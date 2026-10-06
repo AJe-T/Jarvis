@@ -1,0 +1,183 @@
+import { readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { DeepgramClient } from '@deepgram/sdk';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
+import { Porcupine, BuiltinKeyword } from '@picovoice/porcupine-node';
+import { PvRecorder } from '@picovoice/pvrecorder-node';
+import { JarvisError } from '../errors';
+import { newId } from '../lib/util';
+import { runPowerShell } from '../tools/powershell';
+import { escapeSsml } from './speech/speech';
+import type { Recorder, SttProvider, SttSession, TtsChunk, TtsProvider, WakeWord } from './types';
+
+// ── Speech to text: Deepgram live (API-Guide.md §9.2, verified against @deepgram/sdk 5.14.0) ─────────
+
+type Handler = (...args: never[]) => void;
+
+export function createDeepgramStt(getKey: () => string | undefined): SttProvider {
+  return {
+    id: 'deepgram',
+    async start({ language, signal }) {
+      const apiKey = getKey();
+      if (!apiKey)
+        throw new JarvisError(
+          'INVALID',
+          'no deepgram key',
+          'Add a Deepgram key in Settings → Voice.',
+        );
+      const client = new DeepgramClient({ apiKey });
+      const socket = await client.listen.v1.connect({
+        model: 'nova-3',
+        language,
+        encoding: 'linear16',
+        sample_rate: 16000,
+        channels: 1,
+        interim_results: 'true',
+        endpointing: 300,
+        utterance_end_ms: 1000,
+        vad_events: 'true',
+        smart_format: 'true',
+        punctuate: 'true',
+        abortSignal: signal,
+        reconnectAttempts: 0,
+        connectionTimeoutInSeconds: 5,
+      });
+      const handlers = new Map<string, Handler[]>();
+      const fire = (event: string, ...args: unknown[]): void => {
+        for (const h of handlers.get(event) ?? []) (h as (...a: unknown[]) => void)(...args);
+      };
+      let finalParts: string[] = [];
+      socket.on('message', (msg) => {
+        if (msg.type === 'Results') {
+          const text = msg.channel.alternatives[0]?.transcript ?? '';
+          if (msg.is_final) {
+            if (text) finalParts.push(text);
+            if (msg.speech_final && finalParts.length) {
+              fire('final', finalParts.join(' '));
+              finalParts = [];
+            } else fire('partial', [...finalParts].join(' '));
+          } else if (text) fire('partial', [...finalParts, text].join(' '));
+        } else if (msg.type === 'UtteranceEnd') {
+          if (finalParts.length) fire('final', finalParts.join(' '));
+          finalParts = [];
+          fire('utteranceEnd');
+        } else if (msg.type === 'SpeechStarted') fire('speechStarted');
+      });
+      socket.on('error', (err) => fire('error', err));
+      socket.connect();
+      await socket.waitForOpen();
+      const session: SttSession = {
+        write: (frame) =>
+          socket.sendMedia(new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength)),
+        on: (event: string, cb: Handler) => {
+          handlers.set(event, [...(handlers.get(event) ?? []), cb]);
+        },
+        async close() {
+          try {
+            socket.sendCloseStream({ type: 'CloseStream' });
+          } catch {
+            // already closed
+          }
+          socket.close();
+        },
+      };
+      return session;
+    },
+  };
+}
+
+// ── Text to speech ─────────────────────────────────────────────────────────────────────────────
+
+/** Edge "Read Aloud" voices via msedge-tts (MIT). Unofficial endpoint, so callers fall back to SAPI. */
+export function createEdgeTts(): TtsProvider {
+  let tts: MsEdgeTTS | null = null;
+  let configuredVoice = '';
+  return {
+    id: 'edge',
+    async *synthesize(text, { voice, rate, signal }) {
+      if (!tts || configuredVoice !== voice) {
+        tts?.close();
+        tts = new MsEdgeTTS();
+        await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+        configuredVoice = voice;
+      }
+      const { audioStream } = tts.toStream(escapeSsml(text), rate ? { rate } : {});
+      const parts: Buffer[] = [];
+      const onAbort = (): void => {
+        audioStream.destroy();
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      try {
+        for await (const chunk of audioStream as AsyncIterable<Buffer>) parts.push(chunk);
+      } finally {
+        signal.removeEventListener('abort', onAbort);
+      }
+      if (signal.aborted) return;
+      if (parts.length === 0) throw new Error('Edge TTS returned no audio');
+      // One decodable MP3 per sentence keeps playback gapless enough and simple.
+      yield { mime: 'audio/mpeg', data: new Uint8Array(Buffer.concat(parts)) } satisfies TtsChunk;
+    },
+  };
+}
+
+/** Fully offline fallback: Windows System.Speech (API-Guide.md §9.3). */
+export function createSapiTts(): TtsProvider {
+  return {
+    id: 'sapi',
+    async *synthesize(text, { signal, rate }) {
+      const out = path.join(tmpdir(), `jarvis-tts-${newId()}.wav`);
+      const rateNum = Math.max(
+        -10,
+        Math.min(10, Math.round(Number.parseInt(rate ?? '0', 10) / 10) || 0),
+      );
+      const script = `Add-Type -AssemblyName System.Speech
+$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::Male, [System.Speech.Synthesis.VoiceAge]::Adult, 0, [Globalization.CultureInfo]'en-GB') } catch {}
+$s.Rate = [int]$P.rate
+$s.SetOutputToWaveFile($P.out); $s.Speak([string]$P.text); $s.Dispose()`;
+      try {
+        const r = await runPowerShell(script, {
+          params: { out, text, rate: rateNum },
+          signal,
+          timeoutMs: 30_000,
+        });
+        if (r.exitCode !== 0) throw new Error(r.stderr || 'SAPI failed');
+        yield { mime: 'audio/wav', data: new Uint8Array(await readFile(out)) } satisfies TtsChunk;
+      } finally {
+        await rm(out, { force: true });
+      }
+    },
+  };
+}
+
+// ── Microphone + wake word (main process only, ADR-007) ────────────────────────────────────────
+
+export const FRAME_LENGTH = 512;
+
+export function createPvRecorder(deviceIndex: number, frameLength = FRAME_LENGTH): Recorder {
+  const rec = new PvRecorder(frameLength, deviceIndex);
+  return {
+    frameLength,
+    start: () => rec.start(),
+    stop: () => rec.stop(),
+    read: () => rec.read(),
+    release: () => rec.release(),
+    get isRecording() {
+      return rec.isRecording;
+    },
+  };
+}
+
+export function listAudioDevices(): string[] {
+  return PvRecorder.getAvailableDevices();
+}
+
+export function createPorcupine(accessKey: string, sensitivity: number): WakeWord {
+  const p = new Porcupine(accessKey, [BuiltinKeyword.JARVIS], [sensitivity]);
+  return {
+    frameLength: p.frameLength,
+    process: (frame) => p.process(frame) >= 0,
+    release: () => p.release(),
+  };
+}

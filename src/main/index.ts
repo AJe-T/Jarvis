@@ -14,6 +14,8 @@ import { registerCoreHandlers } from './ipc/handlers/core';
 import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { createMemorySystem } from './memory/memory-system';
+import { registerVoiceHandlers } from './ipc/handlers/voice';
+import { createVoiceSystem } from './voice/voice-system';
 import { errorMessage } from './errors';
 import { initFileLogging, logger } from './logging/logger';
 import { createServices, type Services } from './services';
@@ -157,6 +159,9 @@ async function boot(): Promise<void> {
   });
   if (!services.dbHealthy) logger.error('database failed quick_check');
   const memory = createMemorySystem(services);
+  const voice = createVoiceSystem(services);
+  pttHandlers.add(() => voice.voice.ptt());
+  app.on('will-quit', () => voice.voice.shutdown());
   const startMemory = (): void => {
     memory.start().catch((err: unknown) => {
       logger.error({ err: errorMessage(err) }, 'memory start failed');
@@ -172,11 +177,22 @@ async function boot(): Promise<void> {
     onOnboarded: async (_vaultPath, facts) => {
       await memory.start();
       await writeQuickFacts(memory, facts);
+      await voice.start();
     },
   });
   registerSafetyHandlers(services);
   registerMemoryHandlers(services, memory);
-  if (services.settings.get('onboarding.complete')) startMemory();
+  registerVoiceHandlers(services, voice.voice, {
+    setActiveConversation: voice.setActiveConversation,
+    isTest,
+  });
+  if (services.settings.get('onboarding.complete')) {
+    startMemory();
+    void voice.start().then((r) => {
+      if (!r.ok && r.error)
+        emit('notify', { level: 'warn', message: r.error, action: 'settings:voice' });
+    });
+  }
   services.settings.onChange((key) => {
     if (key === 'vault.path' && services.settings.get('onboarding.complete')) startMemory();
   });

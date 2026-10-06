@@ -51,7 +51,8 @@ function accepts(
   set: (p: Partial<ChatStore>) => void,
   conversationId: string,
 ): boolean {
-  if (get().activeId === null && get().awaitingId) {
+  // On an empty new chat the first turn's events claim it (typed or spoken).
+  if (get().activeId === null && (get().awaitingId || get().messages.length === 0)) {
     set({ activeId: conversationId, awaitingId: false });
     return true;
   }
@@ -133,12 +134,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   applyMessage(turnId, conversationId, message) {
-    finishedTurns.add(turnId);
+    if (message.role !== 'user') finishedTurns.add(turnId);
     if (!accepts(get, set, conversationId)) return;
     const live = get().live;
     set({
       messages: [...get().messages, message],
-      ...(live?.turnId === turnId ? { live: null } : {}),
+      ...(live?.turnId === turnId && message.role !== 'user' ? { live: null } : {}),
     });
   },
 

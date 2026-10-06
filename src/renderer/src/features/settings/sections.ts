@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { BrainSection } from './brain-section';
 import { FilesSection } from './files-section';
 import { MemorySection } from './memory-section';
+import { VoiceSection } from './voice-section';
 import { GeneralSection, HotkeysSection, PrivacySection } from './general-sections';
 
 export interface SettingsSectionDef {
@@ -16,6 +17,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   { id: 'brain', label: 'Models & budget', Component: BrainSection },
   { id: 'files', label: 'Files & permissions', Component: FilesSection },
   { id: 'memory', label: 'Memory', Component: MemorySection },
+  { id: 'voice', label: 'Voice', Component: VoiceSection },
   { id: 'privacy', label: 'Privacy', Component: PrivacySection },
   { id: 'hotkeys', label: 'Hotkeys', Component: HotkeysSection },
 ];

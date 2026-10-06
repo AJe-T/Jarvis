@@ -3,6 +3,7 @@ import { ConfirmDialog } from './components/jarvis/confirm-dialog';
 import { ActivityView } from './features/activity/activity-view';
 import { MemoryView } from './features/memory/memory-view';
 import { useMemoryStore } from './stores/memory-store';
+import { installVoiceBridge } from './features/voice/voice-bridge';
 import { registerBridge } from './lib/ipc-bridge';
 import { useConfirmStore } from './stores/confirm-store';
 import type { View } from './stores/ui-store';
@@ -19,3 +20,4 @@ registerBridge((on) => [
   on('confirm:resolved', (p) => useConfirmStore.getState().resolved(p.requestId)),
   on('memory:changed', () => useMemoryStore.getState().bump()),
 ]);
+installVoiceBridge();

@@ -341,6 +341,17 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         userText: text,
         isPrivate: conv.is_private === 1,
       };
+      // Typed messages are shown optimistically by the renderer; spoken ones appear once recognised.
+      if (req.source === 'voice') {
+        const message: UiMessage = {
+          id: newId('m_'),
+          role: 'user',
+          text,
+          source: 'voice',
+          createdAt: nowIso(),
+        };
+        deps.emit('chat:message', { turnId, conversationId: conv.id, message });
+      }
       deps.emit('conversation:updated', toSummary(deps.conversations.get(conv.id) ?? conv));
       queue.push({ info, controller: new AbortController() });
       void pump();

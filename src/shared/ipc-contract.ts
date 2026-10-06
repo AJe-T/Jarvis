@@ -257,6 +257,8 @@ export const EVENTS = {
     seq: z.number(),
     mime: z.enum(['audio/mpeg', 'audio/wav']),
     data: z.instanceof(Uint8Array),
+    /** End-of-utterance marker (empty data): playback is finished once everything before it has played. */
+    last: z.boolean().optional(),
   }),
   'tts:stop': z.object({ utteranceId: z.string().optional() }),
   'usage:update': z.object({
@@ -286,6 +288,7 @@ export const EVENTS = {
 } satisfies Record<EventChannel, z.ZodType>;
 
 export const SEND = {
+  'ui:activeConversation': z.object({ conversationId: z.string().max(64).nullable() }),
   'tts:playback': z.object({
     utteranceId: z.string(),
     event: z.enum(['started', 'finished', 'level']),

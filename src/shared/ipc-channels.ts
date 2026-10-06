@@ -72,5 +72,5 @@ export const EVENT_CHANNELS = [
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
 
 /** Renderer → main fire-and-forget messages (high-frequency, no response). */
-export const SEND_CHANNELS = ['tts:playback'] as const;
+export const SEND_CHANNELS = ['tts:playback', 'ui:activeConversation'] as const;
 export type SendChannel = (typeof SEND_CHANNELS)[number];

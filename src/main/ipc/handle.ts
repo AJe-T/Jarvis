@@ -44,7 +44,8 @@ export function onSend<S extends SendChannel>(
   ipcMain.on(channel, (event, raw: unknown) => {
     try {
       assertTrustedSender(event);
-      fn(SEND[channel].parse(raw));
+      // Narrowing: SEND[channel] is the schema for S, so its output is SendPayload<S>.
+      fn(SEND[channel].parse(raw) as SendPayload<S>);
     } catch (err) {
       log.warn({ channel, err: errorMessage(err) }, 'ipc send rejected');
     }

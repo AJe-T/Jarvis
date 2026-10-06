@@ -570,6 +570,15 @@ $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
 $s.SetOutputToWaveFile($out); $s.Speak($text); $s.Dispose()
 ```
 
+### 9.3a Implementation notes (Phase 4, verified 2026-10-06)
+
+- **Deepgram** (`@deepgram/sdk` 5.14): `new DeepgramClient({ apiKey })` → `client.listen.v1.connect({ model: 'nova-3', encoding: 'linear16', sample_rate: 16000, interim_results: 'true', endpointing: 300, utterance_end_ms: 1000, vad_events: 'true', smart_format: 'true', abortSignal })` → `socket.connect(); await socket.waitForOpen()` → `sendMedia(pcm)`; messages are `Results` (`is_final`, `speech_final`, `channel.alternatives[0].transcript`), `UtteranceEnd`, `SpeechStarted`.
+- **Edge TTS** uses `msedge-tts` (MIT): `setMetadata(voice, AUDIO_24KHZ_48KBITRATE_MONO_MP3)` then `toStream(escapedText, { rate })`; one MP3 per sentence. Text is SSML-escaped first.
+- **Porcupine / PvRecorder** match §9.1 (`new Porcupine(key, [BuiltinKeyword.JARVIS], [sensitivity])`, `new PvRecorder(512, deviceIndex)`, `await recorder.read()`).
+- `tts:audio` carries an empty **`last: true` marker** at the end of each utterance; the renderer reports `tts:playback { event: 'finished' }` once everything before it has played, which moves SPEAKING → IDLE.
+- The renderer reports which chat is open with `ui:activeConversation` so spoken turns land in that conversation; spoken user messages are emitted as `chat:message` (role `user`, source `voice`).
+- Local voice commands: "stop" / "never mind" (cancel turn + speech), "stop everything" (kill switch), "go to sleep" (SLEEP until hotkey). While a confirmation is open, "yes/go ahead/do it" approves (non-destructive only) and "no/cancel" denies.
+
 ### 9.4 Speech shaping
 
 - **Sentence chunker:** buffer deltas; flush at `. ! ?` + space/newline (min 20 chars) or 200 chars.

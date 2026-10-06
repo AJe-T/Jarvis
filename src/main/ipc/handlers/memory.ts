@@ -65,16 +65,14 @@ export function registerMemoryHandlers(s: Services, m: MemorySystem): void {
     return { ok: true };
   });
   handle('memory:reviewList', () =>
-    m.repos.review
-      .pending()
-      .map((r) => ({
-        id: r.id,
-        op: r.op,
-        targetPath: r.target_path,
-        proposedMarkdown: r.proposed_markdown,
-        reason: r.reason,
-        createdAt: r.created_at,
-      })),
+    m.repos.review.pending().map((r) => ({
+      id: r.id,
+      op: r.op,
+      targetPath: r.target_path,
+      proposedMarkdown: r.proposed_markdown,
+      reason: r.reason,
+      createdAt: r.created_at,
+    })),
   );
   handle('memory:reviewResolve', async (req) => {
     if (req.decision === 'accepted') await m.curator.acceptReview(req.id);
@@ -84,13 +82,11 @@ export function registerMemoryHandlers(s: Services, m: MemorySystem): void {
   });
   handle('memory:rebuildIndex', async () => ({ files: (await m.indexer?.rebuild()) ?? 0 }));
   handle('routines:list', () =>
-    m.repos.routines
-      .all()
-      .map((r) => ({
-        name: r.name,
-        triggers: JSON.parse(r.trigger_phrases_json) as string[],
-        enabled: r.enabled === 1,
-        ...(r.error ? { error: r.error } : {}),
-      })),
+    m.repos.routines.all().map((r) => ({
+      name: r.name,
+      triggers: JSON.parse(r.trigger_phrases_json) as string[],
+      enabled: r.enabled === 1,
+      ...(r.error ? { error: r.error } : {}),
+    })),
   );
 }

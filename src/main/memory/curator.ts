@@ -158,17 +158,15 @@ export function createCurator(deps: CuratorDeps) {
         .map((r) => `### ${r.vaultPath.replace(/^Memory\//, '')}\n${r.snippet}`)
         .join('\n\n') || '(none)',
     ].join('\n');
-    const msg = await deps
-      .llm()
-      .stream(
-        {
-          model: deps.model(),
-          max_tokens: 1500,
-          system: CURATOR_PROMPT,
-          messages: [{ role: 'user', content: input }],
-        },
-        { signal: deps.signal() },
-      );
+    const msg = await deps.llm().stream(
+      {
+        model: deps.model(),
+        max_tokens: 1500,
+        system: CURATOR_PROMPT,
+        messages: [{ role: 'user', content: input }],
+      },
+      { signal: deps.signal() },
+    );
     deps.ledger.record(msg, 'curator', conversationId);
     const text = msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
     const out = parseCuratorJson(text);
