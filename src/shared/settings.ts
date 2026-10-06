@@ -77,6 +77,8 @@ export const SETTINGS = {
   'voice.tts.voice': { schema: z.string().min(2).max(60), default: 'en-GB-RyanNeural' },
   'voice.tts.rate': { schema: z.string().regex(/^[+-]\d{1,3}%$/), default: '+5%' },
   'voice.wake.sensitivity': { schema: z.number().min(0).max(1), default: 0.6 },
+  /** ADR-012: seconds after a spoken reply during which Sir can follow up without the wake word (0 = off). */
+  'voice.followUpSeconds': { schema: z.number().min(0).max(30), default: 6 },
   'voice.sounds': { schema: z.boolean(), default: true },
   'hotkeys.ptt': { schema: accelerator, default: 'Ctrl+Alt+Space' },
   'hotkeys.toggleWindow': { schema: accelerator, default: 'Ctrl+Alt+J' },

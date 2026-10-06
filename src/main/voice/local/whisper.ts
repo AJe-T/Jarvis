@@ -1,13 +1,21 @@
 /** Local speech-to-text with Whisper via transformers.js (Apache-2.0) on onnxruntime-node (ADR-011). */
 export interface Transcriber {
-  /** 16 kHz mono audio in [-1, 1] → text. */
-  transcribe(audio: Float32Array): Promise<string>;
+  /** 16 kHz mono audio in [-1, 1] → text. `language` is a setting code (en-IN, hi, auto…). */
+  transcribe(audio: Float32Array, language?: string): Promise<string>;
   release(): Promise<void>;
 }
 
 /** Whisper's well-known outputs on near-silence or noise. */
 const HALLUCINATION =
   /^\s*(\[[^\]]*\]|\([^)]*\)|thank you\.?|thanks for watching!?|you|bye\.?|\.+)\s*$/i;
+
+/** Settings language code → Whisper language name; undefined lets Whisper detect it. */
+export function whisperLanguage(code: string | undefined): string | undefined {
+  const base = (code ?? 'auto').toLowerCase().split('-')[0];
+  return { en: 'english', hi: 'hindi', te: 'telugu', ta: 'tamil', bn: 'bengali', mr: 'marathi' }[
+    base ?? ''
+  ];
+}
 
 export function cleanTranscript(text: string, seconds: number): string {
   const t = text.replace(/\s+/g, ' ').trim();
@@ -26,9 +34,13 @@ export async function loadWhisper(dir: string, multilingual: boolean): Promise<T
     device: 'cpu',
   });
   return {
-    async transcribe(audio) {
-      const out = (await asr(audio, multilingual ? { task: 'transcribe' } : {})) as
-        { text: string } | Array<{ text: string }>;
+    async transcribe(audio, language) {
+      // Multilingual models guess the language on short clips badly ("Yabbies!"); pin it unless "auto".
+      const lang = multilingual ? whisperLanguage(language) : undefined;
+      const opts = multilingual
+        ? { task: 'transcribe' as const, ...(lang ? { language: lang } : {}) }
+        : {};
+      const out = (await asr(audio, opts)) as { text: string } | Array<{ text: string }>;
       const text = Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text;
       return cleanTranscript(text, audio.length / 16000);
     },

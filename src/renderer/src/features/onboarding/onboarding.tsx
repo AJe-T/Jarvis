@@ -43,7 +43,11 @@ export function Onboarding(): React.JSX.Element {
     wakeEngine === 'picovoice'
       ? Boolean(secrets['picovoice']?.set)
       : Boolean(models.status?.['openwakeword-hey-jarvis']?.installed);
-  const voiceReady = { ptt: sttReady, wake: sttReady && wakeReady };
+  const voiceReady = {
+    ptt: sttReady,
+    wake: sttReady && wakeReady,
+    ambient: sttEngine === 'whisper' && sttReady,
+  };
 
   async function finish(): Promise<void> {
     setBusy(true);
@@ -219,6 +223,7 @@ export function Onboarding(): React.JSX.Element {
                   ['off', 'Off — type only', true],
                   ['ptt', 'Press to talk', voiceReady.ptt],
                   ['wake', 'Wake word', voiceReady.wake],
+                  ['ambient', 'Always listening (on-device Whisper)', voiceReady.ambient],
                 ] as const
               ).map(([mode, label, enabled]) => (
                 <label

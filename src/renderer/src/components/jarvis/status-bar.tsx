@@ -3,7 +3,12 @@ import { useSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { useMcpIssues } from '../../stores/mcp-store';
 
-const VOICE_LABEL = { off: 'off', ptt: 'press to talk', wake: 'wake word' } as const;
+const VOICE_LABEL = {
+  off: 'off',
+  ptt: 'press to talk',
+  wake: 'wake word',
+  ambient: 'always listening',
+} as const;
 
 function modelLabel(id: string | undefined): string {
   if (!id) return '—';

@@ -29,7 +29,7 @@ export function createDeepgramStt(getKey: () => string | undefined): SttProvider
       const client = new DeepgramClient({ apiKey });
       const socket = await client.listen.v1.connect({
         model: 'nova-3',
-        language,
+        language: language === 'auto' ? 'multi' : language,
         encoding: 'linear16',
         sample_rate: 16000,
         channels: 1,

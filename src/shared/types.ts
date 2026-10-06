@@ -38,7 +38,8 @@ export const TOOL_STATUSES = [
 ] as const;
 export type ToolStatus = (typeof TOOL_STATUSES)[number];
 
-export const VOICE_MODES = ['off', 'ptt', 'wake'] as const;
+/** ADR-012 'ambient': always listening on-device; say "Jarvis" anywhere in a sentence. */
+export const VOICE_MODES = ['off', 'ptt', 'wake', 'ambient'] as const;
 export type VoiceMode = (typeof VOICE_MODES)[number];
 
 export const MESSAGE_SOURCES = ['text', 'voice', 'system'] as const;

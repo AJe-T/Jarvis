@@ -14,15 +14,20 @@ export function installVoiceBridge(): void {
   ]);
 
   let previous: AssistantState = useAssistantStore.getState().state;
+  let previousDetail: string | undefined;
   useAssistantStore.subscribe((s) => {
     if (s.state === previous) return;
     const sounds = useSettingsStore.getState().values['voice.sounds'] !== false;
-    if (sounds) {
+    // ADR-012: the follow-up window after a reply opens and closes silently, like a person waiting.
+    const followUp = s.detail === 'follow-up' || previousDetail === 'follow-up';
+    if (sounds && !followUp) {
       if (s.state === 'LISTENING') audioPlayer.chime('listen');
       else if (previous === 'LISTENING' && s.state === 'IDLE') audioPlayer.chime('cancel');
       else if (s.state === 'AWAITING_CONFIRMATION') audioPlayer.chime('confirm');
     }
+    if (sounds && previous === 'LISTENING' && s.state === 'THINKING') audioPlayer.chime('thinking');
     previous = s.state;
+    previousDetail = s.detail;
   });
 
   let lastActive: string | null | undefined;

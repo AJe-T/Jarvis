@@ -2,6 +2,11 @@ import { join } from 'node:path';
 import { JarvisError } from '../../errors';
 import type { SettingsService } from '../../settings/settings-service';
 import type { SttProvider, WakeWord } from '../types';
+import {
+  createContinuousTranscriber,
+  type ContinuousTranscriber,
+  type HeardSegment,
+} from './continuous';
 import { createWhisperStt } from './local-stt';
 import type { ModelId, ModelStore } from './model-store';
 import { loadOwwModels, loadSileroVad, type Vad } from './onnx';
@@ -58,6 +63,24 @@ export function createLocalEngines(store: ModelStore, settings: SettingsService)
         await loadOwwModels(store.dir('openwakeword-hey-jarvis')),
         thresholdFor(sensitivity),
       );
+    },
+    /** ADR-012 always-listening: its own VAD instance, the shared (warm) Whisper. */
+    async ambient(handlers: {
+      onSpeechStart(): void;
+      onSegment(seg: HeardSegment): void;
+      onError(err: Error): void;
+    }): Promise<ContinuousTranscriber> {
+      if (!store.installed('silero-vad')) throw notReady('Whisper model');
+      const [ownVad, whisperModel] = await Promise.all([
+        loadSileroVad(join(store.dir('silero-vad'), 'silero_vad.onnx')),
+        transcriber(),
+      ]);
+      return createContinuousTranscriber({
+        vad: ownVad,
+        transcriber: whisperModel,
+        language: () => settings.get('voice.stt.language'),
+        ...handlers,
+      });
     },
     /** Loads Whisper in the background when it is selected, so the first command isn't slow. */
     preload(): void {

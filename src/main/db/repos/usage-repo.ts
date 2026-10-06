@@ -1,7 +1,18 @@
 import { localDay, newId } from '../../lib/util';
 import type { Db } from '../connection';
 
-export type UsagePurpose = 'chat' | 'curator' | 'title' | 'summary' | 'desktop_agent' | 'eval';
+export type UsagePurpose =
+  | 'chat'
+  | 'curator'
+  | 'title'
+  | 'summary'
+  | 'desktop_agent'
+  | 'eval'
+  | 'intent'
+  | 'research'
+  | 'briefing'
+  | 'copilot'
+  | 'task';
 export type Billing = 'api' | 'subscription';
 
 export interface UsageEntry {

@@ -19,6 +19,11 @@ const MODES: Array<{ value: VoiceMode; label: string; hint: string }> = [
     label: 'Wake word',
     hint: 'Listens on this PC for “Jarvis” (Picovoice) or “Hey Jarvis” (on-device); nothing leaves the PC until it hears it.',
   },
+  {
+    value: 'ambient',
+    label: 'Always listening (on-device)',
+    hint: 'Say “Jarvis” anywhere in a sentence (“…what do you think, Jarvis?”). Speech is transcribed on this PC by Whisper and kept in memory for 2 minutes only; needs on-device Whisper.',
+  },
 ];
 
 export function VoiceSection(): React.JSX.Element {
@@ -62,6 +67,12 @@ export function VoiceSection(): React.JSX.Element {
       <Section title="Microphone">
         <MicCheck />
         <SettingInput
+          k="voice.followUpSeconds"
+          label="Follow-up window after a reply (seconds, 0 = off): keep talking without the wake word"
+          type="number"
+          step={1}
+        />
+        <SettingInput
           k="voice.wake.sensitivity"
           label="Wake word sensitivity (0–1, higher hears more but triggers falsely more often)"
           type="number"
@@ -77,6 +88,9 @@ export function VoiceSection(): React.JSX.Element {
             { value: 'en', label: 'English' },
             { value: 'en-GB', label: 'English (UK)' },
             { value: 'en-US', label: 'English (US)' },
+            { value: 'hi', label: 'Hindi' },
+            { value: 'te', label: 'Telugu' },
+            { value: 'auto', label: 'Detect automatically (multilingual Whisper / Deepgram)' },
           ]}
         />
         <SettingSelect

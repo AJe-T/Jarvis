@@ -10,6 +10,8 @@ import {
   createPvRecorder,
   createSapiTts,
 } from './providers';
+import { pickModel } from '../agent/model-router';
+import { INTENT_JUDGE_PROMPT, parseIntent, type Intent } from './conversation';
 import { createLocalEngines, type LocalEngines } from './local/local-engines';
 import { createModelStore, type ModelStore } from './local/model-store';
 import type { SttProvider } from './types';
@@ -39,6 +41,46 @@ export function realFactories(s: Services, local: LocalEngines): VoiceFactories 
     stt,
     edge: createEdgeTts(),
     sapi: createSapiTts(),
+    ambient: (handlers) => {
+      if (s.settings.get('voice.stt.provider') !== 'whisper')
+        throw new JarvisError(
+          'INVALID',
+          'ambient needs whisper',
+          'Always-listening mode only runs with on-device Whisper (Settings → Voice → Speech to text), so no audio leaves this PC.',
+        );
+      return local.ambient(handlers);
+    },
+  };
+}
+
+/** ADR-012 intent judge: a small, fast model call on the recent transcript. */
+function createJudge(s: Services) {
+  return async (
+    transcript: string,
+    ctx: { followUp: boolean; lastReply: string },
+  ): Promise<Intent> => {
+    s.budget.assertCanSpend();
+    const model = pickModel(s.settings, { purpose: 'intent' });
+    const msg = await s.llm.stream(
+      {
+        model,
+        max_tokens: 300,
+        system: INTENT_JUDGE_PROMPT,
+        messages: [
+          {
+            role: 'user',
+            content: `Follow-up window open: ${ctx.followUp ? 'yes' : 'no'}
+Jarvis last said: ${ctx.lastReply || '(nothing recently)'}
+
+Transcript (oldest first):
+${transcript}`,
+          },
+        ],
+      },
+      { signal: AbortSignal.timeout(15_000) },
+    );
+    s.ledger.record(msg, 'intent', null);
+    return parseIntent(msg.content.map((b) => (b.type === 'text' ? b.text : '')).join(''));
   };
 }
 
@@ -59,7 +101,9 @@ export function createVoiceSystem(
   s: Services,
   opts: {
     factories?: VoiceFactories;
-    timeouts?: { silenceMs?: number; maxListenMs?: number };
+    timeouts?: { silenceMs?: number; maxListenMs?: number; echoSettleMs?: number };
+    /** Tests: a scripted intent judge. */
+    judge?: (transcript: string, ctx: { followUp: boolean; lastReply: string }) => Promise<Intent>;
   } = {},
 ) {
   let activeConversation: string | null = null;
@@ -71,6 +115,7 @@ export function createVoiceSystem(
   const voice = createVoiceController({
     settings: s.settings,
     state: s.state,
+    ...(opts.judge ? { judge: opts.judge } : s.isTest ? {} : { judge: createJudge(s) }),
     orchestrator: s.orchestrator,
     broker: s.broker,
     killSwitch: s.killSwitch,
@@ -91,6 +136,7 @@ export function createVoiceSystem(
       key === 'voice.mode' ||
       key === 'voice.wake.sensitivity' ||
       key === 'voice.wake.provider' ||
+      key === 'voice.stt.provider' ||
       key === 'voice.deviceIndex'
     )
       void voice.applyMode();

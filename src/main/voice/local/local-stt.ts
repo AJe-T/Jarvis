@@ -2,12 +2,27 @@ import type { SttProvider, SttSession } from '../types';
 import { VAD_WINDOW, type Vad } from './onnx';
 import type { Transcriber } from './whisper';
 
-const WINDOW_MS = (VAD_WINDOW / 16000) * 1000; // 32 ms
-const START_PROB = 0.5;
-const END_PROB = 0.35;
-const END_SILENCE_MS = 700;
-const PRE_ROLL_WINDOWS = 10; // ~320 ms before speech was detected, so first syllables aren't cut
+export const WINDOW_MS = (VAD_WINDOW / 16000) * 1000; // 32 ms
+export const START_PROB = 0.5;
+export const END_PROB = 0.35;
+export const END_SILENCE_MS = 700;
+export const PRE_ROLL_WINDOWS = 10; // ~320 ms before speech was detected, so first syllables aren't cut
 const MAX_SPEECH_MS = 30_000;
+
+/** int16 mic samples → [-1, 1] floats, carrying a partial window over to the next call. */
+export function toWindows(
+  pending: Float32Array,
+  frame: Int16Array,
+): { windows: Float32Array[]; rest: Float32Array } {
+  const joined = new Float32Array(pending.length + frame.length);
+  joined.set(pending);
+  for (let i = 0; i < frame.length; i++) joined[pending.length + i] = (frame[i] ?? 0) / 32768;
+  const windows: Float32Array[] = [];
+  let at = 0;
+  for (; at + VAD_WINDOW <= joined.length; at += VAD_WINDOW)
+    windows.push(joined.slice(at, at + VAD_WINDOW));
+  return { windows, rest: joined.slice(at) };
+}
 
 type Handler = (...args: never[]) => void;
 
@@ -22,7 +37,7 @@ export function createWhisperStt(deps: {
 }): SttProvider {
   return {
     id: 'whisper',
-    async start({ signal }) {
+    async start({ signal, language }) {
       // Load (or reuse) both models up front so the first words aren't lost while they load.
       const [vad, transcriber] = await Promise.all([deps.vad(), deps.transcriber()]);
       vad.reset();
@@ -30,7 +45,7 @@ export function createWhisperStt(deps: {
       const fire = (event: string, ...args: unknown[]): void => {
         for (const h of handlers.get(event) ?? []) (h as (...a: unknown[]) => void)(...args);
       };
-      let pending = new Float32Array(0);
+      let pending: Float32Array = new Float32Array(0);
       const preRoll: Float32Array[] = [];
       const speech: Float32Array[] = [];
       let inSpeech = false;
@@ -46,7 +61,7 @@ export function createWhisperStt(deps: {
           audio.set(w, at);
           at += w.length;
         }
-        const text = await transcriber.transcribe(audio);
+        const text = await transcriber.transcribe(audio, language);
         if (signal.aborted) return;
         if (text) fire('final', text);
         fire('utteranceEnd');
@@ -72,13 +87,8 @@ export function createWhisperStt(deps: {
       const session: SttSession = {
         write(frame) {
           if (done) return;
-          const joined = new Float32Array(pending.length + frame.length);
-          joined.set(pending);
-          for (let i = 0; i < frame.length; i++)
-            joined[pending.length + i] = (frame[i] ?? 0) / 32768;
-          let at = 0;
-          for (; at + VAD_WINDOW <= joined.length; at += VAD_WINDOW) {
-            const w = joined.slice(at, at + VAD_WINDOW);
+          const { windows, rest } = toWindows(pending, frame);
+          for (const w of windows) {
             chain = chain
               .then(() => step(w))
               .catch((err: unknown) => {
@@ -86,7 +96,7 @@ export function createWhisperStt(deps: {
                 fire('error', err instanceof Error ? err : new Error(String(err)));
               });
           }
-          pending = joined.slice(at);
+          pending = rest;
         },
         on: (event: string, cb: Handler) => {
           handlers.set(event, [...(handlers.get(event) ?? []), cb]);

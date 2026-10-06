@@ -109,9 +109,15 @@ class AudioPlayer {
   }
 
   /** Short UI chimes (Design-system.md §7), synthesised so no sound files ship. */
-  chime(kind: 'listen' | 'cancel' | 'confirm'): void {
+  chime(kind: 'listen' | 'cancel' | 'confirm' | 'thinking'): void {
     const ctx = this.context();
-    const notes = { listen: [660, 880], cancel: [520, 390], confirm: [700, 560] }[kind];
+    const notes = {
+      listen: [660, 880],
+      cancel: [520, 390],
+      confirm: [700, 560],
+      // "Got it, working on it": one soft low note, so a slow reply doesn't feel like silence.
+      thinking: [440],
+    }[kind];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
