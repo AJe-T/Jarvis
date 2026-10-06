@@ -1,0 +1,109 @@
+import { useEffect, useState } from 'react';
+import type { SettingKey, SettingValue } from '@shared/settings';
+import { Field, Switch, TextInput } from '../../components/ui/field';
+import { cleanError } from '../../lib/api';
+import { useSetting, useSettingsStore } from '../../stores/settings-store';
+import { useUiStore } from '../../stores/ui-store';
+
+function asText(v: unknown): string {
+  return typeof v === 'string' || typeof v === 'number' ? String(v) : '';
+}
+
+async function save<K extends SettingKey>(key: K, value: SettingValue<K>): Promise<boolean> {
+  try {
+    await useSettingsStore.getState().set(key, value);
+    return true;
+  } catch (err) {
+    useUiStore.getState().toast({ level: 'error', message: cleanError(err) });
+    return false;
+  }
+}
+
+/** Text/number setting that saves on blur or Enter. */
+export function SettingInput<K extends SettingKey>({
+  k,
+  label,
+  hint,
+  type = 'text',
+  step,
+}: {
+  k: K;
+  label: string;
+  hint?: string;
+  type?: 'text' | 'number';
+  step?: number;
+}): React.JSX.Element {
+  const value = useSetting(k);
+  const [draft, setDraft] = useState(asText(value));
+  useEffect(() => setDraft(asText(value)), [value]);
+  const commit = (): void => {
+    if (draft === asText(value)) return;
+    const v = (type === 'number' ? Number(draft) : draft) as SettingValue<K>;
+    void save(k, v).then((ok) => !ok && setDraft(asText(value)));
+  };
+  return (
+    <Field label={label} {...(hint ? { hint } : {})}>
+      {(id) => (
+        <TextInput
+          id={id}
+          type={type}
+          step={step}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => e.key === 'Enter' && commit()}
+          className={type === 'number' ? 'tabular w-40' : ''}
+        />
+      )}
+    </Field>
+  );
+}
+
+export function SettingSwitch({
+  k,
+  label,
+}: {
+  k: Extract<SettingKey, `${string}`>;
+  label: string;
+}): React.JSX.Element {
+  const value = useSetting(k) as boolean | undefined;
+  return (
+    <Switch
+      label={label}
+      checked={value === true}
+      onChange={(v) => void save(k, v as SettingValue<typeof k>)}
+    />
+  );
+}
+
+export function SettingSelect<K extends SettingKey>({
+  k,
+  label,
+  options,
+}: {
+  k: K;
+  label: string;
+  options: Array<{ value: string; label: string }>;
+}): React.JSX.Element {
+  const value = useSetting(k);
+  return (
+    <Field label={label}>
+      {(id) => (
+        <select
+          id={id}
+          value={asText(value)}
+          onChange={(e) => void save(k, e.target.value as SettingValue<K>)}
+          className="min-h-9 w-64 rounded-md border border-night-600 bg-night-800 px-2 text-base text-ink-100"
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      )}
+    </Field>
+  );
+}
+
+export { save as saveSetting };

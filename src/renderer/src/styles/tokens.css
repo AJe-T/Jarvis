@@ -1,0 +1,40 @@
+/* Design-system.md §2 — the only place raw colour values live. */
+:root {
+  --night-950: #060a12;
+  --night-900: #0a1120;
+  --night-800: #101a2d;
+  --night-700: #18243b;
+  --night-600: #22314d;
+  --reactor-500: #3fd8f5;
+  --reactor-300: #93ecff;
+  --reactor-glow: rgba(63, 216, 245, 0.32);
+  --lamp-400: #ffb54a;
+  --alarm-500: #ff5446;
+  --ok-400: #46dfa0;
+  --ink-100: #e6eefc;
+  --ink-300: #a7b6ce;
+  --ink-500: #7f8faa; /* was #71819C: 4.41:1 on night-800 panels; this is 5.3:1 (§2 target 4.5:1) */
+  --ink-on-reactor: #04202a;
+  --ink-on-alarm: #2a0503;
+
+  --font-display: 'Chakra Petch', 'Segoe UI', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --font-code: 'JetBrains Mono', Consolas, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}

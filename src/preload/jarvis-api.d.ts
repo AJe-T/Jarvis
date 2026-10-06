@@ -1,0 +1,8 @@
+import type { JarvisApi } from '../shared/ipc-contract';
+
+declare global {
+  interface Window {
+    jarvis: JarvisApi;
+  }
+}
+export {};

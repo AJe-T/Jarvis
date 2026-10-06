@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.e2e.json",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "vitest run",
+    "test": "node scripts/vitest-electron.mjs run",
     "test:e2e": "playwright test",
     "evals": "node --experimental-strip-types tests/evals/run-evals.ts",
     "dist": "electron-vite build && electron-builder --win --config electron-builder.yml",

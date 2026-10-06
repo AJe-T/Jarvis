@@ -27,7 +27,8 @@ All channels and payload schemas live in `src/shared/ipc-contract.ts` and are va
 | `conversations:get` | `{ id }` | `{ conversation, messages, toolCalls }` | |
 | `conversations:delete` | `{ id, alsoVault: boolean }` | `{ ok }` | CONFIRM in UI |
 | `confirm:respond` | `{ requestId, decision: 'approve'\|'deny' }` | `{ ok }` | Answer to `confirm:request` |
-| `settings:get` / `settings:set` | `{ key }` / `{ key, value }` | value / `{ ok }` | Values validated per key schema |
+| `settings:getAll` / `settings:set` | `{}` / `{ key, value }` | all values / `{ ok }` | Values validated per key schema (`src/shared/settings.ts`) |
+| `secrets:delete` / `secrets:test` | `{ name }` | `{ ok }` / `{ ok, error? }` | Test = tiny Haiku call ("Reply OK") for the Anthropic key |
 | `secrets:set` | `{ name: SecretName, value: string }` | `{ ok, last4 }` | Value never returned |
 | `secrets:status` | `{}` | `Record<SecretName, { set: boolean, last4?: string }>` | |
 | `memory:list` / `memory:read` / `memory:search` | … | … | Memory browser |
@@ -38,7 +39,12 @@ All channels and payload schemas live in `src/shared/ipc-contract.ts` and are va
 | `app:killSwitch` | `{}` | `{ ok }` | Same as hotkey |
 | `usage:summary` | `{ range: 'day'\|'month' }` | `{ costUsd, tokens, budget }` | |
 | `audit:list` | `{ limit, cursor? }` | `{ items }` | |
-| `onboarding:complete` | `{ vaultPath, voiceMode, ... }` | `{ ok }` | |
+| `onboarding:complete` | `{ vaultPath, voiceMode, facts: { role?, project?, city? } }` | `{ ok }` | |
+| `activity:list` | `{ limit, conversationId? }` | tool calls | Full Activity log |
+| `memory:openInObsidian` / `memory:reviewList` / `memory:reviewResolve` / `memory:rebuildIndex` | … | … | Memory browser + review queue |
+| `voice:devices` | `{}` | `{ index, name }[]` | Mic picker; `voice:mic` also accepts `action: 'meter'` (level only, 5 s) |
+| `app:info` / `app:openExternal` / `app:pickFolder` / `app:setMiniMode` | … | … | http(s) only for openExternal |
+| `usage:breakdown` / `audit:verify` / `audit:export` / `routines:list` / `reminders:list` / `db:backups` / `db:backupNow` / `db:restore` | … | … | Dashboards and data management |
 
 ### 1.2 Event channels (main → renderer, push)
 
@@ -55,7 +61,16 @@ All channels and payload schemas live in `src/shared/ipc-contract.ts` and are va
 | `tts:stop` | `{ utteranceId? }` |
 | `usage:update` | `{ dayCostUsd, monthCostUsd }` |
 | `mcp:status` | `{ server, status: 'connecting'\|'ready'\|'error', toolCount?, error? }` |
-| `notify` | `{ level: 'info'\|'warn'\|'error', message }` |
+| `notify` | `{ level: 'info'\|'warn'\|'error', message, action? }` |
+| `confirm:resolved` | `{ requestId, decision }` (closes a dialog that timed out or was killed) |
+| `conversation:updated` | `ConversationSummary` (title/last-active changed) |
+| `memory:changed` | `{ vaultPaths }` |
+| `computer:active` | `{ active }` (Computer-Control mode on/off) |
+| `nav:open` | `{ view, section? }` (e.g., tray → Settings) |
+
+Renderer → main fire-and-forget: `tts:playback` `{ utteranceId, event: 'started'\|'finished'\|'level', level? }`.
+
+> Implementation: channel names live in `src/shared/ipc-channels.ts` (dependency-free, so the sandboxed preload can import it); schemas in `src/shared/ipc-contract.ts`. The preload exposes `window.jarvis.call[channel](req)`, `window.jarvis.send[channel](payload)` and `window.jarvis.on(event, handler)`: one fixed function per channel, built from the fixed list.
 
 ### 1.3 Preload (`src/preload/index.ts`)
 

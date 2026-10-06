@@ -1,8 +1,237 @@
 @import 'tailwindcss';
+@import './tokens.css';
+
+/* Design tokens → Tailwind utilities (bg-night-900, text-ink-300, ring-reactor-500, …). */
+@theme inline {
+  --color-night-950: var(--night-950);
+  --color-night-900: var(--night-900);
+  --color-night-800: var(--night-800);
+  --color-night-700: var(--night-700);
+  --color-night-600: var(--night-600);
+  --color-reactor-500: var(--reactor-500);
+  --color-reactor-300: var(--reactor-300);
+  --color-reactor-glow: var(--reactor-glow);
+  --color-lamp-400: var(--lamp-400);
+  --color-alarm-500: var(--alarm-500);
+  --color-ok-400: var(--ok-400);
+  --color-ink-100: var(--ink-100);
+  --color-ink-300: var(--ink-300);
+  --color-ink-500: var(--ink-500);
+  --color-ink-on-reactor: var(--ink-on-reactor);
+  --color-ink-on-alarm: var(--ink-on-alarm);
+
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-code: var(--font-code);
+
+  /* §3 type scale (rem so it follows Windows display scaling) */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 2rem;
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 2.25rem;
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-pill: var(--radius-pill);
+  --ease-standard: var(--ease-standard);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
 
 body {
   margin: 0;
-  background: #060a12;
-  color: #e6eefc;
-  font-family: 'Segoe UI', sans-serif;
+  background: var(--night-950);
+  color: var(--ink-100);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.5rem;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--reactor-500);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--night-600);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--night-600) transparent;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Orb (§5.1) ─────────────────────────────────────────────── */
+@keyframes orb-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+@keyframes orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes orb-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes orb-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.orb-breathe {
+  animation: orb-breathe 4s ease-in-out infinite;
+}
+.orb-spin {
+  animation: orb-spin 1.2s linear infinite;
+  transform-origin: 50% 50%;
+  transform-box: fill-box;
+}
+.orb-pulse {
+  animation: orb-pulse 1s ease-in-out infinite;
+}
+.orb-shake {
+  animation: orb-shake 200ms ease-in-out 1;
+}
+.stream-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--reactor-500);
+  animation: caret-blink 1s step-end infinite;
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+/* §6: only the orb moves on its own; reduced motion turns everything else off too. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ── Markdown in Jarvis replies ─────────────────────────────── */
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md table,
+.md pre {
+  margin: 0 0 0.75rem;
+}
+.md ul,
+.md ol {
+  padding-left: 1.25rem;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li + li {
+  margin-top: 0.25rem;
+}
+.md a {
+  color: var(--reactor-500);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md code {
+  font-family: var(--font-code);
+  font-size: 0.85em;
+  background: var(--night-800);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.md pre {
+  background: var(--night-800);
+  border: 1px solid var(--night-600);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+.md table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.md th,
+.md td {
+  border: 1px solid var(--night-600);
+  padding: 0.25rem 0.6rem;
+  text-align: left;
+}
+.md h1,
+.md h2,
+.md h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+}
+.md blockquote {
+  border-left: 3px solid var(--night-600);
+  padding-left: 0.75rem;
+  color: var(--ink-300);
 }

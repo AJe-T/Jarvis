@@ -1,0 +1,76 @@
+// Dependency-free channel lists. The sandboxed preload imports only this file (it cannot load zod).
+// Schemas for each channel live in ipc-contract.ts.
+
+export const INVOKE_CHANNELS = [
+  'chat:send',
+  'chat:cancel',
+  'conversations:list',
+  'conversations:get',
+  'conversations:delete',
+  'confirm:respond',
+  'settings:getAll',
+  'settings:set',
+  'secrets:set',
+  'secrets:delete',
+  'secrets:status',
+  'secrets:test',
+  'memory:list',
+  'memory:read',
+  'memory:search',
+  'memory:delete',
+  'memory:openInObsidian',
+  'memory:reviewList',
+  'memory:reviewResolve',
+  'memory:rebuildIndex',
+  'mcp:list',
+  'mcp:add',
+  'mcp:update',
+  'mcp:remove',
+  'mcp:restart',
+  'voice:setMode',
+  'voice:mic',
+  'voice:devices',
+  'app:killSwitch',
+  'app:info',
+  'app:openExternal',
+  'app:pickFolder',
+  'app:setMiniMode',
+  'usage:summary',
+  'usage:breakdown',
+  'audit:list',
+  'audit:verify',
+  'audit:export',
+  'activity:list',
+  'routines:list',
+  'reminders:list',
+  'db:backups',
+  'db:backupNow',
+  'db:restore',
+  'onboarding:complete',
+] as const;
+export type InvokeChannel = (typeof INVOKE_CHANNELS)[number];
+
+export const EVENT_CHANNELS = [
+  'assistant:state',
+  'chat:delta',
+  'chat:message',
+  'tool:update',
+  'confirm:request',
+  'confirm:resolved',
+  'voice:level',
+  'voice:transcript',
+  'tts:audio',
+  'tts:stop',
+  'usage:update',
+  'mcp:status',
+  'notify',
+  'conversation:updated',
+  'memory:changed',
+  'computer:active',
+  'nav:open',
+] as const;
+export type EventChannel = (typeof EVENT_CHANNELS)[number];
+
+/** Renderer → main fire-and-forget messages (high-frequency, no response). */
+export const SEND_CHANNELS = ['tts:playback'] as const;
+export type SendChannel = (typeof SEND_CHANNELS)[number];

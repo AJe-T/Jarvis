@@ -154,10 +154,11 @@ CREATE TABLE memories (
 CREATE INDEX idx_memories_kind ON memories(kind);
 
 CREATE VIRTUAL TABLE memories_fts USING fts5(
-  title, body, tags,
-  content='', tokenize='porter unicode61'      -- contentless; we manage rowids
+  title, body, tags_json,
+  content='memories', content_rowid='rowid',   -- external content, synced by triggers
+  tokenize='porter unicode61'
 );
--- indexer maintains memories_fts with rowid = memories.rowid
+-- memories_ai / memories_ad / memories_au triggers keep it in sync (same pattern as messages_fts)
 
 -- Proposed memory ops awaiting Sir's review (suspicious or low-confidence)
 CREATE TABLE memory_review_queue (
@@ -252,6 +253,8 @@ CREATE TABLE vault_files (
 
 -- secrets are NOT stored in SQLite (see Security §8)
 ```
+
+Implementation notes (Phase 1): `conversations.summary_upto_seq` records how far the rolling summary reaches; `routines.error` holds the validation error of a disabled routine; `mcp_servers.env_secret_names_json` is a map `{ "ENV_VAR": "secret_name" }`. The exact SQL lives in `src/main/db/migrations/001_init.sql`.
 
 ## 4. Entity Relationships
 

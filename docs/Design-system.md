@@ -41,7 +41,7 @@ Dark is the default and primary theme. A light "Daylight Workshop" theme is P2.
 | `--ok-400` | `#46DFA0` | Success ticks, connected status |
 | `--ink-100` | `#E6EEFC` | Primary text |
 | `--ink-300` | `#A7B6CE` | Secondary text |
-| `--ink-500` | `#71819C` | Tertiary text (timestamps), min 14px |
+| `--ink-500` | `#7F8FAA` | Tertiary text (timestamps), min 14px. Was `#71819C`, which measured 4.41:1 on `--night-800` panels; `#7F8FAA` is 5.3:1 |
 | `--ink-on-reactor` | `#04202A` | Text on cyan buttons |
 | `--ink-on-alarm` | `#2A0503` | Text on red buttons |
 
@@ -53,7 +53,7 @@ Contrast targets: `--ink-100` and `--ink-300` on `--night-900` ≥ 7:1; `--ink-5
   --night-950:#060A12; --night-900:#0A1120; --night-800:#101A2D; --night-700:#18243B; --night-600:#22314D;
   --reactor-500:#3FD8F5; --reactor-300:#93ECFF; --reactor-glow:rgba(63,216,245,.32);
   --lamp-400:#FFB54A; --alarm-500:#FF5446; --ok-400:#46DFA0;
-  --ink-100:#E6EEFC; --ink-300:#A7B6CE; --ink-500:#71819C; --ink-on-reactor:#04202A; --ink-on-alarm:#2A0503;
+  --ink-100:#E6EEFC; --ink-300:#A7B6CE; --ink-500:#7F8FAA; --ink-on-reactor:#04202A; --ink-on-alarm:#2A0503;
 
   --font-display:"Chakra Petch", "Segoe UI", sans-serif;
   --font-body:"IBM Plex Sans", "Segoe UI", sans-serif;
