@@ -15,12 +15,12 @@ import { idle, setupServices } from './helpers';
 function setupVoice(
   script: FakeScript | ((dir: string) => FakeScript),
   transcripts: string[],
-  opts: { edgeFails?: boolean; mode?: 'ptt' | 'wake' } = {},
+  opts: { edgeFails?: boolean; mode?: 'ptt' | 'wake'; sttStartMs?: number } = {},
 ) {
   const t = setupServices(script);
   t.services.settings.set('voice.mode', opts.mode ?? 'ptt');
   const wake = createFakeWake();
-  const stt = createFakeStt(transcripts);
+  const stt = createFakeStt(transcripts, { startDelayMs: opts.sttStartMs ?? 0 });
   const edge = createFakeTts('edge', { fail: opts.edgeFails ?? false });
   const sapi = createFakeTts('sapi');
   const v = createVoiceSystem(t.services, {
@@ -98,6 +98,35 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     t.wake.trigger();
     await until(() => t.stt.sessions === 1);
     await until(() => t.events.some((e) => e.event === 'voice:level'));
+    t.v.voice.shutdown();
+  });
+
+  it('wake word survives the mode being re-applied while the mic is running (regression)', async () => {
+    const t = setupVoice({ rules: [] }, ['hello'], { mode: 'wake' });
+    t.services.secrets.set('picovoice', 'pv-test-key-123');
+    // voice:setMode applies the mode, and so does the settings listener: two applyMode calls back to back.
+    await Promise.all([t.v.voice.applyMode(), t.v.voice.applyMode()]);
+    await new Promise((r) => setTimeout(r, 150));
+    await t.v.voice.applyMode(); // e.g. a model finished downloading
+    await new Promise((r) => setTimeout(r, 150));
+    t.wake.trigger();
+    await until(() => t.stt.sessions === 1);
+    const notices = t.events
+      .filter((e) => e.event === 'notify')
+      .map((e) => JSON.stringify(e.payload));
+    expect(notices.filter((n) => n.includes('microphone'))).toEqual([]);
+    t.v.voice.shutdown();
+  });
+
+  it('keeps the words spoken while speech-to-text is still starting', async () => {
+    const t = setupVoice({ rules: [] }, ['what time is it'], { mode: 'wake', sttStartMs: 200 });
+    t.services.secrets.set('picovoice', 'pv-test-key-123');
+    await t.v.start();
+    t.wake.trigger();
+    await until(() => t.stt.sessions === 1);
+    await until(() => t.stt.written > 0);
+    // ~200 ms of audio (≈ 6 frames of 32 ms) captured before the session existed reached it.
+    expect(t.stt.written).toBeGreaterThanOrEqual(4);
     t.v.voice.shutdown();
   });
 

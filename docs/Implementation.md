@@ -299,3 +299,4 @@ Local Whisper STT · local LLM fallback (Ollama) · vector memory (sqlite-vec + 
 - [x] Settings → Voice and onboarding: wake word Picovoice "Jarvis" or on-device openWakeWord "Hey Jarvis"; speech to text Deepgram or on-device Whisper (base.en / small.en / small), chosen independently.
 - [x] Pinned, SHA-256-verified model downloads with progress, cancel and remove.
 - [x] Verified with real models on Sir's PC (`tests/integration/local-voice.real.test.ts`, run with `JARVIS_VOICE_MODELS` set).
+- [x] v1.2.1 fix: re-applying the voice mode while the microphone ran (voice:setMode plus the settings listener, or a model finishing its download) made the old mic loop fail and release the new recorder, so neither wake word ever heard anything. Each recorder now has its own loop; replaced engines are released only after a running inference; audio spoken while speech-to-text starts is buffered ("Hey Jarvis, what time is it?" in one breath).

@@ -16,6 +16,8 @@ export function createFakeRecorder(frameLength = 512): Recorder & { reads: numbe
     },
     async read(): Promise<Int16Array> {
       await sleep(32); // 512 samples @ 16 kHz
+      // Like PvRecorder: a read that is pending when the recorder is stopped or released fails.
+      if (!recording) throw new Error('PvRecorder failed to read audio data frame.');
       r.reads++;
       const frame = new Int16Array(frameLength);
       for (let i = 0; i < frameLength; i++) frame[i] = Math.round(Math.sin(i / 8) * 800);
@@ -50,13 +52,16 @@ export function createFakeWake(): WakeWord & { trigger(): void } {
 /** Each started session "hears" the next scripted transcript after a short delay. */
 export function createFakeStt(
   transcripts: string[] = [],
-): SttProvider & { queue: string[]; sessions: number } {
+  opts: { startDelayMs?: number } = {},
+): SttProvider & { queue: string[]; sessions: number; written: number } {
   const provider = {
     id: 'fake',
     queue: [...transcripts],
     sessions: 0,
+    written: 0,
     async start({ signal }: { signal: AbortSignal }): Promise<SttSession> {
       provider.sessions++;
+      if (opts.startDelayMs) await sleep(opts.startDelayMs);
       const handlers: Record<string, Array<(...a: never[]) => void>> = {};
       const fire = (e: string, ...a: unknown[]): void => {
         for (const h of handlers[e] ?? []) (h as (...x: unknown[]) => void)(...a);
@@ -71,7 +76,9 @@ export function createFakeStt(
         }, 60);
       }
       return {
-        write: () => undefined,
+        write: () => {
+          provider.written++;
+        },
         on: (event: string, cb: (...a: never[]) => void) => {
           (handlers[event] ??= []).push(cb);
         },

@@ -46,6 +46,8 @@ export function createOpenWakeWord(
   let predictions = 0;
   let lastFire = -Infinity;
   const scores: number[] = [];
+  let inflight: Promise<unknown> = Promise.resolve();
+  let released = false;
 
   async function chunk(samples: Int16Array): Promise<boolean> {
     const joined = new Float32Array(raw.length + samples.length);
@@ -77,17 +79,28 @@ export function createOpenWakeWord(
   return {
     frameLength: OWW_CHUNK,
     scores,
-    async process(frame) {
-      const all = new Int16Array(pending.length + frame.length);
-      all.set(pending);
-      all.set(frame, pending.length);
-      let fired = false;
-      let at = 0;
-      for (; at + OWW_CHUNK <= all.length; at += OWW_CHUNK)
-        if (await chunk(all.subarray(at, at + OWW_CHUNK))) fired = true;
-      pending = all.slice(at);
-      return fired;
+    process(frame) {
+      if (released) return Promise.resolve(false);
+      const run = processFrame(frame);
+      inflight = run.catch(() => undefined);
+      return run;
     },
-    release: () => models.release(),
+    /** Waits for a running inference: disposing ONNX sessions mid-run fails ("Session already disposed"). */
+    release: () => {
+      released = true;
+      void inflight.then(() => models.release());
+    },
   };
+
+  async function processFrame(frame: Int16Array): Promise<boolean> {
+    const all = new Int16Array(pending.length + frame.length);
+    all.set(pending);
+    all.set(frame, pending.length);
+    let fired = false;
+    let at = 0;
+    for (; at + OWW_CHUNK <= all.length; at += OWW_CHUNK)
+      if (await chunk(all.subarray(at, at + OWW_CHUNK))) fired = true;
+    pending = all.slice(at);
+    return fired;
+  }
 }

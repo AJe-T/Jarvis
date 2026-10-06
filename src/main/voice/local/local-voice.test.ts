@@ -58,6 +58,26 @@ describe('openWakeWord port (ADR-011)', () => {
     expect(calls.classify).toBe(50 - 15 - 5); // classifier runs from chunk 16, first 5 are warm-up
     expect(fired).toEqual([21, 21 + 25]); // then again only after the 2 s debounce (25 chunks)
     ww.release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls.released).toBe(true);
+    expect(await ww.process(new Int16Array(OWW_CHUNK))).toBe(false); // released: no more inference
+  });
+
+  it('waits for a running inference before releasing the models', async () => {
+    let finish: () => void = () => undefined;
+    const { models, calls } = fakeOww(() => 0);
+    const slow: OwwModels = {
+      ...models,
+      mel: (a) => new Promise((r) => (finish = () => r(models.mel(a)))),
+    };
+    const ww = createOpenWakeWord(slow, 0.5);
+    const pending = ww.process(new Int16Array(OWW_CHUNK));
+    ww.release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls.released).toBe(false);
+    finish();
+    await pending;
+    await new Promise((r) => setTimeout(r, 0));
     expect(calls.released).toBe(true);
   });
 

@@ -45,6 +45,7 @@ const SILENCE_TIMEOUT_MS = 8_000;
 const MAX_LISTEN_MS = 30_000;
 const LEVEL_INTERVAL_MS = 50; // ≤ 20 Hz (Code-style.md §5)
 const METER_MS = 5_000;
+const MAX_EARLY_FRAMES = 250; // ≥ 8 s at 512 samples per frame
 
 const CANCEL_PHRASES = /^(stop|cancel|never ?mind|forget it|that's all|nothing)[.!]?$/i;
 const STOP_EVERYTHING = /^(jarvis,? )?stop everything[.!]?$/i;
@@ -64,7 +65,6 @@ export function createVoiceController(d: VoiceDeps) {
   let recorder: Recorder | null = null;
   let wake: WakeWord | null = null;
   let modeGeneration = 0;
-  let loopRunning = false;
   let listening: {
     session: SttSession | null;
     abort: AbortController;
@@ -72,6 +72,8 @@ export function createVoiceController(d: VoiceDeps) {
     max?: ReturnType<typeof setTimeout>;
     heard: boolean;
     retried: boolean;
+    /** Audio captured while the speech-to-text session is still starting ("Hey Jarvis, what time…"). */
+    early: Int16Array[];
   } | null = null;
   let meterUntil = 0;
   let sleeping = false;
@@ -147,9 +149,10 @@ export function createVoiceController(d: VoiceDeps) {
 
   function ensureRecorder(): void {
     if (recorder) return;
-    recorder = d.factories.recorder(d.settings.get('voice.deviceIndex'), wake?.frameLength ?? 512);
-    recorder.start();
-    void loop();
+    const rec = d.factories.recorder(d.settings.get('voice.deviceIndex'), wake?.frameLength ?? 512);
+    recorder = rec;
+    rec.start();
+    void loop(rec);
   }
 
   function releaseRecorder(): void {
@@ -163,22 +166,38 @@ export function createVoiceController(d: VoiceDeps) {
     recorder = null;
   }
 
-  async function loop(): Promise<void> {
-    if (loopRunning) return;
-    loopRunning = true;
+  /**
+   * One loop per recorder. applyMode replaces the recorder (and the wake engine) while a read or a
+   * wake-word inference may still be pending; that loop must then end quietly instead of reporting a
+   * broken microphone and releasing the new recorder (the bug that silently disabled the wake word).
+   */
+  async function loop(rec: Recorder): Promise<void> {
     let lastLevel = 0;
     try {
-      while (recorder && needRecorder()) {
-        const frame = await recorder.read();
+      while (recorder === rec && needRecorder()) {
+        const frame = await rec.read();
+        if (recorder !== rec) break;
         const now = Date.now();
         if (now - lastLevel >= LEVEL_INTERVAL_MS) {
           lastLevel = now;
           d.emit('voice:level', { rms: rms(frame) });
         }
-        if (listening) listening.session?.write(frame);
-        else if (wake && mode() === 'wake' && !sleeping && (await wake.process(frame))) onWake();
+        if (listening) {
+          if (listening.session) listening.session.write(frame);
+          else if (listening.early.length < MAX_EARLY_FRAMES) listening.early.push(frame);
+        } else if (wake && mode() === 'wake' && !sleeping) {
+          const w = wake;
+          let heard = false;
+          try {
+            heard = await w.process(frame);
+          } catch (err) {
+            if (wake === w) throw err; // a replaced engine may fail on its way out; ignore that
+          }
+          if (heard && wake === w && recorder === rec) onWake();
+        }
       }
     } catch (err) {
+      if (recorder !== rec) return; // replaced or released on purpose
       log.warn({ err: errorMessage(err) }, 'microphone read failed');
       d.emit('notify', {
         level: 'error',
@@ -187,9 +206,10 @@ export function createVoiceController(d: VoiceDeps) {
       });
       cancelListening();
     } finally {
-      loopRunning = false;
-      releaseRecorder();
-      d.emit('voice:level', { rms: 0 });
+      if (recorder === rec) {
+        releaseRecorder();
+        d.emit('voice:level', { rms: 0 });
+      }
     }
   }
 
@@ -209,7 +229,7 @@ export function createVoiceController(d: VoiceDeps) {
     stopSpeaking();
     sleeping = false;
     const abort = new AbortController();
-    listening = { session: null, abort, heard: false, retried: isRetry };
+    listening = { session: null, abort, heard: false, retried: isRetry, early: [] };
     d.state.set('LISTENING');
     if (timings.wakeAt)
       log.info({ wakeToListeningMs: Date.now() - timings.wakeAt }, 'latency: wake → listening');
@@ -251,6 +271,8 @@ export function createVoiceController(d: VoiceDeps) {
         });
         cancelListening();
       });
+      for (const f of current.early) session.write(f);
+      current.early = [];
     } catch (err) {
       log.warn({ err: errorMessage(err) }, 'speech-to-text connect failed');
       d.emit('notify', {

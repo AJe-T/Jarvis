@@ -1,12 +1,17 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { sleep } from '@main/lib/util';
 import { runPowerShell } from '@main/tools/powershell';
+import { createLocalEngines } from '@main/voice/local/local-engines';
 import { createWhisperStt } from '@main/voice/local/local-stt';
 import { createModelStore, type ModelId } from '@main/voice/local/model-store';
 import { loadOwwModels, loadSileroVad } from '@main/voice/local/onnx';
 import { createOpenWakeWord, thresholdFor } from '@main/voice/local/open-wake-word';
 import { loadWhisper } from '@main/voice/local/whisper';
+import type { Recorder } from '@main/voice/types';
+import { createVoiceSystem, realFactories } from '@main/voice/voice-system';
+import { idle, setupServices } from './helpers';
 
 /**
  * ADR-011 end-to-end check with the real models (downloads them once). Skipped unless
@@ -89,4 +94,59 @@ describe.skipIf(!DIR)('local voice with real models (ADR-011)', () => {
     expect(text.toLowerCase()).toMatch(/what time is it in london/);
     await transcriber.release();
   }, 600_000);
+
+  it('wake mode end to end: "Hey Jarvis, what time is it?" in one breath reaches the chat', async () => {
+    await store.download('openwakeword-hey-jarvis');
+    await store.download(WHISPER);
+    const t = setupServices({
+      rules: [{ match: 'time', steps: [{ text: 'Half past nine, sir.' }] }],
+    });
+    const s = t.services;
+    s.settings.set('voice.mode', 'wake');
+    s.settings.set('voice.wake.provider', 'openwakeword');
+    s.settings.set('voice.stt.provider', 'whisper');
+    s.settings.set('voice.stt.whisperModel', WHISPER);
+    const audio = cat(silence(2500), await speak('Hey Jarvis, what time is it?'), silence(3000));
+    // The microphone, played in real time from the synthesised audio.
+    const fileRecorder = (frameLength: number): Recorder => {
+      let at = 0;
+      let on = false;
+      return {
+        frameLength,
+        start: () => (on = true),
+        stop: () => (on = false),
+        release: () => (on = false),
+        get isRecording() {
+          return on;
+        },
+        async read() {
+          await sleep((frameLength / 16000) * 1000);
+          if (!on) throw new Error('PvRecorder failed to read audio data frame.');
+          const frame = new Int16Array(frameLength);
+          frame.set(audio.subarray(at, Math.min(at + frameLength, audio.length)));
+          at += frameLength;
+          return frame;
+        },
+      };
+    };
+    const real = realFactories(s, createLocalEngines(store, s.settings));
+    const v = createVoiceSystem(s, {
+      factories: { ...real, recorder: (_d, n) => fileRecorder(n) },
+    });
+    expect(await v.start()).toEqual({ ok: true });
+    await v.voice.applyMode(); // as the settings listener does: must not break the running mic
+    const started = Date.now();
+    while (!t.events.some((e) => e.event === 'chat:message') && Date.now() - started < 30_000)
+      await sleep(100);
+    await idle(s, 30_000);
+    const said = t.events
+      .filter((e) => e.event === 'voice:transcript')
+      .map((e) => e.payload as { text: string; isFinal: boolean })
+      .filter((p) => p.isFinal && p.text);
+    process.stdout.write(`
+wake→transcript: ${JSON.stringify(said)}
+`);
+    expect(said.at(-1)?.text.toLowerCase()).toMatch(/what time is it/);
+    v.voice.shutdown();
+  }, 300_000);
 });
