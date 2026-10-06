@@ -43,7 +43,7 @@ export function UsagePanel(): React.JSX.Element {
       {summary && (
         <section aria-label="Spend" className="rounded-md border border-night-600 bg-night-800 p-4">
           <p className="text-sm text-ink-300">
-            {range === 'day' ? 'Spent today' : 'Spent this month'}
+            {range === 'day' ? 'API spend today' : 'API spend this month'}
           </p>
           <p className="font-display text-3xl font-semibold text-ink-100 tabular">
             {usd(summary.costUsd)}
@@ -65,6 +65,12 @@ export function UsagePanel(): React.JSX.Element {
                 style={{ width: `${pct}%` }}
               />
             </div>
+          )}
+          {summary.subscriptionCostUsd > 0 && (
+            <p className="mt-2 text-sm text-ink-300 tabular">
+              Plus {usd(summary.subscriptionCostUsd)} API-equivalent through your Claude
+              subscription (not charged, not counted against the budget).
+            </p>
           )}
           <p className="mt-2 text-xs text-ink-500 tabular">
             {summary.tokens.toLocaleString()} tokens

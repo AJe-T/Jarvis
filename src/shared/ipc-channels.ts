@@ -37,6 +37,8 @@ export const INVOKE_CHANNELS = [
   'app:setMiniMode',
   'usage:summary',
   'usage:breakdown',
+  'llm:claudeCodeStatus',
+  'llm:claudeCodeLogin',
   'audit:list',
   'audit:verify',
   'audit:export',

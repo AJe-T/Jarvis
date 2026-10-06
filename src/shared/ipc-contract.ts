@@ -74,6 +74,8 @@ const UsageSummary = z.object({
   budget: z.number(),
   dayCostUsd: z.number(),
   monthCostUsd: z.number(),
+  /** API-equivalent cost of calls made through the Claude subscription (not charged, not budgeted). */
+  subscriptionCostUsd: z.number(),
 });
 const BreakdownRow = z.object({
   key: z.string(),
@@ -128,6 +130,18 @@ export const INVOKE = {
     Empty,
     z.record(z.string(), z.object({ set: z.boolean(), last4: z.string().optional() })),
   ),
+  'llm:claudeCodeStatus': contract(
+    Empty,
+    z.object({
+      found: z.boolean(),
+      path: z.string().nullable(),
+      loggedIn: z.boolean(),
+      authMethod: z.string().optional(),
+      subscriptionType: z.string().optional(),
+      error: z.string().optional(),
+    }),
+  ),
+  'llm:claudeCodeLogin': contract(Empty, Ok),
   'secrets:test': contract(
     z.object({ name: z.enum(['anthropic', 'deepgram', 'picovoice']) }),
     z.object({ ok: z.boolean(), error: z.string().optional() }),

@@ -13,12 +13,24 @@ test('Phase 7: manual backup, usage tab, mini orb round-trip', async () => {
   await page.getByRole('button', { name: 'Back up now' }).click();
   await expect(page.getByText('Backup saved.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(1);
+  // ADR-010: switch the connection to the Claude subscription and back.
+  await page.getByRole('button', { name: 'Models & budget' }).click();
+  await page.getByRole('radio', { name: /My Claude subscription/ }).click();
+  await expect(page.getByRole('radio', { name: /My Claude subscription/ })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(
+    page.getByText(/Signed in to Claude Code|not signed in|isn't installed/),
+  ).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('radio', { name: /Anthropic API key/ }).click();
+  await expect(page.locator('#anthropic-label')).toBeVisible();
   await page.getByRole('button', { name: 'About' }).click();
   await expect(page.getByText(/^\d+\.\d+\.\d+/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Activity' }).click();
   await page.getByRole('tab', { name: 'Usage' }).click();
-  await expect(page.getByText('Spent this month')).toBeVisible();
+  await expect(page.getByText('API spend this month')).toBeVisible();
 
   await page.getByRole('button', { name: 'Chat' }).click();
   const miniOpened = app.waitForEvent('window');

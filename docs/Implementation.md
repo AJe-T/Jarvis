@@ -269,6 +269,12 @@ docs/Testing.md §5–7 and §10. Implement the Phase 7 tasks, then run the full
 
 **Done when:** installer works on a clean Windows 11 VM; all gates pass. Tag `v1.0.0`. 🎉
 
+### After v1.0.0: Claude subscription connection (ADR-010)
+- [x] Settings → Models & budget and onboarding: choose *Anthropic API key* or *My Claude subscription* (Sir's signed-in Claude Code, personal use only).
+- [x] Chat turns via the Claude Agent SDK with Jarvis tools served over in-process MCP (policy, confirmations and audit unchanged); background calls via the same connection.
+- [x] Subscription usage recorded with `billing = 'subscription'`, shown in the Usage tab, excluded from budgets.
+- [x] Computer control stays API-only. Verified on Sir's PC with a real turn (Sonnet 5.5 + `get_datetime`, ~4.6 s) and Opus 5.5.
+
 ---
 
 ## Parking Lot (P2 — don't build until v1 ships)

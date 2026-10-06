@@ -13,10 +13,7 @@ import { GOLDEN, READ_ONLY } from './golden';
 const key = process.env['ANTHROPIC_API_KEY'];
 if (!key) throw new Error('Set ANTHROPIC_API_KEY in .env to run evals.');
 
-const t = setupServices(
-  undefined,
-  createClaudeClient(() => key),
-);
+const t = setupServices(undefined, { llm: createClaudeClient(() => key) });
 t.services.settings.set('onboarding.complete', true);
 const memory = createMemorySystem(t.services);
 await memory.start();

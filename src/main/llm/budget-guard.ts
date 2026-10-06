@@ -13,6 +13,8 @@ export function createBudgetGuard(ledger: UsageLedger, settings: SettingsService
   const budgetError = (text: string): JarvisError => new JarvisError('BUDGET_EXCEEDED', text, text);
 
   function check(): JarvisError | null {
+    // ADR-010: the subscription has no per-call charge, so dollar budgets only limit API-key spend.
+    if (settings.get('llm.provider') === 'subscription') return null;
     const { day, month } = ledger.totals();
     const daily = settings.get('budget.dailyUsd');
     const monthly = settings.get('budget.monthlyUsd');

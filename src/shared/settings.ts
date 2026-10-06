@@ -17,6 +17,11 @@ const accelerator = z.string().min(1).max(60);
  * Paths that depend on the machine (vault, allowed roots) default to empty and are seeded by main on first run.
  */
 export const SETTINGS = {
+  /** ADR-010: 'api' = Anthropic API key; 'subscription' = Sir's Claude plan via his signed-in Claude Code. */
+  'llm.provider': {
+    schema: z.enum(['api', 'subscription']),
+    default: 'api' as 'api' | 'subscription',
+  },
   'models.default': { schema: modelId, default: 'claude-sonnet-5-5' },
   'models.deep': { schema: modelId, default: 'claude-opus-5-5' },
   'models.fast': { schema: modelId, default: 'claude-haiku-4-5-20251001' },
@@ -87,4 +92,8 @@ export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 export const SettingKeySchema = z.enum(SETTING_KEYS as [SettingKey, ...SettingKey[]]);
 
 /** Settings whose change must itself be confirmed by Sir in the UI (Security.md §5 step 4). */
-export const SENSITIVE_SETTINGS: readonly SettingKey[] = ['policy.overrides', 'files.allowedRoots'];
+export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
+  'policy.overrides',
+  'files.allowedRoots',
+  'llm.provider',
+];

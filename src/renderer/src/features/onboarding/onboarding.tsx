@@ -8,6 +8,7 @@ import { Field, TextInput } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
 import { useSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
+import { ConnectionPicker } from '../settings/connection';
 import { SecretField } from '../settings/secret-field';
 import { MicCheck } from './mic-check';
 
@@ -52,7 +53,8 @@ export function Onboarding(): React.JSX.Element {
     }
   }
 
-  const canNext = step !== 1 || Boolean(anthropic?.set);
+  const provider = useSetting('llm.provider') ?? 'api';
+  const canNext = step !== 1 || provider === 'subscription' || Boolean(anthropic?.set);
 
   return (
     <main className="flex h-full flex-col items-center overflow-y-auto bg-night-900 px-6 py-10">
@@ -116,16 +118,12 @@ export function Onboarding(): React.JSX.Element {
           <>
             <Heading>Connect my brain</Heading>
             <p className="text-ink-300">
-              Paste your Anthropic API key. I&apos;ll test it with a tiny request. Default budget:
-              $2 a day, $30 a month (change it later in Settings).
+              Choose how I reach Claude. With an API key I&apos;ll test it with a tiny request
+              (default budget: $2 a day, $30 a month). With your Claude subscription I use the
+              Claude Code you&apos;re signed in to on this PC.
             </p>
-            <SecretField
-              name="anthropic"
-              label="Anthropic API key"
-              placeholder="sk-ant-…"
-              testable="anthropic"
-            />
-            <p className="text-sm text-ink-500">
+            <ConnectionPicker />
+            <p className="text-sm text-ink-500" hidden={provider === 'subscription'}>
               Tip: also set a monthly spend limit in the{' '}
               <button
                 type="button"

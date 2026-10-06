@@ -17,9 +17,17 @@ import { createToolCallsRepo } from './db/repos/tool-calls-repo';
 import { createUsageRepo } from './db/repos/usage-repo';
 import { createAssistantStateHub } from './agent/assistant-state';
 import { NO_PROVIDERS, createContextBuilder, type ContextProviders } from './agent/context-builder';
+import { runAgentLoop } from './agent/agent-loop';
 import { createOrchestrator, type Emit } from './agent/orchestrator';
+import { createSdkLoop } from './agent/sdk-loop';
 import { createBudgetGuard } from './llm/budget-guard';
 import { createClaudeClient } from './llm/claude-client';
+import {
+  createClaudeCodeClient,
+  findClaudeCode,
+  type ClaudeCodeRuntime,
+  type QueryFn,
+} from './llm/claude-code';
 import { createFakeClaude, loadFakeScript } from './llm/fake-claude';
 import type { LlmClient } from './llm/types';
 import { createUsageLedger } from './llm/usage-ledger';
@@ -48,6 +56,9 @@ export interface ServiceOptions {
   /** Dev-only fallbacks for secrets (e.g., ANTHROPIC_API_KEY from .env). Empty in packaged builds. */
   devSecrets?: Record<string, string>;
   llm?: LlmClient;
+  /** Tests: stand-ins for the Agent SDK's query() and the claude.exe lookup (ADR-010). */
+  claudeCodeQuery?: QueryFn;
+  claudeCodePath?: () => string | null;
   /** Known folders (app.getPath) used to seed vault + allowed roots on first run. */
   paths: {
     documents: string;
@@ -141,9 +152,11 @@ export function createServices(opts: ServiceOptions) {
   const audit = createAuditLog(db);
 
   // ── brain: usage, budget, state ──────────────────────────────────────────────────────────
+  const subscription = (): boolean => settings.get('llm.provider') === 'subscription';
   const ledger = createUsageLedger({
     repo: usageRepo,
     settings,
+    billing: () => (subscription() ? 'subscription' : 'api'),
     onUpdate: (u) =>
       opts.emit('usage:update', {
         dayCostUsd: u.dayCostUsd,
@@ -160,11 +173,28 @@ export function createServices(opts: ServiceOptions) {
     opts.emit('assistant:state', { state: s, ...(detail ? { detail } : {}) }),
   );
 
-  const llm: LlmClient =
+  const llmApi: LlmClient =
     opts.llm ??
     (opts.isTest
       ? createFakeClaude(loadFakeScript(process.env['JARVIS_FAKE_SCRIPT']))
       : createClaudeClient(() => secrets.get('anthropic')));
+  // ADR-010: Sir's own Claude Code (signed in with his plan), driven through the Agent SDK.
+  const claudeCode: ClaudeCodeRuntime = {
+    path: opts.claudeCodePath ?? (() => findClaudeCode()),
+    cwd: join(opts.userData, 'claude-code'),
+    query: async () =>
+      opts.claudeCodeQuery ?? (await import('@anthropic-ai/claude-agent-sdk')).query,
+  };
+  mkdirSync(claudeCode.cwd, { recursive: true });
+  const llmSubscription = createClaudeCodeClient(claudeCode);
+  /** Every Claude call goes to whichever connection Sir chose in Settings → Models & budget. */
+  const llm: LlmClient = {
+    stream: (req, o) => (subscription() ? llmSubscription : llmApi).stream(req, o),
+    ping: (model, signal) => (subscription() ? llmSubscription : llmApi).ping(model, signal),
+  };
+  const sdkLoop = createSdkLoop(claudeCode, {
+    webSearchEnabled: () => settings.get('web.search.enabled'),
+  });
 
   // ── safety layer (Security.md) ───────────────────────────────────────────────────────────
   const home = opts.home ?? homedir();
@@ -248,6 +278,7 @@ export function createServices(opts: ServiceOptions) {
     context,
     llm: () => llm,
     tools: () => tools,
+    loop: () => (subscription() ? sdkLoop : runAgentLoop),
     budget,
     ledger,
     settings,
@@ -289,6 +320,8 @@ export function createServices(opts: ServiceOptions) {
     killSwitch,
     state,
     llm,
+    llmApi,
+    claudeCode,
     pathGuard,
     policy,
     broker,

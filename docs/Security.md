@@ -282,6 +282,13 @@ Decisions taken while building the policy layer; the code is the reference (`src
 - **Presets** (`src/shared/mcp-presets.ts`): Playwright `0.0.83` with `--browser msedge` and a dedicated profile in `%APPDATA%\Jarvis\browser-profile` (Edge ships with every Windows 11; it is never Sir's everyday profile), `browser_run_code_unsafe` BLOCKED by default; GitHub remote server with a fine-grained PAT as a bearer token; Notion `2.5.2` with `NOTION_TOKEN`; filesystem `2026.8.31` scoped to the allowed roots.
 - MCP child processes get only the SDK's minimal environment plus the secrets that server is configured for; the Anthropic key is never passed.
 
+### 16.3 Claude subscription connection (ADR-010)
+
+- Jarvis never touches Claude.ai credentials: sign-in is `claude auth login` in Claude Code's own window; status comes from `claude auth status --json`, of which only `loggedIn`, `authMethod` and `subscriptionType` are kept (not the email or organisation).
+- The claude.exe location is detected (native install folder, then PATH) and is deliberately not a setting, so a compromised renderer can't choose which program Jarvis runs. It is started with argument arrays only (no shell).
+- Claude Code runs with no built-in tools except WebSearch (when enabled), no user/project settings, hooks, plugins or MCP servers, and no session files. `canUseTool` denies everything except `mcp__jarvis__*` and WebSearch. Every Jarvis tool call still goes through the executor (Zod parse → policy → guards → confirmation → audit). WebSearch results taint the turn exactly like the API's web search.
+- `llm.provider` changes are audited with their value. Personal use only: see ADR-010.
+
 ### 16.2 Implementation Notes (Phase 6)
 
 - Desktop action policy (`src/main/security/desktop-policy.ts`) additionally blocks `win+x`, `ctrl+shift+esc` and `win+l` (use `lock_screen`), and asks before `alt+f4`, `ctrl+w` and `ctrl+shift+delete`. A "confirm" verdict pauses the operator and shows the normal confirmation dialog (always treated as destructive: click or Ctrl+Enter).

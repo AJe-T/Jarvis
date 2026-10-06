@@ -30,6 +30,14 @@ export interface ToolRuntime {
   definitions(): Anthropic.ToolUnion[];
   execute(block: ToolUseBlock, ctx: TurnContext): Promise<ToolResultBlockParam>;
   isBatchToolset(block: ToolUseBlock): boolean;
+  /** Plain JSON-Schema tool list, for the Claude subscription path (served over MCP). */
+  catalog?(): ToolCatalogEntry[];
+}
+
+export interface ToolCatalogEntry {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
 }
 
 export const NO_TOOLS: ToolRuntime = {

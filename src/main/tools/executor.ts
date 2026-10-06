@@ -262,6 +262,7 @@ export function createToolExecutor(deps: ExecutorDeps): ToolRuntime {
 
   return {
     definitions: () => deps.registry.definitions(),
+    catalog: () => deps.registry.catalog(),
     execute,
     isBatchToolset: (block) => Boolean((block as { toolset_name?: string | null }).toolset_name),
   };

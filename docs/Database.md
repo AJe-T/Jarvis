@@ -227,7 +227,8 @@ CREATE TABLE usage_ledger (
   output_tokens    INTEGER NOT NULL,
   cache_read_tokens   INTEGER NOT NULL DEFAULT 0,
   cache_write_tokens  INTEGER NOT NULL DEFAULT 0,
-  est_cost_usd     REAL NOT NULL               -- from settings price table (user-editable)
+  est_cost_usd     REAL NOT NULL,              -- from settings price table (user-editable)
+  billing          TEXT NOT NULL DEFAULT 'api' -- 'api' | 'subscription' (migration 003, ADR-010; budgets count 'api' only)
 );
 CREATE INDEX idx_usage_day ON usage_ledger(day);
 
@@ -286,7 +287,7 @@ WHERE memories_fts MATCH ?
 ORDER BY bm25(memories_fts, 3.0, 1.0, 2.0) LIMIT 6;   -- weight title > tags > body
 
 -- Today's spend
-SELECT COALESCE(SUM(est_cost_usd),0) FROM usage_ledger WHERE day = ?;
+SELECT COALESCE(SUM(est_cost_usd),0) FROM usage_ledger WHERE day = ? AND billing = 'api';
 
 -- Due reminders
 SELECT * FROM reminders WHERE status='scheduled' AND due_at <= ? ORDER BY due_at;

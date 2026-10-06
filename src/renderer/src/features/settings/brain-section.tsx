@@ -1,25 +1,21 @@
 import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
-import { useSettingsStore } from '../../stores/settings-store';
-import { SecretField } from './secret-field';
+import { useSetting, useSettingsStore } from '../../stores/settings-store';
+import { ConnectionPicker } from './connection';
 import { SettingInput, SettingSwitch } from './settings-controls';
 
 export function BrainSection(): React.JSX.Element {
   const day = useSettingsStore((s) => s.dayCostUsd);
   const month = useSettingsStore((s) => s.monthCostUsd);
+  const subscription = useSetting('llm.provider') === 'subscription';
   return (
     <>
       <Section
-        title="API key"
-        description="Jarvis uses Claude as its brain. The key is encrypted with Windows DPAPI and never leaves this PC except to call Anthropic."
+        title="Connection"
+        description="Jarvis uses Claude as its brain. An API key is encrypted with Windows DPAPI and never leaves this PC except to call Anthropic. Subscription mode runs your signed-in Claude Code; Jarvis never sees your Claude login."
       >
-        <SecretField
-          name="anthropic"
-          label="Anthropic API key"
-          placeholder="sk-ant-…"
-          testable="anthropic"
-        />
-        <p className="text-sm text-ink-300">
+        <ConnectionPicker />
+        <p className="text-sm text-ink-300" hidden={subscription}>
           Also set a monthly spend limit in the{' '}
           <button
             type="button"
@@ -37,7 +33,11 @@ export function BrainSection(): React.JSX.Element {
       </Section>
       <Section
         title="Budget"
-        description={`Requests stop when a budget is used up. Spent today: $${day.toFixed(2)} · this month: $${month.toFixed(2)}.`}
+        description={
+          subscription
+            ? 'Budgets limit API-key spending only. Subscription use counts against your Claude plan limits instead; the Usage tab shows its API-equivalent cost.'
+            : `Requests stop when a budget is used up. Spent today: $${day.toFixed(2)} · this month: $${month.toFixed(2)}.`
+        }
       >
         <div className="flex flex-wrap gap-6">
           <SettingInput k="budget.dailyUsd" label="Daily budget (USD)" type="number" step={0.5} />

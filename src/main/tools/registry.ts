@@ -48,6 +48,13 @@ export function createToolRegistry(opts: { webSearchEnabled(): boolean }) {
       return tools.get(name) ?? providers.flatMap((p) => p()).find((t) => t.name === name);
     },
     all,
+    catalog() {
+      return all().map((t) => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: inputSchema(t),
+      }));
+    },
     definitions(): Anthropic.ToolUnion[] {
       const defs: Anthropic.ToolUnion[] = all().map((t) =>
         'anthropicDefinition' in t

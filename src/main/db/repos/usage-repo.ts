@@ -2,6 +2,7 @@ import { localDay, newId } from '../../lib/util';
 import type { Db } from '../connection';
 
 export type UsagePurpose = 'chat' | 'curator' | 'title' | 'summary' | 'desktop_agent' | 'eval';
+export type Billing = 'api' | 'subscription';
 
 export interface UsageEntry {
   model: string;
@@ -12,6 +13,7 @@ export interface UsageEntry {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   estCostUsd: number;
+  billing?: Billing;
 }
 
 export function createUsageRepo(db: Db) {
@@ -19,7 +21,7 @@ export function createUsageRepo(db: Db) {
     insert(e: UsageEntry, at = new Date()): void {
       db.prepare(
         `INSERT INTO usage_ledger (id, ts, day, model, purpose, conversation_id, input_tokens, output_tokens,
-           cache_read_tokens, cache_write_tokens, est_cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           cache_read_tokens, cache_write_tokens, est_cost_usd, billing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         newId('u_'),
         at.toISOString(),
@@ -32,18 +34,19 @@ export function createUsageRepo(db: Db) {
         e.cacheReadTokens,
         e.cacheWriteTokens,
         e.estCostUsd,
+        e.billing ?? 'api',
       );
     },
 
     /** Sum over local days in [fromDay, toDay]. */
-    totals(fromDay: string, toDay: string): { costUsd: number; tokens: number } {
+    totals(fromDay: string, toDay: string, billing?: Billing): { costUsd: number; tokens: number } {
       const r = db
         .prepare(
           `SELECT COALESCE(SUM(est_cost_usd), 0) AS cost,
              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens), 0) AS tokens
-           FROM usage_ledger WHERE day BETWEEN ? AND ?`,
+           FROM usage_ledger WHERE day BETWEEN ? AND ? AND (? IS NULL OR billing = ?)`,
         )
-        .get(fromDay, toDay) as { cost: number; tokens: number };
+        .get(fromDay, toDay, billing ?? null, billing ?? null) as { cost: number; tokens: number };
       return { costUsd: r.cost, tokens: r.tokens };
     },
 

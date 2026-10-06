@@ -7,6 +7,8 @@ files:
   - out/**
   - package.json
   - '!**/*.map'
+  # ADR-010: Jarvis runs Sir's installed Claude Code, so the SDK's bundled 240 MB copy isn't shipped.
+  - '!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**'
 asarUnpack:
   - '**/*.node'
   - resources/**

@@ -3,9 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EventChannel } from '@shared/ipc-channels';
 import { createFakeClaude, type FakeScript } from '@main/llm/fake-claude';
-import type { LlmClient } from '@main/llm/types';
 import type { Encryptor } from '@main/settings/secrets';
-import { createServices } from '@main/services';
+import { createServices, type ServiceOptions } from '@main/services';
 import { createFakeOs } from '@main/tools/native/os';
 
 /** Reversible stand-in for DPAPI so tests can run anywhere. */
@@ -15,10 +14,10 @@ export const fakeEncryptor: Encryptor = {
   decryptString: (b) => Buffer.from(b).reverse().toString('utf8'),
 };
 
-/** `realLlm` swaps the FakeClaude for a real client (evals only). */
+/** `extra` overrides service options (a real LLM for evals, a fake Claude Code for ADR-010 tests). */
 export function setupServices(
   script: FakeScript | ((dir: string) => FakeScript) = { rules: [] },
-  realLlm?: LlmClient,
+  extra: Partial<ServiceOptions> = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'jarvis-int-'));
   const home = (n: string): string => {
@@ -33,7 +32,7 @@ export function setupServices(
     isTest: true,
     encryptor: fakeEncryptor,
     emit: (event, payload) => events.push({ event, payload }),
-    llm: realLlm ?? llm,
+    llm,
     os: createFakeOs(),
     home: join(dir, 'home'),
     paths: {
@@ -44,6 +43,7 @@ export function setupServices(
       videos: home('Videos'),
       music: home('Music'),
     },
+    ...extra,
   });
   return { dir, services, events, llm };
 }

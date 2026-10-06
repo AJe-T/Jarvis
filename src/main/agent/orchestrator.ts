@@ -60,6 +60,8 @@ export interface OrchestratorDeps {
   context: ContextBuilder;
   llm: () => LlmClient;
   tools: () => ToolRuntime;
+  /** Picks the chat loop per turn: Messages API (default) or the Claude subscription (ADR-010). */
+  loop?: () => typeof runAgentLoop;
   budget: BudgetGuard;
   ledger: UsageLedger;
   settings: SettingsService;
@@ -207,7 +209,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         mode: info.mode,
         userText: info.userText,
       });
-      const result = await runAgentLoop(
+      const result = await (deps.loop?.() ?? runAgentLoop)(
         {
           llm: deps.llm(),
           tools: deps.tools(),

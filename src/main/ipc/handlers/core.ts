@@ -5,6 +5,7 @@ import { localDay } from '../../lib/util';
 import { toSummary } from '../../db/repos/conversations-repo';
 import { toUiToolCall } from '../../db/repos/tool-calls-repo';
 import { buildUiMessages } from '../../agent/ui-history';
+import { claudeCodeStatus, openClaudeLogin } from '../../llm/claude-code';
 import { monthStart } from '../../llm/usage-ledger';
 import { pickModel } from '../../agent/model-router';
 import type { Services } from '../../services';
@@ -95,7 +96,7 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
   handle('secrets:test', async (req) => {
     if (req.name !== 'anthropic') return { ok: s.secrets.get(req.name) !== undefined };
     try {
-      await s.llm.ping(pickModel(s.settings, { purpose: 'title' }), AbortSignal.timeout(20_000));
+      await s.llmApi.ping(pickModel(s.settings, { purpose: 'title' }), AbortSignal.timeout(20_000));
       return { ok: true };
     } catch (err) {
       return {
@@ -109,11 +110,12 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
   handle('usage:summary', (req) => {
     const t = s.ledger.totals();
     const day = localDay();
-    const range =
-      req.range === 'day' ? s.usageRepo.totals(day, day) : s.usageRepo.totals(monthStart(day), day);
+    const from = req.range === 'day' ? day : monthStart(day);
+    const all = s.usageRepo.totals(from, day);
     return {
-      costUsd: range.costUsd,
-      tokens: range.tokens,
+      costUsd: s.usageRepo.totals(from, day, 'api').costUsd,
+      subscriptionCostUsd: s.usageRepo.totals(from, day, 'subscription').costUsd,
+      tokens: all.tokens,
       budget:
         req.range === 'day'
           ? s.settings.get('budget.dailyUsd')
@@ -121,6 +123,19 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
       dayCostUsd: t.day,
       monthCostUsd: t.month,
     };
+  });
+  handle('llm:claudeCodeStatus', () => claudeCodeStatus(s.claudeCode.path()));
+  handle('llm:claudeCodeLogin', () => {
+    const path = s.claudeCode.path();
+    if (!path)
+      throw new JarvisError(
+        'NOT_FOUND',
+        'claude.exe not found',
+        'Claude Code is not installed on this PC.',
+      );
+    openClaudeLogin(path);
+    audit('llm.claudeCodeLogin', {});
+    return { ok: true };
   });
   handle('usage:breakdown', (req) => {
     const day = localDay();

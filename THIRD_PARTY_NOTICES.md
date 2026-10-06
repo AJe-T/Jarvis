@@ -11,6 +11,7 @@ bundled third-party assets and separately-run components whose licences require 
 | Playwright MCP (@playwright/mcp, run as a separate process via npx) | https://github.com/microsoft/playwright-mcp | Apache-2.0 | Browser connector |
 | Notion MCP server (@notionhq/notion-mcp-server, optional, run via npx) | https://github.com/makenotion/notion-mcp-server | MIT | Notion connector |
 | MCP filesystem server (@modelcontextprotocol/server-filesystem, optional, run via npx) | https://github.com/modelcontextprotocol/servers | MIT | Filesystem connector |
+| Claude Agent SDK (@anthropic-ai/claude-agent-sdk 0.3.291) | https://code.claude.com/docs/en/agent-sdk/overview | Anthropic Commercial Terms (see package LICENSE.md) | Optional "Claude subscription" connection (ADR-010); runs Sir's installed Claude Code |
 | Picovoice Porcupine built-in keyword "Jarvis" | https://github.com/Picovoice/porcupine | Apache-2.0 | Wake word |
 
 npm dependencies keep their own licence files inside `node_modules`; all production

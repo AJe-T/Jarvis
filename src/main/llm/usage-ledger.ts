@@ -1,6 +1,6 @@
 import type { Price } from '@shared/settings';
 import { localDay } from '../lib/util';
-import type { UsagePurpose, UsageRepo } from '../db/repos/usage-repo';
+import type { Billing, UsagePurpose, UsageRepo } from '../db/repos/usage-repo';
 import type { SettingsService } from '../settings/settings-service';
 import type { LlmMessage } from './types';
 
@@ -30,6 +30,8 @@ export function monthStart(day: string): string {
 export function createUsageLedger(deps: {
   repo: UsageRepo;
   settings: SettingsService;
+  /** Subscription calls are recorded at their API-equivalent cost but never count against the budget. */
+  billing?: () => Billing;
   onUpdate?: (s: {
     dayCostUsd: number;
     monthCostUsd: number;
@@ -55,7 +57,10 @@ export function createUsageLedger(deps: {
 
   function totals(now = new Date()): { day: number; month: number } {
     const day = localDay(now);
-    return { day: repo.totals(day, day).costUsd, month: repo.totals(monthStart(day), day).costUsd };
+    return {
+      day: repo.totals(day, day, 'api').costUsd,
+      month: repo.totals(monthStart(day), day, 'api').costUsd,
+    };
   }
 
   return {
@@ -86,6 +91,7 @@ export function createUsageLedger(deps: {
         cacheReadTokens: tokens.cacheRead,
         cacheWriteTokens: tokens.cacheWrite,
         estCostUsd: costUsd,
+        billing: deps.billing?.() ?? 'api',
       });
       const t = totals();
       deps.onUpdate?.({ dayCostUsd: t.day, monthCostUsd: t.month, model: message.model, purpose });
