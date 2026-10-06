@@ -22,6 +22,9 @@ export interface WriteResult {
 }
 
 const SKIP = new Set(['.obsidian', '.trash', '_jarvis', '.git']);
+// Control characters are illegal in Windows file names.
+// eslint-disable-next-line no-control-regex
+const ILLEGAL_NAME_CHARS = /[<>:"|?*\u0000-\u001f]/;
 
 /** Vault-relative paths always use forward slashes ('Memory/People/Pradyumna.md'). */
 export function normalizeRel(rel: string): string {
@@ -44,10 +47,7 @@ export function createVaultService(deps: {
 
   function resolve(relInput: string): string {
     const rel = normalizeRel(relInput);
-    // eslint-disable-next-line no-control-regex -- control characters are illegal in Windows file names
-    if (
-      rel.split('/').some((s) => s === '..' || /[. ]$/.test(s) || /[<>:"|?*\u0000-\u001f]/.test(s))
-    )
+    if (rel.split('/').some((s) => s === '..' || /[. ]$/.test(s) || ILLEGAL_NAME_CHARS.test(s)))
       throw new PolicyError(`Invalid vault path: ${relInput}`);
     const base = root();
     const abs = path.resolve(base, rel);
