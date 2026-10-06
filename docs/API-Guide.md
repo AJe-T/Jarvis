@@ -176,6 +176,8 @@ export function toClaudeTools(tools: Tool[]): Anthropic.Tool[] {
 
 Description-writing rules for tools: say what it does, when to use it, when **not** to use it, and what it returns. Keep each under ~80 words.
 
+Implementation additions to the `Tool` interface (`src/main/tools/types.ts`): `externalFacing` (taint escalation), `guards(input)` (paths/script/urls/text the policy engine checks against the global BLOCKED rules), `confirm(input)` (dialog title, action-named button label, details and their kind: `text` | `code` | `paths`), `jsonSchema` (MCP tools bring their own schema) and `source`. JSON Schema for native tools comes from Zod 4's `z.toJSONSchema`.
+
 ### 2.3 v1 native tool catalogue
 
 | Area | Tools |
@@ -354,7 +356,7 @@ After every successful write: update `memories` + FTS index, emit `memory:change
 ## 5. Web Search (server tool)
 
 ```ts
-const webSearchTool = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 }; // ⚠️ check latest version string
+const webSearchTool = { type: 'web_search_20260318', name: 'web_search', max_uses: 5 }; // verified in @anthropic-ai/sdk 0.131.0 types (2026-10-06)
 ```
 
 Executed by Anthropic; results come back as content blocks with citations. Render citations as links in the UI. Treat as untrusted for taint tracking.

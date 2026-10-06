@@ -42,8 +42,3 @@ export function createKillSwitch(): KillSwitch {
     },
   };
 }
-
-/** One AbortSignal that fires when any input fires. */
-export function anySignal(...signals: AbortSignal[]): AbortSignal {
-  return AbortSignal.any(signals);
-}

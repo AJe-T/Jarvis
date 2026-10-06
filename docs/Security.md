@@ -257,3 +257,19 @@ Before adding a server:
 ## 15. Security Acceptance Tests (must pass before each release)
 
 See [Testing](Testing.md) §6: policy unit tests (100% branch coverage), path-guard fuzz cases, shell blocklist corpus, prompt-injection corpus (≥ 30 cases), secret-scan of vault/logs after the E2E suite, Electron config assertions, kill-switch E2E.
+
+## 16. Implementation Notes (Phase 2)
+
+Decisions taken while building the policy layer; the code is the reference (`src/main/security/*`, `src/main/tools/*`).
+
+| Area | Decision |
+|---|---|
+| `open_path` (not in §4.1) | SAFE for documents and folders; BLOCKED for executables/scripts/shortcuts (`.exe .bat .cmd .ps1 .vbs .js .msi .lnk .url …`), so "open a downloaded installer" can never run code. Installed programs go through `open_app`. |
+| `read_text_file` | CONFIRM (not SAFE) for credential-looking files: `.env*`, `id_rsa`, `id_ed25519`, `*.pem/.key/.pfx/.p12/.kdbx`. |
+| `kill_process` | BLOCKED for critical processes (`lsass`, `csrss`, `winlogon`, `services`, `svchost`, `dwm`, `explorer`, `MsMpEng`, Jarvis itself, …). |
+| `delete_to_recycle_bin`, `move_path`, `rename_path` | Refuse an allowed root itself and the vault root. Cross-drive moves copy and then send the source to the Recycle Bin (never a permanent delete). |
+| Shell guard | Broader than §5.2: **any** `Remove-Item`/`del`/`rm`/`rd` (permanent delete) and **any** network transfer (`iwr`, `irm`, `curl`, `wget`, BITS, `Net.WebClient`) are BLOCKED, as are `Invoke-Expression`, `FromBase64String` and nested `-EncodedCommand` (decoded and re-checked). Words are matched whole, so `Format-Table` is fine while `format` is not. Backtick/caret/string-concatenation obfuscation is normalised first. Corpus: `tests/fixtures/shell-corpus.json` (74 cases). |
+| Path guard | Denied inside Jarvis's data folder: `secrets.bin`, `jarvis.db*`, `logs`, `backups`, `browser-profile`, `mcp.json` (the rest of the folder is still outside the allowed roots). `%VAR%` and `~` are expanded before checking; unknown variables are refused. |
+| URL guard | `open_url` may open private/localhost addresses (Sir runs dev servers); every other URL check refuses private ranges. |
+| Taint | Tools flagged `externalFacing` (`open_url`, MCP write tools) are raised to CONFIRM after the turn read untrusted content; the dialog shows the source. |
+| Internal PowerShell | Native tools pass parameters as JSON in an environment variable (`$P`), never by splicing input into script text. `run_powershell` scripts go through the shell guard; internal scripts are static code. |

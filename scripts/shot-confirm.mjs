@@ -1,0 +1,24 @@
+// Dev helper: screenshot of a PowerShell confirmation dialog in test mode.
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { _electron } from '@playwright/test';
+const out = process.argv[2];
+const dir = mkdtempSync(join(tmpdir(), 'jarvis-shots-'));
+const script = join(dir, 'fake.json');
+writeFileSync(script, JSON.stringify({ rules: [{ match: 'top', steps: [{ text: 'Let me check that.', tools: [{ name: 'run_powershell', input: { script: 'Get-Process |\n  Sort-Object WS -Descending |\n  Select-Object -First 3 Name, WS', purpose: 'List the 3 processes using the most memory' } }] }, { text: 'Done.' }] }] }));
+const env = { ...process.env, JARVIS_TEST: '1', JARVIS_USER_DATA: dir, JARVIS_FAKE_SCRIPT: script };
+delete env.ELECTRON_RUN_AS_NODE;
+const app = await _electron.launch({ args: ['.'], env });
+const page = await app.firstWindow();
+await page.setViewportSize({ width: 1100, height: 760 });
+await page.getByRole('button', { name: 'Continue' }).click();
+await page.getByLabel('Anthropic API key').fill('sk-ant-test-000000000000000000000000');
+await page.getByRole('button', { name: 'Save key' }).click();
+await page.waitForTimeout(300);
+for (const n of ['Continue', 'Continue', 'Skip', 'I understand']) await page.getByRole('button', { name: n }).click();
+await page.getByLabel('Message Jarvis').fill('top processes');
+await page.keyboard.press('Enter');
+await page.waitForTimeout(800);
+await page.screenshot({ path: join(out, 'confirm.png') });
+await app.close();

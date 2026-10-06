@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   backupNow,
@@ -9,11 +10,11 @@ import {
   type Db,
 } from './db/connection';
 import { createConversationsRepo } from './db/repos/conversations-repo';
+import { createRemindersRepo } from './db/repos/reminders-repo';
 import { createSettingsRepo } from './db/repos/settings-repo';
 import { createToolCallsRepo } from './db/repos/tool-calls-repo';
 import { createUsageRepo } from './db/repos/usage-repo';
 import { createAssistantStateHub } from './agent/assistant-state';
-import { NO_TOOLS, type ToolRuntime } from './agent/agent-loop';
 import { NO_PROVIDERS, createContextBuilder, type ContextProviders } from './agent/context-builder';
 import { createOrchestrator, type Emit } from './agent/orchestrator';
 import { createBudgetGuard } from './llm/budget-guard';
@@ -22,15 +23,27 @@ import { createFakeClaude, loadFakeScript } from './llm/fake-claude';
 import type { LlmClient } from './llm/types';
 import { createUsageLedger } from './llm/usage-ledger';
 import { logger } from './logging/logger';
+import { createScheduler } from './scheduler/scheduler';
+import { createAuditLog } from './security/audit';
 import { createKillSwitch } from './security/kill-switch';
+import { createPathGuard, defaultDeniedPaths } from './security/path-guard';
+import { createPolicyEngine } from './security/policy-engine';
 import { createSecretStore, type Encryptor } from './settings/secrets';
 import { createSettingsService } from './settings/settings-service';
+import { createConfirmationBroker, type ConfirmRequestEvent } from './tools/confirmation-broker';
+import { createToolExecutor } from './tools/executor';
+import { createAppIndex } from './tools/native/app-index';
+import { createNativeTools } from './tools/native/index';
+import type { OsAdapter } from './tools/native/os';
+import { createToolRegistry } from './tools/registry';
 
 export interface ServiceOptions {
   userData: string;
   isTest: boolean;
   encryptor: Encryptor;
   emit: Emit;
+  /** Windows/Electron access for native tools (a recording fake in tests). */
+  os: OsAdapter;
   /** Dev-only fallbacks for secrets (e.g., ANTHROPIC_API_KEY from .env). Empty in packaged builds. */
   devSecrets?: Record<string, string>;
   llm?: LlmClient;
@@ -43,6 +56,8 @@ export interface ServiceOptions {
     videos: string;
     music: string;
   };
+  startMenuDirs?: string[];
+  home?: string;
 }
 
 function openDb(userData: string): { db: Db; healthy: boolean } {
@@ -75,11 +90,21 @@ function seedPathSettings(
   }
 }
 
+function defaultStartMenuDirs(): string[] {
+  const programData = process.env['ProgramData'] ?? 'C:\\ProgramData';
+  const appData = process.env['APPDATA'] ?? join(homedir(), 'AppData', 'Roaming');
+  return [
+    join(programData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+    join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+  ];
+}
+
 /** Composition root for everything that does not need an Electron window (Code-style.md §4.3). */
 export function createServices(opts: ServiceOptions) {
   mkdirSync(opts.userData, { recursive: true });
   const { db, healthy } = openDb(opts.userData);
 
+  // ── settings, secrets, storage ───────────────────────────────────────────────────────────
   const settings = createSettingsService(createSettingsRepo(db));
   seedPathSettings(settings, opts.paths);
   const secrets = createSecretStore(
@@ -90,6 +115,10 @@ export function createServices(opts: ServiceOptions) {
   const conversations = createConversationsRepo(db);
   const toolCalls = createToolCallsRepo(db);
   const usageRepo = createUsageRepo(db);
+  const reminders = createRemindersRepo(db);
+  const audit = createAuditLog(db);
+
+  // ── brain: usage, budget, state ──────────────────────────────────────────────────────────
   const ledger = createUsageLedger({
     repo: usageRepo,
     settings,
@@ -115,16 +144,73 @@ export function createServices(opts: ServiceOptions) {
       ? createFakeClaude(loadFakeScript(process.env['JARVIS_FAKE_SCRIPT']))
       : createClaudeClient(() => secrets.get('anthropic')));
 
-  // Later phases plug in real tools and memory providers through these mutable slots.
-  const slots: { tools: ToolRuntime; providers: ContextProviders } = {
-    tools: NO_TOOLS,
-    providers: NO_PROVIDERS,
-  };
+  // ── safety layer (Security.md) ───────────────────────────────────────────────────────────
+  const home = opts.home ?? homedir();
+  const pathGuard = createPathGuard({
+    allowedRoots: () =>
+      [...settings.get('files.allowedRoots'), settings.get('vault.path')].filter(Boolean),
+    deniedPaths: () => defaultDeniedPaths(home, opts.userData),
+    homeDir: home,
+  });
+  const policy = createPolicyEngine({
+    pathGuard,
+    budgetExceeded: () => budget.isExceeded(),
+    overrides: () => settings.get('policy.overrides'),
+  });
+  const confirmShowListeners = new Set<(e: ConfirmRequestEvent) => void>();
+  const broker = createConfirmationBroker({
+    emit: (e, p) => opts.emit(e, p),
+    emitResolved: (p) => opts.emit('confirm:resolved', p),
+    onShow: (e) => {
+      for (const l of confirmShowListeners) l(e);
+    },
+  });
+
+  // ── tools ────────────────────────────────────────────────────────────────────────────────
+  const reminderListeners = new Set<(text: string, missed: boolean) => void>();
+  const scheduler = createScheduler({
+    repo: reminders,
+    logger,
+    onFire: (r, missed) => {
+      opts.os.notify(missed ? 'Missed reminder' : 'Reminder', r.text);
+      opts.emit('notify', {
+        level: 'info',
+        message: `${missed ? 'Missed reminder' : 'Reminder'}: ${r.text}`,
+      });
+      for (const l of reminderListeners) l(r.text, missed);
+    },
+  });
+  const appIndex = createAppIndex(opts.os, opts.startMenuDirs ?? defaultStartMenuDirs());
+  const registry = createToolRegistry({
+    webSearchEnabled: () => settings.get('web.search.enabled'),
+  });
+  for (const tool of createNativeTools({
+    os: opts.os,
+    appIndex,
+    guard: pathGuard,
+    scheduler,
+    roots: () => settings.get('files.allowedRoots'),
+    protectedPaths: () => [settings.get('vault.path')],
+  }))
+    registry.register(tool);
+  const tools = createToolExecutor({
+    registry,
+    policy,
+    broker,
+    toolCalls,
+    audit,
+    state,
+    emit: (e, p) => opts.emit(e, p),
+    logger,
+  });
+
+  // Later phases plug memory providers in through this slot.
+  const slots: { providers: ContextProviders } = { providers: NO_PROVIDERS };
   const providers: ContextProviders = {
     coreProfile: () => slots.providers.coreProfile(),
     retrieve: (t) => slots.providers.retrieve(t),
     integrations: () => slots.providers.integrations(),
-    allowedRoots: () => slots.providers.allowedRoots(),
+    allowedRoots: () => settings.get('files.allowedRoots'),
     screenCount: () => slots.providers.screenCount(),
   };
   const context = createContextBuilder({ conversations, providers });
@@ -134,7 +220,7 @@ export function createServices(opts: ServiceOptions) {
     toolCalls,
     context,
     llm: () => llm,
-    tools: () => slots.tools,
+    tools: () => tools,
     budget,
     ledger,
     settings,
@@ -143,7 +229,19 @@ export function createServices(opts: ServiceOptions) {
     emit: opts.emit,
     logger,
   });
-  killSwitch.onKill(() => orchestrator.cancel());
+
+  // Security.md §11: the kill switch stops turns, denies pending confirmations and returns to IDLE.
+  killSwitch.onKill((reason) => {
+    orchestrator.cancel();
+    broker.denyAll();
+    state.set('IDLE');
+    audit.append(
+      reason === 'ui' || reason === 'hotkey' || reason === 'tray' ? 'user' : 'system',
+      'killswitch',
+      { reason },
+    );
+    opts.emit('notify', { level: 'info', message: 'All activity stopped.' });
+  });
 
   return {
     db,
@@ -151,16 +249,28 @@ export function createServices(opts: ServiceOptions) {
     userData: opts.userData,
     isTest: opts.isTest,
     emit: opts.emit,
+    os: opts.os,
     settings,
     secrets,
     conversations,
     toolCalls,
     usageRepo,
+    reminders,
+    audit,
     ledger,
     budget,
     killSwitch,
     state,
     llm,
+    pathGuard,
+    policy,
+    broker,
+    registry,
+    tools,
+    scheduler,
+    appIndex,
+    reminderListeners,
+    confirmShowListeners,
     context,
     orchestrator,
     slots,

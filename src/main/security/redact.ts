@@ -80,4 +80,32 @@ export function redactDeep<T>(value: T): T {
   return value;
 }
 
+const SENSITIVE_TYPES = new Set([
+  'private_key',
+  'anthropic_key',
+  'openai_key',
+  'github_token',
+  'slack_token',
+  'aws_key',
+  'jwt',
+  'password',
+  'otp',
+  'card',
+  'aadhaar',
+  'pan',
+]);
+
+/** Security.md §5 contentGuard: kinds of sensitive data present in text Jarvis is about to type or send. */
+export function findSensitive(text: string): string[] {
+  const found = new Set<string>();
+  for (const secret of knownSecrets) if (text.includes(secret)) found.add('secret');
+  for (const rule of RULES) {
+    if (!SENSITIVE_TYPES.has(rule.type)) continue;
+    for (const m of text.matchAll(rule.re)) {
+      if (!rule.check || rule.check(m[0])) found.add(rule.type);
+    }
+  }
+  return [...found];
+}
+
 export const __test = { luhnValid };

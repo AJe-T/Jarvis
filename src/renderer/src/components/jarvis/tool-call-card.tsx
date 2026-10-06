@@ -10,7 +10,10 @@ const TIER_CLASS = {
 } as const;
 
 function StatusIndicator({ call }: { call: UiToolCall }): React.JSX.Element {
-  if (call.decision === 'denied' || call.decision === 'cancelled')
+  // A live status (waiting/running) wins over the provisional decision stored while Sir decides.
+  const settled =
+    call.status !== 'awaiting' && call.status !== 'pending' && call.status !== 'running';
+  if (settled && (call.decision === 'denied' || call.decision === 'cancelled'))
     return (
       <span className="flex items-center gap-1 text-ink-500">
         <Ban size={14} aria-hidden /> Declined

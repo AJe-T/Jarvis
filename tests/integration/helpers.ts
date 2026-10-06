@@ -5,6 +5,7 @@ import type { EventChannel } from '@shared/ipc-channels';
 import { createFakeClaude, type FakeScript } from '@main/llm/fake-claude';
 import type { Encryptor } from '@main/settings/secrets';
 import { createServices } from '@main/services';
+import { createFakeOs } from '@main/tools/native/os';
 
 /** Reversible stand-in for DPAPI so tests can run anywhere. */
 export const fakeEncryptor: Encryptor = {
@@ -13,7 +14,7 @@ export const fakeEncryptor: Encryptor = {
   decryptString: (b) => Buffer.from(b).reverse().toString('utf8'),
 };
 
-export function setupServices(script: FakeScript = { rules: [] }) {
+export function setupServices(script: FakeScript | ((dir: string) => FakeScript) = { rules: [] }) {
   const dir = mkdtempSync(join(tmpdir(), 'jarvis-int-'));
   const home = (n: string): string => {
     const p = join(dir, 'home', n);
@@ -21,13 +22,15 @@ export function setupServices(script: FakeScript = { rules: [] }) {
     return p;
   };
   const events: Array<{ event: EventChannel; payload: unknown }> = [];
-  const llm = createFakeClaude(script);
+  const llm = createFakeClaude(typeof script === 'function' ? script(dir) : script);
   const services = createServices({
-    userData: dir,
+    userData: join(dir, 'data'),
     isTest: true,
     encryptor: fakeEncryptor,
     emit: (event, payload) => events.push({ event, payload }),
     llm,
+    os: createFakeOs(),
+    home: join(dir, 'home'),
     paths: {
       documents: home('Documents'),
       desktop: home('Desktop'),

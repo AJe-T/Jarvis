@@ -50,7 +50,9 @@ export function ConfirmModalHost(): React.JSX.Element | null {
             />
             {ask.title}
           </Dialog.Title>
-          <Dialog.Description className="mt-2 text-sm text-ink-300">{ask.body}</Dialog.Description>
+          <Dialog.Description className="mt-2 text-sm whitespace-pre-line text-ink-300">
+            {ask.body}
+          </Dialog.Description>
           <div className="mt-5 flex justify-end gap-2">
             <Button id="confirm-modal-cancel" onClick={() => close(false)}>
               Cancel
