@@ -48,6 +48,7 @@ import type { OsAdapter } from './tools/native/os';
 import { createMealTools, createMealsRepo } from './tools/everyday/meals';
 import { createScreenTools } from './tools/everyday/screen';
 import { createWeatherTools } from './tools/everyday/weather';
+import { createSkillStore } from './skills/skills';
 import { createToolRegistry } from './tools/registry';
 
 export interface ServiceOptions {
@@ -286,7 +287,28 @@ export function createServices(opts: ServiceOptions) {
   });
 
   // Later phases plug memory providers in through this slot.
-  const slots: { providers: ContextProviders } = { providers: NO_PROVIDERS };
+  // Skills (OpenJarvis / agentskills.io): listed in context, loaded on demand with use_skill.
+  const skills = createSkillStore({
+    root: join(opts.userData, 'skills'),
+    settings,
+    ...(opts.fetch ? { fetch: opts.fetch } : {}),
+  });
+  let skillSummary = '';
+  const refreshSkills = (): Promise<void> =>
+    skills
+      .summary()
+      .then((x) => {
+        skillSummary = x;
+      })
+      .catch(() => undefined);
+  void refreshSkills();
+  settings.onChange((key) => {
+    if (key === 'skills.disabled') void refreshSkills();
+  });
+  for (const tool of skills.tools()) registry.register(tool);
+  const slots: { providers: ContextProviders } = {
+    providers: { ...NO_PROVIDERS, skills: () => skillSummary },
+  };
   const providers: ContextProviders = {
     coreProfile: () => slots.providers.coreProfile(),
     retrieve: (t) => slots.providers.retrieve(t),
@@ -294,6 +316,7 @@ export function createServices(opts: ServiceOptions) {
     allowedRoots: () => settings.get('files.allowedRoots'),
     screenCount: () => slots.providers.screenCount(),
     routines: () => slots.providers.routines(),
+    skills: () => slots.providers.skills(),
   };
   const context = createContextBuilder({ conversations, providers });
 
@@ -348,6 +371,8 @@ export function createServices(opts: ServiceOptions) {
     llmApi,
     llmLocal,
     claudeCode,
+    skills,
+    refreshSkills,
     meals,
     pathGuard,
     policy,

@@ -76,6 +76,17 @@ const LocalModelId = z.enum([
   'openwakeword-hey-jarvis',
   'silero-vad',
 ]);
+const SkillName = z
+  .string()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  .max(64);
+const SkillView = z.object({
+  name: z.string(),
+  description: z.string(),
+  license: z.string().nullable(),
+  enabled: z.boolean(),
+  files: z.array(z.string()),
+});
 const UsageSummary = z.object({
   costUsd: z.number(),
   tokens: z.number(),
@@ -156,6 +167,15 @@ export const INVOKE = {
   ),
   'llm:localTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
   'location:detect': contract(Empty, z.object({ town: z.string() })),
+  'skills:list': contract(Empty, z.array(SkillView)),
+  'skills:read': contract(z.object({ name: SkillName }), z.object({ markdown: z.string() })),
+  'skills:installFolder': contract(Empty, z.object({ skill: SkillView.nullable() })),
+  'skills:installGitHub': contract(
+    z.object({ url: z.string().url().startsWith('https://github.com/').max(500) }),
+    z.object({ skill: SkillView }),
+  ),
+  'skills:remove': contract(z.object({ name: SkillName }), Ok),
+  'skills:setEnabled': contract(z.object({ name: SkillName, enabled: z.boolean() }), Ok),
   'dictation:history': contract(
     Empty,
     z.array(

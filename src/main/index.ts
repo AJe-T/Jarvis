@@ -17,6 +17,7 @@ import { registerCoreHandlers } from './ipc/handlers/core';
 import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { createMemorySystem } from './memory/memory-system';
+import { registerSkillHandlers } from './ipc/handlers/skills';
 import { registerVoiceHandlers } from './ipc/handlers/voice';
 import { createVoiceSystem } from './voice/voice-system';
 import { registerMcpHandlers } from './ipc/handlers/mcp';
@@ -271,6 +272,7 @@ async function boot(): Promise<void> {
   });
   handle('computer:calibrate', () => computer.calibrate());
   registerDataHandlers(services);
+  registerSkillHandlers(services);
   applyRetention(services);
   setInterval(() => applyRetention(services), 6 * 3600_000).unref();
   handle('app:setMiniMode', (req) => {

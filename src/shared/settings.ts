@@ -90,6 +90,8 @@ export const SETTINGS = {
     schema: z.enum(['celsius', 'fahrenheit']),
     default: 'celsius' as 'celsius' | 'fahrenheit',
   },
+  /** Skills Sir turned off (by name); installed skills are on by default. */
+  'skills.disabled': { schema: z.array(z.string().max(64)).max(500), default: [] as string[] },
   'nutrition.dailyCalories': { schema: z.number().int().min(0).max(10000), default: 2000 },
   'hotkeys.ptt': { schema: accelerator, default: 'Ctrl+Alt+Space' },
   'hotkeys.toggleWindow': { schema: accelerator, default: 'Ctrl+Alt+J' },
