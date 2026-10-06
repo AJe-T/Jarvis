@@ -38,6 +38,8 @@ export const INVOKE_CHANNELS = [
   'usage:summary',
   'usage:breakdown',
   'llm:claudeCodeStatus',
+  'llm:localModels',
+  'llm:localTest',
   'location:detect',
   'dictation:history',
   'dictation:clear',

@@ -1,5 +1,6 @@
 -- New features (voice intent judge, research, briefing, reply copilot, scheduled tasks) record their own
--- purpose. SQLite can't alter a CHECK constraint, so the table is rebuilt with the same columns.
+-- purpose, and calls to a local model (ADR-013) are billed 'local'. SQLite can't alter a CHECK
+-- constraint, so the table is rebuilt with the same columns.
 CREATE TABLE usage_ledger_new (
   id               TEXT PRIMARY KEY,
   ts               TEXT NOT NULL,
@@ -12,7 +13,7 @@ CREATE TABLE usage_ledger_new (
   cache_read_tokens   INTEGER NOT NULL DEFAULT 0,
   cache_write_tokens  INTEGER NOT NULL DEFAULT 0,
   est_cost_usd     REAL NOT NULL,
-  billing          TEXT NOT NULL DEFAULT 'api' CHECK (billing IN ('api', 'subscription'))
+  billing          TEXT NOT NULL DEFAULT 'api' CHECK (billing IN ('api', 'subscription', 'local'))
 );
 INSERT INTO usage_ledger_new SELECT id, ts, day, model, purpose, conversation_id, input_tokens, output_tokens,
   cache_read_tokens, cache_write_tokens, est_cost_usd, billing FROM usage_ledger;

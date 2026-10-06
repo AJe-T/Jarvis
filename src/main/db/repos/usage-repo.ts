@@ -13,7 +13,7 @@ export type UsagePurpose =
   | 'briefing'
   | 'copilot'
   | 'task';
-export type Billing = 'api' | 'subscription';
+export type Billing = 'api' | 'subscription' | 'local';
 
 export interface UsageEntry {
   model: string;

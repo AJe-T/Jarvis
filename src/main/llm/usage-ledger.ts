@@ -79,9 +79,13 @@ export function createUsageLedger(deps: {
         cacheWrite: u.cache_creation_input_tokens ?? 0,
       };
       const searches = u.server_tool_use?.web_search_requests ?? 0;
+      const billing = deps.billing?.() ?? 'api';
+      // ADR-013: a model on Sir's own machine costs nothing per call.
       const costUsd =
-        costOf(priceFor(message.model), tokens) +
-        searches * settings.get('pricing.webSearchPerUse');
+        billing === 'local'
+          ? 0
+          : costOf(priceFor(message.model), tokens) +
+            searches * settings.get('pricing.webSearchPerUse');
       repo.insert({
         model: message.model,
         purpose,
@@ -91,7 +95,7 @@ export function createUsageLedger(deps: {
         cacheReadTokens: tokens.cacheRead,
         cacheWriteTokens: tokens.cacheWrite,
         estCostUsd: costUsd,
-        billing: deps.billing?.() ?? 'api',
+        billing,
       });
       const t = totals();
       deps.onUpdate?.({ dayCostUsd: t.day, monthCostUsd: t.month, model: message.model, purpose });

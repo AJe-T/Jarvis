@@ -67,7 +67,12 @@ export function Onboarding(): React.JSX.Element {
   }
 
   const provider = useSetting('llm.provider') ?? 'api';
-  const canNext = step !== 1 || provider === 'subscription' || Boolean(anthropic?.set);
+  const localModel = useSetting('llm.local.model') ?? '';
+  const canNext =
+    step !== 1 ||
+    provider === 'subscription' ||
+    (provider === 'local' && Boolean(localModel)) ||
+    Boolean(anthropic?.set);
 
   return (
     <main className="flex h-full flex-col items-center overflow-y-auto bg-night-900 px-6 py-10">
@@ -136,7 +141,7 @@ export function Onboarding(): React.JSX.Element {
               Claude Code you&apos;re signed in to on this PC.
             </p>
             <ConnectionPicker />
-            <p className="text-sm text-ink-500" hidden={provider === 'subscription'}>
+            <p className="text-sm text-ink-500" hidden={provider !== 'api'}>
               Tip: also set a monthly spend limit in the{' '}
               <button
                 type="button"

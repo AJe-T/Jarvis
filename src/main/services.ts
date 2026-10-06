@@ -22,6 +22,7 @@ import { createOrchestrator, type Emit } from './agent/orchestrator';
 import { createSdkLoop } from './agent/sdk-loop';
 import { createBudgetGuard } from './llm/budget-guard';
 import { createClaudeClient } from './llm/claude-client';
+import { createLocalClient } from './llm/local-client';
 import {
   createClaudeCodeClient,
   findClaudeCode,
@@ -161,7 +162,7 @@ export function createServices(opts: ServiceOptions) {
   const ledger = createUsageLedger({
     repo: usageRepo,
     settings,
-    billing: () => (subscription() ? 'subscription' : 'api'),
+    billing: () => settings.get('llm.provider'),
     onUpdate: (u) =>
       opts.emit('usage:update', {
         dayCostUsd: u.dayCostUsd,
@@ -192,10 +193,21 @@ export function createServices(opts: ServiceOptions) {
   };
   mkdirSync(claudeCode.cwd, { recursive: true });
   const llmSubscription = createClaudeCodeClient(claudeCode);
+  // ADR-013: Ollama / LM Studio. Tool schemas come from the registry (it is created below).
+  const llmLocal = createLocalClient({
+    baseUrl: () => settings.get('llm.local.baseUrl'),
+    model: () => settings.get('llm.local.model'),
+    catalog: () => registry.catalog(),
+    ...(opts.fetch ? { fetch: opts.fetch } : {}),
+  });
+  const pickLlm = (): LlmClient => {
+    const p = settings.get('llm.provider');
+    return p === 'subscription' ? llmSubscription : p === 'local' ? llmLocal : llmApi;
+  };
   /** Every Claude call goes to whichever connection Sir chose in Settings → Models & budget. */
   const llm: LlmClient = {
-    stream: (req, o) => (subscription() ? llmSubscription : llmApi).stream(req, o),
-    ping: (model, signal) => (subscription() ? llmSubscription : llmApi).ping(model, signal),
+    stream: (req, o) => pickLlm().stream(req, o),
+    ping: (model, signal) => pickLlm().ping(model, signal),
   };
   const sdkLoop = createSdkLoop(claudeCode, {
     webSearchEnabled: () => settings.get('web.search.enabled'),
@@ -334,6 +346,7 @@ export function createServices(opts: ServiceOptions) {
     state,
     llm,
     llmApi,
+    llmLocal,
     claudeCode,
     meals,
     pathGuard,

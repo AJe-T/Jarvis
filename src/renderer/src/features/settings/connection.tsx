@@ -6,8 +6,9 @@ import { call, cleanError } from '../../lib/api';
 import { useSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { SecretField } from './secret-field';
+import { SettingInput } from './settings-controls';
 
-type Provider = 'api' | 'subscription';
+type Provider = 'api' | 'subscription' | 'local';
 type Status = Res<'llm:claudeCodeStatus'>;
 
 const OPTIONS: Array<{ id: Provider; title: string; body: string }> = [
@@ -20,6 +21,11 @@ const OPTIONS: Array<{ id: Provider; title: string; body: string }> = [
     id: 'subscription',
     title: 'My Claude subscription',
     body: 'Uses the Claude plan you are signed in to in Claude Code on this PC. Personal use only. Computer control is not available.',
+  },
+  {
+    id: 'local',
+    title: 'Local model (Ollama / LM Studio)',
+    body: 'Runs fully offline on this PC. Free, private, but slower and less capable than Claude; no web search or computer control.',
   },
 ];
 
@@ -94,6 +100,62 @@ export function ClaudeCodeCard(): React.JSX.Element {
   );
 }
 
+/** ADR-013: pick the server and model; lists what the server has installed. */
+export function LocalModelCard(): React.JSX.Element {
+  const model = useSetting('llm.local.model') ?? '';
+  const set = useSettingsStore((s) => s.set);
+  const [models, setModels] = useState<string[]>([]);
+  const [status, setStatus] = useState<{ ok: boolean; error?: string | undefined } | null>(null);
+  const refresh = useCallback(async () => {
+    const r = await call('llm:localModels', {});
+    setModels(r.models);
+    setStatus(r.error ? { ok: false, error: r.error } : null);
+  }, []);
+  useEffect(() => void refresh(), [refresh]);
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-night-600 p-3">
+      <SettingInput
+        k="llm.local.baseUrl"
+        label="Server address (OpenAI-compatible)"
+        hint="Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1. Only this PC or your home network."
+      />
+      <label className="flex flex-col gap-1 text-sm text-ink-100">
+        Model
+        <select
+          value={model}
+          onChange={(e) => void set('llm.local.model', e.target.value).then(() => setStatus(null))}
+          className="min-h-8 max-w-md rounded-md border border-night-600 bg-night-800 px-2 text-ink-100"
+        >
+          <option value="">{models.length ? 'Choose a model…' : 'No models found'}</option>
+          {[...new Set([...(model ? [model] : []), ...models])].map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="ghost" onClick={() => void refresh()}>
+          Refresh models
+        </Button>
+        <Button onClick={() => void call('llm:localTest', {}).then(setStatus)}>Test</Button>
+        {status && (
+          <span
+            role="status"
+            className={clsx('text-sm', status.ok ? 'text-ok-400' : 'text-alarm-500')}
+          >
+            {status.ok ? '✓ Model ready.' : status.error}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-ink-500">
+        No Ollama yet? Install it from ollama.com, then run e.g. <code>ollama pull qwen3:8b</code>.
+        Models that support tool calling (Qwen 3, Llama 3.1+, Mistral) can use Jarvis's tools.
+      </p>
+    </div>
+  );
+}
+
 /** ADR-010: one connection at a time, chosen here. */
 export function ConnectionPicker(): React.JSX.Element {
   const provider = useSetting('llm.provider') ?? 'api';
@@ -126,6 +188,8 @@ export function ConnectionPicker(): React.JSX.Element {
       </div>
       {provider === 'subscription' ? (
         <ClaudeCodeCard />
+      ) : provider === 'local' ? (
+        <LocalModelCard />
       ) : (
         <SecretField
           name="anthropic"

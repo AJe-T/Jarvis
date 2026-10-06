@@ -17,11 +17,14 @@ const accelerator = z.string().min(1).max(60);
  * Paths that depend on the machine (vault, allowed roots) default to empty and are seeded by main on first run.
  */
 export const SETTINGS = {
-  /** ADR-010: 'api' = Anthropic API key; 'subscription' = Sir's Claude plan via his signed-in Claude Code. */
+  /** ADR-010/013: 'api' = Anthropic API key; 'subscription' = Sir's Claude plan via Claude Code; 'local' = Ollama/LM Studio. */
   'llm.provider': {
-    schema: z.enum(['api', 'subscription']),
-    default: 'api' as 'api' | 'subscription',
+    schema: z.enum(['api', 'subscription', 'local']),
+    default: 'api' as 'api' | 'subscription' | 'local',
   },
+  /** ADR-013: OpenAI-compatible server on this PC or the home network (Ollama, LM Studio). */
+  'llm.local.baseUrl': { schema: z.string().url().max(200), default: 'http://localhost:11434/v1' },
+  'llm.local.model': { schema: z.string().max(120), default: '' },
   'models.default': { schema: modelId, default: 'claude-sonnet-5-5' },
   'models.deep': { schema: modelId, default: 'claude-opus-5-5' },
   'models.fast': { schema: modelId, default: 'claude-haiku-4-5-20251001' },

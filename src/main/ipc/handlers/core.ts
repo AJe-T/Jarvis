@@ -125,6 +125,23 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
       monthCostUsd: t.month,
     };
   });
+  const userError = (err: unknown): string =>
+    err instanceof JarvisError && err.userMessage ? err.userMessage : String(err);
+  handle('llm:localModels', async () => {
+    try {
+      return { models: await s.llmLocal.listModels() };
+    } catch (err) {
+      return { models: [], error: userError(err) };
+    }
+  });
+  handle('llm:localTest', async () => {
+    try {
+      await s.llmLocal.ping('', AbortSignal.timeout(10_000));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: userError(err) };
+    }
+  });
   handle('llm:claudeCodeStatus', () => claudeCodeStatus(s.claudeCode.path()));
   handle('llm:claudeCodeLogin', () => {
     const path = s.claudeCode.path();

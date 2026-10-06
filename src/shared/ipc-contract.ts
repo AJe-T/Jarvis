@@ -150,6 +150,11 @@ export const INVOKE = {
     }),
   ),
   'llm:claudeCodeLogin': contract(Empty, Ok),
+  'llm:localModels': contract(
+    Empty,
+    z.object({ models: z.array(z.string()), error: z.string().optional() }),
+  ),
+  'llm:localTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
   'location:detect': contract(Empty, z.object({ town: z.string() })),
   'dictation:history': contract(
     Empty,
