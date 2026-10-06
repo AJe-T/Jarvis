@@ -102,7 +102,12 @@ export function createVoiceSystem(
   s: Services,
   opts: {
     factories?: VoiceFactories;
-    timeouts?: { silenceMs?: number; maxListenMs?: number; echoSettleMs?: number };
+    timeouts?: {
+      silenceMs?: number;
+      maxListenMs?: number;
+      echoSettleMs?: number;
+      dictationQuietMs?: number;
+    };
     /** Tests: a scripted intent judge. */
     judge?: (transcript: string, ctx: { followUp: boolean; lastReply: string }) => Promise<Intent>;
   } = {},
