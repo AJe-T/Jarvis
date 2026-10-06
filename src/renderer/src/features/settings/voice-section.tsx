@@ -4,7 +4,7 @@ import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
 import { useSetting, useSettingsStore } from '../../stores/settings-store';
 import { MicCheck } from '../onboarding/mic-check';
-import { SecretField } from './secret-field';
+import { VoiceEngines } from './voice-engines';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
 
 const MODES: Array<{ value: VoiceMode; label: string; hint: string }> = [
@@ -16,8 +16,8 @@ const MODES: Array<{ value: VoiceMode; label: string; hint: string }> = [
   },
   {
     value: 'wake',
-    label: 'Wake word “Jarvis”',
-    hint: 'Listens on this PC for “Jarvis” (nothing leaves the PC until it hears it).',
+    label: 'Wake word',
+    hint: 'Listens on this PC for “Jarvis” (Picovoice) or “Hey Jarvis” (on-device); nothing leaves the PC until it hears it.',
   },
 ];
 
@@ -58,13 +58,7 @@ export function VoiceSection(): React.JSX.Element {
           </p>
         )}
       </Section>
-      <Section
-        title="Keys"
-        description="Deepgram turns speech into text (audio is sent only while Jarvis is listening). Picovoice runs the wake word on this PC."
-      >
-        <SecretField name="deepgram" label="Deepgram API key" />
-        <SecretField name="picovoice" label="Picovoice AccessKey" />
-      </Section>
+      <VoiceEngines />
       <Section title="Microphone">
         <MicCheck />
         <SettingInput

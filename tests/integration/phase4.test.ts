@@ -1,3 +1,6 @@
+import { join } from 'node:path';
+import { createLocalEngines } from '@main/voice/local/local-engines';
+import { createModelStore } from '@main/voice/local/model-store';
 import { describe, expect, it } from 'vitest';
 import type { FakeScript } from '@main/llm/fake-claude';
 import {
@@ -6,7 +9,7 @@ import {
   createFakeTts,
   createFakeWake,
 } from '@main/voice/fakes';
-import { createVoiceSystem } from '@main/voice/voice-system';
+import { createVoiceSystem, realFactories } from '@main/voice/voice-system';
 import { idle, setupServices } from './helpers';
 
 function setupVoice(
@@ -234,5 +237,32 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     expect(t.services.broker.respond(pending?.id ?? '', 'approve', 'voice')).toBe(false);
     t.services.killSwitch.trigger('ui');
     await idle(t.services);
+  });
+});
+
+describe('voice engine selection (ADR-011)', () => {
+  it('explains what is missing for each engine instead of failing silently', async () => {
+    const t = setupServices();
+    const s = t.services;
+    const store = createModelStore({ root: join(t.dir, 'models'), onProgress: () => undefined });
+    const f = realFactories(s, createLocalEngines(store, s.settings));
+    const signal = new AbortController().signal;
+    const start = () => f.stt.start({ sampleRate: 16000, language: 'en-IN', signal });
+
+    let err: unknown;
+    try {
+      void f.wake(0.6);
+    } catch (e) {
+      err = e;
+    }
+    expect((err as { userMessage?: string }).userMessage).toMatch(
+      /Picovoice AccessKey, or choose the on-device "Hey Jarvis"/,
+    );
+    await expect(start()).rejects.toMatchObject({ userMessage: /Deepgram key/ });
+
+    s.settings.set('voice.wake.provider', 'openwakeword');
+    s.settings.set('voice.stt.provider', 'whisper');
+    await expect(f.wake(0.6)).rejects.toMatchObject({ userMessage: /Download the "Hey Jarvis"/ });
+    await expect(start()).rejects.toMatchObject({ userMessage: /Download the Whisper model/ });
   });
 });

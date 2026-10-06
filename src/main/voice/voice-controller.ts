@@ -3,7 +3,7 @@ import type { EventChannel } from '@shared/ipc-channels';
 import type { VoiceMode } from '@shared/types';
 import type { AssistantStateHub } from '../agent/assistant-state';
 import type { Orchestrator, TurnInfo } from '../agent/orchestrator';
-import { errorMessage } from '../errors';
+import { JarvisError, errorMessage } from '../errors';
 import type { Logger } from '../logging/logger';
 import type { KillSwitch } from '../security/kill-switch';
 import type { SettingsService } from '../settings/settings-service';
@@ -20,7 +20,8 @@ import {
 
 export interface VoiceFactories {
   recorder(deviceIndex: number, frameLength: number): Recorder;
-  wake(accessKey: string, sensitivity: number): WakeWord;
+  /** The engine chosen in Settings → Voice (Picovoice or local openWakeWord); throws JarvisError if not ready. */
+  wake(sensitivity: number): WakeWord | Promise<WakeWord>;
   stt: SttProvider;
   edge: TtsProvider;
   sapi: TtsProvider;
@@ -28,7 +29,6 @@ export interface VoiceFactories {
 
 export interface VoiceDeps {
   settings: SettingsService;
-  secret(name: string): string | undefined;
   state: AssistantStateHub;
   orchestrator: Orchestrator;
   broker: ConfirmationBroker;
@@ -63,6 +63,7 @@ export function createVoiceController(d: VoiceDeps) {
   const log = d.logger.child({ module: 'voice' });
   let recorder: Recorder | null = null;
   let wake: WakeWord | null = null;
+  let modeGeneration = 0;
   let loopRunning = false;
   let listening: {
     session: SttSession | null;
@@ -175,7 +176,7 @@ export function createVoiceController(d: VoiceDeps) {
           d.emit('voice:level', { rms: rms(frame) });
         }
         if (listening) listening.session?.write(frame);
-        else if (wake && mode() === 'wake' && !sleeping && wake.process(frame)) onWake();
+        else if (wake && mode() === 'wake' && !sleeping && (await wake.process(frame))) onWake();
       }
     } catch (err) {
       log.warn({ err: errorMessage(err) }, 'microphone read failed');
@@ -200,14 +201,6 @@ export function createVoiceController(d: VoiceDeps) {
 
   async function startListening(isRetry: boolean): Promise<void> {
     if (listening) return;
-    if (!d.secret('deepgram')) {
-      d.emit('notify', {
-        level: 'warn',
-        message: 'Add a Deepgram key to use voice input.',
-        action: 'settings:voice',
-      });
-      return;
-    }
     const s = d.state.get();
     if (s === 'THINKING' || s === 'ACTING') {
       // Barge-in on a reply that is still being written: stop it and listen to Sir instead.
@@ -262,7 +255,11 @@ export function createVoiceController(d: VoiceDeps) {
       log.warn({ err: errorMessage(err) }, 'speech-to-text connect failed');
       d.emit('notify', {
         level: 'error',
-        message: "Couldn't reach the speech service. You can type instead.",
+        // Setup problems (no Deepgram key, Whisper model not downloaded) carry their own message.
+        message:
+          err instanceof JarvisError && err.userMessage
+            ? err.userMessage
+            : "Couldn't start speech recognition. You can type instead.",
         action: 'settings:voice',
       });
       cancelListening();
@@ -420,20 +417,31 @@ export function createVoiceController(d: VoiceDeps) {
       else cancelListening();
     },
 
-    /** Applies voice.mode: 'wake' keeps Porcupine running on-device; audio leaves the PC only while LISTENING. */
+    /** Applies voice.mode: 'wake' keeps the wake word running on-device; audio leaves the PC only while LISTENING (and never with local Whisper). */
     async applyMode(): Promise<{ ok: boolean; error?: string }> {
+      const gen = ++modeGeneration;
       const m = mode();
       cancelListening();
       wake?.release();
       wake = null;
       sleeping = false;
       if (m === 'wake') {
-        const key = d.secret('picovoice');
-        if (!key) return { ok: false, error: 'Add a Picovoice AccessKey to use the wake word.' };
         try {
-          wake = d.factories.wake(key, d.settings.get('voice.wake.sensitivity'));
+          const next = await d.factories.wake(d.settings.get('voice.wake.sensitivity'));
+          // A newer applyMode (setting changed again while the model loaded) wins.
+          if (gen !== modeGeneration) {
+            next.release();
+            return { ok: true };
+          }
+          wake = next;
         } catch (err) {
-          return { ok: false, error: `Wake word could not start: ${errorMessage(err)}` };
+          return {
+            ok: false,
+            error:
+              err instanceof JarvisError && err.userMessage
+                ? err.userMessage
+                : `Wake word could not start: ${errorMessage(err)}`,
+          };
         }
         releaseRecorder();
         ensureRecorder();

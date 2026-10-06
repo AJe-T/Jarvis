@@ -594,6 +594,7 @@ $s.SetOutputToWaveFile($out); $s.Speak($text); $s.Dispose()
 
 | Key | Type | Default |
 |---|---|---|
+| `voice.wake.provider` / `voice.stt.provider` / `voice.stt.whisperModel` | `'picovoice'\|'openwakeword'` / `'deepgram'\|'whisper'` / `'whisper-base.en'\|'whisper-small.en'\|'whisper-small'` | `'picovoice'` / `'deepgram'` / `'whisper-small.en'` (ADR-011; IPC `models:status|download|cancel|delete`, event `models:progress`) |
 | `llm.provider` | `'api'\|'subscription'` | `'api'` (ADR-010: subscription = Sir's signed-in Claude Code via the Agent SDK; IPC `llm:claudeCodeStatus`, `llm:claudeCodeLogin`) |
 | `models.default` / `models.deep` / `models.fast` / `models.computer` | string | `claude-sonnet-5-5` / `claude-opus-5-5` / `claude-haiku-4-5-20251001` / `claude-sonnet-5-5` |
 | `budget.dailyUsd` / `budget.monthlyUsd` | number | 2 / 30 |

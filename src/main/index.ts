@@ -218,10 +218,15 @@ async function boot(): Promise<void> {
   });
   registerSafetyHandlers(services);
   registerMemoryHandlers(services, memory);
-  registerVoiceHandlers(services, voice.voice, {
-    setActiveConversation: voice.setActiveConversation,
-    isTest,
-  });
+  registerVoiceHandlers(
+    services,
+    voice.voice,
+    {
+      setActiveConversation: voice.setActiveConversation,
+      isTest,
+    },
+    voice.local,
+  );
   registerMcpHandlers(services, mcp.manager);
   const overlay = createComputerOverlay();
   app.on('will-quit', () => overlay.destroy());

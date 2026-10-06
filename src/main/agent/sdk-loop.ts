@@ -198,11 +198,7 @@ export function createSdkLoop(rt: ClaudeCodeRuntime, opts: { webSearchEnabled():
           hooks.persist([{ role: 'user', content: results, textPlain: '', source: 'system' }]);
         } else if (m.type === 'result') {
           flush();
-          deps.ledger.record(
-            { model: req.model, usage: m.usage },
-            ctx.purpose,
-            ctx.conversationId,
-          );
+          deps.ledger.record({ model: req.model, usage: m.usage }, ctx.purpose, ctx.conversationId);
           if (m.subtype === 'error_max_turns') {
             const limitText = `\n\nI've stopped after ${deps.maxIterations} steps, sir, to avoid running away with this. Tell me if you'd like me to continue.`;
             hooks.onText(limitText);

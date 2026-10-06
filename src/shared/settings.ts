@@ -59,7 +59,19 @@ export const SETTINGS = {
   'web.search.enabled': { schema: z.boolean(), default: true },
   'voice.mode': { schema: z.enum(VOICE_MODES), default: 'ptt' as (typeof VOICE_MODES)[number] },
   'voice.deviceIndex': { schema: z.number().int().min(-1), default: -1 },
-  'voice.stt.provider': { schema: z.enum(['deepgram']), default: 'deepgram' as const },
+  // ADR-011: cloud (Deepgram, Picovoice) or on-device (Whisper, openWakeWord), chosen separately.
+  'voice.stt.provider': {
+    schema: z.enum(['deepgram', 'whisper']),
+    default: 'deepgram' as 'deepgram' | 'whisper',
+  },
+  'voice.stt.whisperModel': {
+    schema: z.enum(['whisper-base.en', 'whisper-small.en', 'whisper-small']),
+    default: 'whisper-small.en' as 'whisper-base.en' | 'whisper-small.en' | 'whisper-small',
+  },
+  'voice.wake.provider': {
+    schema: z.enum(['picovoice', 'openwakeword']),
+    default: 'picovoice' as 'picovoice' | 'openwakeword',
+  },
   'voice.stt.language': { schema: z.string().min(2).max(10), default: 'en-IN' },
   'voice.tts.provider': { schema: z.enum(['edge', 'sapi']), default: 'edge' as 'edge' | 'sapi' },
   'voice.tts.voice': { schema: z.string().min(2).max(60), default: 'en-GB-RyanNeural' },

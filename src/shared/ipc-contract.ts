@@ -68,6 +68,14 @@ const AuditItem = z.object({
   event: z.string(),
   details: z.string(),
 });
+/** ADR-011 local voice models (ids from src/main/voice/local/models.json). */
+const LocalModelId = z.enum([
+  'whisper-base.en',
+  'whisper-small.en',
+  'whisper-small',
+  'openwakeword-hey-jarvis',
+  'silero-vad',
+]);
 const UsageSummary = z.object({
   costUsd: z.number(),
   tokens: z.number(),
@@ -142,6 +150,16 @@ export const INVOKE = {
     }),
   ),
   'llm:claudeCodeLogin': contract(Empty, Ok),
+  'models:status': contract(
+    Empty,
+    z.record(
+      z.string(),
+      z.object({ installed: z.boolean(), sizeBytes: z.number(), downloading: z.boolean() }),
+    ),
+  ),
+  'models:download': contract(z.object({ id: LocalModelId }), Ok),
+  'models:cancel': contract(z.object({ id: LocalModelId }), Ok),
+  'models:delete': contract(z.object({ id: LocalModelId }), Ok),
   'secrets:test': contract(
     z.object({ name: z.enum(['anthropic', 'deepgram', 'picovoice']) }),
     z.object({ ok: z.boolean(), error: z.string().optional() }),
@@ -283,6 +301,13 @@ export const EVENTS = {
     last: z.boolean().optional(),
   }),
   'tts:stop': z.object({ utteranceId: z.string().optional() }),
+  'models:progress': z.object({
+    id: z.string(),
+    receivedBytes: z.number(),
+    totalBytes: z.number(),
+    done: z.boolean().optional(),
+    error: z.string().optional(),
+  }),
   'usage:update': z.object({
     dayCostUsd: z.number(),
     monthCostUsd: z.number(),

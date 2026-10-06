@@ -9,7 +9,7 @@ import { call, cleanError } from '../../lib/api';
 import { useSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { ConnectionPicker } from '../settings/connection';
-import { SecretField } from '../settings/secret-field';
+import { useModels, VoiceEngines } from '../settings/voice-engines';
 import { MicCheck } from './mic-check';
 
 const STEPS = ['Welcome', 'Brain', 'Memory vault', 'Voice', 'Safety'] as const;
@@ -31,10 +31,19 @@ export function Onboarding(): React.JSX.Element {
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('off');
   const [busy, setBusy] = useState(false);
   const toast = useUiStore((s) => s.toast);
-  const voiceReady = {
-    ptt: Boolean(secrets['deepgram']?.set),
-    wake: Boolean(secrets['deepgram']?.set && secrets['picovoice']?.set),
-  };
+  const models = useModels();
+  const sttEngine = useSetting('voice.stt.provider') ?? 'deepgram';
+  const wakeEngine = useSetting('voice.wake.provider') ?? 'picovoice';
+  const whisperModel = useSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
+  const sttReady =
+    sttEngine === 'deepgram'
+      ? Boolean(secrets['deepgram']?.set)
+      : Boolean(models.status?.[whisperModel]?.installed);
+  const wakeReady =
+    wakeEngine === 'picovoice'
+      ? Boolean(secrets['picovoice']?.set)
+      : Boolean(models.status?.['openwakeword-hey-jarvis']?.installed);
+  const voiceReady = { ptt: sttReady, wake: sttReady && wakeReady };
 
   async function finish(): Promise<void> {
     setBusy(true);
@@ -197,11 +206,11 @@ export function Onboarding(): React.JSX.Element {
           <>
             <Heading>Voice (optional)</Heading>
             <p className="text-ink-300">
-              Press-to-talk needs a Deepgram key (speech to text). The “Jarvis” wake word also needs
-              a free Picovoice AccessKey. You can skip this and type instead.
+              Choose cloud services (Deepgram, Picovoice; need keys) or on-device engines (Whisper,
+              openWakeWord; free downloads, nothing leaves this PC). You can skip this and type
+              instead.
             </p>
-            <SecretField name="deepgram" label="Deepgram API key" />
-            <SecretField name="picovoice" label="Picovoice AccessKey" />
+            <VoiceEngines />
             <MicCheck />
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-sm font-medium text-ink-100">Voice mode</legend>
@@ -209,7 +218,7 @@ export function Onboarding(): React.JSX.Element {
                 [
                   ['off', 'Off — type only', true],
                   ['ptt', 'Press to talk', voiceReady.ptt],
-                  ['wake', 'Wake word “Jarvis”', voiceReady.wake],
+                  ['wake', 'Wake word', voiceReady.wake],
                 ] as const
               ).map(([mode, label, enabled]) => (
                 <label
@@ -228,7 +237,7 @@ export function Onboarding(): React.JSX.Element {
                     onChange={() => setVoiceMode(mode)}
                   />
                   {label}
-                  {!enabled && ' (needs keys)'}
+                  {!enabled && ' (set up the engines above first)'}
                 </label>
               ))}
             </fieldset>

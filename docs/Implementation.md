@@ -294,3 +294,8 @@ Local Whisper STT · local LLM fallback (Ollama) · vector memory (sqlite-vec + 
 | `spawn npx ENOENT` for MCP | Use `npx.cmd` or `cmd /c npx` on Windows |
 | Edge TTS stops working | Unofficial endpoint changed; app falls back to SAPI; update the package or switch provider |
 | 400 error "tool_use ids without tool_result" | Agent loop bug: every `tool_use` needs a `tool_result` in the next user message (`API-Guide.md` §3.4) |
+
+### After v1.1.0: on-device voice engines (ADR-011)
+- [x] Settings → Voice and onboarding: wake word Picovoice "Jarvis" or on-device openWakeWord "Hey Jarvis"; speech to text Deepgram or on-device Whisper (base.en / small.en / small), chosen independently.
+- [x] Pinned, SHA-256-verified model downloads with progress, cancel and remove.
+- [x] Verified with real models on Sir's PC (`tests/integration/local-voice.real.test.ts`, run with `JARVIS_VOICE_MODELS` set).

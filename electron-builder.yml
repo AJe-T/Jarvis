@@ -9,12 +9,21 @@ files:
   - '!**/*.map'
   # ADR-010: Jarvis runs Sir's installed Claude Code, so the SDK's bundled 240 MB copy isn't shipped.
   - '!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**'
+  # ADR-011: on-device voice runs on onnxruntime-node (Windows build only); transformers.js bundles
+  # what it needs from onnxruntime-web, whose WASM files are browser-only.
+  - '!**/node_modules/onnxruntime-node/bin/napi-v6/linux/**'
+  - '!**/node_modules/onnxruntime-node/bin/napi-v6/darwin/**'
+  - '!**/node_modules/onnxruntime-web/**'
 asarUnpack:
   - '**/*.node'
   - resources/**
   # Porcupine/PvRecorder and nut.js native libs open their model and .dll files by real path.
   - node_modules/@picovoice/**
   - node_modules/@nut-tree-fork/**
+  # onnxruntime and sharp load native DLLs by real path.
+  - node_modules/onnxruntime-node/**
+  - node_modules/sharp/**
+  - node_modules/@img/**
 extraResources:
   - from: resources/
     to: resources/

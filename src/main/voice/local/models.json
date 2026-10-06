@@ -1,0 +1,187 @@
+{
+  "whisper-base.en": {
+    "kind": "whisper",
+    "source": "onnx-community/whisper-base.en@51eefc0af78b103839eda9e7e4f4186acc6517fe",
+    "license": "Apache-2.0 (OpenAI Whisper weights: MIT)",
+    "files": [
+      {
+        "path": "config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-base.en/resolve/51eefc0af78b103839eda9e7e4f4186acc6517fe/config.json",
+        "sha256": "c8a0de5ed8a083565a4319db29d0c210fda35b4d6076c2d711cae53ae00f3cb1",
+        "size": 2197
+      },
+      {
+        "path": "generation_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-base.en/resolve/51eefc0af78b103839eda9e7e4f4186acc6517fe/generation_config.json",
+        "sha256": "3479b1f44a07e41db799e22599222fee5816738036def94a39841cb9cdbb4120",
+        "size": 1556
+      },
+      {
+        "path": "preprocessor_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-base.en/resolve/51eefc0af78b103839eda9e7e4f4186acc6517fe/preprocessor_config.json",
+        "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+        "size": 339
+      },
+      {
+        "path": "tokenizer.json",
+        "url": "https://huggingface.co/onnx-community/whisper-base.en/resolve/51eefc0af78b103839eda9e7e4f4186acc6517fe/tokenizer.json",
+        "sha256": "5eb60cec1e77aeeb6869a2bb5a8e01a84c3fe5d072d75369343021fe6f5310d0",
+        "size": 2405679
+      },
+      {
+        "path": "tokenizer_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-base.en/resolve/51eefc0af78b103839eda9e7e4f4186acc6517fe/tokenizer_config.json",
+        "sha256": "93879c3dccdd4b976f709acd85b44778873f30c275e67026f30ca1e4c975230c",
+        "size": 282662
+      },
+      {
+        "path": "onnx/encoder_model_quantized.onnx",
+        "url": "https://huggingface.co/onnx-community/whisper-base.en/resolve/51eefc0af78b103839eda9e7e4f4186acc6517fe/onnx/encoder_model_quantized.onnx",
+        "sha256": "6e8001198c490bbae018c0044f630c2915efb826bad957006ce36152d0ab2a10",
+        "size": 23201320
+      },
+      {
+        "path": "onnx/decoder_model_merged_quantized.onnx",
+        "url": "https://huggingface.co/onnx-community/whisper-base.en/resolve/51eefc0af78b103839eda9e7e4f4186acc6517fe/onnx/decoder_model_merged_quantized.onnx",
+        "sha256": "dd4761a3f7add26afda3512abff4706920404c2517e85a9f2ff090b0c0987909",
+        "size": 53692803
+      }
+    ]
+  },
+  "whisper-small.en": {
+    "kind": "whisper",
+    "source": "onnx-community/whisper-small.en@482fb8ba081b6e906f92efe103622316b2a0cc69",
+    "license": "Apache-2.0 (OpenAI Whisper weights: MIT)",
+    "files": [
+      {
+        "path": "config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small.en/resolve/482fb8ba081b6e906f92efe103622316b2a0cc69/config.json",
+        "sha256": "8825c4174cb86f94d9fa67614942f8aa17bfbbdf2fae5426d4adfd0bc5893c43",
+        "size": 2203
+      },
+      {
+        "path": "generation_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small.en/resolve/482fb8ba081b6e906f92efe103622316b2a0cc69/generation_config.json",
+        "sha256": "5490747ca976d6b3765280a0697d66489020c2afa6e754244d9cd093e1639331",
+        "size": 1956
+      },
+      {
+        "path": "preprocessor_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small.en/resolve/482fb8ba081b6e906f92efe103622316b2a0cc69/preprocessor_config.json",
+        "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+        "size": 339
+      },
+      {
+        "path": "tokenizer.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small.en/resolve/482fb8ba081b6e906f92efe103622316b2a0cc69/tokenizer.json",
+        "sha256": "5eb60cec1e77aeeb6869a2bb5a8e01a84c3fe5d072d75369343021fe6f5310d0",
+        "size": 2405679
+      },
+      {
+        "path": "tokenizer_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small.en/resolve/482fb8ba081b6e906f92efe103622316b2a0cc69/tokenizer_config.json",
+        "sha256": "93879c3dccdd4b976f709acd85b44778873f30c275e67026f30ca1e4c975230c",
+        "size": 282662
+      },
+      {
+        "path": "onnx/encoder_model_quantized.onnx",
+        "url": "https://huggingface.co/onnx-community/whisper-small.en/resolve/482fb8ba081b6e906f92efe103622316b2a0cc69/onnx/encoder_model_quantized.onnx",
+        "sha256": "dae677b93ca77f911d858238e277026fa8f95a94cb899ea443ec78ee62726edf",
+        "size": 92326170
+      },
+      {
+        "path": "onnx/decoder_model_merged_quantized.onnx",
+        "url": "https://huggingface.co/onnx-community/whisper-small.en/resolve/482fb8ba081b6e906f92efe103622316b2a0cc69/onnx/decoder_model_merged_quantized.onnx",
+        "sha256": "29132c41903c252d0f2b9e59ee1e7d75f7d0b64d37f3e36d1ecc4a1a1af62953",
+        "size": 156750076
+      }
+    ]
+  },
+  "whisper-small": {
+    "kind": "whisper",
+    "source": "onnx-community/whisper-small@36050c46d777d46dc4b5f43f6d90574fc38f8732",
+    "license": "Apache-2.0 (OpenAI Whisper weights: MIT)",
+    "files": [
+      {
+        "path": "config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small/resolve/36050c46d777d46dc4b5f43f6d90574fc38f8732/config.json",
+        "sha256": "457854d452f17661e197d74aee12b8e74fb75ba30ebfaa7426d0d61ea1e08a18",
+        "size": 2227
+      },
+      {
+        "path": "generation_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small/resolve/36050c46d777d46dc4b5f43f6d90574fc38f8732/generation_config.json",
+        "sha256": "f538b28220c6a6d6f1af1458d4141cacb4ef4963df3de98a19490440c412ddf0",
+        "size": 3893
+      },
+      {
+        "path": "preprocessor_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small/resolve/36050c46d777d46dc4b5f43f6d90574fc38f8732/preprocessor_config.json",
+        "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+        "size": 339
+      },
+      {
+        "path": "tokenizer.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small/resolve/36050c46d777d46dc4b5f43f6d90574fc38f8732/tokenizer.json",
+        "sha256": "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566",
+        "size": 2480466
+      },
+      {
+        "path": "tokenizer_config.json",
+        "url": "https://huggingface.co/onnx-community/whisper-small/resolve/36050c46d777d46dc4b5f43f6d90574fc38f8732/tokenizer_config.json",
+        "sha256": "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce",
+        "size": 282683
+      },
+      {
+        "path": "onnx/encoder_model_quantized.onnx",
+        "url": "https://huggingface.co/onnx-community/whisper-small/resolve/36050c46d777d46dc4b5f43f6d90574fc38f8732/onnx/encoder_model_quantized.onnx",
+        "sha256": "a43a83f3c5361cd591cfa7c36f14b43cf7cb22f47a415cc14a8d557be800fa92",
+        "size": 92326160
+      },
+      {
+        "path": "onnx/decoder_model_merged_quantized.onnx",
+        "url": "https://huggingface.co/onnx-community/whisper-small/resolve/36050c46d777d46dc4b5f43f6d90574fc38f8732/onnx/decoder_model_merged_quantized.onnx",
+        "sha256": "ec07c3cbb64172c39791e26ee870a65ac22b458c36722bfe2776b3dbf741e0c9",
+        "size": 156750845
+      }
+    ]
+  },
+  "openwakeword-hey-jarvis": {
+    "kind": "wake",
+    "source": "dscripka/openWakeWord v0.5.1",
+    "license": "Code Apache-2.0; models CC BY-NC-SA 4.0 (non-commercial)",
+    "files": [
+      {
+        "path": "melspectrogram.onnx",
+        "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/melspectrogram.onnx",
+        "sha256": "ba2b0e0f8b7b875369a2c89cb13360ff53bac436f2895cced9f479fa65eb176f",
+        "size": 1087958
+      },
+      {
+        "path": "embedding_model.onnx",
+        "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/embedding_model.onnx",
+        "sha256": "70d164290c1d095d1d4ee149bc5e00543250a7316b59f31d056cff7bd3075c1f",
+        "size": 1326578
+      },
+      {
+        "path": "hey_jarvis_v0.1.onnx",
+        "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_jarvis_v0.1.onnx",
+        "sha256": "94a13cfe60075b132f6a472e7e462e8123ee70861bc3fb58434a73712ee0d2cb",
+        "size": 1271370
+      }
+    ]
+  },
+  "silero-vad": {
+    "kind": "vad",
+    "source": "snakers4/silero-vad v6.2.3",
+    "license": "MIT",
+    "files": [
+      {
+        "path": "silero_vad.onnx",
+        "url": "https://raw.githubusercontent.com/snakers4/silero-vad/v6.2.3/src/silero_vad/data/silero_vad.onnx",
+        "sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
+        "size": 2327524
+      }
+    ]
+  }
+}

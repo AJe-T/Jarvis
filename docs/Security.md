@@ -289,6 +289,11 @@ Decisions taken while building the policy layer; the code is the reference (`src
 - Claude Code runs with no built-in tools except WebSearch (when enabled), no user/project settings, hooks, plugins or MCP servers, and no session files. `canUseTool` denies everything except `mcp__jarvis__*` and WebSearch. Every Jarvis tool call still goes through the executor (Zod parse → policy → guards → confirmation → audit). WebSearch results taint the turn exactly like the API's web search.
 - `llm.provider` changes are audited with their value. Personal use only: see ADR-010.
 
+### 16.4 On-device voice models (ADR-011)
+
+- Model downloads are limited to the files pinned in `src/main/voice/local/models.json` (fixed URLs at fixed revisions); the renderer can only name a model id. Each file is streamed to `*.part`, checked for size and SHA-256, and only then renamed into `userData/models/<id>/`; a mismatch deletes it. Downloads and removals are audited.
+- transformers.js runs with remote models disabled, so Whisper can only load those verified files. With Whisper and openWakeWord selected, no audio leaves the PC at all.
+
 ### 16.2 Implementation Notes (Phase 6)
 
 - Desktop action policy (`src/main/security/desktop-policy.ts`) additionally blocks `win+x`, `ctrl+shift+esc` and `win+l` (use `lock_screen`), and asks before `alt+f4`, `ctrl+w` and `ctrl+shift+delete`. A "confirm" verdict pauses the operator and shows the normal confirmation dialog (always treated as destructive: click or Ctrl+Enter).

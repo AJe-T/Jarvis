@@ -22,6 +22,13 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
 
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Voice' }).click();
+  // ADR-011: on-device engines show what they need (downloads aren't started in tests).
+  await page.getByRole('radio', { name: /On-device: “Hey Jarvis”/ }).click();
+  await expect(page.getByRole('button', { name: /^Download \(4 MB\)$/ })).toBeVisible();
+  await page.getByRole('radio', { name: /Whisper \(on this PC\)/ }).click();
+  await expect(page.getByRole('button', { name: /^Download \(254 MB\)$/ })).toBeVisible();
+  await page.getByRole('radio', { name: /Deepgram \(cloud\)/ }).click();
+  await page.getByRole('radio', { name: /^Picovoice: “Jarvis”/ }).click();
   await page.getByLabel(/Press to talk/).check();
   await expect(page.getByText('Voice: press to talk')).toBeVisible();
 

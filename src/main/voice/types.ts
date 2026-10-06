@@ -37,7 +37,8 @@ export interface Recorder {
 
 export interface WakeWord {
   readonly frameLength: number;
-  process(frame: Int16Array): boolean;
+  /** Porcupine answers synchronously; openWakeWord (ONNX) asynchronously. */
+  process(frame: Int16Array): boolean | Promise<boolean>;
   release(): void;
 }
 

@@ -204,9 +204,7 @@ export function renderTranscript(messages: MessageParam[]): string {
   return messages
     .map((m) => {
       const blocks: Block[] =
-        typeof m.content === 'string'
-          ? [{ type: 'text', text: m.content }]
-          : (m.content);
+        typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content;
       const text = blocks.map(blockText).filter(Boolean).join('\n').trim();
       if (!text) return '';
       const isToolResult = blocks.every((b) => b.type === 'tool_result');
