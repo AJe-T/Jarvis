@@ -1,0 +1,8 @@
+out
+dist
+coverage
+node_modules
+docs
+package-lock.json
+*.md
+.remember

@@ -1,0 +1,25 @@
+appId: com.sir.jarvis
+productName: Jarvis
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+asarUnpack:
+  - '**/*.node'
+  - resources/**
+extraResources:
+  - from: resources/
+    to: resources/
+    filter: ['**/*', '!fonts/**']
+win:
+  target: [nsis]
+  icon: resources/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: Jarvis-Setup-${version}.${ext}
+npmRebuild: true

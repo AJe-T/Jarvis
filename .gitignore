@@ -1,0 +1,16 @@
+node_modules/
+out/
+dist/
+coverage/
+test-results/
+playwright-report/
+.env
+*.db
+*.db-wal
+*.db-shm
+secrets.bin
+logs/
+*.log
+.remember/
+tests/evals/results/*.json
+!tests/evals/results/.gitkeep
