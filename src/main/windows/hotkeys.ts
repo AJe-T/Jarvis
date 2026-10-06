@@ -17,7 +17,11 @@ export interface HotkeyHandlers {
  * Registers global shortcuts (they work while the app is minimised). Returns the accelerators that
  * Windows refused (already taken by another app) so the UI can say so.
  */
-export function registerHotkeys(b: HotkeyBindings, h: HotkeyHandlers): string[] {
+export function registerHotkeys(
+  b: HotkeyBindings,
+  h: HotkeyHandlers,
+  extra: Array<{ accel: string; fn: () => void }> = [],
+): string[] {
   globalShortcut.unregisterAll();
   const failed: string[] = [];
   const bind = (accel: string, fn: () => void): void => {
@@ -30,6 +34,7 @@ export function registerHotkeys(b: HotkeyBindings, h: HotkeyHandlers): string[] 
   bind(b.kill, h.kill);
   bind(b.toggleWindow, h.toggleWindow);
   bind(b.ptt, h.ptt);
+  for (const x of extra) bind(x.accel, x.fn);
   if (failed.length) logger.warn({ failed }, 'some global hotkeys could not be registered');
   return failed;
 }

@@ -45,10 +45,17 @@ export interface VoiceDeps {
   logger: Logger;
   factories: VoiceFactories;
   activeConversation(): string | undefined;
+  /** Dictation finished: the words to type into the app in front. */
+  onDictation?(text: string): void;
   /** ADR-012 intent judge: is the latest ambient speech for Jarvis, and what does Sir want? */
   judge?(transcript: string, ctx: { followUp: boolean; lastReply: string }): Promise<Intent>;
   /** Overridable for tests. */
-  timeouts?: { silenceMs?: number; maxListenMs?: number; echoSettleMs?: number };
+  timeouts?: {
+    silenceMs?: number;
+    maxListenMs?: number;
+    echoSettleMs?: number;
+    dictationQuietMs?: number;
+  };
 }
 
 const SILENCE_TIMEOUT_MS = 8_000;
@@ -56,6 +63,9 @@ const MAX_LISTEN_MS = 30_000;
 const LEVEL_INTERVAL_MS = 50; // ≤ 20 Hz (Code-style.md §5)
 const METER_MS = 5_000;
 const MAX_EARLY_FRAMES = 250; // ≥ 8 s at 512 samples per frame
+/** Dictation lets Sir pause to think mid-sentence. */
+const DICTATION_PAUSE_MS = 1500;
+const DICTATION_MAX_MS = 120_000;
 /** Voice turns within this long continue the same conversation (ADR-012). */
 const CONVERSATION_GAP_MS = 15 * 60_000;
 /** Wait for the room to stop echoing Jarvis's voice before opening the follow-up window. */
@@ -92,6 +102,8 @@ export function createVoiceController(d: VoiceDeps) {
     early: Int16Array[];
     /** Opened by itself after a spoken reply: no chime, gives up quietly. */
     followUp: boolean;
+    /** Dictation: collect everything said until a pause or the hotkey, then type it (no turn). */
+    dictation?: { parts: string[]; quiet?: ReturnType<typeof setTimeout> };
   } | null = null;
   /** ADR-012 conversational state. */
   let lastVoice: { conversationId: string; at: number } | null = null;
@@ -258,14 +270,26 @@ export function createVoiceController(d: VoiceDeps) {
    * A reply that is still being written is NOT cancelled here: a false wake word or a cough must not
    * throw Sir's answer away. route() replaces the running turn only once real words arrive (ADR-012).
    */
-  async function startListening(isRetry: boolean, followUp = false): Promise<void> {
+  async function startListening(
+    isRetry: boolean,
+    followUp = false,
+    dictation = false,
+  ): Promise<void> {
     if (listening) return;
     stopSpeaking();
     sleeping = false;
     ambient?.reset();
     const abort = new AbortController();
-    listening = { session: null, abort, heard: false, retried: isRetry, early: [], followUp };
-    d.state.set('LISTENING', followUp ? 'follow-up' : undefined);
+    listening = {
+      session: null,
+      abort,
+      heard: false,
+      retried: isRetry,
+      early: [],
+      followUp,
+      ...(dictation ? { dictation: { parts: [] } } : {}),
+    };
+    d.state.set('LISTENING', followUp ? 'follow-up' : dictation ? 'dictation' : undefined);
     if (timings.wakeAt)
       log.info({ wakeToListeningMs: Date.now() - timings.wakeAt }, 'latency: wake → listening');
     timings.wakeAt = undefined;
@@ -279,12 +303,16 @@ export function createVoiceController(d: VoiceDeps) {
       },
       followUp ? followUpMs : (d.timeouts?.silenceMs ?? SILENCE_TIMEOUT_MS),
     );
-    current.max = setTimeout(() => cancelListening(), d.timeouts?.maxListenMs ?? MAX_LISTEN_MS);
+    current.max = setTimeout(
+      () => (current.dictation ? finishDictation(current) : cancelListening()),
+      dictation ? DICTATION_MAX_MS : (d.timeouts?.maxListenMs ?? MAX_LISTEN_MS),
+    );
     try {
       const session = await d.factories.stt.start({
         sampleRate: 16000,
         language: d.settings.get('voice.stt.language'),
         signal: abort.signal,
+        ...(dictation ? { endSilenceMs: DICTATION_PAUSE_MS } : {}),
       });
       if (listening !== current) {
         await session.close();
@@ -296,9 +324,17 @@ export function createVoiceController(d: VoiceDeps) {
         if (text) current.heard = true;
         timings.eosAt = Date.now();
         d.emit('voice:transcript', { text, isFinal: false });
+        if (current.dictation) dictationPause(current);
       });
-      session.on('final', (text) => void onFinal(current, text));
+      session.on('final', (text) => {
+        if (!current.dictation) return void onFinal(current, text);
+        if (text.trim()) current.dictation.parts.push(text.trim());
+        current.heard = true;
+        d.emit('voice:transcript', { text: current.dictation.parts.join(' '), isFinal: false });
+        dictationPause(current);
+      });
       session.on('utteranceEnd', () => {
+        if (current.dictation) return; // dictation ends on a longer pause or the hotkey
         if (current.heard && listening === current) void onFinal(current, '');
       });
       session.on('error', (err) => {
@@ -325,6 +361,23 @@ export function createVoiceController(d: VoiceDeps) {
       });
       cancelListening();
     }
+  }
+
+  /** Dictation ends after a pause with nothing new, or when the hotkey is pressed again. */
+  function dictationPause(l: NonNullable<typeof listening>): void {
+    if (!l.dictation) return;
+    clearTimeout(l.dictation.quiet);
+    l.dictation.quiet = setTimeout(() => finishDictation(l), d.timeouts?.dictationQuietMs ?? 1200);
+  }
+
+  function finishDictation(l: NonNullable<typeof listening>): void {
+    if (listening !== l || !l.dictation) return;
+    clearTimeout(l.dictation.quiet);
+    const text = l.dictation.parts.join(' ').trim();
+    endListening();
+    d.emit('voice:transcript', { text, isFinal: true });
+    settleAfterListening();
+    if (text) d.onDictation?.(text);
   }
 
   function endListening(): void {
@@ -536,6 +589,13 @@ export function createVoiceController(d: VoiceDeps) {
       afterSpeechWaiters.delete(utteranceId);
       if (waiter) waiter();
       else if (wasReply && voiceTurns.size === 0 && !speaking) openFollowUp();
+    },
+
+    /** Dictation hotkey: start, or finish early if already dictating. Works in every voice mode. */
+    dictate(): void {
+      if (listening?.dictation) return finishDictation(listening);
+      if (listening) cancelListening();
+      void startListening(false, false, true);
     },
 
     /** PRD F4.1 press-to-talk toggle; also barge-in while Jarvis is speaking. */

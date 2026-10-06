@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { AdvancedSection } from './advanced-section';
+import { DictationSection } from './dictation-section';
 import { AboutSection, DataSection } from './data-sections';
 import { BrainSection } from './brain-section';
 import { FilesSection } from './files-section';
@@ -26,6 +27,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   { id: 'files', label: 'Files & permissions', Component: FilesSection },
   { id: 'memory', label: 'Memory', Component: MemorySection },
   { id: 'voice', label: 'Voice', Component: VoiceSection },
+  { id: 'dictation', label: 'Dictation', Component: DictationSection },
   { id: 'privacy', label: 'Privacy', Component: PrivacySection },
   { id: 'hotkeys', label: 'Hotkeys', Component: HotkeysSection },
   { id: 'data', label: 'Data & backups', Component: DataSection },

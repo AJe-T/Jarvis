@@ -1,5 +1,6 @@
 import type { Services } from '../../services';
 import { logger } from '../../logging/logger';
+import type { DictationRepo } from '../../voice/dictation';
 import type { ModelStore } from '../../voice/local/model-store';
 import { listAudioDevices } from '../../voice/providers';
 import type { VoiceController } from '../../voice/voice-controller';
@@ -11,8 +12,14 @@ export function registerVoiceHandlers(
   voice: VoiceController,
   ui: { setActiveConversation(id: string | null): void; isTest: boolean },
   local: { models: ModelStore; changed(): void },
+  dictations: DictationRepo,
 ): void {
   const { models } = local;
+  handle('dictation:history', () => dictations.list(100));
+  handle('dictation:clear', () => {
+    dictations.clear();
+    return { ok: true };
+  });
   handle('voice:setMode', async (req) => {
     const previous = s.settings.get('voice.mode');
     s.settings.set('voice.mode', req.mode); // the settings listener also re-applies the mode

@@ -107,3 +107,38 @@ export function SettingSelect<K extends SettingKey>({
 }
 
 export { save as saveSetting };
+
+/** Multi-line text setting that saves on blur. */
+export function SettingTextArea<K extends SettingKey>({
+  k,
+  label,
+  hint,
+  rows = 4,
+}: {
+  k: K;
+  label: string;
+  hint?: string;
+  rows?: number;
+}): React.JSX.Element {
+  const value = useSetting(k);
+  const [draft, setDraft] = useState(asText(value));
+  useEffect(() => setDraft(asText(value)), [value]);
+  return (
+    <Field label={label} {...(hint ? { hint } : {})}>
+      {(id) => (
+        <textarea
+          id={id}
+          rows={rows}
+          value={draft}
+          spellCheck={false}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            if (draft !== asText(value))
+              void save(k, draft as SettingValue<K>).then((ok) => !ok && setDraft(asText(value)));
+          }}
+          className="w-full rounded-md border border-night-600 bg-night-800 px-3 py-2 font-code text-sm text-ink-100"
+        />
+      )}
+    </Field>
+  );
+}

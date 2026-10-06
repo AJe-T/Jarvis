@@ -171,8 +171,9 @@ describe('everyday tools (ideas from isair/jarvis)', () => {
   });
 
   it('town detection is a single opt-in lookup', async () => {
-    const town = await detectTownFromIp((async () =>
-      json({ city: 'Hyderabad', region: 'Telangana', country_name: 'India' })));
+    const town = await detectTownFromIp(async () =>
+      json({ city: 'Hyderabad', region: 'Telangana', country_name: 'India' }),
+    );
     expect(town).toBe('Hyderabad, India');
   });
 });

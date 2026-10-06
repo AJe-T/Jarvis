@@ -12,6 +12,7 @@ import {
 } from './providers';
 import { pickModel } from '../agent/model-router';
 import { INTENT_JUDGE_PROMPT, parseIntent, type Intent } from './conversation';
+import { createDictationRepo, finishDictation } from './dictation';
 import { createLocalEngines, type LocalEngines } from './local/local-engines';
 import { createModelStore, type ModelStore } from './local/model-store';
 import type { SttProvider } from './types';
@@ -112,6 +113,20 @@ export function createVoiceSystem(
     onProgress: (p) => s.emit('models:progress', p),
   });
   const local = createLocalEngines(models, s.settings);
+  const dictations = createDictationRepo(s.db);
+  /** Types dictated words into the app in front (clipboard + Ctrl+V, clipboard restored). */
+  async function typeDictation(raw: string): Promise<void> {
+    const text = finishDictation(raw, {
+      removeFillers: s.settings.get('dictation.removeFillers'),
+      dictionary: s.settings.get('dictation.dictionary'),
+    });
+    if (!text) return;
+    const target = await s.os.foregroundWindow().catch(() => ({ title: '', process: '' }));
+    await s.os.pasteText(text);
+    if (s.settings.get('dictation.keepHistory'))
+      dictations.add(raw, text, target.process || target.title || null);
+    s.emit('dictation:done', { text, app: target.process || target.title || '' });
+  }
   const voice = createVoiceController({
     settings: s.settings,
     state: s.state,
@@ -123,6 +138,15 @@ export function createVoiceSystem(
     logger,
     factories: opts.factories ?? (s.isTest ? testFactories() : realFactories(s, local)),
     activeConversation: () => activeConversation ?? undefined,
+    onDictation: (text) =>
+      void typeDictation(text).catch((err: unknown) => {
+        logger.warn({ err: String(err) }, 'dictation paste failed');
+        s.emit('notify', {
+          level: 'error',
+          message: "Couldn't type the dictation; it's in Settings → Voice → Dictation history.",
+        });
+        dictations.add(text, text, null);
+      }),
     ...(opts.timeouts ? { timeouts: opts.timeouts } : {}),
   });
   s.confirmShowListeners.add((e) => voice.onConfirmShown(e));
@@ -144,6 +168,7 @@ export function createVoiceSystem(
   });
   return {
     voice,
+    dictations,
     local: {
       models,
       /** A model was downloaded: warm Whisper and (re)start the wake word if it was waiting for it. */

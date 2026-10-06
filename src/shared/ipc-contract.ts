@@ -151,6 +151,19 @@ export const INVOKE = {
   ),
   'llm:claudeCodeLogin': contract(Empty, Ok),
   'location:detect': contract(Empty, z.object({ town: z.string() })),
+  'dictation:history': contract(
+    Empty,
+    z.array(
+      z.object({
+        id: z.string(),
+        ts: z.string(),
+        raw_text: z.string(),
+        final_text: z.string(),
+        target_app: z.string().nullable(),
+      }),
+    ),
+  ),
+  'dictation:clear': contract(Empty, Ok),
   'models:status': contract(
     Empty,
     z.record(
@@ -302,6 +315,7 @@ export const EVENTS = {
     last: z.boolean().optional(),
   }),
   'tts:stop': z.object({ utteranceId: z.string().optional() }),
+  'dictation:done': z.object({ text: z.string(), app: z.string() }),
   'models:progress': z.object({
     id: z.string(),
     receivedBytes: z.number(),

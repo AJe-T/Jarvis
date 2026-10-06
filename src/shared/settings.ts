@@ -91,6 +91,13 @@ export const SETTINGS = {
   'hotkeys.ptt': { schema: accelerator, default: 'Ctrl+Alt+Space' },
   'hotkeys.toggleWindow': { schema: accelerator, default: 'Ctrl+Alt+J' },
   'hotkeys.kill': { schema: accelerator, default: 'Ctrl+Alt+Shift+X' },
+  /** Dictation (ideas from isair/jarvis): press to start, speak, pause or press again to type it. */
+  'hotkeys.dictation': { schema: accelerator, default: 'Ctrl+Alt+D' },
+  'dictation.enabled': { schema: z.boolean(), default: false },
+  'dictation.removeFillers': { schema: z.boolean(), default: true },
+  /** "heard → written" fixes, one per line, e.g. "jarvis => JARVIS". */
+  'dictation.dictionary': { schema: z.string().max(5000), default: '' },
+  'dictation.keepHistory': { schema: z.boolean(), default: true },
   'vault.path': { schema: z.string().max(400), default: '' },
   'files.allowedRoots': {
     schema: z.array(z.string().min(3).max(400)).max(50),

@@ -197,3 +197,36 @@ describe('conversational voice (ADR-012)', () => {
     expect((await v.start()).ok).toBe(false);
   });
 });
+
+describe('dictation (ideas from isair/jarvis)', () => {
+  it('hotkey → speech → pause → cleaned text pasted into the app in front, kept in history', async () => {
+    const t = setupServices();
+    const s = t.services;
+    s.settings.set('voice.mode', 'off'); // dictation works in every voice mode
+    s.settings.set('dictation.dictionary', 'jarvis => JARVIS');
+    const v = createVoiceSystem(s, {
+      factories: {
+        recorder: (_d, n) => createFakeRecorder(n),
+        wake: () => createFakeWake(),
+        stt: createFakeStt(['um send the report to jarvis today']),
+        edge: createFakeTts('edge'),
+        sapi: createFakeTts('sapi'),
+      },
+      timeouts: { silenceMs: 2000, dictationQuietMs: 50 },
+    });
+    v.voice.dictate();
+    const os = s.os as unknown as { calls: Array<{ op: string; args: unknown[] }> };
+    await until(() => os.calls.some((c) => c.op === 'pasteText'));
+    expect(os.calls.find((c) => c.op === 'pasteText')?.args).toEqual([
+      'Send the report to JARVIS today',
+    ]);
+    await until(() => v.dictations.list().length === 1);
+    expect(v.dictations.list()[0]).toMatchObject({
+      raw_text: 'um send the report to jarvis today',
+      final_text: 'Send the report to JARVIS today',
+      target_app: 'notepad',
+    });
+    expect(s.conversations.list(5)).toHaveLength(0); // dictation never becomes a chat turn
+    v.voice.shutdown();
+  });
+});

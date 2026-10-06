@@ -10,7 +10,13 @@ export interface SttSession {
 
 export interface SttProvider {
   readonly id: string;
-  start(opts: { sampleRate: 16000; language: string; signal: AbortSignal }): Promise<SttSession>;
+  start(opts: {
+    sampleRate: 16000;
+    language: string;
+    signal: AbortSignal;
+    /** Pause that ends an utterance (dictation allows longer pauses). */
+    endSilenceMs?: number;
+  }): Promise<SttSession>;
 }
 
 export interface TtsChunk {

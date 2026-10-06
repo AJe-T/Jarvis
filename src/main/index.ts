@@ -11,6 +11,7 @@ import {
   type BrowserWindow,
   type Tray,
 } from 'electron';
+import type { SettingKey } from '@shared/settings';
 import { addEventTarget, emit } from './ipc/emit';
 import { registerCoreHandlers } from './ipc/handlers/core';
 import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
@@ -68,6 +69,8 @@ function applyLoginItem(enabled: boolean): void {
 
 /** Push-to-talk listeners (the voice controller registers one in Phase 4). */
 export const pttHandlers = new Set<() => void>();
+/** Optional feature hotkeys (dictation, reply copilot): setting key → when enabled → action. */
+const extraHotkeys: Array<{ key: SettingKey; enabled(): boolean; fn(): void }> = [];
 
 /** Dev convenience only: ANTHROPIC_API_KEY from the repo's .env (never in packaged builds). */
 function devSecrets(): Record<string, string> {
@@ -161,6 +164,9 @@ function wireHotkeysAndTray(s: Services): void {
         toggleWindow: toggleMainWindow,
         ptt: () => pttHandlers.forEach((h) => h()),
       },
+      extraHotkeys
+        .filter((x) => x.enabled())
+        .map((x) => ({ accel: s.settings.get(x.key) as string, fn: x.fn })),
     );
     if (failed.length)
       emit('notify', {
@@ -170,7 +176,7 @@ function wireHotkeysAndTray(s: Services): void {
   };
   bind();
   s.settings.onChange((key) => {
-    if (key.startsWith('hotkeys.')) bind();
+    if (key.startsWith('hotkeys.') || key.endsWith('.enabled')) bind();
   });
   if (isTest) return;
   tray = createTray({
@@ -212,6 +218,11 @@ async function boot(): Promise<void> {
   const mcp = createMcpSystem(services, { appVersion: app.getVersion() });
   app.on('will-quit', () => void mcp.manager.shutdown());
   pttHandlers.add(() => voice.voice.ptt());
+  extraHotkeys.push({
+    key: 'hotkeys.dictation',
+    enabled: () => services.settings.get('dictation.enabled'),
+    fn: () => voice.voice.dictate(),
+  });
   app.on('will-quit', () => voice.voice.shutdown());
   const startMemory = (): void => {
     memory.start().catch((err: unknown) => {
@@ -242,6 +253,7 @@ async function boot(): Promise<void> {
       isTest,
     },
     voice.local,
+    voice.dictations,
   );
   registerMcpHandlers(services, mcp.manager);
   const overlay = createComputerOverlay();

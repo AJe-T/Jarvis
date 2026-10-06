@@ -37,7 +37,7 @@ export function createWhisperStt(deps: {
 }): SttProvider {
   return {
     id: 'whisper',
-    async start({ signal, language }) {
+    async start({ signal, language, endSilenceMs = END_SILENCE_MS }) {
       // Load (or reuse) both models up front so the first words aren't lost while they load.
       const [vad, transcriber] = await Promise.all([deps.vad(), deps.transcriber()]);
       vad.reset();
@@ -81,7 +81,7 @@ export function createWhisperStt(deps: {
         }
         speech.push(window);
         quietMs = p < END_PROB ? quietMs + WINDOW_MS : 0;
-        if (quietMs >= END_SILENCE_MS || speech.length * WINDOW_MS >= MAX_SPEECH_MS) await finish();
+        if (quietMs >= endSilenceMs || speech.length * WINDOW_MS >= MAX_SPEECH_MS) await finish();
       }
 
       const session: SttSession = {
