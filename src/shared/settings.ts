@@ -92,6 +92,14 @@ export const SETTINGS = {
   },
   /** Skills Sir turned off (by name); installed skills are on by default. */
   'skills.disabled': { schema: z.array(z.string().max(64)).max(500), default: [] as string[] },
+  /** News feeds for read_feed and the briefing: "Name | https://url" per line (ideas from OpenJarvis). */
+  'feeds.list': {
+    schema: z.string().max(5000),
+    default: [
+      'Hacker News | https://hnrss.org/frontpage',
+      'BBC World | https://feeds.bbci.co.uk/news/world/rss.xml',
+    ].join('\n'),
+  },
   'nutrition.dailyCalories': { schema: z.number().int().min(0).max(10000), default: 2000 },
   'hotkeys.ptt': { schema: accelerator, default: 'Ctrl+Alt+Space' },
   'hotkeys.toggleWindow': { schema: accelerator, default: 'Ctrl+Alt+J' },

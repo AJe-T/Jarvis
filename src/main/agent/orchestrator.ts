@@ -21,7 +21,7 @@ import type { SettingsService } from '../settings/settings-service';
 import { runAgentLoop, textOfContent, type ToolRuntime, type TurnContext } from './agent-loop';
 import type { AssistantStateHub } from './assistant-state';
 import { historyWindow, type ContextBuilder } from './context-builder';
-import { pickModel } from './model-router';
+import { pickModel, type TurnPurpose } from './model-router';
 import { SUMMARY_PROMPT, TITLE_PROMPT } from './prompts/orchestrator';
 import { displayText } from './ui-history';
 
@@ -38,6 +38,8 @@ export interface SendRequest {
   text: string;
   source: 'text' | 'voice';
   attachments?: Attachment[] | undefined;
+  /** Who asked: Sir ('chat', default) or an automation ('briefing', 'task', 'research'…). */
+  purpose?: TurnPurpose | undefined;
 }
 
 export interface TurnInfo {
@@ -46,6 +48,7 @@ export interface TurnInfo {
   mode: 'text' | 'voice';
   userText: string;
   isPrivate: boolean;
+  purpose: TurnPurpose;
 }
 
 export interface TurnEnd extends TurnInfo {
@@ -194,7 +197,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       turnId: info.turnId,
       conversationId: info.conversationId,
       mode: info.mode,
-      purpose: 'chat',
+      purpose: info.purpose,
       signal,
       taint: { tainted: false },
     };
@@ -219,7 +222,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         },
         ctx,
         {
-          model: pickModel(deps.settings, { purpose: 'chat', text: info.userText }),
+          model: pickModel(deps.settings, { purpose: info.purpose, text: info.userText }),
           system,
           messages: deps.context.history(info.conversationId),
           withCache: deps.context.withCacheOnLastBlock,
@@ -342,6 +345,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         mode: req.source,
         userText: text,
         isPrivate: conv.is_private === 1,
+        purpose: req.purpose ?? 'chat',
       };
       // Typed messages are shown optimistically by the renderer; spoken ones appear once recognised.
       if (req.source === 'voice') {

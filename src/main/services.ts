@@ -373,6 +373,7 @@ export function createServices(opts: ServiceOptions) {
     claudeCode,
     skills,
     refreshSkills,
+    fetch: opts.fetch,
     meals,
     pathGuard,
     policy,

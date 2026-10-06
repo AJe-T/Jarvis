@@ -17,6 +17,8 @@ import { registerCoreHandlers } from './ipc/handlers/core';
 import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { createMemorySystem } from './memory/memory-system';
+import { createAutomation } from './automation/automation';
+import { registerAutomationHandlers } from './ipc/handlers/automation';
 import { registerSkillHandlers } from './ipc/handlers/skills';
 import { registerVoiceHandlers } from './ipc/handlers/voice';
 import { createVoiceSystem } from './voice/voice-system';
@@ -273,6 +275,14 @@ async function boot(): Promise<void> {
   handle('computer:calibrate', () => computer.calibrate());
   registerDataHandlers(services);
   registerSkillHandlers(services);
+  // Scheduled agents (ideas from OpenJarvis): briefing, recurring tasks, proactive check-ins.
+  const automation = createAutomation(services, {
+    writeNote: (rel, md) => memory.vault.write(rel, md),
+  });
+  automation.ensureMorningBriefing();
+  registerAutomationHandlers(services, automation);
+  if (!isTest) automation.start();
+  app.on('will-quit', () => automation.stop());
   applyRetention(services);
   setInterval(() => applyRetention(services), 6 * 3600_000).unref();
   handle('app:setMiniMode', (req) => {

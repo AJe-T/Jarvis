@@ -76,6 +76,33 @@ const LocalModelId = z.enum([
   'openwakeword-hey-jarvis',
   'silero-vad',
 ]);
+const TaskId = z.string().regex(/^task_[\w-]+$/);
+const TaskSchedule = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('daily'),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    days: z.array(z.number().int().min(1).max(7)).max(7),
+  }),
+  z.object({ type: z.literal('interval'), minutes: z.number().int().min(15).max(10080) }),
+]);
+const TaskInput = z.object({
+  id: TaskId.optional(),
+  name: z.string().min(2).max(60),
+  kind: z.enum(['briefing', 'task', 'checkin']),
+  prompt: z.string().min(5).max(2000),
+  schedule: TaskSchedule,
+  enabled: z.boolean(),
+  speak: z.boolean(),
+  saveToVault: z.boolean(),
+});
+const TaskView = TaskInput.extend({
+  id: TaskId,
+  scheduleText: z.string(),
+  nextRunAt: z.string().nullable(),
+  lastRunAt: z.string().nullable(),
+  lastStatus: z.string().nullable(),
+  lastConversationId: z.string().nullable(),
+});
 const SkillName = z
   .string()
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
@@ -167,6 +194,10 @@ export const INVOKE = {
   ),
   'llm:localTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
   'location:detect': contract(Empty, z.object({ town: z.string() })),
+  'tasks:list': contract(Empty, z.array(TaskView)),
+  'tasks:save': contract(TaskInput, z.object({ task: TaskView })),
+  'tasks:delete': contract(z.object({ id: TaskId }), Ok),
+  'tasks:runNow': contract(z.object({ id: TaskId }), z.object({ conversationId: z.string() })),
   'skills:list': contract(Empty, z.array(SkillView)),
   'skills:read': contract(z.object({ name: SkillName }), z.object({ markdown: z.string() })),
   'skills:installFolder': contract(Empty, z.object({ skill: SkillView.nullable() })),
@@ -341,6 +372,7 @@ export const EVENTS = {
   }),
   'tts:stop': z.object({ utteranceId: z.string().optional() }),
   'dictation:done': z.object({ text: z.string(), app: z.string() }),
+  'tasks:changed': z.object({}),
   'models:progress': z.object({
     id: z.string(),
     receivedBytes: z.number(),
