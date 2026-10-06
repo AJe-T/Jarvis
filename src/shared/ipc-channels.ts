@@ -47,6 +47,7 @@ export const INVOKE_CHANNELS = [
   'db:backupNow',
   'db:restore',
   'onboarding:complete',
+  'computer:calibrate',
 ] as const;
 export type InvokeChannel = (typeof INVOKE_CHANNELS)[number];
 

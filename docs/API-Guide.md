@@ -442,6 +442,8 @@ Request (Desktop Operator sub-agent):
 }
 ```
 
+Verified 2026-10-06 against the official Computer use tool page: no beta header on 5.5 models; the toolset entry takes only `type`, `configs` and `cache_control` (**no** `display_width_px`/`display_height_px`/`display_number`, they are rejected); Claude learns the screen size only from screenshots; limits are ≤ 1568 px long edge **and** ≤ 1.15 MP for broad compatibility (5.5 models accept up to 2576 px / ~3.75 MP; Jarvis uses the smaller limits to save tokens); `cursor_position` returns text like `X=512, Y=384`; `key.repeat` is 1–100; `hold_key`/`wait` durations go up to 300 s (Jarvis caps a single member at 30 s so Stop stays responsive). Pruning old screenshots is safe because the Desktop Operator does not use extended thinking. On Sir's display (1536×864 DIP at 125 %) nut.js moves in physical pixels and `screen.getCursorScreenPoint() × scaleFactor` matches within 1 px (checked with a calibration script); Settings → Advanced → "Check click accuracy" repeats this check.
+
 Member tools to implement (17): `screenshot`, `zoom`, `left_click`, `right_click`, `middle_click`, `double_click`, `triple_click`, `left_click_drag`, `mouse_move`, `left_mouse_down`, `left_mouse_up`, `cursor_position`, `scroll`, `type`, `key` (honour `repeat`), `hold_key`, `wait`.
 
 Rules (from the official docs):

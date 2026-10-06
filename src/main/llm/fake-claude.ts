@@ -9,7 +9,13 @@ import type { LlmClient, LlmMessage, LlmRequest, MessageParam } from './types';
 const StepSchema = z.object({
   text: z.string().optional(),
   tools: z
-    .array(z.object({ name: z.string(), input: z.record(z.string(), z.unknown()) }))
+    .array(
+      z.object({
+        name: z.string(),
+        input: z.record(z.string(), z.unknown()),
+        toolset: z.string().optional(),
+      }),
+    )
     .optional(),
   chunkDelayMs: z.number().optional(),
 });
@@ -99,6 +105,7 @@ export function createFakeClaude(
           name: t.name,
           input: t.input,
           caller: { type: 'direct' },
+          ...(t.toolset ? { toolset_name: t.toolset } : {}),
         });
       }
       // Test double: only the fields the app reads are populated.

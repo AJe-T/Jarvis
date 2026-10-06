@@ -281,3 +281,10 @@ Decisions taken while building the policy layer; the code is the reference (`src
 - **Loosening** a tool to "Run automatically" in Connections needs its own confirmation and is audit-logged (`mcp.update`).
 - **Presets** (`src/shared/mcp-presets.ts`): Playwright `0.0.83` with `--browser msedge` and a dedicated profile in `%APPDATA%\Jarvis\browser-profile` (Edge ships with every Windows 11; it is never Sir's everyday profile), `browser_run_code_unsafe` BLOCKED by default; GitHub remote server with a fine-grained PAT as a bearer token; Notion `2.5.2` with `NOTION_TOKEN`; filesystem `2026.8.31` scoped to the allowed roots.
 - MCP child processes get only the SDK's minimal environment plus the secrets that server is configured for; the Anthropic key is never passed.
+
+### 16.2 Implementation Notes (Phase 6)
+
+- Desktop action policy (`src/main/security/desktop-policy.ts`) additionally blocks `win+x`, `ctrl+shift+esc` and `win+l` (use `lock_screen`), and asks before `alt+f4`, `ctrl+w` and `ctrl+shift+delete`. A "confirm" verdict pauses the operator and shows the normal confirmation dialog (always treated as destructive: click or Ctrl+Enter).
+- Clicks are refused when the target lies on a visible Jarvis window (main window or the Stop pill); the full-screen red border is click-through and excluded. Jarvis minimises its main window for the session and restores it afterwards.
+- Every member action is recorded in `tool_calls` (`toolset_name = 'computer'`); blocked ones are also written to the audit log (`desktop.blocked`). Typed text is not stored in the activity log.
+- Password-field detection via UI Automation (`IsPassword`) is still P1; until then the content guard blocks typing anything that looks like a password, OTP, card number or key.

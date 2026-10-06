@@ -18,6 +18,11 @@ import { registerVoiceHandlers } from './ipc/handlers/voice';
 import { createVoiceSystem } from './voice/voice-system';
 import { registerMcpHandlers } from './ipc/handlers/mcp';
 import { createMcpSystem } from './mcp/mcp-system';
+import { createComputerSystem } from './tools/computer/computer-system';
+import { createElectronScreen } from './tools/computer/electron-screen';
+import { createFakeDriver, createFakeScreen, createNutDriver } from './tools/computer/drivers';
+import { createComputerOverlay } from './windows/overlay-window';
+import { handle } from './ipc/handle';
 import { errorMessage } from './errors';
 import { initFileLogging, logger } from './logging/logger';
 import { createServices, type Services } from './services';
@@ -192,6 +197,20 @@ async function boot(): Promise<void> {
     isTest,
   });
   registerMcpHandlers(services, mcp.manager);
+  const overlay = createComputerOverlay();
+  app.on('will-quit', () => overlay.destroy());
+  const computer = createComputerSystem(services, {
+    screen: isTest ? createFakeScreen() : createElectronScreen((w) => !overlay.isBorder(w)),
+    driver: isTest ? async () => createFakeDriver() : createNutDriver,
+    overlay,
+    mainWindow: {
+      minimize: () => mainWindow?.minimize(),
+      restore: () => {
+        if (mainWindow?.isMinimized()) mainWindow.restore();
+      },
+    },
+  });
+  handle('computer:calibrate', () => computer.calibrate());
   if (services.settings.get('onboarding.complete')) {
     void mcp.manager.start();
     startMemory();

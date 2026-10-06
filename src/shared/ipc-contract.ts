@@ -221,6 +221,7 @@ export const INVOKE = {
     }),
     Ok,
   ),
+  'computer:calibrate': contract(Empty, z.object({ ok: z.boolean(), maxErrorPx: z.number() })),
 } satisfies Record<InvokeChannel, { request: z.ZodType; response: z.ZodType }>;
 
 export const EVENTS = {

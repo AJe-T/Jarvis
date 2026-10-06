@@ -10,7 +10,7 @@
 
 Current phase tracker (Sir updates this line):
 
-> **CURRENT PHASE: 6**
+> **CURRENT PHASE: 7**
 
 ---
 

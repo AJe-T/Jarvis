@@ -235,3 +235,9 @@ body {
   padding-left: 0.75rem;
   color: var(--ink-300);
 }
+
+/* Computer-Control overlay windows are transparent (Design-system.md §4.4). */
+html.overlay,
+html.overlay body {
+  background: transparent;
+}
