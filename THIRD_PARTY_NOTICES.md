@@ -9,6 +9,8 @@ bundled third-party assets and separately-run components whose licences require 
 | IBM Plex Sans (via @fontsource/ibm-plex-sans) | https://github.com/IBM/plex | SIL OFL 1.1 | Body font |
 | JetBrains Mono (via @fontsource/jetbrains-mono) | https://github.com/JetBrains/JetBrainsMono | SIL OFL 1.1 | Code font |
 | Playwright MCP (@playwright/mcp, run as a separate process via npx) | https://github.com/microsoft/playwright-mcp | Apache-2.0 | Browser connector |
+| Notion MCP server (@notionhq/notion-mcp-server, optional, run via npx) | https://github.com/makenotion/notion-mcp-server | MIT | Notion connector |
+| MCP filesystem server (@modelcontextprotocol/server-filesystem, optional, run via npx) | https://github.com/modelcontextprotocol/servers | MIT | Filesystem connector |
 | Picovoice Porcupine built-in keyword "Jarvis" | https://github.com/Picovoice/porcupine | Apache-2.0 | Wake word |
 
 npm dependencies keep their own licence files inside `node_modules`; all production

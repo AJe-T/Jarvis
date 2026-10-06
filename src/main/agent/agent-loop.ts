@@ -158,6 +158,11 @@ export async function runAgentLoop(
     hooks.onStep?.(msg);
     const usage = deps.ledger.record(msg, ctx.purpose, ctx.conversationId);
     turnInputTokens += usage.inputTokens;
+    // Security.md §6.3: web search results are untrusted content for taint tracking.
+    if (msg.content.some((b) => b.type === 'web_search_tool_result')) {
+      ctx.taint.tainted = true;
+      ctx.taint.source ??= 'web search results';
+    }
     const stepPlain = textOfContent(msg.content);
     fullText += stepPlain;
     for (const c of citationsOf(msg.content))

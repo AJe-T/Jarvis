@@ -16,6 +16,8 @@ import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { createMemorySystem } from './memory/memory-system';
 import { registerVoiceHandlers } from './ipc/handlers/voice';
 import { createVoiceSystem } from './voice/voice-system';
+import { registerMcpHandlers } from './ipc/handlers/mcp';
+import { createMcpSystem } from './mcp/mcp-system';
 import { errorMessage } from './errors';
 import { initFileLogging, logger } from './logging/logger';
 import { createServices, type Services } from './services';
@@ -160,6 +162,8 @@ async function boot(): Promise<void> {
   if (!services.dbHealthy) logger.error('database failed quick_check');
   const memory = createMemorySystem(services);
   const voice = createVoiceSystem(services);
+  const mcp = createMcpSystem(services, { appVersion: app.getVersion() });
+  app.on('will-quit', () => void mcp.manager.shutdown());
   pttHandlers.add(() => voice.voice.ptt());
   app.on('will-quit', () => voice.voice.shutdown());
   const startMemory = (): void => {
@@ -178,6 +182,7 @@ async function boot(): Promise<void> {
       await memory.start();
       await writeQuickFacts(memory, facts);
       await voice.start();
+      void mcp.manager.start();
     },
   });
   registerSafetyHandlers(services);
@@ -186,7 +191,9 @@ async function boot(): Promise<void> {
     setActiveConversation: voice.setActiveConversation,
     isTest,
   });
+  registerMcpHandlers(services, mcp.manager);
   if (services.settings.get('onboarding.complete')) {
+    void mcp.manager.start();
     startMemory();
     void voice.start().then((r) => {
       if (!r.ok && r.error)

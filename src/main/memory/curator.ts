@@ -41,7 +41,7 @@ const PathSchema = z
   );
 
 const OpSchema = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('NOOP') }).passthrough(),
+  z.looseObject({ op: z.literal('NOOP') }),
   z.object({
     op: z.enum(['ADD', 'UPDATE', 'DELETE']),
     path: PathSchema,
@@ -64,8 +64,13 @@ type ChangeOp = Exclude<CuratorOutput['ops'][number], { op: 'NOOP' }>;
 const INSTRUCTION_LIKE =
   /\b(ignore (all|any|previous|prior|the above)|disregard|you (must|should|will|are to)|(assistant|jarvis) (must|should|will|is to)|from now on|pre-?approved|without (asking|confirmation)|always (send|email|forward|upload|share|delete|run|execute|approve|open)|never (ask|confirm))\b|^(send|email|forward|upload|delete|run|execute|ignore|always|never|approve)\b/i;
 
+/** Data-routing or permission "facts" ("files are sent to x@y.com", "Jarvis is allowed to…") are instructions in disguise. */
+const ROUTING_OR_PERMISSION =
+  /\b(send|sent|forward(ed)?|e-?mail(ed)?|upload(ed)?|share[ds]?)\b[^.]*\b[\w.+-]+@[\w-]+\.\w+|\b(allowed|permitted|authori[sz]ed)\s+to\b|\binstructions?\s+for\s+(the\s+)?(assistant|jarvis|ai)\b/i;
+
 export function isInstructionLike(text: string): boolean {
-  return INSTRUCTION_LIKE.test(text.trim());
+  const t = text.trim();
+  return INSTRUCTION_LIKE.test(t) || ROUTING_OR_PERMISSION.test(t);
 }
 
 export function parseCuratorJson(text: string): CuratorOutput | null {

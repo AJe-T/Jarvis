@@ -273,3 +273,11 @@ Decisions taken while building the policy layer; the code is the reference (`src
 | URL guard | `open_url` may open private/localhost addresses (Sir runs dev servers); every other URL check refuses private ranges. |
 | Taint | Tools flagged `externalFacing` (`open_url`, MCP write tools) are raised to CONFIRM after the turn read untrusted content; the dialog shows the source. |
 | Internal PowerShell | Native tools pass parameters as JSON in an environment variable (`$P`), never by splicing input into script text. `run_powershell` scripts go through the shell guard; internal scripts are static code. |
+
+### 16.1 Implementation Notes (Phase 5)
+
+- **MCP inputs are guarded like native ones**: every string argument passes the content guard (no passwords, OTPs, card numbers, keys), and URL-like fields (`url`, `uri`, `href`, …) pass the URL guard (`javascript:`, `file:`, `data:` blocked).
+- **MCP outputs** are always wrapped as untrusted and taint the turn; non-SAFE MCP tools count as external-facing.
+- **Loosening** a tool to "Run automatically" in Connections needs its own confirmation and is audit-logged (`mcp.update`).
+- **Presets** (`src/shared/mcp-presets.ts`): Playwright `0.0.83` with `--browser msedge` and a dedicated profile in `%APPDATA%\Jarvis\browser-profile` (Edge ships with every Windows 11; it is never Sir's everyday profile), `browser_run_code_unsafe` BLOCKED by default; GitHub remote server with a fine-grained PAT as a bearer token; Notion `2.5.2` with `NOTION_TOKEN`; filesystem `2026.8.31` scoped to the allowed roots.
+- MCP child processes get only the SDK's minimal environment plus the secrets that server is configured for; the Anthropic key is never passed.

@@ -29,6 +29,8 @@ const McpServerInput = z.object({
   args: z.array(z.string().max(500)).max(40).default([]),
   url: z.string().url().max(500).optional(),
   envSecrets: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{1,60}$/), SecretNameSchema).default({}),
+  /** HTTP servers: secret sent as "Authorization: Bearer <secret>". */
+  authSecret: SecretNameSchema.optional(),
   trustLevel: z.enum(['official', 'community', 'experimental']),
   defaultTier: z.enum(TIERS).default('CONFIRM'),
   toolOverrides: z.record(z.string(), z.enum(TIERS)).default({}),

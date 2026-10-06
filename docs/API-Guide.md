@@ -519,6 +519,8 @@ async function connect(server: McpServerConfig) {
 
 `"secret:<name>"` values are resolved from the secrets store at spawn time.
 
+Implementation (Phase 5): the `mcp_servers` table is the source of truth; `%APPDATA%\Jarvis\mcp.json` is written as a Claude-Desktop-compatible export (secret references only). HTTP servers may set `authSecret` (sent as `Authorization: Bearer …`, migration `002_mcp_auth.sql`). Args may use `{browserProfile}` and `{allowedRoots}` placeholders. `cross-spawn` inside the SDK handles `npx` on Windows, so `command: "npx"` works as-is. Imports verified against SDK 1.32.1: `@modelcontextprotocol/sdk/client/index.js`, `client/stdio.js`, `client/streamableHttp.js`.
+
 ## 9. Voice Interfaces
 
 ```ts
