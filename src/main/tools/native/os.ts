@@ -21,6 +21,12 @@ export interface OsAdapter {
   clipboardRead(): Promise<string>;
   clipboardWrite(text: string): Promise<void>;
   mediaKey(key: 'play_pause' | 'next' | 'previous' | 'stop' | 'mute'): Promise<void>;
+  /** PNG of the primary display, at most maxWidth wide. */
+  captureScreen(opts: { maxWidth: number }): Promise<Uint8Array>;
+  /** Puts text into the focused app via the clipboard + Ctrl+V, then restores the clipboard. */
+  pasteText(text: string): Promise<void>;
+  /** Title and process name of the window in front (for dictation and the reply copilot). */
+  foregroundWindow(): Promise<{ title: string; process: string }>;
 }
 
 export interface ElectronBits {
@@ -31,6 +37,7 @@ export interface ElectronBits {
   };
   clipboard: { readText(): Promise<string>; writeText(t: string): Promise<void> };
   notify(title: string, body: string): void;
+  captureScreen(maxWidth: number): Promise<Uint8Array>;
 }
 
 const VK: Record<Parameters<OsAdapter['mediaKey']>[0], number> = {
@@ -40,6 +47,15 @@ const VK: Record<Parameters<OsAdapter['mediaKey']>[0], number> = {
   stop: 0xb2,
   mute: 0xad,
 };
+
+const USER32 = `Add-Type -Name U -Namespace J -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e); [DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow(); [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(System.IntPtr h, System.Text.StringBuilder s, int n); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint p);'`;
+/** Ctrl down, V down, V up, Ctrl up. */
+const PASTE_SCRIPT = `${USER32}
+[J.U]::keybd_event(0x11,0,0,[UIntPtr]::Zero); [J.U]::keybd_event(0x56,0,0,[UIntPtr]::Zero); [J.U]::keybd_event(0x56,0,2,[UIntPtr]::Zero); [J.U]::keybd_event(0x11,0,2,[UIntPtr]::Zero)`;
+const FOREGROUND_SCRIPT = `${USER32}
+$h = [J.U]::GetForegroundWindow(); $sb = New-Object System.Text.StringBuilder 512; [void][J.U]::GetWindowText($h, $sb, 512)
+$procId = 0; [void][J.U]::GetWindowThreadProcessId($h, [ref]$procId); $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+@{ title = $sb.ToString(); process = $(if ($p) { $p.ProcessName } else { '' }) } | ConvertTo-Json -Compress`;
 
 export function createWindowsOs(e: ElectronBits): OsAdapter {
   return {
@@ -64,6 +80,20 @@ export function createWindowsOs(e: ElectronBits): OsAdapter {
     notify: (title, body) => e.notify(title, body),
     clipboardRead: () => e.clipboard.readText(),
     clipboardWrite: (text) => e.clipboard.writeText(text),
+    captureScreen: ({ maxWidth }) => e.captureScreen(maxWidth),
+    async pasteText(text) {
+      const previous = await e.clipboard.readText().catch(() => '');
+      await e.clipboard.writeText(text);
+      const r = await runPowerShell(PASTE_SCRIPT, { timeoutMs: 10_000 });
+      if (r.exitCode !== 0) throw new ToolError(r.stderr || 'Paste failed.');
+      // Give the target app time to read the clipboard before putting Sir's clipboard back.
+      setTimeout(() => void e.clipboard.writeText(previous).catch(() => undefined), 600);
+    },
+    async foregroundWindow() {
+      return runPowerShellJson<{ title: string; process: string }>(FOREGROUND_SCRIPT, {
+        timeoutMs: 10_000,
+      });
+    },
     async mediaKey(key) {
       const script = `Add-Type -Name K -Namespace J -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);'
 [J.K]::keybd_event(${VK[key]}, 0, 1, [UIntPtr]::Zero); [J.K]::keybd_event(${VK[key]}, 0, 3, [UIntPtr]::Zero)`;
@@ -73,11 +103,20 @@ export function createWindowsOs(e: ElectronBits): OsAdapter {
   };
 }
 
+/** 1×1 transparent PNG. */
+const FAKE_PNG = Uint8Array.from(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    'base64',
+  ),
+);
+
 /** Records every OS call; used by unit tests and by E2E runs (JARVIS_TEST=1) so nothing real happens. */
 export function createFakeOs(
   responses: Partial<{
     psJson: (script: string, opts?: PsOptions) => unknown;
     clipboard: string;
+    foreground: { title: string; process: string };
   }> = {},
 ) {
   const calls: Array<{ op: string; args: unknown[] }> = [];
@@ -114,6 +153,17 @@ export function createFakeOs(
     },
     async mediaKey(key) {
       calls.push({ op: 'mediaKey', args: [key] });
+    },
+    async captureScreen(opts) {
+      calls.push({ op: 'captureScreen', args: [opts.maxWidth] });
+      return FAKE_PNG;
+    },
+    async pasteText(text) {
+      calls.push({ op: 'pasteText', args: [text] });
+    },
+    async foregroundWindow() {
+      calls.push({ op: 'foregroundWindow', args: [] });
+      return responses.foreground ?? { title: 'Notepad', process: 'notepad' };
     },
   };
   return os;

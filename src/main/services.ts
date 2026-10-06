@@ -44,6 +44,9 @@ import { createToolExecutor } from './tools/executor';
 import { createAppIndex } from './tools/native/app-index';
 import { createNativeTools } from './tools/native/index';
 import type { OsAdapter } from './tools/native/os';
+import { createMealTools, createMealsRepo } from './tools/everyday/meals';
+import { createScreenTools } from './tools/everyday/screen';
+import { createWeatherTools } from './tools/everyday/weather';
 import { createToolRegistry } from './tools/registry';
 
 export interface ServiceOptions {
@@ -59,6 +62,8 @@ export interface ServiceOptions {
   /** Tests: stand-ins for the Agent SDK's query() and the claude.exe lookup (ADR-010). */
   claudeCodeQuery?: QueryFn;
   claudeCodePath?: () => string | null;
+  /** Tests: stand-in for network requests made by tools (weather, feeds, Telegram). */
+  fetch?: typeof fetch;
   /** Known folders (app.getPath) used to seed vault + allowed roots on first run. */
   paths: {
     documents: string;
@@ -249,6 +254,14 @@ export function createServices(opts: ServiceOptions) {
     protectedPaths: () => [settings.get('vault.path')],
   }))
     registry.register(tool);
+  // Everyday tools (ideas from isair/jarvis): weather, home town, meal log, look at the screen.
+  const meals = createMealsRepo(db);
+  for (const tool of [
+    ...createWeatherTools({ settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) }),
+    ...createMealTools({ repo: meals, settings }),
+    ...createScreenTools(opts.os),
+  ])
+    registry.register(tool);
   const tools = createToolExecutor({
     registry,
     policy,
@@ -322,6 +335,7 @@ export function createServices(opts: ServiceOptions) {
     llm,
     llmApi,
     claudeCode,
+    meals,
     pathGuard,
     policy,
     broker,

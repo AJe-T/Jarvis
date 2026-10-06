@@ -38,6 +38,7 @@ export const INVOKE_CHANNELS = [
   'usage:summary',
   'usage:breakdown',
   'llm:claudeCodeStatus',
+  'location:detect',
   'models:status',
   'models:download',
   'models:cancel',

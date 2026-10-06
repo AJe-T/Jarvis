@@ -7,6 +7,7 @@ import { toUiToolCall } from '../../db/repos/tool-calls-repo';
 import { buildUiMessages } from '../../agent/ui-history';
 import { claudeCodeStatus, openClaudeLogin } from '../../llm/claude-code';
 import { monthStart } from '../../llm/usage-ledger';
+import { detectTownFromIp } from '../../tools/everyday/weather';
 import { pickModel } from '../../agent/model-router';
 import type { Services } from '../../services';
 import { isSafeExternalUrl } from '../../windows/hardening';
@@ -136,6 +137,11 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
     openClaudeLogin(path);
     audit('llm.claudeCodeLogin', {});
     return { ok: true };
+  });
+  // Opt-in only (a button in Settings): one request that reveals the public IP to ipapi.co.
+  handle('location:detect', async () => {
+    audit('location.detect', {});
+    return { town: await detectTownFromIp() };
   });
   handle('usage:breakdown', (req) => {
     const day = localDay();

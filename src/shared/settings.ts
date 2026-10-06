@@ -80,6 +80,14 @@ export const SETTINGS = {
   /** ADR-012: seconds after a spoken reply during which Sir can follow up without the wake word (0 = off). */
   'voice.followUpSeconds': { schema: z.number().min(0).max(30), default: 6 },
   'voice.sounds': { schema: z.boolean(), default: true },
+  // Everyday tools (ideas from isair/jarvis).
+  /** Home town for weather ("Hyderabad, India"); empty = ask. */
+  'location.home': { schema: z.string().max(120), default: '' },
+  'units.temperature': {
+    schema: z.enum(['celsius', 'fahrenheit']),
+    default: 'celsius' as 'celsius' | 'fahrenheit',
+  },
+  'nutrition.dailyCalories': { schema: z.number().int().min(0).max(10000), default: 2000 },
   'hotkeys.ptt': { schema: accelerator, default: 'Ctrl+Alt+Space' },
   'hotkeys.toggleWindow': { schema: accelerator, default: 'Ctrl+Alt+J' },
   'hotkeys.kill': { schema: accelerator, default: 'Ctrl+Alt+Shift+X' },

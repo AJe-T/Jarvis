@@ -150,6 +150,7 @@ export const INVOKE = {
     }),
   ),
   'llm:claudeCodeLogin': contract(Empty, Ok),
+  'location:detect': contract(Empty, z.object({ town: z.string() })),
   'models:status': contract(
     Empty,
     z.record(

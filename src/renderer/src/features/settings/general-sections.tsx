@@ -1,5 +1,9 @@
 import { Section } from '../../components/ui/field';
-import { SettingInput, SettingSwitch } from './settings-controls';
+import { Button } from '../../components/ui/button';
+import { call, cleanError } from '../../lib/api';
+import { useSettingsStore } from '../../stores/settings-store';
+import { useUiStore } from '../../stores/ui-store';
+import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
 
 export function HotkeysSection(): React.JSX.Element {
   return (
@@ -42,6 +46,47 @@ export function GeneralSection(): React.JSX.Element {
       />
       <SettingSwitch k="app.startWithWindows" label="Start Jarvis when Windows starts" />
       <SettingSwitch k="app.startHidden" label="Start hidden in the tray" />
+    </Section>
+  );
+}
+
+/** Everyday tools: weather location, units, nutrition target. */
+export function EverydaySection(): React.JSX.Element {
+  const set = useSettingsStore((s) => s.set);
+  const toast = useUiStore((s) => s.toast);
+  return (
+    <Section
+      title="Everyday"
+      description="Used by the weather and meal-log tools. Your town is only sent to Open-Meteo when you ask about the weather."
+    >
+      <div className="flex flex-wrap items-end gap-3">
+        <SettingInput k="location.home" label="Home town (e.g. Hyderabad, India)" />
+        <Button
+          variant="ghost"
+          title="Looks up your town from your internet connection (sends your IP address to ipapi.co once)"
+          onClick={() =>
+            void call('location:detect', {})
+              .then((r) => set('location.home', r.town))
+              .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
+          }
+        >
+          Detect
+        </Button>
+      </div>
+      <SettingSelect
+        k="units.temperature"
+        label="Temperature"
+        options={[
+          { value: 'celsius', label: 'Celsius' },
+          { value: 'fahrenheit', label: 'Fahrenheit' },
+        ]}
+      />
+      <SettingInput
+        k="nutrition.dailyCalories"
+        label="Daily calorie target (meal log)"
+        type="number"
+        step={50}
+      />
     </Section>
   );
 }

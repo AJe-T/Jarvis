@@ -4,7 +4,9 @@ import {
   Notification,
   app,
   clipboard,
+  desktopCapturer,
   safeStorage,
+  screen,
   shell,
   type BrowserWindow,
   type Tray,
@@ -106,6 +108,20 @@ function osAdapter() {
   return createWindowsOs({
     shell,
     clipboard,
+    captureScreen: async (maxWidth) => {
+      const d = screen.getPrimaryDisplay();
+      const size = {
+        width: Math.round(d.bounds.width * d.scaleFactor),
+        height: Math.round(d.bounds.height * d.scaleFactor),
+      };
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
+      const src = sources.find((x) => x.display_id === String(d.id)) ?? sources[0];
+      if (!src) throw new Error('No screen available to capture.');
+      const img = src.thumbnail;
+      return img.getSize().width > maxWidth
+        ? img.resize({ width: maxWidth, quality: 'good' }).toPNG()
+        : img.toPNG();
+    },
     notify: (title, body) => {
       const n = new Notification({ title, body, icon: iconPath() });
       n.on('click', showMainWindow);

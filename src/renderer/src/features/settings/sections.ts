@@ -5,7 +5,12 @@ import { BrainSection } from './brain-section';
 import { FilesSection } from './files-section';
 import { MemorySection } from './memory-section';
 import { VoiceSection } from './voice-section';
-import { GeneralSection, HotkeysSection, PrivacySection } from './general-sections';
+import {
+  EverydaySection,
+  GeneralSection,
+  HotkeysSection,
+  PrivacySection,
+} from './general-sections';
 
 export interface SettingsSectionDef {
   id: string;
@@ -16,6 +21,7 @@ export interface SettingsSectionDef {
 /** Design-system.md §5.6 settings groups. Later features append their sections. */
 export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   { id: 'general', label: 'General', Component: GeneralSection },
+  { id: 'everyday', label: 'Everyday', Component: EverydaySection },
   { id: 'brain', label: 'Models & budget', Component: BrainSection },
   { id: 'files', label: 'Files & permissions', Component: FilesSection },
   { id: 'memory', label: 'Memory', Component: MemorySection },
