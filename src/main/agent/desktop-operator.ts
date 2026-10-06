@@ -190,18 +190,16 @@ export function createDesktopOperator(d: OperatorDeps) {
             throw new JarvisError('KILLED', 'stopped', 'Computer control was stopped.');
           d.budget.assertCanSpend(turnInputTokens);
           messages = pruneScreenshots(messages);
-          const msg = await d
-            .llm()
-            .stream(
-              {
-                model: d.model(),
-                max_tokens: 4096,
-                system: desktopOperatorPrompt(goal, constraints),
-                tools,
-                messages: [...messages],
-              },
-              { signal: parent.signal },
-            );
+          const msg = await d.llm().stream(
+            {
+              model: d.model(),
+              max_tokens: 4096,
+              system: desktopOperatorPrompt(goal, constraints),
+              tools,
+              messages: [...messages],
+            },
+            { signal: parent.signal },
+          );
           turnInputTokens += d.ledger.record(
             msg,
             'desktop_agent',

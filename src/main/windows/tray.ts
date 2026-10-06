@@ -6,6 +6,7 @@ export interface TrayActions {
   stopEverything(): void;
   toggleVoice(): void;
   openSettings(): void;
+  miniMode(): void;
   quit(): void;
   voiceEnabled(): boolean;
 }
@@ -34,6 +35,7 @@ export function createTray(actions: TrayActions): Tray {
           label: actions.voiceEnabled() ? 'Turn voice off' : 'Turn voice on',
           click: () => (actions.toggleVoice(), rebuild()),
         },
+        { label: 'Mini orb', click: actions.miniMode },
         { label: 'Stop everything', click: actions.stopEverything },
         { type: 'separator' },
         { label: 'Settings', click: actions.openSettings },

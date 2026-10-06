@@ -22,6 +22,8 @@ import { createComputerSystem } from './tools/computer/computer-system';
 import { createElectronScreen } from './tools/computer/electron-screen';
 import { createFakeDriver, createFakeScreen, createNutDriver } from './tools/computer/drivers';
 import { createComputerOverlay } from './windows/overlay-window';
+import { createMiniWindow } from './windows/mini-window';
+import { applyRetention, registerDataHandlers } from './ipc/handlers/data';
 import { handle } from './ipc/handle';
 import { errorMessage } from './errors';
 import { initFileLogging, logger } from './logging/logger';
@@ -38,6 +40,29 @@ if (process.env['JARVIS_USER_DATA']) app.setPath('userData', process.env['JARVIS
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
+
+let miniWindow: BrowserWindow | null = null;
+
+/** Design-system.md §4.3 mini orb: hides the main window and shows a small always-on-top orb (or back). */
+function setMiniMode(on: boolean): void {
+  if (on) {
+    if (!miniWindow || miniWindow.isDestroyed()) {
+      miniWindow = createMiniWindow();
+      addEventTarget(miniWindow);
+      miniWindow.once('ready-to-show', () => miniWindow?.showInactive());
+    } else miniWindow.showInactive();
+    mainWindow?.hide();
+  } else {
+    miniWindow?.hide();
+    showMainWindow();
+  }
+}
+
+/** PRD F6.4 start with Windows (packaged builds only; dev builds would register electron.exe). */
+function applyLoginItem(enabled: boolean): void {
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({ openAtLogin: enabled, args: ['--hidden'] });
+}
 
 /** Push-to-talk listeners (the voice controller registers one in Phase 4). */
 export const pttHandlers = new Set<() => void>();
@@ -135,6 +160,7 @@ function wireHotkeysAndTray(s: Services): void {
   tray = createTray({
     show: showMainWindow,
     stopEverything: () => s.killSwitch.trigger('tray'),
+    miniMode: () => setMiniMode(true),
     toggleVoice: () =>
       s.settings.set('voice.mode', s.settings.get('voice.mode') === 'off' ? 'ptt' : 'off'),
     voiceEnabled: () => s.settings.get('voice.mode') !== 'off',
@@ -211,6 +237,13 @@ async function boot(): Promise<void> {
     },
   });
   handle('computer:calibrate', () => computer.calibrate());
+  registerDataHandlers(services);
+  applyRetention(services);
+  setInterval(() => applyRetention(services), 6 * 3600_000).unref();
+  handle('app:setMiniMode', (req) => {
+    setMiniMode(req.on);
+    return { ok: true };
+  });
   if (services.settings.get('onboarding.complete')) {
     void mcp.manager.start();
     startMemory();
@@ -221,9 +254,13 @@ async function boot(): Promise<void> {
   }
   services.settings.onChange((key) => {
     if (key === 'vault.path' && services.settings.get('onboarding.complete')) startMemory();
+    if (key === 'app.startWithWindows')
+      applyLoginItem(services.settings.get('app.startWithWindows'));
   });
 
-  mainWindow = createMainWindow();
+  const hidden =
+    !isTest && (process.argv.includes('--hidden') || services.settings.get('app.startHidden'));
+  mainWindow = createMainWindow({ startHidden: hidden });
   addEventTarget(mainWindow);
   wireWindowBehaviour(services);
   wireHotkeysAndTray(services);

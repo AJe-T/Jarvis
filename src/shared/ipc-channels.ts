@@ -48,6 +48,7 @@ export const INVOKE_CHANNELS = [
   'db:restore',
   'onboarding:complete',
   'computer:calibrate',
+  'app:openFolder',
 ] as const;
 export type InvokeChannel = (typeof INVOKE_CHANNELS)[number];
 

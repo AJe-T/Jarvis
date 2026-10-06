@@ -9,15 +9,17 @@ import '@fontsource/jetbrains-mono/400.css';
 import './styles/globals.css';
 import { App } from './app';
 import { OverlayBorder, OverlayPill } from './features/computer/overlay';
+import { MiniOrb } from './features/mini/mini-orb';
 
 // The same bundle serves the main window and the two Computer-Control overlay windows (by hash route).
 const route = window.location.hash.replace(/^#/, '');
-const overlay =
-  route === 'overlay-border' ? (
-    <OverlayBorder />
-  ) : route === 'overlay-pill' ? (
-    <OverlayPill />
-  ) : null;
+const SPECIAL: Record<string, () => React.JSX.Element> = {
+  'overlay-border': OverlayBorder,
+  'overlay-pill': OverlayPill,
+  mini: MiniOrb,
+};
+const Special = SPECIAL[route];
+const overlay = Special ? <Special /> : null;
 if (overlay) document.documentElement.classList.add('overlay');
 
 const root = document.getElementById('root');

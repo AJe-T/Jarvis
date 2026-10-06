@@ -167,6 +167,7 @@ describe('desktop action policy (Security.md §5.3)', () => {
     ['hold_key', { text: 'ctrl+shift+esc' }, 'block'],
     ['key', { text: 'alt+f4' }, 'confirm'],
     ['key', { text: 'ctrl+s' }, 'allow'],
+    ['key', { text: 42 }, 'allow'],
     ['teleport', {}, 'block'],
   ] as const)('%s %o → %s', (member, input, decision) => {
     expect(checkDesktopAction(member, input as Record<string, unknown>, ctx).decision).toBe(

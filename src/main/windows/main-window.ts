@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { BrowserWindow, app } from 'electron';
 import { HARDENED_WEB_PREFERENCES, hardenWindow } from './hardening';
 
-export function createMainWindow(): BrowserWindow {
+export function createMainWindow(opts: { startHidden?: boolean } = {}): BrowserWindow {
   const win = new BrowserWindow({
     width: 1100,
     height: 760,
@@ -11,6 +11,7 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     backgroundColor: '#060A12',
     title: 'Jarvis',
+    icon: join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       ...HARDENED_WEB_PREFERENCES,
@@ -18,7 +19,8 @@ export function createMainWindow(): BrowserWindow {
     },
   });
   hardenWindow(win);
-  win.once('ready-to-show', () => win.show());
+  // PRD F6.4: start hidden in the tray when launched at login (or when Sir chose it).
+  if (!opts.startHidden) win.once('ready-to-show', () => win.show());
 
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (!app.isPackaged && devUrl) void win.loadURL(devUrl);

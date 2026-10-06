@@ -6,8 +6,10 @@ import { ToolCallCard } from '../../components/jarvis/tool-call-card';
 import { Button } from '../../components/ui/button';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
+import { UsagePanel } from './usage-panel';
 
-type Tab = 'actions' | 'audit';
+type Tab = 'actions' | 'audit' | 'usage';
+const TAB_LABEL: Record<Tab, string> = { actions: 'Actions', audit: 'Audit log', usage: 'Usage' };
 
 /** Full Activity log (Rail → Activity): every tool call, plus the tamper-evident audit log. */
 export function ActivityView(): React.JSX.Element {
@@ -35,7 +37,7 @@ export function ActivityView(): React.JSX.Element {
       <header className="flex h-14 shrink-0 items-center gap-4 border-b border-night-600 px-6">
         <h1 className="font-display text-lg font-semibold">Activity</h1>
         <div role="tablist" className="flex gap-1">
-          {(['actions', 'audit'] as const).map((t) => (
+          {(['actions', 'audit', 'usage'] as const).map((t) => (
             <button
               key={t}
               role="tab"
@@ -47,7 +49,7 @@ export function ActivityView(): React.JSX.Element {
                 tab === t ? 'bg-night-700 text-ink-100' : 'text-ink-300 hover:text-ink-100',
               )}
             >
-              {t === 'actions' ? 'Actions' : 'Audit log'}
+              {TAB_LABEL[t]}
             </button>
           ))}
         </div>
@@ -92,7 +94,9 @@ export function ActivityView(): React.JSX.Element {
       )}
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {tab === 'actions' ? (
+        {tab === 'usage' ? (
+          <UsagePanel />
+        ) : tab === 'actions' ? (
           <ol className="mx-auto flex max-w-3xl flex-col gap-1.5">
             {calls.length === 0 && <li className="text-sm text-ink-500">No actions yet.</li>}
             {calls.map((c) => (

@@ -128,7 +128,7 @@ During a fake computer-use session with held modifier keys → kill → assert a
 
 `npm run evals` (asks for confirmation, prints estimated cost). Uses **fake OS tools** that record calls, so evals are safe and deterministic on the tool side.
 
-Scoring per case: expected tool(s) called with matching key args (fuzzy), no forbidden tools, final reply quality (Haiku-as-judge rubric: correct, concise, persona-consistent).
+Scoring per case: expected tool(s) called with matching key args (fuzzy), no forbidden tools, and a reply regex where the answer is checkable. (Implemented in `tests/evals/`. The Haiku-as-judge reply rubric is not built yet. Cases 22, 23 and 31 need live MCP servers or a real screen, so they are skipped and checked by hand. There is no `focus_window` tool: case 8 accepts `open_app` or `list_open_windows`.)
 
 | # | Input | Expect |
 |---|---|---|

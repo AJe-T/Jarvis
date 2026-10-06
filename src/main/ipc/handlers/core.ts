@@ -139,6 +139,7 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
     vaultPath: s.settings.get('vault.path'),
     isTest: s.isTest,
     online: true,
+    dbHealthy: s.dbHealthy,
   }));
   handle('app:openExternal', async (req) => {
     if (!isSafeExternalUrl(req.url))

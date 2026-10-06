@@ -163,6 +163,7 @@ export const INVOKE = {
       vaultPath: z.string(),
       isTest: z.boolean(),
       online: z.boolean(),
+      dbHealthy: z.boolean(),
     }),
   ),
   'app:openExternal': contract(z.object({ url: z.string().url().max(2000) }), Ok),
@@ -222,6 +223,10 @@ export const INVOKE = {
     Ok,
   ),
   'computer:calibrate': contract(Empty, z.object({ ok: z.boolean(), maxErrorPx: z.number() })),
+  'app:openFolder': contract(
+    z.object({ which: z.enum(['userData', 'logs', 'vault', 'backups']) }),
+    Ok,
+  ),
 } satisfies Record<InvokeChannel, { request: z.ZodType; response: z.ZodType }>;
 
 export const EVENTS = {

@@ -253,13 +253,13 @@ docs/App-flow.md §9, docs/Design-system.md §4.4. Implement the Phase 6 tasks. 
 ## Phase 7 — Polish & Package (≈ 1 week)
 
 ### Tasks
-- [ ] Tray menu (Show, Voice on/off, Stop everything, Quit), start with Windows (setting), start hidden.
-- [ ] Mini orb mode (`Design-system.md` §4.3).
-- [ ] Empty-state orchestration (large orb → compact), suggestion chips from routines.
-- [ ] Usage dashboard (day/month, by model/purpose).
-- [ ] DB backup/restore UI; audit chain verification button; data retention settings; `/private` incognito turns.
-- [ ] electron-builder NSIS installer; Electron fuses for production; app icon; version/about screen.
-- [ ] Final security gate (`Security.md` §15) + evals ≥ 90% + manual QA.
+- [x] Tray menu (Show, Voice on/off, Stop everything, Quit), start with Windows (setting), start hidden.
+- [x] Mini orb mode (`Design-system.md` §4.3).
+- [x] Empty-state orchestration (large orb → compact), suggestion chips from routines.
+- [x] Usage dashboard (day/month, by model/purpose).
+- [x] DB backup/restore UI; audit chain verification button; data retention settings; `/private` incognito turns.
+- [x] electron-builder NSIS installer; Electron fuses for production; app icon; version/about screen.
+- [ ] Final security gate (`Security.md` §15) + evals ≥ 90% + manual QA. (Automated gate passes: `npm run release-gate`. Evals need Sir's API key and cost approval. Manual QA and the clean-VM install are still to do.)
 
 ### Claude Code prompt
 ```text

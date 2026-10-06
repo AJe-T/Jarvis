@@ -1,4 +1,4 @@
-import { useEffect, type ComponentType } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Rail } from './components/jarvis/rail';
 import { StatusBar } from './components/jarvis/status-bar';
@@ -8,6 +8,7 @@ import { ActivityDrawer } from './features/activity/activity-drawer';
 import { ChatView } from './features/chat/chat-view';
 import { Onboarding } from './features/onboarding/onboarding';
 import { SettingsView } from './features/settings/settings-view';
+import { call } from './lib/api';
 import { startIpcBridge } from './lib/ipc-bridge';
 import { useChatStore } from './stores/chat-store';
 import { useSetting, useSettingsStore } from './stores/settings-store';
@@ -20,12 +21,32 @@ const VIEWS: Partial<Record<View, ComponentType>> = {
   ...EXTRA_VIEWS,
 };
 
+/** Database.md §8: integrity check failed at startup — point Sir at a backup instead of failing silently. */
+function DbBanner(): React.JSX.Element | null {
+  const [healthy, setHealthy] = useState(true);
+  const go = useUiStore((s) => s.go);
+  useEffect(() => void call('app:info', {}).then((i) => setHealthy(i.dbHealthy)), []);
+  if (healthy) return null;
+  return (
+    <div
+      role="alert"
+      className="flex items-center gap-3 bg-alarm-500 px-4 py-2 text-sm text-ink-on-alarm"
+    >
+      Jarvis's database failed its integrity check. Some history may be missing.
+      <button type="button" className="underline" onClick={() => go('settings', 'data')}>
+        Restore a backup
+      </button>
+    </div>
+  );
+}
+
 function Shell(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const activityOpen = useUiStore((s) => s.activityOpen);
   const Current = VIEWS[view];
   return (
     <div className="flex h-full flex-col">
+      <DbBanner />
       <div className="flex min-h-0 flex-1">
         <Rail />
         <main className="flex min-w-0 flex-1">

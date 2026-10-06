@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import {
+  backupIfStale,
   backupNow,
   migrate,
   openDatabase,
@@ -60,15 +61,36 @@ export interface ServiceOptions {
   home?: string;
 }
 
+/** Database.md §7: a restore chosen in Settings is applied on the next start, before the DB is opened. */
+function applyPendingRestore(userData: string): void {
+  const marker = join(userData, 'restore-pending.json');
+  if (!existsSync(marker)) return;
+  try {
+    const { file } = JSON.parse(readFileSync(marker, 'utf8')) as { file: string };
+    const source = join(userData, 'backups', basename(file));
+    if (existsSync(source)) {
+      for (const ext of ['', '-wal', '-shm'])
+        rmSync(join(userData, `jarvis.db${ext}`), { force: true });
+      copyFileSync(source, join(userData, 'jarvis.db'));
+      logger.warn({ file }, 'database restored from backup');
+    }
+  } finally {
+    rmSync(marker, { force: true });
+  }
+}
+
 function openDb(userData: string): { db: Db; healthy: boolean } {
+  applyPendingRestore(userData);
   const file = join(userData, 'jarvis.db');
   const existed = existsSync(file);
   const db = openDatabase(file);
   const healthy = !existed || quickCheck(db);
+  const backups = join(userData, 'backups');
   // Database.md §6: back up before applying migrations to an existing database.
-  if (existed && healthy && pendingMigrations(db).length > 0)
-    backupNow(db, join(userData, 'backups'));
+  if (existed && healthy && pendingMigrations(db).length > 0) backupNow(db, backups);
   migrate(db);
+  // Database.md §7: daily automatic backup, keep the last 7.
+  if (existed && healthy) backupIfStale(db, backups);
   return { db, healthy };
 }
 

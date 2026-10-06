@@ -305,7 +305,8 @@ FTS query safety: user/LLM text must be converted to a safe FTS expression (quot
 
 | Item | Policy |
 |---|---|
-| Automatic DB backup | On startup (if last backup > 24 h) via `db.backup(path)`; keep last 7 |
+| Automatic DB backup | On startup (if last backup > 24 h) via `VACUUM INTO` (node:sqlite, ADR-009); keep last 7 |
+| Restore | Settings → Data & backups. Writes `restore-pending.json`, saves the current DB as `pre-restore.db`, restarts; the copy happens before the DB opens |
 | Integrity check | `PRAGMA quick_check` on startup; on failure → offer restore from latest backup |
 | Messages | Kept forever by default; Settings: auto-delete older than N days |
 | Tool call output previews | 2 KB cap; full outputs not stored |

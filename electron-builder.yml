@@ -10,10 +10,23 @@ files:
 asarUnpack:
   - '**/*.node'
   - resources/**
+  # Porcupine/PvRecorder and nut.js native libs open their model and .dll files by real path.
+  - node_modules/@picovoice/**
+  - node_modules/@nut-tree-fork/**
 extraResources:
   - from: resources/
     to: resources/
     filter: ['**/*', '!fonts/**']
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+# Security.md §7: lock the binary down. file:// privileges stay on because the renderer loads from file://.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableCookieEncryption: true
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 win:
   target: [nsis]
   icon: resources/icon.ico
@@ -22,4 +35,5 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   artifactName: Jarvis-Setup-${version}.${ext}
-npmRebuild: true
+# All native deps ship N-API prebuilds, so no compiler (VS Build Tools) is needed.
+npmRebuild: false

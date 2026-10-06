@@ -69,10 +69,11 @@ export async function loadRoutines(
           error = `Step ${i + 1} (${s.tool}): ${r.error.issues[0]?.message ?? 'invalid input'}`;
       }
     });
-    if (rows.some((r) => r.name.toLowerCase() === parsed.data.name.toLowerCase()))
-      error = `Duplicate routine name "${parsed.data.name}"`;
+    // routines.name is UNIQUE: a duplicate is stored under its path so one bad file can't fail the whole load.
+    const duplicate = rows.some((r) => r.name.toLowerCase() === parsed.data.name.toLowerCase());
+    if (duplicate) error = `Duplicate routine name "${parsed.data.name}"`;
     rows.push({
-      name: parsed.data.name,
+      name: duplicate ? rel : parsed.data.name,
       vault_path: rel,
       trigger_phrases_json: JSON.stringify(parsed.data.triggers),
       steps_json: JSON.stringify(parsed.data.steps),

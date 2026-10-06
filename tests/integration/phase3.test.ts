@@ -214,4 +214,51 @@ describe('phase 3 integration (Testing.md §4 memory rows)', () => {
     expect(bad?.error).toMatch(/cannot be used in a routine/);
     await t.m.watcher.stop();
   });
+
+  it('reports every kind of broken routine, and run_routine refuses missing or disabled ones', async () => {
+    const t = await setupMemory({
+      rules: [
+        {
+          match: 'routines please',
+          steps: [
+            {
+              tools: [
+                { name: 'list_routines', input: {} },
+                { name: 'run_routine', input: { name: 'Nope' } },
+              ],
+            },
+            { tools: [{ name: 'run_routine', input: { name: 'Unknown' } }] },
+            { text: 'Done.' },
+          ],
+        },
+      ],
+    });
+    const dir = join(t.vaultRoot, 'Routines');
+    const write = (f: string, body: string): void => writeFileSync(join(dir, f), body);
+    write('Unknown.md', '---\nsteps:\n  - tool: fly_to_moon\n---\n');
+    write('BadInput.md', '---\nsteps:\n  - tool: set_volume\n    input: { level: 500 }\n---\n');
+    write('Empty.md', '---\nname: Empty\nsteps: []\n---\n');
+    write('Dup1.md', '---\nname: Twin\nsteps:\n  - tool: mute\n---\n');
+    write('Dup2.md', '---\nname: Twin\nsteps:\n  - tool: mute\n---\n');
+    write('notes.txt', 'ignored');
+    await t.m.reloadRoutines();
+    const err = (n: string): string | null | undefined => t.m.repos.routines.byName(n)?.error;
+    expect(err('Unknown')).toMatch(/unknown tool "fly_to_moon"/);
+    expect(err('BadInput')).toMatch(/Step 1 \(set_volume\)/);
+    expect(err('Routines/Empty.md')).toBeTruthy();
+    expect(t.m.repos.routines.byName('Twin')?.enabled).toBe(1);
+    expect(err('Routines/Dup2.md')).toMatch(/Duplicate routine name/);
+
+    t.services.orchestrator.send({ text: 'routines please', source: 'text' });
+    await idle(t.services);
+    const results = t.llm.calls
+      .flatMap((c) => c.messages)
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((b) => b.type === 'tool_result')
+      .map((b) => JSON.stringify(b));
+    expect(results.some((r) => r.includes('disabled: Step 1: unknown tool'))).toBe(true);
+    expect(results.some((r) => r.includes('No routine called'))).toBe(true);
+    expect(results.some((r) => /Routine \\"Unknown\\" is disabled/.test(r))).toBe(true);
+    await t.m.watcher.stop();
+  });
 });

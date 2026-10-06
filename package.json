@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "productName": "Jarvis",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "JARVIS: voice-first AI assistant for Windows",
   "main": "./out/main/index.js",
@@ -16,9 +16,11 @@
     "format": "prettier --write .",
     "test": "node scripts/vitest-electron.mjs run",
     "test:e2e": "playwright test",
-    "evals": "node --experimental-strip-types tests/evals/run-evals.ts",
+    "evals": "node scripts/run-evals.mjs",
     "dist": "electron-vite build && electron-builder --win --config electron-builder.yml",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "secret-scan": "node scripts/secret-scan.mjs",
+    "release-gate": "npm run typecheck && npm run lint && npm run test -- --coverage && npm audit --omit=dev --audit-level=high && npm run build && npm run test:e2e && npm run secret-scan"
   },
   "devDependencies": {
     "@electron/fuses": "2.1.3",

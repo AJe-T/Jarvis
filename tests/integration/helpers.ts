@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EventChannel } from '@shared/ipc-channels';
 import { createFakeClaude, type FakeScript } from '@main/llm/fake-claude';
+import type { LlmClient } from '@main/llm/types';
 import type { Encryptor } from '@main/settings/secrets';
 import { createServices } from '@main/services';
 import { createFakeOs } from '@main/tools/native/os';
@@ -14,7 +15,11 @@ export const fakeEncryptor: Encryptor = {
   decryptString: (b) => Buffer.from(b).reverse().toString('utf8'),
 };
 
-export function setupServices(script: FakeScript | ((dir: string) => FakeScript) = { rules: [] }) {
+/** `realLlm` swaps the FakeClaude for a real client (evals only). */
+export function setupServices(
+  script: FakeScript | ((dir: string) => FakeScript) = { rules: [] },
+  realLlm?: LlmClient,
+) {
   const dir = mkdtempSync(join(tmpdir(), 'jarvis-int-'));
   const home = (n: string): string => {
     const p = join(dir, 'home', n);
@@ -28,7 +33,7 @@ export function setupServices(script: FakeScript | ((dir: string) => FakeScript)
     isTest: true,
     encryptor: fakeEncryptor,
     emit: (event, payload) => events.push({ event, payload }),
-    llm,
+    llm: realLlm ?? llm,
     os: createFakeOs(),
     home: join(dir, 'home'),
     paths: {

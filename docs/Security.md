@@ -181,7 +181,7 @@ evaluate(tool, input, context) → { tier, reason, humanSummary, destructive }
 - [ ] `session.setPermissionRequestHandler` denies everything (mic is captured in main, not renderer).
 - [ ] Load only local files (`file://` app bundle / dev server in dev); never load remote content in app windows.
 - [ ] Markdown rendering with `react-markdown` (no raw HTML), links sanitized.
-- [ ] Electron fuses: disable `RunAsNode`, `EnableNodeOptionsEnvironmentVariable`, `EnableNodeCliInspectArguments`; enable `OnlyLoadAppFromAsar` for production builds.
+- [x] Electron fuses: disable `RunAsNode`, `EnableNodeOptionsEnvironmentVariable`, `EnableNodeCliInspectArguments`; enable `OnlyLoadAppFromAsar` for production builds. (Set through electron-builder's `electronFuses`, which also turns on cookie encryption and embedded ASAR integrity validation.)
 - [ ] Single-instance lock (`app.requestSingleInstanceLock()`).
 - [ ] Keep Electron updated (security patches); `npm audit` in CI.
 

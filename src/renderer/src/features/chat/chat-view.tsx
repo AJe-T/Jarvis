@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { History, PanelRight, Plus } from 'lucide-react';
+import { History, Minimize2, PanelRight, Plus } from 'lucide-react';
 import { Orb } from '../../components/jarvis/orb';
 import { ChatMessage, Markdown, ToolCards } from '../../components/jarvis/chat-message';
 import { Composer } from '../../components/jarvis/composer';
 import { IconButton } from '../../components/ui/button';
+import { call } from '../../lib/api';
 import { useAssistantStore } from '../../stores/assistant-store';
 import { useChatStore } from '../../stores/chat-store';
 import { useUiStore } from '../../stores/ui-store';
@@ -69,6 +70,9 @@ export function ChatView(): React.JSX.Element {
               {state === 'ERROR' && detail ? detail : STATUS_LINE[state]}
             </span>
           </div>
+          <IconButton label="Mini orb" onClick={() => void call('app:setMiniMode', { on: true })}>
+            <Minimize2 size={18} strokeWidth={1.75} aria-hidden />
+          </IconButton>
           <IconButton
             label={activityOpen ? 'Hide activity' : 'Show activity'}
             active={activityOpen}
