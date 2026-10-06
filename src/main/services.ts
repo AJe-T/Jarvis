@@ -168,9 +168,13 @@ export function createServices(opts: ServiceOptions) {
 
   // ── tools ────────────────────────────────────────────────────────────────────────────────
   const reminderListeners = new Set<(text: string, missed: boolean) => void>();
+  const remindersChangedListeners = new Set<() => void>();
   const scheduler = createScheduler({
     repo: reminders,
     logger,
+    onChange: () => {
+      for (const l of remindersChangedListeners) l();
+    },
     onFire: (r, missed) => {
       opts.os.notify(missed ? 'Missed reminder' : 'Reminder', r.text);
       opts.emit('notify', {
@@ -212,6 +216,7 @@ export function createServices(opts: ServiceOptions) {
     integrations: () => slots.providers.integrations(),
     allowedRoots: () => settings.get('files.allowedRoots'),
     screenCount: () => slots.providers.screenCount(),
+    routines: () => slots.providers.routines(),
   };
   const context = createContextBuilder({ conversations, providers });
 
@@ -270,6 +275,7 @@ export function createServices(opts: ServiceOptions) {
     scheduler,
     appIndex,
     reminderListeners,
+    remindersChangedListeners,
     confirmShowListeners,
     context,
     orchestrator,

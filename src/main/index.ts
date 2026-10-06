@@ -11,7 +11,10 @@ import {
 } from 'electron';
 import { addEventTarget, emit } from './ipc/emit';
 import { registerCoreHandlers } from './ipc/handlers/core';
+import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
+import { createMemorySystem } from './memory/memory-system';
+import { errorMessage } from './errors';
 import { initFileLogging, logger } from './logging/logger';
 import { createServices, type Services } from './services';
 import { createFakeOs, createWindowsOs } from './tools/native/os';
@@ -153,10 +156,30 @@ async function boot(): Promise<void> {
     ...(isTest ? { home: join(userData, 'home') } : {}),
   });
   if (!services.dbHealthy) logger.error('database failed quick_check');
+  const memory = createMemorySystem(services);
+  const startMemory = (): void => {
+    memory.start().catch((err: unknown) => {
+      logger.error({ err: errorMessage(err) }, 'memory start failed');
+      emit('notify', {
+        level: 'error',
+        message: `The memory vault could not be opened: ${errorMessage(err)}`,
+        action: 'memory',
+      });
+    });
+  };
   registerCoreHandlers(services, {
     audit: (event, details) => services.audit.append('user', event, details),
+    onOnboarded: async (_vaultPath, facts) => {
+      await memory.start();
+      await writeQuickFacts(memory, facts);
+    },
   });
   registerSafetyHandlers(services);
+  registerMemoryHandlers(services, memory);
+  if (services.settings.get('onboarding.complete')) startMemory();
+  services.settings.onChange((key) => {
+    if (key === 'vault.path' && services.settings.get('onboarding.complete')) startMemory();
+  });
 
   mainWindow = createMainWindow();
   addEventTarget(mainWindow);

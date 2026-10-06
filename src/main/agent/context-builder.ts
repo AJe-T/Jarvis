@@ -12,6 +12,7 @@ export interface ContextProviders {
   integrations(): string;
   allowedRoots(): string[];
   screenCount(): number;
+  routines(): string;
 }
 
 export const NO_PROVIDERS: ContextProviders = {
@@ -20,6 +21,7 @@ export const NO_PROVIDERS: ContextProviders = {
   integrations: () => '',
   allowedRoots: () => [],
   screenCount: () => 1,
+  routines: () => '',
 };
 
 type Block = Exclude<MessageParam['content'], string>[number];
@@ -143,6 +145,7 @@ export function createContextBuilder(deps: {
         machine: `${os.version()} ${os.release()}, ${deps.providers.screenCount()} display(s)`,
         integrations: deps.providers.integrations(),
         allowedRoots: deps.providers.allowedRoots(),
+        routines: deps.providers.routines(),
         coreProfile,
         retrievedMemories,
         earlierSummary: conv?.summary ?? null,

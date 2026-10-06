@@ -18,15 +18,13 @@ export function registerSafetyHandlers(s: Services): void {
   });
 
   handle('audit:list', (req) => ({
-    items: s.audit
-      .list(req.limit, req.beforeSeq)
-      .map((r) => ({
-        seq: r.seq,
-        ts: r.ts,
-        actor: r.actor,
-        event: r.event,
-        details: r.details_json,
-      })),
+    items: s.audit.list(req.limit, req.beforeSeq).map((r) => ({
+      seq: r.seq,
+      ts: r.ts,
+      actor: r.actor,
+      event: r.event,
+      details: r.details_json,
+    })),
   }));
   handle('audit:verify', () => s.audit.verify());
   handle('audit:export', async (_req, event) => {

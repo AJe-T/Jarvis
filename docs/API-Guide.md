@@ -335,7 +335,7 @@ Claude issues file commands against a virtual `/memories` root. We map it to `<v
 | `delete` | `path` | Move file to vault `.trash/` (Obsidian convention) + audit; reject deleting root |
 | `rename` | `old_path`, `new_path` | Both inside root |
 
-⚠️ Confirm exact command/field names in the Memory tool docs before implementing.
+Verified 2026-10-06 against `@anthropic-ai/sdk` 0.131.0 (`BetaMemoryTool20250818*Command` types): `view {path, view_range?}`, `create {path, file_text}`, `str_replace {path, old_str, new_str}`, `insert {path, insert_line, insert_text}`, `delete {path}`, `rename {old_path, new_path}`. The tool definition is GA: `{ type: 'memory_20250818', name: 'memory' }`. Bare notes created by Claude get the §8.2 frontmatter added automatically.
 
 ```ts
 function resolveMemoryPath(virtualPath: string): string {

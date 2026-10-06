@@ -435,3 +435,11 @@ Routine steps are validated against tool schemas on load; invalid routines are d
 - `add`/`change` → if hash differs from `vault_files` → re-index (`last_writer='external'`).
 - `unlink` → remove from index (memory deleted by Sir).
 - Ignore `.obsidian/`, `_jarvis/`, `*.tmp`.
+
+## 9. Implementation Notes (Phase 3)
+
+- **Block ids** in daily logs use dashes (`^c-8Hk2`): Obsidian block ids allow only letters, digits and `-`, so `_` in conversation ids is replaced. Each exchange ends with an HTML comment (`<!-- c-8Hk2 -->`) so consecutive exchanges of one conversation share one heading.
+- **Merge rule** (§8.5 step 3): Jarvis overwrites a note only if the file on disk is exactly what Jarvis last wrote, or the caller read the current version first (`str_replace`, `insert`, curator `UPDATE`). Otherwise the new text is appended under `## Updates from Jarvis`.
+- **Routines** may not use `run_routine`, `run_powershell`, `delegate_desktop_task` or `memory` as steps (no recursion or unattended shell/GUI control); such routines are loaded disabled with an error.
+- **Curator review queue**: confidence 0.5–0.8, instruction-like facts (Security.md §6.6), and `flag`s go to `memory_review_queue`; Sir accepts or discards them in the Memory browser.
+- `Tasks/Reminders.md` is regenerated whenever reminders change or fire.
