@@ -90,12 +90,21 @@ export function createConfirmationBroker(deps: {
       });
     },
 
-    respond(id: string, decision: Decision, via: 'click' | 'keyboard' | 'voice'): boolean {
+    respond(
+      id: string,
+      decision: Decision,
+      via: 'click' | 'keyboard' | 'voice' | 'remote',
+    ): boolean {
       const p = queue.find((q) => q.id === id);
       if (!p || p !== queue[0]) return false;
-      // Security.md §4: destructive actions need a click or Ctrl+Enter, never voice.
-      if (via === 'voice' && decision === 'approve' && p.input.destructive) return false;
-      return finish(id, decision, via === 'voice' ? 'user_voice' : 'user_click');
+      // Security.md §4: destructive actions need a click or Ctrl+Enter at the PC, never voice or a phone.
+      if ((via === 'voice' || via === 'remote') && decision === 'approve' && p.input.destructive)
+        return false;
+      return finish(
+        id,
+        decision,
+        via === 'voice' ? 'user_voice' : via === 'remote' ? 'user_remote' : 'user_click',
+      );
     },
 
     current(): (ConfirmInput & { id: string }) | null {

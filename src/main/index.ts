@@ -19,6 +19,8 @@ import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { createMemorySystem } from './memory/memory-system';
 import { createResearchTool } from './agent/research';
 import { createAutomation } from './automation/automation';
+import { createTelegramChannel } from './channels/telegram';
+import { registerTelegramHandlers } from './ipc/handlers/telegram';
 import { registerAutomationHandlers } from './ipc/handlers/automation';
 import { registerSkillHandlers } from './ipc/handlers/skills';
 import { registerVoiceHandlers } from './ipc/handlers/voice';
@@ -287,6 +289,11 @@ async function boot(): Promise<void> {
   );
   registerAutomationHandlers(services, automation);
   if (!isTest) automation.start();
+  // Telegram channel (ideas from OpenJarvis): only when Sir turned it on and gave a bot token.
+  const telegram = createTelegramChannel(services);
+  registerTelegramHandlers(services, telegram);
+  if (!isTest) void telegram.start();
+  app.on('will-quit', () => telegram.stop());
   app.on('will-quit', () => automation.stop());
   applyRetention(services);
   setInterval(() => applyRetention(services), 6 * 3600_000).unref();

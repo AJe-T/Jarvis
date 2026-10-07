@@ -76,6 +76,13 @@ const LocalModelId = z.enum([
   'openwakeword-hey-jarvis',
   'silero-vad',
 ]);
+const TelegramStatus = z.object({
+  running: z.boolean(),
+  paired: z.boolean(),
+  botName: z.string().nullable(),
+  pairingCode: z.string().nullable(),
+  error: z.string().nullable(),
+});
 const TaskId = z.string().regex(/^task_[\w-]+$/);
 const TaskSchedule = z.discriminatedUnion('type', [
   z.object({
@@ -194,6 +201,9 @@ export const INVOKE = {
   ),
   'llm:localTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
   'location:detect': contract(Empty, z.object({ town: z.string() })),
+  'telegram:status': contract(Empty, TelegramStatus),
+  'telegram:restart': contract(Empty, TelegramStatus),
+  'telegram:unpair': contract(Empty, Ok),
   'tasks:list': contract(Empty, z.array(TaskView)),
   'tasks:save': contract(TaskInput, z.object({ task: TaskView })),
   'tasks:delete': contract(z.object({ id: TaskId }), Ok),
@@ -373,6 +383,7 @@ export const EVENTS = {
   'tts:stop': z.object({ utteranceId: z.string().optional() }),
   'dictation:done': z.object({ text: z.string(), app: z.string() }),
   'tasks:changed': z.object({}),
+  'telegram:status': TelegramStatus,
   'models:progress': z.object({
     id: z.string(),
     receivedBytes: z.number(),

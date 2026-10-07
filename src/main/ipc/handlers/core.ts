@@ -1,5 +1,5 @@
 import { app, dialog, shell, BrowserWindow } from 'electron';
-import { SENSITIVE_SETTINGS } from '@shared/settings';
+import { MAIN_ONLY_SETTINGS, SENSITIVE_SETTINGS } from '@shared/settings';
 import { JarvisError } from '../../errors';
 import { localDay } from '../../lib/util';
 import { toSummary } from '../../db/repos/conversations-repo';
@@ -74,6 +74,12 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
 
   handle('settings:getAll', () => s.settings.all());
   handle('settings:set', (req) => {
+    if (MAIN_ONLY_SETTINGS.includes(req.key))
+      throw new JarvisError(
+        'IPC_FORBIDDEN',
+        `${req.key} is main-only`,
+        'That setting can only be changed by pairing.',
+      );
     // Sensitive settings are only changed from the Settings UI after its own confirmation dialog.
     s.settings.set(req.key, req.value);
     audit('settings.change', {

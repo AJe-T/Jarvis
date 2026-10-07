@@ -30,6 +30,7 @@ const RULES: Rule[] = [
   { type: 'openai_key', re: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}/g },
   { type: 'github_token', re: /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,})/g },
   { type: 'slack_token', re: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g },
+  { type: 'telegram_token', re: /\b\d{6,12}:[A-Za-z0-9_-]{30,}/g },
   { type: 'aws_key', re: /\bAKIA[0-9A-Z]{16}\b/g },
   { type: 'jwt', re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g },
   {

@@ -100,6 +100,11 @@ export const SETTINGS = {
       'BBC World | https://feeds.bbci.co.uk/news/world/rss.xml',
     ].join('\n'),
   },
+  /** Telegram channel (ideas from OpenJarvis): talk to Jarvis from Sir's phone via his own bot. */
+  'telegram.enabled': { schema: z.boolean(), default: false },
+  /** The one chat Jarvis answers (set by pairing); empty = not paired. */
+  'telegram.chatId': { schema: z.string().regex(/^-?\d{0,20}$/), default: '' },
+  'telegram.forwardAutomations': { schema: z.boolean(), default: true },
   'nutrition.dailyCalories': { schema: z.number().int().min(0).max(10000), default: 2000 },
   'hotkeys.ptt': { schema: accelerator, default: 'Ctrl+Alt+Space' },
   'hotkeys.toggleWindow': { schema: accelerator, default: 'Ctrl+Alt+J' },
@@ -134,6 +139,9 @@ export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 export const SettingKeySchema = z.enum(SETTING_KEYS as [SettingKey, ...SettingKey[]]);
 
 /** Settings whose change must itself be confirmed by Sir in the UI (Security.md §5 step 4). */
+/** Set only by main-process flows (e.g. Telegram pairing), never directly from the renderer. */
+export const MAIN_ONLY_SETTINGS: readonly SettingKey[] = ['telegram.chatId'];
+
 export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   'policy.overrides',
   'files.allowedRoots',

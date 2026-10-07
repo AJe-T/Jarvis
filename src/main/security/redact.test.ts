@@ -7,6 +7,11 @@ describe('redact', () => {
     ['github pat', 'github_pat_11ABCDEFG0123456789_abcdefghijklmnop', 'github_token'],
     ['ghp token', 'ghp_abcdefghijklmnopqrstuvwxyz0123456789', 'github_token'],
     [
+      'telegram bot token',
+      'bot 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsawQ ok',
+      'telegram_token',
+    ],
+    [
       'jwt',
       'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
       'jwt',

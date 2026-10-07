@@ -53,6 +53,7 @@ export const KNOWN_SECRETS = [
   'elevenlabs',
   'github_pat',
   'notion_token',
+  'telegram',
 ] as const;
 export const SECRET_NAME_RE = /^[a-z][a-z0-9_]{1,39}$/;
 export const SecretNameSchema = z.string().regex(SECRET_NAME_RE);

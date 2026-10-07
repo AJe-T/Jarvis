@@ -2,7 +2,8 @@ import type { Tier, ToolDecision, ToolSource, UiToolCall } from '@shared/types';
 import { newId, nowIso } from '../../lib/util';
 import type { Db, SqlValue } from '../connection';
 
-export type DecidedBy = 'policy' | 'user_click' | 'user_voice' | 'kill_switch' | 'timeout';
+export type DecidedBy =
+  'policy' | 'user_click' | 'user_voice' | 'user_remote' | 'kill_switch' | 'timeout';
 export type DbToolStatus = 'pending' | 'running' | 'success' | 'error' | 'not_run';
 
 export interface ToolCallRow {
