@@ -300,3 +300,19 @@ Local Whisper STT · local LLM fallback (Ollama) · vector memory (sqlite-vec + 
 - [x] Pinned, SHA-256-verified model downloads with progress, cancel and remove.
 - [x] Verified with real models on Sir's PC (`tests/integration/local-voice.real.test.ts`, run with `JARVIS_VOICE_MODELS` set).
 - [x] v1.2.1 fix: re-applying the voice mode while the microphone ran (voice:setMode plus the settings listener, or a model finishing its download) made the old mic loop fail and release the new recorder, so neither wake word ever heard anything. Each recorder now has its own loop; replaced engines are released only after a running inference; audio spoken while speech-to-text starts is buffered ("Hey Jarvis, what time is it?" in one breath).
+
+## Phase 8 — Features from isair/jarvis, OpenJarvis and jev-chat-jarvis (v1.3.0)
+
+Sir asked to study three projects and build their functionality end to end, fix the voice conversation, update all docs and add a project Bible. Scope chosen by Sir (all options): conversational voice, dictation, everyday tools, local model (isair/jarvis); skills, scheduled agents, deep research, Telegram + feeds (OpenJarvis); reply copilot (jev-chat-jarvis); Bible as doc + in-app page.
+
+- [x] Conversational voice + always-listening mode (ADR-012); fixes "interrupts after thinking"
+- [x] Dictation hotkey with dictionary and history
+- [x] Everyday tools: weather, home town, meal log, look at screen
+- [x] Local model connection (ADR-013)
+- [x] Skills (ADR-014)
+- [x] Scheduled agents, morning briefing preset, news feeds (ADR-015)
+- [x] Deep research + fetch_web_page (ADR-016)
+- [x] Telegram channel (ADR-017)
+- [x] Reply copilot (ADR-018)
+- [x] Bible (docs/BIBLE.md + in-app view) and generated docs/REFERENCE.md kept in sync by a test (ADR-019); all docs updated
+- [ ] Sir's manual QA on his PC (real microphone, real Telegram bot, real chat apps, Ollama if wanted)

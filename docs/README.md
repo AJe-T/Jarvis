@@ -9,6 +9,8 @@ jarvis-docs/
 ├─ README.md            ← you are here
 ├─ CLAUDE.md            ← put in the repo root; Claude Code reads it automatically
 └─ docs/
+   ├─ BIBLE.md          ★ The whole project in one guide (also in the app: Bible view)
+   ├─ REFERENCE.md      Generated from code: every tool + tier, setting, IPC channel, migration
    ├─ PRD.md            Product requirements + GitHub prior-art research
    ├─ TRD.md            Tech stack, NFRs, architecture decisions
    ├─ Architecture.md   Processes, modules, agent loop, voice & memory pipelines
@@ -20,8 +22,10 @@ jarvis-docs/
    ├─ App-flow.md       Every user flow, incl. errors and kill switch
    ├─ Code-style.md     Conventions, git, dependency & licensing policy
    ├─ Testing.md        Unit → E2E, security suite, 40-command eval set, CI
-   └─ Implementation.md Phase 0–7 build plan with copy-paste Claude Code prompts
+   └─ Implementation.md Phase 0–8 build plan with copy-paste Claude Code prompts
 ```
+
+**Start with [BIBLE.md](BIBLE.md).** It covers every feature, including the ones added after v1.0 (Claude subscription and local-model connections, on-device voice, conversational voice, dictation, everyday tools, skills, automations, research, Telegram and the reply copilot).
 
 ## How to use it with Claude Code
 

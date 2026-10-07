@@ -165,7 +165,29 @@ Priority key: **P0** = must ship in v1 · **P1** = fast follow · **P2** = futur
 | **abdushsk/jarvis**, **AbyssalCoder/Open-Jarvis**, **sukeesh/Jarvis** | Hobby Jarvis assistants: Claude brain + Picovoice + Whisper + ElevenLabs; 3D arc-reactor UI; British-butler persona; Esc-to-stop | Mixed / unclear | Persona, orb UI, ESC-style kill switch, wake word → STT → LLM → TTS pipeline | Validates our pipeline; our implementation is original |
 | **trycua/cua**, **mediar-ai/terminator** | Computer-use infrastructure; "Playwright for Windows" | MIT | Fast, selector-based Windows UI automation | P2 evaluation for F2.9 |
 
+| **isair/jarvis** | Local-first Python voice assistant: transcript-first listening, intent judge, hot window, echo detection, dictation, diary, weather/meals/screenshot tools, Ollama | Custom non-commercial | Conversational voice (ADR-012), dictation, everyday tools, local-model connection (ADR-013), fetch_web_page | Re-implemented in TypeScript from its specs; no code copied (licence forbids commercial use and requires share-alike for derivatives) |
+| **open-jarvis/OpenJarvis** | Stanford's local-first agent framework: skills, morning digest, deep research, scheduled/continuous agents, 35 channels, 40 connectors | Apache-2.0 | Skills (ADR-014), scheduled agents + briefing (ADR-015), deep research (ADR-016), Telegram channel + news feeds (ADR-017) | Our own code; only the groups Sir chose (no other channels/connectors, no code execution sandbox, no energy telemetry) |
+| **jev-chat/jev-chat-jarvis** | Android WhatsApp reply copilot: analyse → stance → two drafts → checks/score → fill (never send) | MIT (+ NOTICE asking for credit) | Reply copilot for desktop chat apps (ADR-018) | Our own code; credited in THIRD_PARTY_NOTICES and the Bible |
+
 **Why our design is stronger than the hobby repos:** most of them use keyword `if/else` commands, store memory in one JSON file, and have no permission system. Ours uses LLM tool-calling, a deterministic policy engine, MCP for unlimited app connections, and an editable Obsidian brain.
+
+## 8b. Features added after v1.0
+
+All are implemented; details and how-tos in [BIBLE.md](BIBLE.md) §3, decisions in [TRD](TRD.md) ADR-010…019.
+
+| Area | Requirement | Priority |
+|---|---|---|
+| F7 Connections | Choose API key, Claude subscription (personal use, via Sir's Claude Code) or a local OpenAI-compatible model | P0 |
+| F8 On-device voice | Whisper STT and openWakeWord "Hey Jarvis" as alternatives to Deepgram/Picovoice; pinned, verified downloads | P1 |
+| F9 Conversational voice | Follow-up window, conversation continuity, echo rejection, unclear-speech retry, no cancel on false wake, always-listening mode with intent judge | P0 |
+| F10 Dictation | Hotkey → speech → cleaned text pasted into any app; dictionary; history | P1 |
+| F11 Everyday tools | Weather (Open-Meteo), home town, meal log, look at screen, read web pages | P1 |
+| F12 Skills | Install/enable SKILL.md skills from a folder or GitHub; load on demand | P1 |
+| F13 Automations | Scheduled briefing/task/check-in prompts; morning briefing preset; news feeds | P1 |
+| F14 Deep research | Reading-only agent producing cited reports saved to the vault | P1 |
+| F15 Telegram | Paired phone chat, button confirmations (non-destructive only), forwarding of briefings | P2 |
+| F16 Reply copilot | Read a chat on screen, analyse, stance, two checked drafts, paste (never send) | P2 |
+| F17 Bible | One complete guide in docs and in the app; generated reference kept in sync by a test | P1 |
 
 ## 9. Success Metrics
 

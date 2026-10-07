@@ -445,3 +445,18 @@ Routine steps are validated against tool schemas on load; invalid routines are d
 - **Routines** may not use `run_routine`, `run_powershell`, `delegate_desktop_task` or `memory` as steps (no recursion or unattended shell/GUI control); such routines are loaded disabled with an error.
 - **Curator review queue**: confidence 0.5–0.8, instruction-like facts (Security.md §6.6), and `flag`s go to `memory_review_queue`; Sir accepts or discards them in the Memory browser.
 - `Tasks/Reminders.md` is regenerated whenever reminders change or fire.
+
+## 10. Tables and changes added after v1.0
+
+Full migration list: [REFERENCE.md → Database migrations](REFERENCE.md#database-migrations).
+
+| Migration | Change |
+|---|---|
+| `003_usage_billing.sql` | `usage_ledger.billing` = `api` \| `subscription` \| `local`; budgets sum `api` only |
+| `004_usage_purposes.sql` | Purposes `intent`, `research`, `briefing`, `copilot`, `task` (table rebuilt) |
+| `005_meals.sql` | `meals(id, ts, day, description, calories, protein_g, carbs_g, fat_g, conversation_id)` |
+| `006_dictations.sql` | `dictations(id, ts, raw_text, final_text, target_app)`, newest 200 kept |
+| `007_scheduled_tasks.sql` | `scheduled_tasks(id, name, kind briefing\|task\|checkin, prompt, schedule_json, enabled, speak, save_to_vault, next_run_at, last_run_at, last_status, last_conversation_id, created_at)` |
+| `008_remote_decisions.sql` | `tool_calls.decided_by` gains `user_remote` (Telegram) (table rebuilt) |
+
+Files outside the DB (all under `%APPDATA%\jarvis`): `models/` (verified voice models), `skills/` (SKILL.md folders), `claude-code/` (empty working folder for subscription mode). Vault folders added: `Briefings/`, `Research/`.

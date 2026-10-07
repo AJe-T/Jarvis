@@ -10,6 +10,8 @@ You are helping Sir build **JARVIS**, a voice-first AI assistant desktop app for
 ## Docs index
 | Doc | Use it for |
 |---|---|
+| `docs/BIBLE.md` | The whole project in one guide (features, architecture, safety, data, troubleshooting, decisions, credits) |
+| `docs/REFERENCE.md` | Generated from code (`npm run docs:reference`): tools + tiers, settings, IPC, migrations. Never edit by hand |
 | `docs/PRD.md` | What and why; priorities (P0/P1/P2); prior-art research |
 | `docs/TRD.md` | Stack, versions policy, NFRs, ADRs |
 | `docs/Architecture.md` | Processes, modules, data flow, folder structure |

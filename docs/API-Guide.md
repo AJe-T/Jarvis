@@ -607,3 +607,21 @@ $s.SetOutputToWaveFile($out); $s.Speak($text); $s.Dispose()
 | `files.allowedRoots` | string[] | Desktop, Documents, Downloads, Pictures, Videos, Music, vault |
 | `agent.maxIterations` / `agent.computerMaxActions` | number | 25 / 60 |
 | `privacy.logConversationsToVault` | boolean | true |
+
+## 11. Interfaces added after v1.0
+
+The exact, current list of IPC channels, tools and settings is generated into [REFERENCE.md](REFERENCE.md). Groups added in v1.1–1.3:
+
+| Group | Invoke channels | Events |
+|---|---|---|
+| Connections | `llm:claudeCodeStatus`, `llm:claudeCodeLogin`, `llm:localModels`, `llm:localTest` | — |
+| Voice models | `models:status`, `models:download`, `models:cancel`, `models:delete` | `models:progress` |
+| Dictation | `dictation:history`, `dictation:clear` | `dictation:done` |
+| Everyday | `location:detect` | — |
+| Skills | `skills:list`, `skills:read`, `skills:installFolder`, `skills:installGitHub`, `skills:remove`, `skills:setEnabled` | — |
+| Automations | `tasks:list`, `tasks:save`, `tasks:delete`, `tasks:runNow` | `tasks:changed` |
+| Telegram | `telegram:status`, `telegram:restart`, `telegram:unpair` | `telegram:status` |
+| Reply copilot | `copilot:capture`, `copilot:analyse`, `copilot:draft`, `copilot:fill` | `copilot:captured` |
+
+**Service seams:** `LlmClient` now has three implementations (Claude API, Claude Code, local OpenAI-compatible); `services.loopFor()` picks the agent loop; `ToolRuntime.catalog()` gives plain JSON-Schema tool lists (for MCP and OpenAI function calling); `OsAdapter` gained `captureScreen`, `pasteText`, `foregroundWindow`, `focusWindow`; `SendRequest.purpose` tags automation/research turns; `ConfirmationBroker.respond(…, 'remote')` for Telegram.
+

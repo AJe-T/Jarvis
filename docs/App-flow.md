@@ -215,3 +215,24 @@ From any state: `Ctrl+Alt+Shift+X` / tray "Stop everything" / overlay Stop pill 
 ## 13. Shutdown
 
 Window close → minimise to tray (default) or quit (setting). Quit: stop recorder → abort turns → close MCP clients (SIGTERM, 3 s, then kill) → flush logs → close DB → exit.
+
+## 14. Flows added after v1.0 (how-tos in [BIBLE.md](BIBLE.md) §3)
+
+| Flow | Steps |
+|---|---|
+| **Voice follow-up** | Reply finishes playing → 0.4 s echo settle → silent listening for `voice.followUpSeconds` → speech becomes a voice turn in the same conversation; silence closes the window quietly |
+| **Always listening** | Mic → VAD → Whisper (on-device) → 2-min buffer → phrase contains "Jarvis" (or is inside the follow-up window) → intent judge → directed? → voice turn with the rewritten request |
+| **Barge-in / false wake while thinking** | Wake → listening; the running reply keeps going; only real words replace it (cancel + new turn) |
+| **Dictation** | `Ctrl+Alt+D` → listening (chime) → pause 1.5 s or hotkey → clean text → paste at cursor (clipboard restored) → history |
+| **Connection: subscription** | Settings → Models & budget → My Claude subscription → status card → Sign in with Claude (Claude Code's own window) → status polls until signed in |
+| **Connection: local model** | Settings → Models & budget → Local model → server address → Refresh models → pick → Test |
+| **Voice models** | Settings → Voice → choose on-device engine → Download (size shown) → progress / Cancel → verified → engine loads |
+| **Skill install** | Settings → Skills → GitHub link or folder → validated → preview SKILL.md → on/off/remove |
+| **Automation** | Settings → Automations → New / Edit (name, kind, prompt, time & days or interval, speak, save) → runs on schedule → notification (+ speech, + Obsidian, + Telegram) |
+| **Deep research** | "Research …" → tool card "Research: …" (1–5 min) → cited report in chat → `Research/` note |
+| **Telegram pairing** | Settings → Telegram → token → turn on → Connect → send the 6-digit code to the bot → "Paired" |
+| **Telegram turn** | Phone message → turn → confirmation buttons (destructive: Deny only, approve at PC) → reply message |
+| **Reply copilot** | Chat app in front → `Ctrl+Alt+R` → Jarvis opens the Reply copilot view → who is this → Analyse → stance + details → Draft two replies → edit/Paste into chat (same window only) → Sir presses Send |
+| **Bible** | Rail → Bible → contents / search; Reference tab shows the generated lists |
+
+New error cases: Claude Code not installed / not signed in (sign-in card), local server unreachable (Test shows the reason), voice model missing (message names what to download), copilot chat window changed (refuses to paste, offers Copy), Telegram token invalid (status shows the error).

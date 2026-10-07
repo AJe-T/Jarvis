@@ -222,3 +222,20 @@ Evals are **not** run in CI (cost + secrets); run them locally before tagging a 
 **Phase 5:** add Playwright MCP → browse + summarise a page · GitHub connector lists PRs · MCP write tool prompts · server crash recovers.
 **Phase 6:** red overlay visible · Excel/Notepad scripted tasks · clicks land correctly at 100%/125%/150% scaling · Stop pill and hotkey stop instantly · password field typing blocked.
 **Phase 7:** installer on clean VM · tray + autostart · mini orb · routines from vault · reminders fire after restart.
+
+## 11. Tests added after v1.0
+
+| File | Covers |
+|---|---|
+| `src/main/agent/sdk-loop.test.ts`, `src/main/llm/claude-code.test.ts`, `tests/integration/phase8.test.ts` | Subscription connection: isolation options, MCP tool calls with real tool_use ids, taint, errors, end-to-end confirmed tool turn (fake Claude Code over real in-memory MCP) |
+| `src/main/llm/local-client.test.ts`, `tests/integration/local-llm.test.ts` | Local model adapter: message/tool translation, `<think>` filter, URL restriction, SSE tool turn through a fake Ollama |
+| `src/main/voice/local/local-voice.test.ts`, `tests/integration/local-voice.real.test.ts` | Model store integrity, openWakeWord pipeline, VAD segmentation; opt-in real-model wake → Whisper → chat run |
+| `src/main/voice/conversation.test.ts`, `tests/integration/voice-conversation.test.ts`, `tests/integration/phase4.test.ts` | Echo/unclear/name detection, rolling buffer, follow-ups, continuity, no cancel on false wake, always-listening + judge, dictation, mic-loop regression (recorder replaced mid-read) |
+| `src/main/voice/dictation.test.ts` | Filler removal, dictionary |
+| `tests/integration/everyday.test.ts`, `tests/integration/research.test.ts` | Weather, meals, look_at_screen, fetch_web_page guards, deep research loop |
+| `tests/integration/skills.test.ts` | Skill validation, folder/GitHub install, context listing, use_skill, path traversal |
+| `tests/integration/automation.test.ts` | Schedules, feeds, briefing run + vault save, silent check-in, missed runs, schedule_task |
+| `tests/integration/telegram.test.ts` | Pairing, wrong chat ignored, button confirmations recorded as `user_remote`, destructive approval refused |
+| `tests/integration/copilot.test.ts` | Scoring/ranking, capture → analyse → draft → paste into the same window |
+| `tests/unit/reference.test.ts` | `docs/REFERENCE.md` matches the code (`npm run docs:reference` to update) |
+| `tests/e2e/data.e2e.ts`, `tests/e2e/voice.e2e.ts` | Connection switch, voice engine choices |

@@ -28,6 +28,15 @@ test('Phase 7: manual backup, usage tab, mini orb round-trip', async () => {
   await page.getByRole('button', { name: 'About' }).click();
   await expect(page.getByText(/^\d+\.\d+\.\d+/)).toBeVisible();
 
+  // v1.3 views: the Bible (with search) and the reply copilot.
+  await page.getByRole('button', { name: 'Bible' }).click();
+  await expect(page.getByRole('heading', { name: 'The JARVIS Bible' })).toBeVisible();
+  await page.getByLabel('Search the Bible').fill('pairing code');
+  await expect(page.getByRole('button', { name: /Everything Jarvis can do/ })).toBeVisible();
+  await page.getByRole('tab', { name: 'Reference (generated)' }).click();
+  await expect(page.getByRole('button', { name: /^Tools \(\d+\)$/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Reply copilot' }).click();
+  await expect(page.getByText(/No chat captured yet/)).toBeVisible();
   await page.getByRole('button', { name: 'Activity' }).click();
   await page.getByRole('tab', { name: 'Usage' }).click();
   await expect(page.getByText('API spend this month')).toBeVisible();

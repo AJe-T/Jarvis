@@ -294,6 +294,21 @@ Decisions taken while building the policy layer; the code is the reference (`src
 - Model downloads are limited to the files pinned in `src/main/voice/local/models.json` (fixed URLs at fixed revisions); the renderer can only name a model id. Each file is streamed to `*.part`, checked for size and SHA-256, and only then renamed into `userData/models/<id>/`; a mismatch deletes it. Downloads and removals are audited.
 - transformers.js runs with remote models disabled, so Whisper can only load those verified files. With Whisper and openWakeWord selected, no audio leaves the PC at all.
 
+### 16.5 Features added in v1.3 (ADR-012…018)
+
+| Surface | Control |
+|---|---|
+| Always-listening voice | On-device Whisper only (refuses with a cloud STT); 2-minute buffer kept in memory, never stored; intent judge sees text only and never follows instructions in it |
+| Dictation / copilot paste | Clipboard + Ctrl+V into the focused window; Sir's clipboard restored; copilot re-focuses the exact window title and refuses if a different chat is open; nothing ever presses Enter/Send |
+| Local model | Only loopback/private-network servers (`checkLocalUrl`); computer control and web search unavailable |
+| look_at_screen, help_me_reply | CONFIRM (non-destructive, voice may approve); screen content is untrusted |
+| fetch_web_page, read_feed, deep_research | URL guard on every redirect hop, no private addresses, 2 MB cap, untrusted output; research agent gets reading tools only |
+| Weather / Detect town | Only the town name goes to Open-Meteo; IP lookup only on the Detect button (audited) |
+| Skills | Folder or public GitHub link; text files only, size/count limits; never executed; listed in context as data; use_skill marks them "installed_by=sir" but every action still passes the policy |
+| Automations | Run as normal turns; confirmations time out (deny) when Sir is away; `schedule_task` is CONFIRM |
+| Telegram | One paired private chat; `telegram.chatId` is main-only (renderer can't set it); other chats ignored + audited; button approvals recorded `user_remote` and **refused for destructive actions**; bot tokens redacted (`telegram_token` rule) |
+| Model downloads | Pinned URLs + SHA-256 (ADR-011) |
+
 ### 16.2 Implementation Notes (Phase 6)
 
 - Desktop action policy (`src/main/security/desktop-policy.ts`) additionally blocks `win+x`, `ctrl+shift+esc` and `win+l` (use `lock_screen`), and asks before `alt+f4`, `ctrl+w` and `ctrl+shift+delete`. A "confirm" verdict pauses the operator and shows the normal confirmation dialog (always treated as destructive: click or Ctrl+Enter).

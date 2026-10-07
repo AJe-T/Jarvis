@@ -299,6 +299,26 @@ jarvis/
 └─ scripts/                      # dev helpers (seed vault, reset db, etc.)
 ```
 
+## 10b. Modules added after v1.0
+
+| Module | Role | Notes |
+|---|---|---|
+| `llm/claude-code.ts`, `agent/sdk-loop.ts` | Claude subscription connection | Claude Code runs the loop; Jarvis tools served over an in-process MCP server whose handlers call the normal executor (ADR-010) |
+| `llm/local-client.ts` | Local model connection | Messages API ⇄ OpenAI chat/completions adapter; the normal `runAgentLoop` is reused (ADR-013) |
+| `voice/local/*` | On-device voice | ONNX Runtime: Whisper (transformers.js), openWakeWord port, Silero VAD, pinned model store (ADR-011) |
+| `voice/conversation.ts`, `voice/local/continuous.ts` | Conversational voice | Echo / unclear / name detection, rolling transcript, intent judge, always-listening segmenter (ADR-012) |
+| `voice/dictation.ts` | Dictation | Text clean-up, dictionary, history; the controller owns the mic |
+| `tools/everyday/*` | Everyday tools | Weather, meals, look_at_screen, fetch_web_page |
+| `skills/skills.ts` | Skills | Store, GitHub/folder install, use_skill / read_skill_file, context summary (ADR-014) |
+| `automation/*` | Scheduled agents | Tasks table + 30 s ticker; feeds (ADR-015) |
+| `agent/research.ts` | Deep research | Nested loop with reading-only tools (ADR-016) |
+| `channels/telegram.ts` | Telegram | Long-poll, pairing, button confirmations as `remote` (ADR-017) |
+| `copilot/copilot.ts` | Reply copilot | Vision read → analyse → draft → check → focus+paste (ADR-018) |
+
+**Loop selection:** `services.loopFor()` returns `sdkLoop` for the subscription and `runAgentLoop` otherwise; the orchestrator, the research agent and automations all use it. **Turn purposes** (`chat`, `briefing`, `task`, `research`, `copilot`, `intent`, …) flow into the usage ledger.
+
+**Confirmation channels:** click/keyboard (anything), voice and Telegram (`remote`) (non-destructive only), enforced in `ConfirmationBroker.respond`.
+
 ## 11. Extension Points (design for P2)
 
 | Extension | Mechanism |

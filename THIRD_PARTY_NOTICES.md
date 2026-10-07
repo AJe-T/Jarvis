@@ -22,3 +22,10 @@ bundled third-party assets and separately-run components whose licences require 
 
 npm dependencies keep their own licence files inside `node_modules`; all production
 dependencies are MIT / Apache-2.0 / BSD / ISC / OFL (checked at Phase 0, see docs/TRD.md §4).
+
+## Projects whose ideas JARVIS re-implements (no code copied)
+
+- **isair/jarvis** — © 2025 Baris Sencan, "Jarvis AI Assistant License" (non-commercial; derivatives under the same terms). JARVIS studied its specs (transcript-first listening, intent judge, hot window, echo detection, dictation, everyday tools, local-model support) and wrote its own implementation. Because the ideas came from a non-commercial project, treat this app as personal / non-commercial.
+- **open-jarvis/OpenJarvis** — Apache-2.0. Ideas: skills catalogue (agentskills.io format), morning digest and scheduled agents, deep research, channels (Telegram), news feeds.
+- **jev-chat/jev-chat-jarvis** — MIT, © 2026 Finderchangchang and the jev-chat contributors. Its NOTICE asks for credit: *Based on ideas from Jev Chat Assistant (https://github.com/jev-chat/jev-chat-jarvis)* — the reply copilot's analyse → stance → draft → check → fill flow and its scoring rule.
+
