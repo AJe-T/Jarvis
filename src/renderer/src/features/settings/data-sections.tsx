@@ -71,7 +71,7 @@ export function DataSection(): React.JSX.Element {
         {backups.map((b) => (
           <li
             key={b.file}
-            className="flex items-center justify-between gap-3 rounded-md border border-glass-border px-3 py-2 text-sm"
+            className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2 text-sm"
           >
             <span className="text-ink-100 tabular">{new Date(b.createdAt).toLocaleString()}</span>
             <Button variant="ghost" onClick={() => void restore(b.file)}>

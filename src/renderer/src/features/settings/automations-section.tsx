@@ -44,7 +44,7 @@ function TaskEditor({
       .then(onDone)
       .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }));
   return (
-    <div className="flex flex-col gap-3 glass-raised border-accent-edge p-4">
+    <div className="flex flex-col gap-3 card border-accent-edge p-4">
       <TextInput
         aria-label="Task name"
         placeholder="Name, e.g. Weekly review"
@@ -56,7 +56,7 @@ function TaskEditor({
         <select
           value={t.kind}
           onChange={(e) => setT({ ...t, kind: e.target.value as TaskInput['kind'] })}
-          className="min-h-8 rounded-md border border-glass-border bg-glass-inset px-2 text-ink-100"
+          className="min-h-8 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
         >
           {Object.entries(KINDS).map(([k, label]) => (
             <option key={k} value={k}>
@@ -71,7 +71,7 @@ function TaskEditor({
         placeholder="What should Jarvis do each time? e.g. Summarise my week from my daily logs and list open reminders."
         value={t.prompt}
         onChange={(e) => setT({ ...t, prompt: e.target.value })}
-        className="rounded-md border border-glass-border bg-glass-inset px-3 py-2 text-sm text-ink-100"
+        className="rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink-100"
       />
       <div className="flex flex-wrap items-center gap-3 text-sm text-ink-300">
         <select
@@ -86,7 +86,7 @@ function TaskEditor({
                   : { type: 'interval', minutes: 60 },
             })
           }
-          className="min-h-8 rounded-md border border-glass-border bg-glass-inset px-2 text-ink-100"
+          className="min-h-8 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
         >
           <option value="daily">At a time</option>
           <option value="interval">Every…</option>
@@ -98,7 +98,7 @@ function TaskEditor({
               aria-label="Time"
               value={daily.time}
               onChange={(e) => setT({ ...t, schedule: { ...daily, time: e.target.value } })}
-              className="min-h-8 rounded-md border border-glass-border bg-glass-inset px-2 text-ink-100"
+              className="min-h-8 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
             />
             {DAYS.map((d, i) => (
               <label key={d} className="flex items-center gap-1">
@@ -136,7 +136,7 @@ function TaskEditor({
                   schedule: { type: 'interval', minutes: Math.max(15, Number(e.target.value)) },
                 })
               }
-              className="min-h-8 w-24 rounded-md border border-glass-border bg-glass-inset px-2 text-ink-100"
+              className="min-h-8 w-24 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
             />
             minutes
           </label>
@@ -208,7 +208,7 @@ export function AutomationsSection(): React.JSX.Element {
               <li
                 key={t.id}
                 className={clsx(
-                  'glass-inset flex flex-wrap items-start gap-3 rounded-lg p-4 transition-colors duration-[160ms]',
+                  'inset flex flex-wrap items-start gap-3 rounded-lg p-4 transition-colors duration-[160ms]',
                   !t.enabled && 'opacity-75',
                 )}
               >
@@ -217,7 +217,7 @@ export function AutomationsSection(): React.JSX.Element {
                     <span
                       className={clsx(
                         'size-2 shrink-0 rounded-pill',
-                        t.enabled ? 'bg-ok-400' : 'bg-ink-muted',
+                        t.enabled ? 'bg-ok-400' : 'bg-ink-500',
                       )}
                       aria-hidden
                     />

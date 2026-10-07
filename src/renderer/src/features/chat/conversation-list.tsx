@@ -20,15 +20,15 @@ export function ConversationList({ onClose }: { onClose: () => void }): React.JS
   return (
     <aside
       aria-label="Conversations"
-      className="flex w-64 shrink-0 flex-col border-r border-glass-border max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-10 max-md:bg-solid-float"
+      className="flex w-64 shrink-0 flex-col border-r border-line-subtle max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-10 max-md:bg-surface-1"
     >
-      <div className="flex h-14 items-center justify-between px-3">
-        <h2 className="text-sm font-semibold text-ink-300">Conversations</h2>
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-line-subtle pr-2 pl-4">
+        <h2 className="text-ui font-semibold text-ink-100">Conversations</h2>
         <IconButton label="Close conversations" onClick={onClose}>
           <X size={16} aria-hidden />
         </IconButton>
       </div>
-      <ul className="flex-1 overflow-y-auto px-2 pb-3">
+      <ul className="flex-1 overflow-y-auto p-2">
         {conversations.length === 0 && (
           <li className="px-2 py-4 text-sm text-ink-500">No conversations yet.</li>
         )}
@@ -40,7 +40,7 @@ export function ConversationList({ onClose }: { onClose: () => void }): React.JS
               aria-current={c.id === activeId ? 'true' : undefined}
               className={clsx(
                 'flex w-full flex-col rounded-md px-2.5 py-2 pr-9 text-left',
-                c.id === activeId ? 'bg-glass-selected' : 'hover:bg-glass-hover',
+                c.id === activeId ? 'bg-selected' : 'hover:bg-hover',
               )}
             >
               <span className="truncate text-sm text-ink-100">{c.title ?? 'New conversation'}</span>

@@ -85,7 +85,7 @@ function LogsPanel(): React.JSX.Element {
       </div>
       <ol
         aria-label="Log lines"
-        className="max-h-96 overflow-y-auto rounded-sm border border-glass-border bg-solid-inset p-2 font-code text-xs"
+        className="max-h-96 overflow-y-auto rounded-sm border border-line bg-surface-2 p-2 font-code text-xs"
       >
         {shown.length === 0 && <li className="text-ink-500">Nothing logged yet.</li>}
         {shown.map((r, i) => (
@@ -102,7 +102,7 @@ function LogsPanel(): React.JSX.Element {
             >
               {r.level}
             </span>{' '}
-            {r.module && <span className="text-reactor-500">{r.module}</span>}{' '}
+            {r.module && <span className="text-accent-300">{r.module}</span>}{' '}
             <span className="text-ink-100">{r.text}</span>
           </li>
         ))}

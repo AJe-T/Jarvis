@@ -79,7 +79,7 @@ export function FilesSection(): React.JSX.Element {
           {roots.map((r) => (
             <li
               key={r}
-              className="flex items-center justify-between gap-2 rounded-sm bg-glass-inset px-3 py-1.5"
+              className="flex items-center justify-between gap-2 rounded-sm bg-surface-2 px-3 py-1.5"
             >
               <span className="font-code text-sm break-all text-ink-100">{r}</span>
               <button
@@ -108,7 +108,7 @@ export function FilesSection(): React.JSX.Element {
             {Object.entries(overrides).map(([name, t]) => (
               <li
                 key={name}
-                className="flex items-center justify-between rounded-sm bg-glass-inset px-3 py-1.5 text-sm"
+                className="flex items-center justify-between rounded-sm bg-surface-2 px-3 py-1.5 text-sm"
               >
                 <span className="font-code">{name}</span>
                 <span className="flex items-center gap-2">
@@ -140,7 +140,7 @@ export function FilesSection(): React.JSX.Element {
             aria-label="Rule"
             value={tier}
             onChange={(e) => setTier(e.target.value as Tier)}
-            className="min-h-9 rounded-md border border-glass-border bg-glass-inset px-2 text-sm"
+            className="min-h-9 rounded-md border border-line bg-surface-2 px-2 text-sm"
           >
             <option value="CONFIRM">Always confirm</option>
             <option value="BLOCKED">Block</option>

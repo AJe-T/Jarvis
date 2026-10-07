@@ -91,7 +91,7 @@ export function Composer(): React.JSX.Element {
           {attachments.map((a, i) => (
             <li
               key={`${a.name}-${i}`}
-              className="glass-inset flex items-center gap-1.5 rounded-pill py-1 pr-2 pl-3 text-sm text-ink-300"
+              className="inset flex items-center gap-1.5 py-1 pr-2 pl-3 text-sm text-ink-300"
             >
               {a.name}
               <button
@@ -106,7 +106,7 @@ export function Composer(): React.JSX.Element {
         </ul>
       )}
       <div
-        className="composer flex min-h-[56px] items-end gap-1 p-2"
+        className="composer flex min-h-[52px] items-end gap-1 p-1.5"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
@@ -127,21 +127,14 @@ export function Composer(): React.JSX.Element {
           label={listening ? 'Stop listening' : 'Talk to Jarvis'}
           hint={pttKey}
           active={listening}
-          // §6.2: the mic is cyan (JARVIS listening); a ring breathes out while recording.
-          className={clsx(
-            'relative rounded-pill',
-            listening ? 'mic-live' : 'hover:text-reactor-300',
-          )}
+          // §6.2: while recording the mic turns blue and a ring breathes out of it.
+          className={clsx('relative', listening && 'mic-live text-accent-300!')}
           disabled={voiceMode === 'off' || voiceMode === undefined}
           onClick={() => void call('voice:mic', { action: listening ? 'stop' : 'start' })}
         >
           <Mic size={18} strokeWidth={1.75} aria-hidden />
         </IconButton>
-        <IconButton
-          label="Attach image or PDF"
-          className="rounded-pill"
-          onClick={() => fileRef.current?.click()}
-        >
+        <IconButton label="Attach image or PDF" onClick={() => fileRef.current?.click()}>
           <Paperclip size={18} strokeWidth={1.75} aria-hidden />
         </IconButton>
         <input
@@ -153,11 +146,7 @@ export function Composer(): React.JSX.Element {
           onChange={(e) => void onFiles(e.target.files).then(() => (e.target.value = ''))}
         />
         {busy ? (
-          <IconButton
-            label="Stop"
-            onClick={() => void cancel()}
-            className="rounded-pill border-alarm-500/40 text-alarm-500"
-          >
+          <IconButton label="Stop" onClick={() => void cancel()} className="text-alarm-500">
             <Square size={18} strokeWidth={1.75} aria-hidden />
           </IconButton>
         ) : (
@@ -166,8 +155,7 @@ export function Composer(): React.JSX.Element {
             hint="Enter"
             disabled={!text.trim()}
             className={clsx(
-              'rounded-pill',
-              text.trim() && 'btn-send motion-safe:hover:-translate-y-px',
+              text.trim() && 'bg-accent-600! text-ink-on-accent! hover:brightness-110',
             )}
             onClick={() => void submit()}
           >

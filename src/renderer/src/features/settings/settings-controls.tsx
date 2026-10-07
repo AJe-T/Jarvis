@@ -93,7 +93,7 @@ export function SettingSelect<K extends SettingKey>({
           id={id}
           value={asText(value)}
           onChange={(e) => void save(k, e.target.value as SettingValue<K>)}
-          className="min-h-9 w-64 rounded-md border border-glass-border bg-glass-inset px-2 text-base text-ink-100"
+          className="min-h-9 w-64 rounded-md border border-line bg-surface-2 px-2 text-base text-ink-100"
         >
           {options.map((o) => (
             <option key={o.value} value={o.value}>
@@ -136,7 +136,7 @@ export function SettingTextArea<K extends SettingKey>({
             if (draft !== asText(value))
               void save(k, draft as SettingValue<K>).then((ok) => !ok && setDraft(asText(value)));
           }}
-          className="w-full rounded-md border border-glass-border bg-glass-inset px-3 py-2 font-code text-sm text-ink-100"
+          className="w-full rounded-md border border-line bg-surface-2 px-3 py-2 font-code text-sm text-ink-100"
         />
       )}
     </Field>

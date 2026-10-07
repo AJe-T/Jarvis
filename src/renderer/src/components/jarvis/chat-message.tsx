@@ -112,7 +112,7 @@ export function ChatMessage({
             </IconButton>
           </div>
         )}
-        <div className="max-w-[88%] rounded-lg rounded-br-[6px] border border-bubble-sir-edge bg-bubble-sir px-4 py-2.5 whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
+        <div className="max-w-[85%] rounded-xl rounded-br-sm bg-surface-2 px-4 py-2.5 whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
           {message.text}
         </div>
       </div>

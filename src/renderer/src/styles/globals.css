@@ -1,64 +1,47 @@
 @import 'tailwindcss';
 @import './fonts.css';
 @import './tokens.css';
-/* In the components layer so a utility (bg-accent-600, rounded-pill…) can still override a glass recipe. */
-@import './glass.css' layer(components);
+/* In the components layer so a utility (rounded-pill, p-4…) can still override a recipe. */
+@import './surfaces.css' layer(components);
 
 /* §5.1: short windows (height < 600px) get a smaller orb, composer and status bar. */
 @custom-variant short (@media (max-height: 599px));
 
-/* Design tokens → Tailwind utilities (bg-glass-inset, text-ink-300, text-accent-300, …). §3.6 */
+/* Design tokens → Tailwind utilities (bg-surface-1, text-ink-300, border-line, …). §3.4 */
 @theme inline {
   --breakpoint-md: 760px;
   --breakpoint-lg: 1200px;
   --breakpoint-xl: 1600px;
 
-  --color-void-950: var(--void-950);
-  --color-glass-inset: var(--glass-inset);
-  --color-glass-raised: var(--glass-3);
-  --color-glass-hover: var(--glass-hover);
-  --color-glass-press: var(--glass-press);
-  --color-glass-selected: var(--glass-selected);
-  --color-glass-border: var(--glass-border);
-  --color-glass-border-subtle: var(--glass-border-subtle);
-  --color-glass-border-strong: var(--glass-border-strong);
-  --color-solid-float: var(--solid-float);
-  --color-solid-inset: var(--solid-inset);
-  --color-reactor-500: var(--reactor-500);
-  --color-reactor-300: var(--reactor-300);
-  --color-reactor-glow: var(--reactor-glow);
-  --color-reactor-tint: var(--reactor-tint);
-  --color-reactor-edge: var(--reactor-edge);
-  --color-accent-600: var(--accent-600);
-  --color-accent-500: var(--accent-500);
-  --color-accent-300: var(--accent-300);
-  --color-accent-edge: var(--accent-edge);
-  --color-accent-focus: var(--accent-focus);
-  --color-accent-hover: var(--accent-hover);
-  --color-bubble-sir: var(--bubble-sir);
-  --color-bubble-sir-edge: var(--bubble-sir-edge);
-  --color-lamp-400: var(--lamp-400);
-  --color-lamp-tint: var(--lamp-tint);
-  --color-alarm-500: var(--alarm-500);
-  --color-alarm-fill: var(--alarm-fill);
-  --color-alarm-tint: var(--alarm-tint);
-  --color-ok-400: var(--ok-400);
-  --color-ok-tint: var(--ok-tint);
-  --color-info-tint: var(--info-tint);
+  --color-app: var(--bg-app);
+  --color-main: var(--bg-main);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-hover: var(--hover);
+  --color-press: var(--press);
+  --color-selected: var(--selected);
+  --color-line-subtle: var(--line-subtle);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-ink-100: var(--ink-100);
   --color-ink-300: var(--ink-300);
   --color-ink-500: var(--ink-500);
-  --color-ink-muted: var(--ink-muted);
   --color-icon-rest: var(--icon-rest);
+  --color-accent-600: var(--accent-600);
+  --color-accent-500: var(--accent-500);
+  --color-accent-300: var(--accent-300);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-edge: var(--accent-edge);
   --color-ink-on-accent: var(--ink-on-accent);
-  --color-ink-on-reactor: var(--ink-on-reactor);
-  --color-ink-on-lamp: var(--ink-on-lamp);
+  --color-alarm-500: var(--alarm-500);
+  --color-alarm-fill: var(--alarm-fill);
+  --color-alarm-tint: var(--alarm-tint);
+  --color-lamp-400: var(--lamp-400);
+  --color-lamp-tint: var(--lamp-tint);
+  --color-ok-400: var(--ok-400);
   --color-ink-on-alarm: var(--ink-on-alarm);
-  --color-ink-on-ok: var(--ink-on-ok);
 
-  --shadow-pane: var(--shadow-pane);
-  --shadow-float: var(--shadow-float);
-  --shadow-accent: var(--shadow-accent);
+  --shadow-pop: var(--shadow-pop);
 
   --font-display: var(--font-display);
   --font-body: var(--font-body);
@@ -73,21 +56,20 @@
   --text-ui--line-height: 1.25rem;
   --text-base: 0.9375rem;
   --text-base--line-height: 1.5rem;
-  --text-lg: 1.1875rem;
-  --text-lg--line-height: 1.75rem;
-  --text-xl: 1.5rem;
-  --text-xl--line-height: 2rem;
-  --text-2xl: 2rem;
-  --text-2xl--line-height: 2.5rem;
-  --text-hero: clamp(2rem, 1.1rem + 2.6vw, 3.25rem);
-  --text-hero--line-height: 1.1;
-  --text-hero--letter-spacing: -0.03em;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 2.125rem;
+  --text-hero: 1.75rem;
+  --text-hero--line-height: 2.25rem;
+  --text-hero--letter-spacing: -0.02em;
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
-  --radius-composer: var(--radius-composer);
   --radius-pill: var(--radius-pill);
   --ease-standard: var(--ease-standard);
 }
@@ -100,7 +82,7 @@ body,
 
 body {
   margin: 0;
-  background: var(--void-950);
+  background: var(--bg-app);
   color: var(--ink-100);
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -109,29 +91,23 @@ body {
   overflow: hidden;
 }
 
-/* Large headings: tighter tracking (§4). */
-.text-xl,
-.text-2xl {
-  letter-spacing: -0.02em;
-}
-
-/* §11: one focus system on every layer: 2px violet, 2px offset. */
+/* §11: one focus system: 2px blue outline, 2px offset. */
 :focus-visible {
   outline: 2px solid var(--accent-500);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--accent-edge);
+  background: var(--accent-tint);
 }
 
 ::placeholder {
-  color: var(--ink-muted);
+  color: var(--ink-500);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-border-strong) transparent;
+  scrollbar-color: var(--line-strong) transparent;
 }
 
 .tabular {
@@ -146,14 +122,8 @@ body {
 .orb-breathe {
   animation: orb-breathe 4.5s ease-in-out infinite;
 }
-.orb-orbit-slow {
-  animation: orb-spin 24s linear infinite;
-}
 .orb-orbit {
-  animation: orb-spin 1.6s linear infinite;
-}
-.orb-orbit-rev {
-  animation: orb-spin 9s linear infinite reverse;
+  animation: spin 1.4s linear infinite;
 }
 .orb-await {
   animation: orb-await 2.4s ease-in-out infinite;
@@ -162,174 +132,97 @@ body {
   animation: orb-ripple 1.8s ease-out infinite;
 }
 .orb-error {
-  animation: orb-error 420ms ease-out 1;
-}
-.orb-particle {
-  animation: orb-particle var(--p-dur, 7s) ease-in-out var(--p-delay, 0s) infinite;
+  animation: orb-error 400ms ease-out 1;
 }
 @keyframes orb-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.65;
-  }
   50% {
-    transform: scale(1.025);
-    opacity: 0.85;
-  }
-}
-@keyframes orb-spin {
-  to {
-    transform: rotate(360deg);
+    transform: scale(1.03);
+    opacity: 0.9;
   }
 }
 @keyframes orb-await {
-  0%,
-  100% {
-    opacity: 0.7;
-    transform: scale(1);
-  }
   50% {
-    opacity: 1;
     transform: scale(1.04);
+    opacity: 0.8;
   }
 }
 @keyframes orb-ripple {
   from {
-    transform: scale(0.85);
-    opacity: var(--ripple-strength, 0.5);
+    transform: scale(0.9);
+    opacity: var(--ripple-strength, 0.4);
   }
   to {
-    transform: scale(1.18);
+    transform: scale(1.3);
     opacity: 0;
   }
 }
 @keyframes orb-error {
-  0% {
-    transform: translateX(0) scale(1);
+  25% {
+    transform: translateX(-3px);
   }
-  20% {
-    transform: translateX(-3px) scale(1.06);
-  }
-  45% {
-    transform: translateX(3px) scale(1.03);
-  }
-  70% {
-    transform: translateX(-2px) scale(1);
-  }
-  100% {
-    transform: translateX(0) scale(1);
+  60% {
+    transform: translateX(3px);
   }
 }
-@keyframes orb-particle {
-  0% {
-    transform: translate(0, 0);
-    opacity: 0;
-  }
-  30% {
-    opacity: var(--p-alpha, 0.6);
-  }
-  100% {
-    transform: translate(var(--p-x, 4px), var(--p-y, -10px));
-    opacity: 0;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-/* ── Interface motion (§8) ──────────────────────────────────── */
+/* ── Interface motion (§8): short fades, no slides ──────────── */
 .view-enter,
-.expand-in,
-.toast-in {
-  animation: rise-in 220ms var(--ease-standard) both;
-}
-.modal-in {
-  animation: modal-in 200ms var(--ease-standard) both;
-}
 .fade-in {
-  animation: fade-in 200ms var(--ease-standard) both;
+  animation: fade-in 160ms var(--ease-standard) both;
 }
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-@keyframes modal-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
+.expand-in,
+.toast-in,
+.modal-in {
+  animation: rise-in 180ms var(--ease-standard) both;
 }
 @keyframes fade-in {
   from {
     opacity: 0;
   }
 }
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
 
-/* Status indicators (§6.4) */
+/* Status marks (§6.4) */
 .dot-breathe {
   animation: dot-breathe 2s ease-in-out infinite;
 }
 @keyframes dot-breathe {
   50% {
-    opacity: 0.45;
-    transform: scale(0.8);
-  }
-}
-.pulse-once {
-  animation: pulse-once 480ms ease-out 1;
-}
-@keyframes pulse-once {
-  40% {
-    transform: scale(1.25);
+    opacity: 0.4;
   }
 }
 .ring-spin {
   display: inline-block;
-  border: 2px solid var(--reactor-tint);
-  border-top-color: var(--reactor-500);
+  border: 2px solid var(--accent-tint);
+  border-top-color: var(--accent-500);
   border-radius: 999px;
-  animation: orb-spin 0.9s linear infinite;
+  animation: spin 0.9s linear infinite;
 }
 .mic-live::after {
-  /* recording: a soft cyan ring breathing out of the mic button */
   content: '';
   position: absolute;
   inset: -3px;
   border-radius: inherit;
-  border: 1px solid var(--reactor-500);
+  border: 1px solid var(--accent-500);
   animation: orb-ripple 1.6s ease-out infinite;
   pointer-events: none;
 }
 
-/* Loading (§6.7): glass skeletons and pulsing dots instead of spinners. */
+/* Loading (§6.7) */
 .skeleton {
   border-radius: var(--radius-sm);
-  background: linear-gradient(100deg, transparent 30%, var(--glass-highlight) 50%, transparent 70%)
-    0 0 / 220% 100% var(--glass-inset);
-  animation: shimmer 1.8s ease-in-out infinite;
-}
-@keyframes shimmer {
-  from {
-    background-position: 120% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
-}
-.pulse-dots > span {
-  display: inline-block;
-  width: 4px;
-  height: 4px;
-  margin: 0 1.5px;
-  border-radius: 999px;
-  background: currentColor;
-  animation: dot-breathe 1.2s ease-in-out infinite;
-}
-.pulse-dots > span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.pulse-dots > span:nth-child(3) {
-  animation-delay: 0.3s;
+  background: var(--surface-2);
+  animation: dot-breathe 1.6s ease-in-out infinite;
 }
 
 .stream-caret {
@@ -338,33 +231,13 @@ body {
   height: 1.1em;
   margin-left: 2px;
   vertical-align: text-bottom;
-  border-radius: 1px;
-  background: var(--reactor-500);
+  background: var(--accent-500);
   animation: caret-blink 1s step-end infinite;
 }
 @keyframes caret-blink {
   50% {
     opacity: 0;
   }
-}
-
-/* Primary call to action: violet, one subtle highlight, no glow (§6.6). */
-.btn-accent {
-  background: var(--accent-600);
-  color: var(--ink-on-accent);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.16),
-    var(--shadow-accent);
-}
-.btn-accent:hover:not(:disabled) {
-  background: var(--accent-500);
-}
-.btn-send {
-  background: linear-gradient(135deg, var(--violet-500), var(--indigo-500));
-  color: var(--text-primary);
-  box-shadow:
-    inset 0 1px 0 rgb(103 232 249 / 0.25),
-    var(--shadow-accent);
 }
 
 /* §11: reduced motion keeps colour and opacity changes, drops movement. */
@@ -412,13 +285,13 @@ body {
 .md code {
   font-family: var(--font-code);
   font-size: 0.85em;
-  background: var(--solid-inset);
+  background: var(--surface-2);
   border-radius: 4px;
   padding: 0.1em 0.35em;
 }
 .md pre {
-  background: var(--solid-inset); /* §6.3: solid, for legibility */
-  border: 1px solid var(--glass-border);
+  background: var(--surface-2); /* §6.3: solid, for legibility */
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   overflow-x: auto;
@@ -433,7 +306,7 @@ body {
 }
 .md th,
 .md td {
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--line);
   padding: 0.25rem 0.6rem;
   text-align: left;
 }
@@ -445,7 +318,7 @@ body {
   margin: 1rem 0 0.5rem;
 }
 .md blockquote {
-  border-left: 3px solid var(--glass-border-strong);
+  border-left: 3px solid var(--line-strong);
   padding-left: 0.75rem;
   color: var(--ink-300);
 }

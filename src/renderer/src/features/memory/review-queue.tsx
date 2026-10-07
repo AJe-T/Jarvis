@@ -24,14 +24,14 @@ export function ReviewQueue(): React.JSX.Element | null {
   return (
     <section
       aria-label="Memories to review"
-      className="max-h-72 overflow-y-auto border-t border-glass-border p-3"
+      className="max-h-72 overflow-y-auto border-t border-line p-3"
     >
       <h2 className="mb-2 text-sm font-semibold text-lamp-400">
         Review {items.length === 1 ? '1 memory' : `${items.length} memories`}
       </h2>
       <ul className="flex flex-col gap-2">
         {items.map((i) => (
-          <li key={i.id} className="rounded-sm border border-glass-border p-2 text-xs">
+          <li key={i.id} className="rounded-sm border border-line p-2 text-xs">
             <p className="text-ink-300">{i.reason}</p>
             {i.targetPath && <p className="mt-1 font-code text-ink-500">{i.targetPath}</p>}
             {i.proposedMarkdown && (

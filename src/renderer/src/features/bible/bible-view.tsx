@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import bible from '../../../../../docs/BIBLE.md?raw';
 import reference from '../../../../../docs/REFERENCE.md?raw';
 import { Markdown } from '../../components/jarvis/chat-message';
+import { PageBody, PageHeader } from '../../components/ui/page';
 import { TextInput } from '../../components/ui/field';
 
 interface Part {
@@ -46,63 +47,70 @@ export function BibleView(): React.JSX.Element {
     <div className="flex min-w-0 flex-1">
       <nav
         aria-label="Bible contents"
-        className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-glass-border px-3 py-4"
+        className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-line-subtle md:w-64"
       >
-        <h1 className="px-2 text-xl font-semibold text-ink-100">JARVIS Bible</h1>
-        <div role="tablist" className="flex gap-1">
-          {(Object.keys(DOCS) as Array<keyof typeof DOCS>).map((d) => (
-            <button
-              key={d}
-              type="button"
-              role="tab"
-              aria-selected={doc === d}
-              onClick={() => (setDoc(d), setActive(0), setQuery(''))}
-              className={clsx(
-                'rounded-pill px-3 py-1 text-xs',
-                doc === d ? 'bg-glass-selected text-ink-100' : 'text-ink-300 hover:text-ink-100',
-              )}
-            >
-              {DOCS[d].label}
-            </button>
-          ))}
+        <div className="flex h-12 shrink-0 items-center border-b border-line-subtle px-4">
+          <h1 className="text-ui font-semibold text-ink-100">JARVIS Bible</h1>
         </div>
-        <TextInput
-          aria-label="Search the Bible"
-          placeholder="Search…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <ol className="flex flex-col gap-0.5">
-          {matches.map(({ s, i }) => (
-            <li key={`${doc}-${i}`}>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+          <div role="tablist" className="flex gap-1 rounded-md bg-surface-2 p-1">
+            {(Object.keys(DOCS) as Array<keyof typeof DOCS>).map((d) => (
               <button
+                key={d}
                 type="button"
-                aria-current={!q && i === active ? 'page' : undefined}
-                onClick={() => (setActive(i), setQuery(''))}
+                role="tab"
+                aria-selected={doc === d}
+                onClick={() => (setDoc(d), setActive(0), setQuery(''))}
                 className={clsx(
-                  'w-full rounded-md px-2 py-1 text-left text-sm',
-                  !q && i === active
-                    ? 'bg-glass-selected text-ink-100'
-                    : 'text-ink-300 hover:bg-glass-hover',
+                  'h-7 flex-1 rounded-sm px-2 text-xs transition-colors duration-[120ms]',
+                  doc === d
+                    ? 'bg-surface-1 font-medium text-ink-100 shadow-sm'
+                    : 'text-ink-300 hover:text-ink-100',
                 )}
               >
-                {s.title}
+                {DOCS[d].label}
               </button>
-            </li>
-          ))}
-          {q && matches.length === 0 && (
-            <li className="px-2 text-sm text-ink-500">Nothing found.</li>
-          )}
-        </ol>
+            ))}
+          </div>
+          <TextInput
+            aria-label="Search the Bible"
+            placeholder="Search…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <ol className="flex flex-col gap-0.5">
+            {matches.map(({ s, i }) => (
+              <li key={`${doc}-${i}`}>
+                <button
+                  type="button"
+                  aria-current={!q && i === active ? 'page' : undefined}
+                  onClick={() => (setActive(i), setQuery(''))}
+                  className={clsx(
+                    'w-full rounded-md px-2.5 py-1.5 text-left text-sm transition-colors duration-[120ms]',
+                    !q && i === active ? 'bg-selected text-ink-100' : 'text-ink-300 hover:bg-hover',
+                  )}
+                >
+                  {s.title}
+                </button>
+              </li>
+            ))}
+            {q && matches.length === 0 && (
+              <li className="px-2 text-sm text-ink-500">Nothing found.</li>
+            )}
+          </ol>
+        </div>
       </nav>
-      <div className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
-        <article className="bible mx-auto flex max-w-3xl flex-col gap-8 text-sm text-ink-300">
-          {shown.map((s) => (
-            <section key={s?.title}>
-              <Markdown text={s?.body ?? ''} />
-            </section>
-          ))}
-        </article>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PageHeader title={q ? `Search: ${query}` : (shown[0]?.title ?? DOCS[doc].label)} />
+        <PageBody>
+          <article className="bible flex flex-col gap-8 text-sm text-ink-300">
+            {shown.map((s) => (
+              <section key={s?.title}>
+                <Markdown text={s?.body ?? ''} />
+              </section>
+            ))}
+          </article>
+        </PageBody>
       </div>
     </div>
   );

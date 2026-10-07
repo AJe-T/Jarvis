@@ -47,7 +47,7 @@ export function AddConnection({
 
   if (!preset) {
     return (
-      <section className="glass-raised border-accent-edge p-4" aria-label="Add connection">
+      <section className="card border-accent-edge p-4" aria-label="Add connection">
         <h2 className="mb-3 font-semibold">Add a connection</h2>
         <ul className="grid gap-2 sm:grid-cols-2">
           {MCP_PRESETS.filter((p) => !existing.includes(p.server.name)).map((p) => (
@@ -55,7 +55,7 @@ export function AddConnection({
               <button
                 type="button"
                 onClick={() => setPreset(p)}
-                className="h-full w-full rounded-md border border-glass-border p-3 text-left hover:border-accent-edge hover:bg-accent-hover"
+                className="h-full w-full rounded-md border border-line p-3 text-left hover:border-accent-edge hover:bg-hover"
               >
                 <span className="block font-semibold text-ink-100">{p.label}</span>
                 <span className="block text-sm text-ink-300">{p.description}</span>
@@ -66,7 +66,7 @@ export function AddConnection({
             <button
               type="button"
               onClick={() => setPreset('custom')}
-              className="h-full w-full rounded-md border border-dashed border-glass-border p-3 text-left hover:border-accent-edge hover:bg-accent-hover"
+              className="h-full w-full rounded-md border border-dashed border-line p-3 text-left hover:border-accent-edge hover:bg-hover"
             >
               <span className="block font-semibold text-ink-100">Custom server</span>
               <span className="block text-sm text-ink-300">
@@ -89,7 +89,7 @@ export function AddConnection({
     const ready = !needs || secrets[needs.name]?.set;
     return (
       <section
-        className="flex flex-col gap-3 glass-raised border-accent-edge p-4"
+        className="flex flex-col gap-3 card border-accent-edge p-4"
         aria-label={`Add ${preset.label}`}
       >
         <h2 className="font-semibold">{preset.label}</h2>
@@ -129,7 +129,7 @@ export function AddConnection({
   const nameOk = /^[a-z][a-z0-9_-]{1,30}$/.test(custom.name) && !existing.includes(custom.name);
   return (
     <section
-      className="flex flex-col gap-3 glass-raised border-accent-edge p-4"
+      className="flex flex-col gap-3 card border-accent-edge p-4"
       aria-label="Add custom connection"
     >
       <h2 className="font-semibold">Custom MCP server</h2>
@@ -198,7 +198,7 @@ export function AddConnection({
             onChange={(e) =>
               setCustom({ ...custom, trust: e.target.value as McpServerInput['trustLevel'] })
             }
-            className="min-h-9 w-48 rounded-md border border-glass-border bg-glass-inset px-2"
+            className="min-h-9 w-48 rounded-md border border-line bg-surface-2 px-2"
           >
             <option value="official">Official vendor</option>
             <option value="community">Community</option>

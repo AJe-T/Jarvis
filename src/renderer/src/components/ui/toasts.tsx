@@ -1,5 +1,4 @@
 import { AlertTriangle, Info, X } from 'lucide-react';
-import clsx from 'clsx';
 import { useUiStore, type Toast } from '../../stores/ui-store';
 
 const ICONS = { info: Info, warn: AlertTriangle, error: AlertTriangle } as const;
@@ -17,13 +16,13 @@ function runAction(action: NonNullable<Toast['action']>): void {
   else go(action);
 }
 
-/** Bottom-right, max 3; errors persist until dismissed (Design-system.md §5.6). */
+/** Top-centre under the header, max 3; errors persist until dismissed (Design-system.md §6.8). */
 export function Toasts(): React.JSX.Element {
   const toasts = useUiStore((s) => s.toasts);
   const dismiss = useUiStore((s) => s.dismiss);
   return (
     <div
-      className="pointer-events-none fixed right-4 bottom-12 z-40 flex w-80 flex-col gap-2"
+      className="pointer-events-none fixed top-14 left-1/2 z-40 flex w-[min(26rem,calc(100vw-32px))] -translate-x-1/2 flex-col gap-2"
       role="region"
       aria-label="Notifications"
     >
@@ -33,15 +32,8 @@ export function Toasts(): React.JSX.Element {
           <div
             key={t.id}
             role={t.level === 'error' ? 'alert' : 'status'}
-            className={clsx(
-              // §6.8: compact glass, tinted by level; errors and warnings keep a 3px edge.
-              'glass-float toast-in pointer-events-auto flex items-start gap-2.5 rounded-lg p-3 text-sm',
-              t.level === 'error'
-                ? '[background-image:linear-gradient(var(--alarm-tint),var(--alarm-tint))] shadow-[inset_3px_0_0_var(--alarm-fill),var(--shadow-float)]'
-                : t.level === 'warn'
-                  ? '[background-image:linear-gradient(var(--lamp-tint),var(--lamp-tint))] shadow-[inset_3px_0_0_var(--lamp-400),var(--shadow-float)]'
-                  : '[background-image:linear-gradient(var(--info-tint),var(--info-tint))]',
-            )}
+            // §6.8: plain card; the coloured icon says what kind it is.
+            className="popover toast-in pointer-events-auto flex items-start gap-2.5 p-3 text-sm"
           >
             <Icon
               size={18}
@@ -52,7 +44,7 @@ export function Toasts(): React.JSX.Element {
                   ? 'text-alarm-500'
                   : t.level === 'warn'
                     ? 'text-lamp-400'
-                    : 'text-reactor-500'
+                    : 'text-accent-300'
               }
             />
             <div className="flex-1">

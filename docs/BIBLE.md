@@ -209,15 +209,13 @@ Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem) in the
   - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent).
   - **Memory:** browse, search, forget, and the review queue.
   - **Connections**, **Reply copilot** and **Bible**.
-- **Look ("Obsidian Intelligence", [Design-system](Design-system.md)):**
-  - Four levels of glass (control rail, main surface, activity console, dialogs) over a dark obsidian atmosphere with soft violet, cyan and rose light that drifts very slowly; the orb's state colour lights the room.
-  - Violet means you act (buttons, focus, selection, links); cyan means Jarvis acts (orb, voice, running tools).
-  - The orb is an eight-layer reactor: it breathes when idle, ripples with your voice, turns a violet ring while thinking, shows one segment per tool while acting, glows amber when it needs you, draws a wave while speaking.
-  - Fonts: Outfit (interface), JetBrains Mono (code and paths), bundled so they work offline.
+- **Look ("Graphite", [Design-system](Design-system.md)):**
+  - Clean, solid design: graphite surfaces with thin borders, one blue accent for buttons, links and Jarvis, red only for danger.
+  - Every screen has the same 48 px header and the same centred column, so things line up across the app.
+  - The orb is a calm status mark: it breathes when idle, a ring reacts to your voice, an arc turns while thinking, one segment per tool while acting, amber when it needs you, a wave while speaking.
+  - Font: Outfit everywhere; JetBrains Mono only for code and paths. Bundled, works offline.
   - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px Activity opens as a sheet (Esc closes it).
-  - Reduced motion (Windows animation effects off) stops the drift, rotation and particles; colours and text still show every state.
-  - **Settings → General → Theme:** Match Windows (default), Dark, Light (frosted white glass over a pale lavender atmosphere).
-  - **Settings → General → Transparency:** Full glass (default), Auto, Reduced (no blur), Solid. Auto uses Solid when Windows "Transparency effects" is off, and Reduced on battery.
+  - **Settings → General → Theme:** Match Windows (default), Dark, Light.
 - **Mini orb:** a small always-on-top orb (tray or chat header).
 - **Tray, start with Windows, start hidden.**
 - **Settings → Data & backups:**
@@ -332,8 +330,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 - `budget.*`
 - `location.home`
 - `dictation.*`
-- `telegram.*`
-- `appearance.transparency`, `appearance.theme`
+- `telegram.*`, `appearance.theme`
 - `memory.semanticSearch`
 
 ---
@@ -381,8 +378,6 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | Telegram silent | Settings → Telegram: token saved, channel on, Connect, pairing code sent from a private chat. |
 | Reply copilot won't paste | The chat window must still be open with the same title; otherwise use Copy. |
 | Database warning banner | Settings → Data & backups → Restore a backup. |
-| No aurora or blur, the app looks flat | Settings → General → Transparency must be Full glass (the default). With Auto, Windows "Transparency effects" off means Solid. |
-| Window lags while resizing | Set Transparency to Reduced (keeps the look, drops the blur). |
 
 ---
 
@@ -426,6 +421,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.4 | Voice fixes (always-listening model bug, no self-interruption, longer end-of-speech pause, PTT follow-ups, conversational replies); ideas from microsoft/JARVIS (HuggingGPT), sukeesh/Jarvis (plugins) and Priler/jarvis (instant commands); glass theme v2 (aurora backdrop, glass islands, Sora/Geist fonts, transparency modes, responsive down to 480 px), light and dark themes |
 | 1.5 | The rest of isair/jarvis: semantic (meaning-based) memory search, recall by date, offline screen OCR, world time, chat rewind, tool routing for local models, in-app logs, slow speech-recognition guidance, Chrome and YouTube MCP presets |
 | 1.6 | "Obsidian Intelligence" redesign: four-level glass, violet/cyan roles, Outfit font, eight-layer orb with tool progress, view/modal/toast motion, re-coloured light theme |
+| 1.7 | "Graphite" redesign: solid neutral surfaces, one blue accent, consistent page grid, simpler orb; Transparency setting removed |
 
 ---
 

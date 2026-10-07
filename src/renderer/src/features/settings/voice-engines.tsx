@@ -131,8 +131,8 @@ function Choice<K extends SettingKey>(p: {
           className={clsx(
             'rounded-md border p-3 text-left transition-colors',
             value === o.value
-              ? 'border-accent-edge bg-glass-selected'
-              : 'border-glass-border hover:border-ink-500',
+              ? 'border-accent-edge bg-selected'
+              : 'border-line hover:border-ink-500',
           )}
         >
           <span className="block font-semibold text-ink-100">{o.title}</span>
@@ -203,7 +203,7 @@ export function VoiceEngines(): React.JSX.Element {
             {WHISPER_MODELS.map((m) => (
               <div
                 key={m.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-glass-border px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2"
               >
                 <label className="flex items-start gap-2 text-sm">
                   <input

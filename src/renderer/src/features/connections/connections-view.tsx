@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import type { McpServerView, Res } from '@shared/ipc-contract';
 import type { Tier } from '@shared/types';
 import { Button } from '../../components/ui/button';
+import { PageBody, PageHeader } from '../../components/ui/page';
 import { confirmAction } from '../../components/ui/confirm-modal';
 import { Switch } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
@@ -45,8 +46,8 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
   }
 
   return (
-    <li className="glass-inset rounded-lg">
-      <div className="flex items-center gap-3 p-3">
+    <li className="card">
+      <div className="flex items-center gap-3 p-4">
         <span
           className={clsx('size-2.5 shrink-0 rounded-pill', STATUS[s.status].dot)}
           aria-hidden
@@ -54,7 +55,7 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="font-semibold text-ink-100">{s.name}</h2>
-            <span className="rounded-sm border border-glass-border px-1.5 text-xs text-ink-300">
+            <span className="rounded-sm border border-line px-1.5 text-xs text-ink-300">
               {s.trustLevel}
             </span>
           </div>
@@ -93,7 +94,7 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
         </Button>
       </div>
       {s.tools.length > 0 && (
-        <div className="border-t border-glass-border">
+        <div className="border-t border-line">
           <button
             type="button"
             aria-expanded={open}
@@ -108,7 +109,7 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
               {s.tools.map((t) => (
                 <li
                   key={t.name}
-                  className="flex items-start gap-3 border-t border-glass-border py-2 first:border-t-0"
+                  className="flex items-start gap-3 border-t border-line py-2 first:border-t-0"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="font-code text-sm text-ink-100">{t.name}</p>
@@ -119,9 +120,9 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
                     value={t.tier}
                     onChange={(e) => void setTier(t.name, e.target.value as Tier)}
                     className={clsx(
-                      'min-h-8 rounded-md border bg-glass-inset px-2 text-xs',
+                      'min-h-8 rounded-md border bg-surface-2 px-2 text-xs',
                       t.tier === 'SAFE'
-                        ? 'border-glass-border'
+                        ? 'border-line'
                         : t.tier === 'CONFIRM'
                           ? 'border-lamp-400'
                           : 'border-alarm-500',
@@ -151,34 +152,31 @@ export function ConnectionsView(): React.JSX.Element {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center border-b border-glass-border-subtle px-6">
-        <h1 className="text-xl font-semibold text-ink-100">Connections</h1>
-        <Button variant="primary" className="ml-auto" onClick={() => setAdding(true)}>
+      <PageHeader title="Connections">
+        <Button variant="primary" onClick={() => setAdding(true)}>
           <Plus size={14} aria-hidden /> Add connection
         </Button>
-      </header>
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4">
-          <p className="text-sm text-ink-300">
-            Connections give Jarvis tools from other apps through MCP. New tools ask before acting
-            until you mark read-only ones as “Run automatically”.
-          </p>
-          {adding && (
-            <AddConnection
-              existing={servers.map((s) => s.name)}
-              onDone={() => (setAdding(false), load())}
-            />
-          )}
-          {servers.length === 0 && !adding && (
-            <p className="text-ink-500">No connections yet. Add the browser first.</p>
-          )}
-          <ul className="flex flex-col gap-3">
-            {servers.map((s) => (
-              <ServerCard key={s.id} s={s} onChange={load} />
-            ))}
-          </ul>
-        </div>
-      </div>
+      </PageHeader>
+      <PageBody className="flex flex-col gap-4">
+        <p className="text-sm text-ink-300">
+          Connections give Jarvis tools from other apps through MCP. New tools ask before acting
+          until you mark read-only ones as “Run automatically”.
+        </p>
+        {adding && (
+          <AddConnection
+            existing={servers.map((s) => s.name)}
+            onDone={() => (setAdding(false), load())}
+          />
+        )}
+        {servers.length === 0 && !adding && (
+          <p className="text-ink-500">No connections yet. Add the browser first.</p>
+        )}
+        <ul className="flex flex-col gap-3">
+          {servers.map((s) => (
+            <ServerCard key={s.id} s={s} onChange={load} />
+          ))}
+        </ul>
+      </PageBody>
     </div>
   );
 }

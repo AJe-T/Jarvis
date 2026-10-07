@@ -34,7 +34,7 @@ export function MiniOrb(): React.JSX.Element {
     >
       {caption && (
         <p
-          className="fade-in line-clamp-2 max-w-[200px] rounded-lg border border-glass-border-strong bg-solid-float/90 px-3 py-2 text-sm text-ink-100 shadow-float"
+          className="fade-in line-clamp-2 max-w-[200px] rounded-lg border border-line-strong bg-surface-1 px-3 py-2 text-sm text-ink-100 shadow-pop"
           aria-live="polite"
         >
           {caption}
@@ -45,8 +45,8 @@ export function MiniOrb(): React.JSX.Element {
         aria-label="Open Jarvis"
         title="Open Jarvis (drag the edge to move)"
         onClick={() => void call('app:setMiniMode', { on: false })}
-        // §5.5: a small glass halo. A transparent window cannot blur the desktop, so the halo is tinted, not blurred.
-        className="rounded-pill border border-glass-border-strong bg-solid-float/75 p-1 shadow-[inset_0_1px_0_var(--glass-highlight),var(--shadow-float)] transition-transform duration-200 motion-safe:hover:scale-[1.03]"
+        // §5.4: the orb on a small solid disc.
+        className="rounded-pill border border-line-strong bg-surface-1 p-1.5 shadow-pop"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         <Orb state={state} level={level} size="md" />

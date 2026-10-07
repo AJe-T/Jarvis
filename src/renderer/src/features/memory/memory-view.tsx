@@ -54,10 +54,9 @@ function TreeNode({
           aria-current={selected === entry.path ? 'true' : undefined}
           className={clsx(
             'flex min-h-8 w-full items-center gap-1.5 rounded-sm pr-2 text-left text-sm transition-colors duration-[160ms]',
-            // §6.9: selected note = violet tint + 2px violet edge.
             selected === entry.path
-              ? 'bg-glass-selected text-ink-100 shadow-[inset_2px_0_0_var(--accent-500)]'
-              : 'text-ink-300 hover:bg-glass-hover hover:text-ink-100',
+              ? 'bg-selected font-medium text-ink-100'
+              : 'text-ink-300 hover:bg-hover hover:text-ink-100',
           )}
           style={{ paddingLeft: 8 + depth * 14 }}
         >
@@ -73,7 +72,7 @@ function TreeNode({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="flex min-h-8 w-full items-center gap-1.5 rounded-sm pr-2 text-left text-sm text-ink-100 hover:bg-glass-hover"
+        className="flex min-h-8 w-full items-center gap-1.5 rounded-sm pr-2 text-left text-sm text-ink-100 hover:bg-hover"
         style={{ paddingLeft: 8 + depth * 14 }}
       >
         {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
@@ -141,13 +140,13 @@ export function MemoryView(): React.JSX.Element {
   const { meta, body } = note ? splitFrontmatter(note) : { meta: '', body: '' };
 
   return (
-    <div className="flex min-w-0 flex-1 gap-2 p-2">
+    <div className="flex min-w-0 flex-1">
       <aside
         aria-label="Memory notes"
-        className="glass-inset flex w-56 shrink-0 flex-col overflow-hidden rounded-lg md:w-72"
+        className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-line-subtle md:w-64"
       >
-        <div className="flex h-14 items-center gap-2 px-3">
-          <h1 className="text-lg font-semibold">Memory</h1>
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle pr-2 pl-4">
+          <h1 className="text-ui font-semibold text-ink-100">Memory</h1>
           <Button
             variant="ghost"
             className="ml-auto"
@@ -157,7 +156,7 @@ export function MemoryView(): React.JSX.Element {
           </Button>
         </div>
         <form
-          className="relative px-3 pb-2"
+          className="relative p-3"
           role="search"
           onSubmit={(e) => {
             e.preventDefault();
@@ -165,7 +164,7 @@ export function MemoryView(): React.JSX.Element {
             else setHits(null);
           }}
         >
-          <Search size={14} aria-hidden className="absolute top-3 left-5.5 text-reactor-500/70" />
+          <Search size={14} aria-hidden className="absolute top-[23px] left-5.5 text-icon-rest" />
           <TextInput
             aria-label="Search memory"
             placeholder="Search memory"
@@ -174,7 +173,7 @@ export function MemoryView(): React.JSX.Element {
             className="w-full pl-7 text-sm"
           />
         </form>
-        <div className="flex-1 overflow-y-auto px-1 pb-3">
+        <div className="flex-1 overflow-y-auto px-2 pb-3">
           {hits ? (
             <ul aria-label="Search results">
               {hits.length === 0 && <li className="px-3 py-2 text-sm text-ink-500">No matches.</li>}
@@ -183,7 +182,7 @@ export function MemoryView(): React.JSX.Element {
                   <button
                     type="button"
                     onClick={() => setSelected(h.vaultPath)}
-                    className="w-full rounded-sm px-3 py-2 text-left transition-colors duration-[160ms] hover:bg-glass-hover"
+                    className="w-full rounded-sm px-3 py-2 text-left transition-colors duration-[160ms] hover:bg-hover"
                   >
                     <span className="block text-sm text-ink-100">{h.title}</span>
                     <span className="block truncate text-xs text-ink-500">{h.snippet}</span>
@@ -205,13 +204,10 @@ export function MemoryView(): React.JSX.Element {
         <ReviewQueue />
       </aside>
 
-      <section
-        className="glass-raised flex min-w-0 flex-1 flex-col overflow-hidden"
-        aria-label="Note"
-      >
+      <section className="flex min-w-0 flex-1 flex-col" aria-label="Note">
         {selected && note !== null ? (
           <>
-            <header className="flex h-14 shrink-0 items-center gap-2 border-b border-glass-border px-6">
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle px-4 md:px-6">
               <h2 className="truncate text-lg font-semibold">
                 {selected.replace(/^Memory\//, '').replace(/\.md$/, '')}
               </h2>
@@ -224,10 +220,10 @@ export function MemoryView(): React.JSX.Element {
                 </Button>
               </div>
             </header>
-            <div key={selected} className="fade-in flex-1 overflow-y-auto px-6 py-7 md:px-10">
-              <div className="mx-auto max-w-[72ch]">
+            <div key={selected} className="fade-in flex-1 overflow-y-auto px-4 md:px-6">
+              <div className="mx-auto max-w-3xl py-6">
                 {meta && (
-                  <pre className="mb-6 overflow-x-auto rounded-md border border-glass-border bg-glass-inset px-4 py-3 font-code text-xs leading-5 text-ink-500">
+                  <pre className="mb-6 overflow-x-auto rounded-md bg-surface-2 px-4 py-3 font-code text-xs leading-5 text-ink-500">
                     {meta}
                   </pre>
                 )}

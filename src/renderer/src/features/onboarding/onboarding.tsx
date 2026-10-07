@@ -15,7 +15,7 @@ import { MicCheck } from './mic-check';
 const STEPS = ['Welcome', 'Brain', 'Memory vault', 'Voice', 'Safety'] as const;
 
 function Heading({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <h1 className="font-display text-2xl font-semibold text-ink-100">{children}</h1>;
+  return <h1 className="text-2xl font-semibold text-ink-100">{children}</h1>;
 }
 
 /** App-flow.md §3: five steps, each one screen. */
@@ -75,7 +75,7 @@ export function Onboarding(): React.JSX.Element {
     Boolean(anthropic?.set);
 
   return (
-    <main className="relative z-10 flex h-full flex-col items-center overflow-y-auto px-3 py-10 md:px-6">
+    <main className="flex h-full flex-col items-center overflow-y-auto bg-app px-4 py-10 md:px-6">
       <ol
         className="mb-8 flex flex-wrap items-center justify-center gap-2"
         aria-label="Setup steps"
@@ -90,10 +90,10 @@ export function Onboarding(): React.JSX.Element {
               className={clsx(
                 'flex size-7 items-center justify-center rounded-pill border text-xs',
                 i < step
-                  ? 'border-ok-400 text-ok-400'
+                  ? 'border-accent-600 bg-accent-600 text-ink-on-accent'
                   : i === step
                     ? 'border-accent-500 text-accent-300'
-                    : 'border-glass-border text-ink-500',
+                    : 'border-line text-ink-500',
               )}
             >
               {i < step ? <Check size={14} aria-hidden /> : i + 1}
@@ -101,14 +101,14 @@ export function Onboarding(): React.JSX.Element {
             <span className={clsx('text-sm', i === step ? 'text-ink-100' : 'text-ink-500')}>
               {s}
             </span>
-            {i < STEPS.length - 1 && <span className="mx-1 h-px w-6 bg-glass-border" aria-hidden />}
+            {i < STEPS.length - 1 && <span className="mx-1 h-px w-6 bg-line" aria-hidden />}
           </li>
         ))}
       </ol>
 
       <section
         key={step}
-        className="glass-float view-enter flex w-full max-w-[560px] flex-col gap-5 p-6 md:p-8"
+        className="card view-enter flex w-full max-w-[560px] flex-col gap-5 p-6 md:p-8"
       >
         {step === 0 && (
           <>
@@ -264,7 +264,7 @@ export function Onboarding(): React.JSX.Element {
           <>
             <Heading>How I keep things safe</Heading>
             <dl className="grid gap-3 text-sm">
-              <div className="rounded-md border border-glass-border p-3">
+              <div className="rounded-md border border-line p-3">
                 <dt className="font-semibold text-ink-100">Safe — runs automatically</dt>
                 <dd className="text-ink-300">
                   Opening apps and websites, volume, reading files in your folders, the time.
@@ -294,11 +294,8 @@ export function Onboarding(): React.JSX.Element {
                 ))}
               </ul>
             </div>
-            <p className="rounded-md bg-glass-inset p-3 text-sm text-ink-100">
-              Press{' '}
-              <kbd className="rounded-sm border border-glass-border px-1.5 font-code">
-                {killKey}
-              </kbd>{' '}
+            <p className="rounded-md bg-surface-2 p-3 text-sm text-ink-100">
+              Press <kbd className="rounded-sm border border-line px-1.5 font-code">{killKey}</kbd>{' '}
               at any time to stop everything I&apos;m doing.
             </p>
           </>

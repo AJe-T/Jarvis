@@ -1,0 +1,81 @@
+/* Design-system.md §2 — surface recipes. Solid, bordered, no blur. */
+
+/* Main content panel and the activity panel */
+.panel {
+  background: var(--bg-main);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+}
+
+/* Cards and grouped sections inside a panel */
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+/* Small bordered fills: chips, list cards, attachments */
+.inset {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.inset:where(:hover, [data-hover]) {
+  background: var(--selected);
+}
+
+/* Things that float above the page: toasts, menus, sheets */
+.popover {
+  background: var(--surface-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+
+/* Confirmation dialogs */
+.dialog {
+  background: var(--surface-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-pop);
+}
+.scrim {
+  background: var(--scrim);
+}
+
+/* Text fields: blue edge + soft ring instead of the outline */
+:where(
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
+  select,
+  textarea
+):focus-visible {
+  outline: none;
+  border-color: var(--accent-500);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+/* Message composer */
+.composer {
+  background: var(--surface-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  transition:
+    border-color var(--dur-base) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard);
+}
+.composer:focus-within {
+  border-color: var(--accent-500);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.composer textarea:focus-visible {
+  box-shadow: none;
+}
+
+/* Primary action */
+.btn-accent {
+  background: var(--accent-600);
+  color: var(--ink-on-accent);
+}
+.btn-accent:hover:not(:disabled) {
+  filter: brightness(1.1);
+}

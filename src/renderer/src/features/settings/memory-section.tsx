@@ -44,7 +44,7 @@ export function MemorySection(): React.JSX.Element {
         title="Memory vault"
         description="Jarvis's long-term memory is an Obsidian vault of Markdown notes. You can edit them; Jarvis notices within seconds."
       >
-        <p className="rounded-sm bg-glass-inset px-3 py-2 font-code text-sm break-all">{vault}</p>
+        <p className="rounded-sm bg-surface-2 px-3 py-2 font-code text-sm break-all">{vault}</p>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => void call('memory:openInObsidian', {})}>Open in Obsidian</Button>
           <Button onClick={() => void changeVault()}>Choose another folder…</Button>

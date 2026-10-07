@@ -41,7 +41,7 @@ export function UsagePanel(): React.JSX.Element {
       </div>
 
       {summary && (
-        <section aria-label="Spend" className="glass-raised p-5">
+        <section aria-label="Spend" className="card p-5">
           <p className="text-sm text-ink-300">
             {range === 'day' ? 'API spend today' : 'API spend this month'}
           </p>
@@ -53,7 +53,7 @@ export function UsagePanel(): React.JSX.Element {
           </p>
           {summary.budget > 0 && (
             <div
-              className="mt-3 h-2 rounded-pill bg-glass-hover"
+              className="mt-3 h-2 rounded-pill bg-hover"
               role="meter"
               aria-valuenow={Math.round(pct)}
               aria-valuemin={0}
@@ -61,7 +61,7 @@ export function UsagePanel(): React.JSX.Element {
               aria-label="Budget used"
             >
               <div
-                className={`h-2 rounded-pill ${pct >= 90 ? 'bg-alarm-fill' : pct >= 70 ? 'bg-lamp-400' : 'bg-reactor-500'}`}
+                className={`h-2 rounded-pill ${pct >= 90 ? 'bg-alarm-fill' : pct >= 70 ? 'bg-lamp-400' : 'bg-accent-300'}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -98,14 +98,14 @@ export function UsagePanel(): React.JSX.Element {
             </tr>
           )}
           {rows.map((r) => (
-            <tr key={r.key} className="border-t border-glass-border">
+            <tr key={r.key} className="border-t border-line">
               <td className="py-1.5 pr-3 text-ink-100">{r.key}</td>
               <td className="py-1.5 pr-3 text-ink-300">{r.calls}</td>
               <td className="py-1.5 pr-3 text-ink-300">{r.tokens.toLocaleString()}</td>
               <td className="py-1.5">
                 <div className="flex items-center gap-2">
                   <div
-                    className="h-1.5 rounded-pill bg-reactor-500"
+                    className="h-1.5 rounded-pill bg-accent-300"
                     style={{ width: `${(r.costUsd / max) * 120}px` }}
                     aria-hidden
                   />
@@ -132,7 +132,7 @@ function Select<T extends string>(p: {
       <select
         value={p.value}
         onChange={(e) => p.onChange(e.target.value as T)}
-        className="min-h-8 rounded-md border border-glass-border bg-glass-inset px-2 text-ink-100"
+        className="min-h-8 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
       >
         {(Object.keys(p.options) as T[]).map((k) => (
           <option key={k} value={k}>

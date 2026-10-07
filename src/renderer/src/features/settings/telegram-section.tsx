@@ -39,7 +39,7 @@ export function TelegramSection(): React.JSX.Element {
       {status && (
         <div
           role="status"
-          className="max-w-xl rounded-md border border-glass-border p-3 text-sm text-ink-100"
+          className="max-w-xl rounded-md border border-line p-3 text-sm text-ink-100"
         >
           {status.error ? (
             <p className="text-alarm-500">{status.error}</p>
@@ -50,7 +50,7 @@ export function TelegramSection(): React.JSX.Element {
           ) : (
             <p>
               Connected as @{status.botName}. Send this code to your bot to pair:{' '}
-              <span className="font-code text-lg text-reactor-500">{status.pairingCode}</span>
+              <span className="font-code text-lg text-accent-300">{status.pairingCode}</span>
             </p>
           )}
         </div>

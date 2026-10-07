@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import type { Res } from '@shared/ipc-contract';
 import { ToolCallCard } from '../../components/jarvis/tool-call-card';
 import { Button } from '../../components/ui/button';
+import { PageBody, PageHeader } from '../../components/ui/page';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
 import { UsagePanel } from './usage-panel';
@@ -34,9 +35,33 @@ export function ActivityView(): React.JSX.Element {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-glass-border-subtle px-6">
-        <h1 className="text-xl font-semibold text-ink-100">Activity</h1>
-        <div role="tablist" className="flex gap-1">
+      <PageHeader title="Activity">
+        <Button variant="ghost" onClick={() => void load()}>
+          <RefreshCw size={14} aria-hidden /> Refresh
+        </Button>
+        {tab === 'audit' && (
+          <>
+            <Button onClick={() => void call('audit:verify', {}).then(setVerify)}>
+              <ShieldCheck size={14} aria-hidden /> Verify chain
+            </Button>
+            <Button
+              onClick={() =>
+                void call('audit:export', {})
+                  .then(
+                    (r) =>
+                      r.path && toast({ level: 'info', message: `Audit log saved to ${r.path}` }),
+                  )
+                  .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
+              }
+            >
+              Export JSON
+            </Button>
+          </>
+        )}
+      </PageHeader>
+
+      <PageBody className="flex flex-col gap-4">
+        <div role="tablist" className="flex w-fit gap-1 rounded-md bg-surface-2 p-1">
           {(['actions', 'audit', 'usage'] as const).map((t) => (
             <button
               key={t}
@@ -45,59 +70,35 @@ export function ActivityView(): React.JSX.Element {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={clsx(
-                'min-h-8 rounded-pill px-3 text-sm',
-                tab === t ? 'bg-glass-selected text-ink-100' : 'text-ink-300 hover:text-ink-100',
+                'h-7 rounded-sm px-3 text-sm transition-colors duration-[120ms]',
+                tab === t
+                  ? 'bg-surface-1 font-medium text-ink-100 shadow-sm'
+                  : 'text-ink-300 hover:text-ink-100',
               )}
             >
               {TAB_LABEL[t]}
             </button>
           ))}
         </div>
-        <div className="ml-auto flex gap-2">
-          <Button variant="ghost" onClick={() => void load()}>
-            <RefreshCw size={14} aria-hidden /> Refresh
-          </Button>
-          {tab === 'audit' && (
-            <>
-              <Button onClick={() => void call('audit:verify', {}).then(setVerify)}>
-                <ShieldCheck size={14} aria-hidden /> Verify chain
-              </Button>
-              <Button
-                onClick={() =>
-                  void call('audit:export', {})
-                    .then(
-                      (r) =>
-                        r.path && toast({ level: 'info', message: `Audit log saved to ${r.path}` }),
-                    )
-                    .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
-                }
-              >
-                Export JSON
-              </Button>
-            </>
-          )}
-        </div>
-      </header>
 
-      {tab === 'audit' && verify && (
-        <p
-          role="status"
-          className={clsx(
-            'mx-6 mt-3 rounded-sm border p-2 text-sm',
-            verify.ok ? 'border-ok-400 text-ok-400' : 'border-alarm-500 text-alarm-500',
-          )}
-        >
-          {verify.ok
-            ? `✓ Chain intact (${verify.checked} entries).`
-            : `✗ Chain broken at entry ${verify.brokenAt ?? '?'}; the log was modified outside Jarvis.`}
-        </p>
-      )}
+        {tab === 'audit' && verify && (
+          <p
+            role="status"
+            className={clsx(
+              'rounded-md p-3 text-sm',
+              verify.ok ? 'bg-surface-2 text-ok-400' : 'bg-alarm-tint text-alarm-500',
+            )}
+          >
+            {verify.ok
+              ? `✓ Chain intact (${verify.checked} entries).`
+              : `✗ Chain broken at entry ${verify.brokenAt ?? '?'}; the log was modified outside Jarvis.`}
+          </p>
+        )}
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
         {tab === 'usage' ? (
           <UsagePanel />
         ) : tab === 'actions' ? (
-          <ol className="mx-auto flex max-w-3xl flex-col gap-1.5">
+          <ol className="flex flex-col gap-1.5">
             {calls.length === 0 && <li className="text-sm text-ink-500">No actions yet.</li>}
             {calls.map((c) => (
               <li key={c.id} className="flex items-start gap-3">
@@ -131,7 +132,7 @@ export function ActivityView(): React.JSX.Element {
             </thead>
             <tbody>
               {audit.map((a) => (
-                <tr key={a.seq} className="border-t border-glass-border align-top">
+                <tr key={a.seq} className="border-t border-line align-top">
                   <td className="py-1.5 pr-3 text-ink-500">{a.seq}</td>
                   <td className="py-1.5 pr-3 whitespace-nowrap text-ink-300">
                     {new Date(a.ts).toLocaleString()}
@@ -144,7 +145,7 @@ export function ActivityView(): React.JSX.Element {
             </tbody>
           </table>
         )}
-      </div>
+      </PageBody>
     </div>
   );
 }

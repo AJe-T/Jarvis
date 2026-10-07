@@ -56,16 +56,6 @@ export function GeneralSection(): React.JSX.Element {
           { value: 'light', label: 'Light' },
         ]}
       />
-      <SettingSelect
-        k="appearance.transparency"
-        label="Transparency"
-        options={[
-          { value: 'auto', label: 'Auto' },
-          { value: 'full', label: 'Full glass' },
-          { value: 'reduced', label: 'Reduced (no blur)' },
-          { value: 'solid', label: 'Solid' },
-        ]}
-      />
     </Section>
   );
 }

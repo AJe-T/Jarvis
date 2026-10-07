@@ -140,15 +140,9 @@ export const SETTINGS = {
   'app.closeToTray': { schema: z.boolean(), default: true },
   'app.startWithWindows': { schema: z.boolean(), default: false },
   'app.startHidden': { schema: z.boolean(), default: false },
-  // Design-system.md §7: auto = solid when Windows transparency effects are off, reduced on battery.
-  // Default is full glass: many PCs have Windows transparency off, and auto then showed no glass at all.
-  'appearance.transparency': {
-    schema: z.enum(['auto', 'full', 'reduced', 'solid']),
-    default: 'full' as 'auto' | 'full' | 'reduced' | 'solid',
-  },
-  /** Dark or light glass; system follows Windows (Settings → Personalisation → Colours). */
   /** Hybrid keyword + meaning memory search with an on-device model (isair/jarvis idea). */
   'memory.semanticSearch': { schema: z.boolean(), default: true },
+  /** Dark or light; system follows Windows (Settings → Personalisation → Colours). */
   'appearance.theme': {
     schema: z.enum(['system', 'dark', 'light']),
     default: 'system' as 'system' | 'dark' | 'light',

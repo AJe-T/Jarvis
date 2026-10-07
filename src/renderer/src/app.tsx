@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { AppBackdrop } from './components/jarvis/app-backdrop';
+import { ThemeSync } from './components/jarvis/theme-sync';
 import { Rail } from './components/jarvis/rail';
 import { StatusBar } from './components/jarvis/status-bar';
 import { ConfirmModalHost } from './components/ui/confirm-modal';
@@ -31,7 +31,7 @@ function DbBanner(): React.JSX.Element | null {
   return (
     <div
       role="alert"
-      className="flex items-center gap-3 rounded-md bg-alarm-fill px-4 py-2 text-sm text-ink-on-alarm"
+      className="mx-2 mt-2 flex items-center gap-3 rounded-md bg-alarm-fill px-4 py-2 text-sm text-ink-on-alarm"
     >
       Jarvis's database failed its integrity check. Some history may be missing.
       <button type="button" className="underline" onClick={() => go('settings', 'data')}>
@@ -41,7 +41,7 @@ function DbBanner(): React.JSX.Element | null {
   );
 }
 
-/** §5.1: floating glass islands over the atmosphere: control rail, main surface, console, status. */
+/** §5.1: sidebar and status bar sit on the window colour; content and activity are bordered panels. */
 function Shell(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const activityOpen = useUiStore((s) => s.activityOpen);
@@ -59,13 +59,13 @@ function Shell(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawer, toggleActivity]);
   return (
-    <div className="relative z-10 flex h-full flex-col gap-[var(--shell-gap)] p-[var(--shell-gap)]">
+    <div className="flex h-full flex-col bg-app">
       <DbBanner />
-      <div className="flex min-h-0 flex-1 gap-[var(--shell-gap)]">
+      <div className="flex min-h-0 flex-1 gap-[var(--shell-gap)] p-[var(--shell-gap)] pl-0">
         <Rail />
-        <main className="glass-pane flex min-w-0 flex-1 overflow-hidden">
+        <main className="panel flex min-w-0 flex-1 overflow-hidden">
           {Current ? (
-            // §8: each view rises in (opacity + 6px), never slides sideways.
+            // §8: views fade in; nothing slides.
             <div key={view} className="view-enter flex min-w-0 flex-1">
               <Current />
             </div>
@@ -76,7 +76,7 @@ function Shell(): React.JSX.Element {
         {drawer && (
           // Below lg the drawer is an overlay sheet; the scrim closes it.
           <div
-            className="glass-scrim fixed inset-0 z-20 lg:hidden"
+            className="scrim fixed inset-0 z-20 lg:hidden"
             onClick={toggleActivity}
             aria-hidden
           />
@@ -101,7 +101,7 @@ export function App(): React.JSX.Element {
 
   return (
     <Tooltip.Provider>
-      <AppBackdrop />
+      <ThemeSync />
       {!loaded ? null : onboarded ? <Shell /> : <Onboarding />}
       {APP_OVERLAYS.map((Overlay, i) => (
         <Overlay key={i} />
