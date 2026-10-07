@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Orb } from '../../components/jarvis/orb';
+import { LiveOrb } from '../../components/jarvis/orb';
 import { call } from '../../lib/api';
-import { useAssistantStore } from '../../stores/assistant-store';
 import { useChatStore } from '../../stores/chat-store';
 
 function greeting(d = new Date()): string {
@@ -18,8 +17,6 @@ const FALLBACK_CHIPS = [
 
 /** Design-system.md §5.2: brand mesh behind the orb, one line, three suggestion cards from routines. */
 export function EmptyState(): React.JSX.Element {
-  const state = useAssistantStore((s) => s.state);
-  const level = useAssistantStore((s) => (s.state === 'SPEAKING' ? s.outLevel : s.micLevel));
   const send = useChatStore((s) => s.send);
   const [chips, setChips] = useState<string[]>(FALLBACK_CHIPS);
 
@@ -42,7 +39,7 @@ export function EmptyState(): React.JSX.Element {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6">
       <div className="mesh flex w-full max-w-3xl flex-col items-center gap-5">
-        <Orb state={state} level={level} size="lg" />
+        <LiveOrb size="lg" />
         <h1 className="text-center text-hero font-semibold text-ink-100">{greeting()}</h1>
         {/* suggestions as an even grid of left-aligned cards */}
         <div className="mt-3 grid w-full gap-2 md:grid-cols-3">

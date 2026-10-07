@@ -76,7 +76,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `write_clipboard` | SAFE | Put text on the clipboard so sir can paste it. |
 | `write_text_file` | CONFIRM (destructive) | Create a text file, or overwrite one when overwrite is true, in the allowed folders. Requires confirmation. Max 1 MB. |
 
-## Settings (59)
+## Settings (60)
 
 Stored in the local database; changed in Settings. Secrets are separate (below).
 
@@ -140,6 +140,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `app.startHidden` | boolean | `false` |  |
 | `memory.semanticSearch` | boolean | `true` |  |
 | `appearance.theme` | `system` / `dark` / `light` | `system` |  |
+| `appearance.orbMusic` | boolean | `true` |  |
 | `onboarding.complete` | boolean | `false` |  |
 
 ## Secrets
@@ -149,7 +150,7 @@ Encrypted with Windows DPAPI (Electron safeStorage); the renderer only ever sees
 ## IPC channels
 
 - **Invoke** (renderer → main, request/response, Zod-validated both ways, 77): `chat:send`, `chat:cancel`, `chat:rewind`, `logs:tail`, `conversations:list`, `conversations:get`, `conversations:delete`, `confirm:respond`, `settings:getAll`, `settings:set`, `secrets:set`, `secrets:delete`, `secrets:status`, `secrets:test`, `memory:list`, `memory:read`, `memory:search`, `memory:delete`, `memory:openInObsidian`, `memory:reviewList`, `memory:reviewResolve`, `memory:rebuildIndex`, `mcp:list`, `mcp:add`, `mcp:update`, `mcp:remove`, `mcp:restart`, `voice:setMode`, `voice:mic`, `voice:devices`, `app:killSwitch`, `app:info`, `app:openExternal`, `app:pickFolder`, `app:setMiniMode`, `usage:summary`, `usage:breakdown`, `llm:claudeCodeStatus`, `llm:localModels`, `llm:localTest`, `location:detect`, `telegram:status`, `telegram:restart`, `copilot:capture`, `copilot:analyse`, `copilot:draft`, `copilot:fill`, `telegram:unpair`, `tasks:list`, `tasks:save`, `tasks:delete`, `tasks:runNow`, `skills:list`, `skills:read`, `skills:installFolder`, `skills:installGitHub`, `skills:remove`, `skills:setEnabled`, `dictation:history`, `dictation:clear`, `models:status`, `models:download`, `models:cancel`, `models:delete`, `llm:claudeCodeLogin`, `audit:list`, `audit:verify`, `audit:export`, `activity:list`, `routines:list`, `reminders:list`, `db:backups`, `db:backupNow`, `db:restore`, `onboarding:complete`, `computer:calibrate`, `app:openFolder`
-- **Events** (main → renderer, 22): `assistant:state`, `chat:delta`, `chat:message`, `tool:update`, `confirm:request`, `confirm:resolved`, `voice:level`, `voice:transcript`, `tts:audio`, `tts:stop`, `usage:update`, `models:progress`, `dictation:done`, `tasks:changed`, `copilot:captured`, `telegram:status`, `mcp:status`, `notify`, `conversation:updated`, `memory:changed`, `computer:active`, `nav:open`
+- **Events** (main → renderer, 23): `assistant:state`, `chat:delta`, `chat:message`, `tool:update`, `confirm:request`, `confirm:resolved`, `voice:level`, `music:level`, `voice:transcript`, `tts:audio`, `tts:stop`, `usage:update`, `models:progress`, `dictation:done`, `tasks:changed`, `copilot:captured`, `telegram:status`, `mcp:status`, `notify`, `conversation:updated`, `memory:changed`, `computer:active`, `nav:open`
 - **Send** (renderer → main, fire-and-forget): `tts:playback`, `ui:activeConversation`
 
 ## Database migrations

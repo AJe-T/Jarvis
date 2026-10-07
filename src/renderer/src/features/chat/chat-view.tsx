@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { History, Minimize2, PanelRight, Plus } from 'lucide-react';
-import { Orb, type OrbStep } from '../../components/jarvis/orb';
+import { LiveOrb, type OrbStep } from '../../components/jarvis/orb';
 import { ChatMessage, Markdown, ToolCards } from '../../components/jarvis/chat-message';
 import { Composer } from '../../components/jarvis/composer';
 import { IconButton } from '../../components/ui/button';
@@ -33,7 +33,6 @@ export function ChatView(): React.JSX.Element {
   const newConversation = useChatStore((s) => s.newConversation);
   const state = useAssistantStore((s) => s.state);
   const detail = useAssistantStore((s) => s.detail);
-  const level = useAssistantStore((s) => (s.state === 'SPEAKING' ? s.outLevel : s.micLevel));
   const historyOpen = useUiStore((s) => s.historyOpen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
   const activityOpen = useUiStore((s) => s.activityOpen);
@@ -75,7 +74,7 @@ export function ChatView(): React.JSX.Element {
             style={{ opacity: empty ? 0 : 1 }}
             aria-hidden={empty}
           >
-            <Orb state={state} level={level} size="sm" steps={steps} />
+            <LiveOrb size="sm" steps={steps} />
             <span className="text-sm font-medium text-ink-300">
               {state === 'ERROR' && detail ? detail : STATUS_LINE[state]}
             </span>

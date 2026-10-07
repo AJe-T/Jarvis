@@ -28,6 +28,7 @@ export function startIpcBridge(): Unsubscribe {
       useUiStore.getState().toast({ level: p.level, message: p.message, action: p.action }),
     ),
     on('voice:level', (p) => useAssistantStore.getState().setMicLevel(p.rms)),
+    on('music:level', (p) => useAssistantStore.getState().setMusicLevel(p.rms)),
     on('voice:transcript', (p) => useAssistantStore.getState().setTranscript(p)),
     on('computer:active', (p) => useAssistantStore.getState().setComputerActive(p.active)),
     on('nav:open', (p) => useUiStore.getState().go(p.view, p.section)),

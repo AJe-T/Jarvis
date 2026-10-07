@@ -151,7 +151,7 @@ letter-spaced capitals, tabular figures for numbers.
 
 ### 5.2 Empty state
 
-The brand mesh (`.mesh`) behind the orb (112px) and the greeting in `text-hero`, then up to three
+The brand mesh (`.mesh`) behind the orb (168px) and the greeting in `text-hero`, then up to three
 suggestion cards (`.card`, white with hairline and `shadow-sm`, hover `surface-2`) in an even
 three-column grid as wide as the composer.
 
@@ -174,21 +174,30 @@ never translucent.
 
 ### 6.1 Orb (`components/jarvis/orb.tsx`)
 
-A calm status mark: a blue core with a white centre, a grey track and one state ring.
+Jarvis's energy core, after Sir's reference image: a teal glow, wavy outer rings, a ring of
+bars, a bright inner ring and a slowly turning dotted sphere. Drawn on a canvas every frame
+(`orb-painter.ts`); colours `--orb-1` / `--orb-2` / `--orb-hi` (teal is the one exception to
+"blue for Jarvis", by Sir's choice). The orb is the only teal thing in the app.
+
+**What it follows** (`selectOrbLevel`): Jarvis's voice while `SPEAKING`, Sir's mic while
+`LISTENING`, otherwise music and other sound playing on the PC (Settings → General, on by
+default; see Security.md §7 for the meter). Level drives one `energy` value with a fast attack
+and a slow release, so the bars jump on a beat or a syllable and settle smoothly; the rings
+widen, the glow brightens, the sphere swells and spins faster.
 
 | State | Visual |
 |---|---|
-| `IDLE` | Core breathes slowly; no ring |
-| `LISTENING` | Ring brightens with mic level; core scales 0.94→1.08; a soft ripple |
-| `THINKING` | A short arc turns around the track (1.4 s) |
-| `ACTING` | One segment per tool call: blue done, pale blue running, grey pending, red failed |
-| `AWAITING_CONFIRMATION` | Amber core and ring, gentle breathing |
-| `SPEAKING` | The ring becomes a gentle wave that follows the voice level |
-| `ERROR` | Red, one small shake, then still |
-| `SLEEP` | Grey outline only |
+| `IDLE` | Slow spin; bars and rings move with music if any is playing |
+| `LISTENING` | Bars, rings and glow follow the mic level |
+| `THINKING` | A bright sweep runs round the bar ring; the sphere spins faster |
+| `ACTING` | The bar ring splits into one segment per tool call: teal done, pulsing running, grey pending, red failed |
+| `AWAITING_CONFIRMATION` | Amber |
+| `SPEAKING` | Bars, rings and glow follow Jarvis's voice |
+| `ERROR` | Red, one small shake |
+| `SLEEP` | Grey, dimmed, still |
 
-Sizes `sm` 32 · `md` 88 · `lg` 112. `role="img"`, `aria-label`, debounced live announcement.
-Reduced motion: no rotation, ripple, wave or scaling.
+Sizes `sm` 32 (bars and core only) · `md` 88 · `lg` 168. `role="img"`, `aria-label`,
+debounced live announcement. Reduced motion: drawn once per state change, never moves.
 
 ### 6.2 Composer
 
@@ -285,6 +294,7 @@ next. The butler voice ("sir") appears only in Jarvis's own messages.
 
 | Version | Change |
 |---|---|
+| v6.1 Energy core | Orb redrawn after Sir's reference: teal canvas orb (dotted sphere, bar ring, wavy rings, glow) that follows Jarvis's voice, Sir's mic, or music on the PC; hero orb 168px. |
 | v6.0 Geist | Vercel-style: ink on near-white, `#EBEBEB` hairlines, solid-ink primary (white ink in dark), one blue for focus, links and the orb, develop / preview / ship mesh behind the empty-state hero only, Geist + Geist Mono, stacked small shadows, 6px controls / 8px cards / pill tags, tight negative tracking on display sizes. Dark is the polarity flip on `#0A0A0A`. Focus outline moved to the base layer so field and composer recipes win. |
 | v5.0 Workspace | Notion-style: warm white canvas and grey sidebar, Notion purple primary, link blue for links, pastel tags and suggestion cards, labelled sidebar from 1200px, underline and pill tabs, 8px buttons / 12px cards, level-4 shadows on floats only. Dark follows Notion's app dark mode. |
 | v4.0 Graphite | Replaced the glass themes: neutral graphite surfaces, one blue accent, red for danger; solid bordered panels; one page grid (48px header, 768px column) for every view; Outfit only (JetBrains Mono for code); simpler orb; Transparency setting removed. |

@@ -6,7 +6,8 @@ import { call } from '../../lib/api';
 /** Design-system.md §4.3 mini mode: orb only, drag to move, click to expand, caption while replying. */
 export function MiniOrb(): React.JSX.Element {
   const [state, setState] = useState<AssistantState>('IDLE');
-  const [level, setLevel] = useState(0);
+  const [mic, setMic] = useState(0);
+  const [music, setMusic] = useState(0);
   const [caption, setCaption] = useState('');
 
   useEffect(() => {
@@ -16,7 +17,8 @@ export function MiniOrb(): React.JSX.Element {
         setState(p.state);
         if (p.state === 'IDLE' || p.state === 'LISTENING') setTimeout(() => setCaption(''), 4000);
       }),
-      on('voice:level', (p) => setLevel(p.rms)),
+      on('voice:level', (p) => setMic(p.rms)),
+      on('music:level', (p) => setMusic(p.rms)),
       on('chat:delta', (p) =>
         setCaption((c) => (c + p.textDelta).replace(/<\/?spoken>/g, '').slice(-140)),
       ),
@@ -49,7 +51,7 @@ export function MiniOrb(): React.JSX.Element {
         className="rounded-pill border border-line-strong bg-surface-1 p-1.5 shadow-pop"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <Orb state={state} level={level} size="md" />
+        <Orb state={state} level={state === 'LISTENING' ? mic : music} size="md" />
       </button>
     </div>
   );

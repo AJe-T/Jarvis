@@ -147,6 +147,8 @@ export const SETTINGS = {
     schema: z.enum(['system', 'dark', 'light']),
     default: 'system' as 'system' | 'dark' | 'light',
   },
+  /** The orb moves to music and other sound playing on this PC (levels only, never recorded). */
+  'appearance.orbMusic': { schema: z.boolean(), default: true },
   'onboarding.complete': { schema: z.boolean(), default: false },
 } as const;
 

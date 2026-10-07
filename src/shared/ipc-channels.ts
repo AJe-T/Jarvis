@@ -90,6 +90,7 @@ export const EVENT_CHANNELS = [
   'confirm:request',
   'confirm:resolved',
   'voice:level',
+  'music:level',
   'voice:transcript',
   'tts:audio',
   'tts:stop',

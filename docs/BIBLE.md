@@ -213,7 +213,7 @@ Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem) in the
   - Near-white sidebar with labels (icons only on narrow windows), white page, thin `#EBEBEB` hairlines, no gaps; cards carry a faint stacked shadow.
   - Solid black ink for the main button (white in dark), one blue for focus, links and Jarvis; status as soft pill tags (amber = needs you, red = blocked, green = done). A blurred blue-violet-pink-amber mesh sits behind the orb on the empty chat, and nowhere else.
   - Every screen has the same 48 px header and the same centred column, so things line up across the app.
-  - The orb is a calm status mark: it breathes when idle, a ring reacts to your voice, an arc turns while thinking, one segment per tool while acting, orange when it needs you, a wave while speaking.
+  - The orb is a teal energy core (dotted sphere, ring of bars, wavy rings). It moves with Jarvis's voice when he speaks, your voice when he listens, and music playing on the PC the rest of the time (Settings → General → "The orb moves to music", on by default; only the loudness is read, nothing is recorded). It sweeps while thinking, splits into one segment per tool while acting, turns amber when it needs you and red on errors.
   - Font: Geist everywhere, tight tracking on headings; Geist Mono for code and paths. Bundled, works offline.
   - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px Activity opens as a sheet (Esc closes it).
   - **Settings → General → Theme:** Match Windows (default), Light, Dark (near-black, Vercel-style).
@@ -425,6 +425,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.7 | "Graphite" redesign: solid neutral surfaces, one blue accent, consistent page grid, simpler orb; Transparency setting removed |
 | 1.8 | "Workspace" redesign modelled on Notion: warm canvas and sidebar, purple primary, link blue, pastel tags and suggestion cards, labelled sidebar |
 | 1.9 | "Geist" redesign modelled on Vercel: ink-on-white, solid-ink primary, one blue, brand mesh behind the empty-state hero, Geist + Geist Mono, stacked shadows, pill tags |
+| 1.10 | Teal energy-core orb that follows voice, mic and music playing on the PC (loopback meter in its own sandboxed session) |
 
 ---
 

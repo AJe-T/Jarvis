@@ -144,14 +144,14 @@ describe('Orb (Design-system.md §5.1)', () => {
     expect(img.getAttribute('aria-label')).toMatch(/^Jarvis is /);
   });
 
-  it('turns off animation classes under reduced motion', () => {
+  it('stands still under reduced motion', () => {
     window.matchMedia = ((q: string) => ({
       matches: true,
       media: q,
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
     })) as never;
-    const { container } = render(<Orb state="THINKING" size="sm" />);
-    expect(container.querySelector('.orb-orbit')).toBeNull();
+    render(<Orb state="THINKING" size="sm" />);
+    expect(screen.getByRole('img').getAttribute('data-motion')).toBe('off');
   });
 });

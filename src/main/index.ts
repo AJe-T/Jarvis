@@ -43,6 +43,7 @@ import { createFakeOs, createWindowsOs } from './tools/native/os';
 import { hardenSession } from './windows/hardening';
 import { registerHotkeys, unregisterHotkeys } from './windows/hotkeys';
 import { createMainWindow } from './windows/main-window';
+import { createMusicMeter } from './windows/music-meter';
 import { createTray, iconPath } from './windows/tray';
 
 const isTest = process.env['JARVIS_TEST'] === '1';
@@ -357,6 +358,17 @@ async function boot(): Promise<void> {
     !isTest && (process.argv.includes('--hidden') || services.settings.get('app.startHidden'));
   mainWindow = createMainWindow({ startHidden: hidden });
   addEventTarget(mainWindow);
+  // §6.1: the orb follows music on the PC (off in tests; stops with the main window so the app can quit).
+  const meter = createMusicMeter((rms) => emit('music:level', { rms }));
+  const applyMeter = (): void => {
+    if (!isTest && services.settings.get('appearance.orbMusic')) meter.start();
+    else meter.stop();
+  };
+  applyMeter();
+  mainWindow.on('closed', () => meter.stop());
+  services.settings.onChange((key) => {
+    if (key === 'appearance.orbMusic') applyMeter();
+  });
   wireWindowBehaviour(services);
   wireHotkeysAndTray(services);
   services.scheduler.start();

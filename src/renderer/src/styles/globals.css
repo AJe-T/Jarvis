@@ -132,36 +132,8 @@ body {
 }
 
 /* ── Orb (§6.1) ─────────────────────────────────────────────── */
-.orb-part {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-}
-.orb-breathe {
-  animation: orb-breathe 4.5s ease-in-out infinite;
-}
-.orb-orbit {
-  animation: spin 1.4s linear infinite;
-}
-.orb-await {
-  animation: orb-await 2.4s ease-in-out infinite;
-}
-.orb-ripple {
-  animation: orb-ripple 1.8s ease-out infinite;
-}
 .orb-error {
   animation: orb-error 400ms ease-out 1;
-}
-@keyframes orb-breathe {
-  50% {
-    transform: scale(1.03);
-    opacity: 0.9;
-  }
-}
-@keyframes orb-await {
-  50% {
-    transform: scale(1.04);
-    opacity: 0.8;
-  }
 }
 @keyframes orb-ripple {
   from {

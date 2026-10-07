@@ -56,6 +56,10 @@ export function GeneralSection(): React.JSX.Element {
           { value: 'light', label: 'Light' },
         ]}
       />
+      <SettingSwitch
+        k="appearance.orbMusic"
+        label="The orb moves to music playing on this PC (only the loudness is read; nothing is recorded)"
+      />
     </Section>
   );
 }

@@ -442,6 +442,7 @@ export const EVENTS = {
   }),
   'confirm:resolved': z.object({ requestId: z.string(), decision: z.enum(['approve', 'deny']) }),
   'voice:level': z.object({ rms: z.number() }),
+  'music:level': z.object({ rms: z.number() }),
   'voice:transcript': z.object({ text: z.string(), isFinal: z.boolean() }),
   'tts:audio': z.object({
     utteranceId: z.string(),

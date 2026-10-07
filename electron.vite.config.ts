@@ -20,10 +20,27 @@ export default defineConfig({
   },
   preload: {
     resolve: { alias },
-    build: { externalizeDeps: true },
+    build: {
+      externalizeDeps: true,
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/preload/index.ts'),
+          meter: resolve(__dirname, 'src/preload/meter.ts'),
+        },
+      },
+    },
   },
   renderer: {
     resolve: { alias },
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        // meter.html: the hidden music meter (windows/music-meter.ts)
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          meter: resolve(__dirname, 'src/renderer/meter.html'),
+        },
+      },
+    },
   },
 });

@@ -185,7 +185,7 @@ evaluate(tool, input, context) → { tier, reason, humanSummary, destructive }
 - [ ] Strict CSP: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'`.
 - [ ] `webContents.setWindowOpenHandler(() => ({ action: 'deny' }))`; external links open via `shell.openExternal` after URL validation (http/https only).
 - [ ] Block navigation: `will-navigate` → prevent unless app URL.
-- [ ] `session.setPermissionRequestHandler` denies everything (mic is captured in main, not renderer).
+- [ ] `session.setPermissionRequestHandler` denies everything on the app session (mic is captured in main, not renderer). The one exception is the separate in-memory `music-meter` session (`windows/music-meter.ts`): a hidden, sandboxed window with a two-send preload, whose only page (`meter.html`, `connect-src none`) may use `getDisplayMedia` for Windows loopback audio. Its screen track is stopped at once; only a loudness number reaches main (Zod-checked, sender-checked). Off with Settings → General → "The orb moves to music".
 - [ ] Load only local files (`file://` app bundle / dev server in dev); never load remote content in app windows.
 - [ ] Markdown rendering with `react-markdown` (no raw HTML), links sanitized.
 - [x] Electron fuses: disable `RunAsNode`, `EnableNodeOptionsEnvironmentVariable`, `EnableNodeCliInspectArguments`; enable `OnlyLoadAppFromAsar` for production builds. (Set through electron-builder's `electronFuses`, which also turns on cookie encryption and embedded ASAR integrity validation.)
