@@ -41,6 +41,8 @@ import { createPolicyEngine } from './security/policy-engine';
 import { createSecretStore, type Encryptor } from './settings/secrets';
 import { createSettingsService } from './settings/settings-service';
 import { createConfirmationBroker, type ConfirmRequestEvent } from './tools/confirmation-broker';
+import { createHuggingFaceTools } from './tools/everyday/hugging-face';
+import { createUtilityTools } from './tools/everyday/utilities';
 import { createToolExecutor } from './tools/executor';
 import { createAppIndex } from './tools/native/app-index';
 import { createNativeTools } from './tools/native/index';
@@ -277,6 +279,18 @@ export function createServices(opts: ServiceOptions) {
     ...createMealTools({ repo: meals, settings }),
     ...createScreenTools(opts.os),
     ...createWebPageTools(opts.fetch ? { fetch: opts.fetch } : {}),
+    // HuggingGPT (microsoft/JARVIS): Claude plans, picks Hub models, runs them, explains.
+    ...createHuggingFaceTools({
+      token: () => secrets.get('huggingface'),
+      guard: pathGuard,
+      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+    }),
+    // Everyday plugins (sukeesh/Jarvis): currency, markets, network, passwords, folder tidy.
+    ...createUtilityTools({
+      os: opts.os,
+      guard: pathGuard,
+      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+    }),
   ])
     registry.register(tool);
   const tools = createToolExecutor({
