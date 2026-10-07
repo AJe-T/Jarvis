@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { z } from 'zod';
 import { createMemoryRepos } from '../db/repos/memory-repos';
 import { errorMessage } from '../errors';
@@ -10,11 +11,28 @@ import { createCurator } from './curator';
 import { createIndexer } from './indexer';
 import { createMemoryTool } from './memory-tool';
 import { createRetriever } from './retriever';
+import { createSemanticIndex } from './semantic';
 import { createRoutineTools, loadRoutines } from './routines';
 import { createVaultService } from './vault-service';
 import { createVaultWatcher } from './vault-watcher';
 
-function searchTools(m: { retriever: ReturnType<typeof createRetriever> }): Tool[] {
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date like 2026-10-07.');
+
+/** Sir's local days (inclusive) → UTC instants, end exclusive, as stored in messages.created_at. */
+export function localDayRange(from?: string, to?: string): { from?: string; to?: string } {
+  const start = (d: string): Date => new Date(`${d}T00:00:00`);
+  const end = to ? start(to) : null;
+  end?.setDate(end.getDate() + 1);
+  return {
+    ...(from ? { from: start(from).toISOString() } : {}),
+    ...(end ? { to: end.toISOString() } : {}),
+  };
+}
+
+function searchTools(m: {
+  retriever: ReturnType<typeof createRetriever>;
+  conversations: Services['conversations'];
+}): Tool[] {
   return [
     defineTool({
       name: 'search_memory',
@@ -27,7 +45,7 @@ function searchTools(m: { retriever: ReturnType<typeof createRetriever> }): Tool
       tier: 'SAFE',
       summarize: ({ query }) => `Search memory for "${query}"`,
       async run({ query, limit }) {
-        const hits = m.retriever.searchMemories(query, limit);
+        const hits = await m.retriever.findMemories(query, limit);
         return ok(
           hits.length
             ? hits.map((h) => `${h.vaultPath} — ${h.title}\n${h.snippet}`).join('\n\n')
@@ -37,16 +55,27 @@ function searchTools(m: { retriever: ReturnType<typeof createRetriever> }): Tool
     }),
     defineTool({
       name: 'search_conversations',
-      description:
-        'Search past conversations with sir (all days). Use for "what did we decide/discuss about X" or "what did we talk about yesterday". Returns dated snippets.',
-      input: z.object({
-        query: z.string().min(1).max(200),
-        limit: z.number().int().min(1).max(20).default(8),
-      }),
+      description: `Search past conversations with sir. Give a query for "what did we decide about X"; give from/to dates (YYYY-MM-DD, Sir's local days, inclusive) for "what did we talk about yesterday / last Monday", with or without a query. Returns dated snippets.`,
+      input: z
+        .object({
+          query: z.string().min(1).max(200).optional(),
+          from: isoDay.optional(),
+          to: isoDay.optional(),
+          limit: z.number().int().min(1).max(40).default(8),
+        })
+        .refine((i) => i.query || i.from || i.to, 'Give a query or a date range.'),
       tier: 'SAFE',
-      summarize: ({ query }) => `Search past conversations for "${query}"`,
-      async run({ query, limit }) {
-        const hits = m.retriever.searchConversations(query, limit);
+      summarize: ({ query, from, to }) =>
+        `Search past conversations${query ? ` for "${query}"` : ''}${from || to ? ` (${from ?? '…'} to ${to ?? '…'})` : ''}`,
+      async run({ query, from, to, limit }) {
+        const range = localDayRange(from, to);
+        const hits = query
+          ? await m.retriever.findConversations(query, limit, range)
+          : m.conversations.messagesBetween(
+              range.from ?? '',
+              range.to ?? '9999',
+              Math.max(limit, 30),
+            );
         return ok(
           hits.length
             ? hits
@@ -89,7 +118,14 @@ export function createMemorySystem(s: Services) {
     onChange: emitChanged,
     onRoutinesChanged: reloadRoutines,
   });
-  const retriever = createRetriever({ vault, repos, conversations: s.conversations });
+  // Semantic search (isair/jarvis idea): on when the MiniLM model is downloaded (Settings → Memory).
+  const semantic = createSemanticIndex({
+    db: s.db,
+    modelDir: join(s.userData, 'models', 'minilm-embed'),
+    enabled: () => s.settings.get('memory.semanticSearch'),
+    logger,
+  });
+  const retriever = createRetriever({ vault, repos, conversations: s.conversations, semantic });
   const convLogger = createConversationLogger(vault);
   const curator = createCurator({
     llm: () => s.llm,
@@ -111,7 +147,10 @@ export function createMemorySystem(s: Services) {
   });
 
   s.registry.register(createMemoryTool(vault, emitChanged));
-  for (const t of [...searchTools({ retriever }), ...createRoutineTools(repos, () => s.tools)])
+  for (const t of [
+    ...searchTools({ retriever, conversations: s.conversations }),
+    ...createRoutineTools(repos, () => s.tools),
+  ])
     s.registry.register(t);
 
   // Context for every turn (Agents.md §B1 dynamic block).
@@ -151,6 +190,7 @@ export function createMemorySystem(s: Services) {
       }
     }
     if (turn.replyText.trim()) curator.schedule(turn.conversationId, turn.userText, turn.replyText);
+    void semantic.sync();
   });
 
   /** Database.md §8.1: a human-readable mirror of the reminders table. */
@@ -184,9 +224,21 @@ export function createMemorySystem(s: Services) {
       await indexer?.indexFile(rel, 'external').catch(() => false);
     await reloadRoutines();
     await watcher.start();
+    void semantic.sync(); // background: embeds what's new since last time
   }
 
-  return { repos, vault, indexer, watcher, retriever, convLogger, curator, start, reloadRoutines };
+  return {
+    repos,
+    vault,
+    indexer,
+    watcher,
+    retriever,
+    semantic,
+    convLogger,
+    curator,
+    start,
+    reloadRoutines,
+  };
 }
 
 export type MemorySystem = ReturnType<typeof createMemorySystem>;

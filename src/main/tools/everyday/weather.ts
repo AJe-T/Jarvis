@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ToolError } from '../../errors';
 import type { SettingsService } from '../../settings/settings-service';
-import { defineTool, ok, type Tool } from '../types';
+import { defineTool, fail, ok, type Tool } from '../types';
 
 /** Open-Meteo (CC BY 4.0 data, no key): geocoding + forecast. Only the place name and coordinates are sent. */
 const GEOCODE = 'https://geocoding-api.open-meteo.com/v1/search';
@@ -54,6 +54,31 @@ interface Place {
   longitude: number;
   country?: string;
   admin1?: string;
+  /** IANA zone, e.g. "Asia/Tokyo". */
+  timezone?: string;
+}
+
+/** "Europe/Athens" is a real zone if Intl accepts it. */
+function isZone(z: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: z });
+    return z.includes('/') || z === 'UTC';
+  } catch {
+    return false;
+  }
+}
+
+export function timeIn(zone: string, now: Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZoneName: 'short',
+  }).format(now);
 }
 
 export async function geocode(f: Fetch, place: string, signal: AbortSignal): Promise<Place> {
@@ -91,6 +116,23 @@ interface Forecast {
 export function createWeatherTools(deps: { settings: SettingsService; fetch?: Fetch }): Tool[] {
   const f = deps.fetch ?? fetch;
   return [
+    // Idea from isair/jarvis: time zones are arithmetic, so no model guesses UTC offsets.
+    defineTool({
+      name: 'get_world_time',
+      description:
+        'Current date and time in another city, country or IANA time zone ("Tokyo", "New York", "Europe/Athens"). Sir\'s own local time is already in your context.',
+      input: z.object({ place: z.string().min(2).max(100) }),
+      tier: 'SAFE',
+      summarize: ({ place }) => `Get the time in ${place}`,
+      async run({ place }, ctx) {
+        if (isZone(place)) return ok(`${place}: ${timeIn(place, new Date())}.`);
+        const p = await geocode(f, place, ctx.signal);
+        if (!p.timezone || !isZone(p.timezone))
+          return fail(`I couldn't find the time zone for ${place}.`);
+        const where = [p.name, p.admin1, p.country].filter(Boolean).join(', ');
+        return ok(`${where} (${p.timezone}): ${timeIn(p.timezone, new Date())}.`);
+      },
+    }),
     defineTool({
       name: 'get_weather',
       description:

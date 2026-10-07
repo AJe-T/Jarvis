@@ -112,4 +112,47 @@ export const MCP_PRESETS: McpPreset[] = [
       enabled: true,
     },
   },
+  // From isair/jarvis's MCP catalogue (vetted, pinned).
+  {
+    id: 'chrome-devtools',
+    label: 'Chrome (DevTools)',
+    description:
+      "Google's Chrome DevTools server: open, read and operate pages in a throwaway Chrome profile (not your everyday browser). Needs Google Chrome.",
+    server: {
+      name: 'chrome-devtools',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', 'chrome-devtools-mcp@1.10.1', '--isolated'],
+      envSecrets: {},
+      trustLevel: 'official',
+      defaultTier: 'CONFIRM',
+      toolOverrides: {
+        list_pages: 'SAFE',
+        take_snapshot: 'SAFE',
+        take_screenshot: 'SAFE',
+        list_console_messages: 'SAFE',
+        list_network_requests: 'SAFE',
+        // Arbitrary JavaScript in a page is too powerful to allow by default (same rule as Playwright).
+        evaluate_script: 'BLOCKED',
+      },
+      enabled: true,
+    },
+  },
+  {
+    id: 'youtube-transcript',
+    label: 'YouTube transcripts',
+    description:
+      'Fetches the captions of a YouTube video so Jarvis can summarise or answer questions about it. Read-only.',
+    server: {
+      name: 'youtube-transcript',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@kimtaeyoon83/mcp-server-youtube-transcript@0.1.1'],
+      envSecrets: {},
+      trustLevel: 'community',
+      defaultTier: 'CONFIRM',
+      toolOverrides: { get_transcript: 'SAFE' },
+      enabled: true,
+    },
+  },
 ];

@@ -458,5 +458,6 @@ Full migration list: [REFERENCE.md → Database migrations](REFERENCE.md#databas
 | `006_dictations.sql` | `dictations(id, ts, raw_text, final_text, target_app)`, newest 200 kept |
 | `007_scheduled_tasks.sql` | `scheduled_tasks(id, name, kind briefing\|task\|checkin, prompt, schedule_json, enabled, speak, save_to_vault, next_run_at, last_run_at, last_status, last_conversation_id, created_at)` |
 | `008_remote_decisions.sql` | `tool_calls.decided_by` gains `user_remote` (Telegram) (table rebuilt) |
+| `009_embeddings.sql` | `embeddings(kind memory\|message, ref, hash, vector BLOB)`: on-device MiniLM vectors (384 × float32) for semantic search; rows for deleted notes/messages are pruned on each sync |
 
 Files outside the DB (all under `%APPDATA%\jarvis`): `models/` (verified voice models), `skills/` (SKILL.md folders), `claude-code/` (empty working folder for subscription mode). Vault folders added: `Briefings/`, `Research/`.

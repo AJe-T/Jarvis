@@ -1,9 +1,10 @@
 import { memo, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, Pencil, RotateCcw } from 'lucide-react';
 import type { UiMessage, UiToolCall } from '@shared/types';
 import { call } from '../../lib/api';
+import { IconButton } from '../ui/button';
 import { ToolCallCard } from './tool-call-card';
 
 function safeHref(href: string | undefined): string | undefined {
@@ -80,12 +81,37 @@ export const Markdown = memo(function Markdown({ text }: { text: string }): Reac
 });
 
 /** Design-system.md §5.3. */
-export function ChatMessage({ message }: { message: UiMessage }): React.JSX.Element {
+export function ChatMessage({
+  message,
+  onRewind,
+}: {
+  message: UiMessage;
+  /** Shown on Sir's messages when Jarvis is idle (idea from isair/jarvis). */
+  onRewind?: ((resend: boolean) => void) | undefined;
+}): React.JSX.Element {
   if (message.role === 'notice')
     return <p className="py-2 text-center text-sm text-ink-500">{message.text}</p>;
   if (message.role === 'user')
     return (
-      <div className="flex justify-end">
+      <div className="group flex items-start justify-end gap-1">
+        {onRewind && (
+          <div className="flex gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+            <IconButton
+              label="Edit from here"
+              hint="Removes this message and everything after it, and puts it back in the box"
+              onClick={() => onRewind(false)}
+            >
+              <Pencil size={14} strokeWidth={1.75} aria-hidden />
+            </IconButton>
+            <IconButton
+              label="Regenerate from here"
+              hint="Removes everything after this message and asks again"
+              onClick={() => onRewind(true)}
+            >
+              <RotateCcw size={14} strokeWidth={1.75} aria-hidden />
+            </IconButton>
+          </div>
+        )}
         <div className="glass-inset max-w-[88%] rounded-lg rounded-br-[6px] px-4 py-2 whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
           {message.text}
         </div>

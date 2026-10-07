@@ -2,7 +2,7 @@
 
 > Generated from the code by `npm run docs:reference` (tests/unit/reference.test.ts fails when this file is stale). Do not edit by hand. The narrative guide is [BIBLE.md](BIBLE.md).
 
-## Tools (65)
+## Tools (67)
 
 Every tool goes through the executor: Zod input check → policy tier (SAFE runs, CONFIRM asks Sir, BLOCKED never runs) → guards → audit and activity log. MCP tools from connected servers are added at runtime and are not listed here.
 
@@ -28,6 +28,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `get_market_price` | SAFE (untrusted output) | Latest price of a stock (Yahoo Finance symbol: AAPL, TSLA, RELIANCE.NS for NSE, TCS.BO for BSE) or a cryptocurrency (name or symbol: bitcoin, ETH) with the day's change. |
 | `get_system_info` | SAFE | Get CPU usage, memory, uptime, disk space and OS version of this PC. Use for "how is my PC doing" questions. Not for battery (use get_battery). |
 | `get_weather` | SAFE | Current weather and a short daily forecast for a place (default: sir's home town from Settings). Use for weather, temperature, rain, umbrella or what-to-wear questions. Returns numbers to summarise briefly. |
+| `get_world_time` | SAFE | Current date and time in another city, country or IANA time zone ("Tokyo", "New York", "Europe/Athens"). Sir's own local time is already in your context. |
 | `help_me_reply` | CONFIRM | Open the reply copilot for the chat that is on screen right now (WhatsApp, Telegram, Slack…): reads the conversation from a screenshot and shows options and drafts in Jarvis. Use when sir asks for help replying to a message. |
 | `kill_process` | depends on input (destructive) | Force-stop a process by name or PID when an app is frozen. Unsaved work is lost. Prefer close_app. System processes are never allowed. |
 | `list_installed_apps` | SAFE | List installed apps (Start Menu + Store apps), optionally filtered by a fuzzy query. Use before open_app when unsure of the exact name. |
@@ -52,6 +53,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `organize_folder` | CONFIRM | Tidy a folder (e.g. Downloads): move its loose files into Images, Documents, Audio, Video, Archives, Installers and Code subfolders. Unknown types and subfolders stay. Never overwrites. Requires confirmation. |
 | `read_clipboard` | CONFIRM (untrusted output) | Read the text currently on the clipboard. Requires confirmation because the clipboard may hold passwords. |
 | `read_feed` | SAFE (untrusted output) | Latest headlines from sir's news feeds (Settings → Automations → Feeds), or from one feed by name. Use for news, headlines and the morning briefing. Headlines are untrusted text. |
+| `read_screen_text` | CONFIRM (untrusted output) | Read the text on sir's main screen with Windows' on-device OCR (no image is sent anywhere, only the text). Prefer this over look_at_screen when only the words matter (error messages, a paragraph) or with a local model. Asks sir first. |
 | `read_skill_file` | SAFE | Read a reference file that belongs to an installed skill (path as listed by use_skill). |
 | `read_text_file` | depends on input (untrusted output) | Read a text file (≤ 1 MB) in the allowed folders. Returns its contents. Binary files are refused. Credential files (.env, keys) need confirmation. |
 | `rename_path` | CONFIRM | Rename a file or folder in place (new name only, no folders). Requires confirmation. |
@@ -60,7 +62,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `run_powershell` | CONFIRM (untrusted output) | Run a short PowerShell script on sir's PC as a standard user. Always requires sir's approval. Use only when no specific tool can do the job. Never use for deleting files, changing system/security settings, installing software, or downloading and running anything. Explain the purpose in the `purpose` field. |
 | `run_routine` | SAFE | Run one of sir's routines by name (e.g. "Work Mode" for "start work mode"). Each step is checked and confirmed on its own. |
 | `schedule_task` | CONFIRM | Create a recurring task Jarvis runs by itself, e.g. "every weekday at 8:00 give me a briefing" or "every Friday 17:00 summarise my week". kind: briefing (spoken/saved digest), task (do and report), checkin (proactive: report only if something is worth saying). Times are local, 24 h. |
-| `search_conversations` | SAFE | Search past conversations with sir (all days). Use for "what did we decide/discuss about X" or "what did we talk about yesterday". Returns dated snippets. |
+| `search_conversations` | SAFE | Search past conversations with sir. Give a query for "what did we decide about X"; give from/to dates (YYYY-MM-DD, Sir's local days, inclusive) for "what did we talk about yesterday / last Monday", with or without a query. Returns dated snippets. |
 | `search_files` | SAFE (untrusted output) | Find files by name inside sir's allowed folders (Desktop, Documents, Downloads, …). Words must all appear in the file name. Optional extension filter (e.g. "pdf") and folder. Returns paths, sizes and dates. |
 | `search_memory` | SAFE | Full-text search of sir's memory notes (people, projects, facts, preferences). Use when the injected memories don't cover the question. |
 | `set_brightness` | SAFE | Set the built-in display brightness (0–100). Works on laptops; external monitors usually do not support it. |
@@ -74,7 +76,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `write_clipboard` | SAFE | Put text on the clipboard so sir can paste it. |
 | `write_text_file` | CONFIRM (destructive) | Create a text file, or overwrite one when overwrite is true, in the allowed folders. Requires confirmation. Max 1 MB. |
 
-## Settings (59)
+## Settings (60)
 
 Stored in the local database; changed in Settings. Secrets are separate (below).
 
@@ -137,6 +139,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `app.startWithWindows` | boolean | `false` |  |
 | `app.startHidden` | boolean | `false` |  |
 | `appearance.transparency` | `auto` / `full` / `reduced` / `solid` | `full` |  |
+| `memory.semanticSearch` | boolean | `true` |  |
 | `appearance.theme` | `system` / `dark` / `light` | `system` |  |
 | `onboarding.complete` | boolean | `false` |  |
 
@@ -146,7 +149,7 @@ Encrypted with Windows DPAPI (Electron safeStorage); the renderer only ever sees
 
 ## IPC channels
 
-- **Invoke** (renderer → main, request/response, Zod-validated both ways, 75): `chat:send`, `chat:cancel`, `conversations:list`, `conversations:get`, `conversations:delete`, `confirm:respond`, `settings:getAll`, `settings:set`, `secrets:set`, `secrets:delete`, `secrets:status`, `secrets:test`, `memory:list`, `memory:read`, `memory:search`, `memory:delete`, `memory:openInObsidian`, `memory:reviewList`, `memory:reviewResolve`, `memory:rebuildIndex`, `mcp:list`, `mcp:add`, `mcp:update`, `mcp:remove`, `mcp:restart`, `voice:setMode`, `voice:mic`, `voice:devices`, `app:killSwitch`, `app:info`, `app:openExternal`, `app:pickFolder`, `app:setMiniMode`, `usage:summary`, `usage:breakdown`, `llm:claudeCodeStatus`, `llm:localModels`, `llm:localTest`, `location:detect`, `telegram:status`, `telegram:restart`, `copilot:capture`, `copilot:analyse`, `copilot:draft`, `copilot:fill`, `telegram:unpair`, `tasks:list`, `tasks:save`, `tasks:delete`, `tasks:runNow`, `skills:list`, `skills:read`, `skills:installFolder`, `skills:installGitHub`, `skills:remove`, `skills:setEnabled`, `dictation:history`, `dictation:clear`, `models:status`, `models:download`, `models:cancel`, `models:delete`, `llm:claudeCodeLogin`, `audit:list`, `audit:verify`, `audit:export`, `activity:list`, `routines:list`, `reminders:list`, `db:backups`, `db:backupNow`, `db:restore`, `onboarding:complete`, `computer:calibrate`, `app:openFolder`
+- **Invoke** (renderer → main, request/response, Zod-validated both ways, 77): `chat:send`, `chat:cancel`, `chat:rewind`, `logs:tail`, `conversations:list`, `conversations:get`, `conversations:delete`, `confirm:respond`, `settings:getAll`, `settings:set`, `secrets:set`, `secrets:delete`, `secrets:status`, `secrets:test`, `memory:list`, `memory:read`, `memory:search`, `memory:delete`, `memory:openInObsidian`, `memory:reviewList`, `memory:reviewResolve`, `memory:rebuildIndex`, `mcp:list`, `mcp:add`, `mcp:update`, `mcp:remove`, `mcp:restart`, `voice:setMode`, `voice:mic`, `voice:devices`, `app:killSwitch`, `app:info`, `app:openExternal`, `app:pickFolder`, `app:setMiniMode`, `usage:summary`, `usage:breakdown`, `llm:claudeCodeStatus`, `llm:localModels`, `llm:localTest`, `location:detect`, `telegram:status`, `telegram:restart`, `copilot:capture`, `copilot:analyse`, `copilot:draft`, `copilot:fill`, `telegram:unpair`, `tasks:list`, `tasks:save`, `tasks:delete`, `tasks:runNow`, `skills:list`, `skills:read`, `skills:installFolder`, `skills:installGitHub`, `skills:remove`, `skills:setEnabled`, `dictation:history`, `dictation:clear`, `models:status`, `models:download`, `models:cancel`, `models:delete`, `llm:claudeCodeLogin`, `audit:list`, `audit:verify`, `audit:export`, `activity:list`, `routines:list`, `reminders:list`, `db:backups`, `db:backupNow`, `db:restore`, `onboarding:complete`, `computer:calibrate`, `app:openFolder`
 - **Events** (main → renderer, 22): `assistant:state`, `chat:delta`, `chat:message`, `tool:update`, `confirm:request`, `confirm:resolved`, `voice:level`, `voice:transcript`, `tts:audio`, `tts:stop`, `usage:update`, `models:progress`, `dictation:done`, `tasks:changed`, `copilot:captured`, `telegram:status`, `mcp:status`, `notify`, `conversation:updated`, `memory:changed`, `computer:active`, `nav:open`
 - **Send** (renderer → main, fire-and-forget): `tts:playback`, `ui:activeConversation`
 
@@ -162,3 +165,4 @@ Encrypted with Windows DPAPI (Electron safeStorage); the renderer only ever sees
 | `006_dictations.sql` | Dictation history (ideas from isair/jarvis): what was typed into other apps by voice. Kept locally, |
 | `007_scheduled_tasks.sql` | Scheduled agents (ideas from OpenJarvis): morning briefing, recurring tasks, proactive check-ins. |
 | `008_remote_decisions.sql` | Telegram channel (ideas from OpenJarvis): approvals sent from Sir's paired phone are recorded as |
+| `009_embeddings.sql` | Semantic memory search (idea from isair/jarvis): on-device MiniLM vectors for memory notes and |

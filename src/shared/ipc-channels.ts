@@ -4,6 +4,8 @@
 export const INVOKE_CHANNELS = [
   'chat:send',
   'chat:cancel',
+  'chat:rewind',
+  'logs:tail',
   'conversations:list',
   'conversations:get',
   'conversations:delete',

@@ -88,6 +88,9 @@ Trust boundaries: Renderer ↔ Main (IPC), Main ↔ child processes (MCP/PowerSh
 | `convert_currency`, `get_market_price`, `network_info`, `find_ai_models` | SAFE | Read-only web lookups; ping host passed as a PowerShell parameter |
 | `generate_password` | SAFE | Password goes to the clipboard only; never returned to Claude, logged or stored |
 | `run_ai_model` | SAFE for text; CONFIRM when it sends a file or writes an image | Sends input to Hugging Face; output untrusted |
+| `read_screen_text` | CONFIRM | Windows OCR on-device; temp screenshot deleted; only text reaches the model; output untrusted |
+| `get_world_time` | SAFE | Sends only the place name to Open-Meteo geocoding |
+| Chat rewind (`chat:rewind`) | User action | Deletes Sir's chosen message and later ones in that conversation; audited; refused while a turn runs |
 | `organize_folder` | CONFIRM | Allowed roots only; moves, never overwrites |
 | `delegate_desktop_task` (computer use) | CONFIRM | Starts Computer-Control Mode |
 | MCP tools | CONFIRM by default | Per-server/per-tool overrides; read-only tools can be marked SAFE in Settings |

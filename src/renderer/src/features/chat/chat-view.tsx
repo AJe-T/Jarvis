@@ -29,6 +29,7 @@ function stripSpokenTags(text: string): string {
 export function ChatView(): React.JSX.Element {
   const messages = useChatStore((s) => s.messages);
   const live = useChatStore((s) => s.live);
+  const rewind = useChatStore((s) => s.rewind);
   const newConversation = useChatStore((s) => s.newConversation);
   const state = useAssistantStore((s) => s.state);
   const detail = useAssistantStore((s) => s.detail);
@@ -91,8 +92,20 @@ export function ChatView(): React.JSX.Element {
               aria-live="polite"
               aria-relevant="additions"
             >
-              {messages.map((m) => (
-                <ChatMessage key={m.id} message={m} />
+              {messages.map((m, i) => (
+                <ChatMessage
+                  key={m.id}
+                  message={m}
+                  onRewind={
+                    m.role === 'user' && !live
+                      ? (resend) =>
+                          void rewind(
+                            messages.slice(0, i).filter((x) => x.role === 'user').length,
+                            resend,
+                          )
+                      : undefined
+                  }
+                />
               ))}
               {live && (
                 <article className="text-ink-100" aria-label="Jarvis (replying)" aria-live="off">

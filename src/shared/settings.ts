@@ -147,6 +147,8 @@ export const SETTINGS = {
     default: 'full' as 'auto' | 'full' | 'reduced' | 'solid',
   },
   /** Dark or light glass; system follows Windows (Settings → Personalisation → Colours). */
+  /** Hybrid keyword + meaning memory search with an on-device model (isair/jarvis idea). */
+  'memory.semanticSearch': { schema: z.boolean(), default: true },
   'appearance.theme': {
     schema: z.enum(['system', 'dark', 'light']),
     default: 'system' as 'system' | 'dark' | 'light',

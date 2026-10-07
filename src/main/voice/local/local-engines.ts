@@ -20,8 +20,35 @@ const notReady = (what: string): JarvisError =>
     `Download the ${what} in Settings → Voice first.`,
   );
 
+/** Phrases in a row that decoded slower than they were spoken before Sir is told (isair/jarvis idea). */
+const SLOW_STREAK = 3;
+
+/** Wraps Whisper to notice when it can't keep up with speech (once per run). */
+export function watchSpeed(t: Transcriber, onSlow: () => void, now = Date.now): Transcriber {
+  let streak = 0;
+  let warned = false;
+  return {
+    async transcribe(audio, language) {
+      const start = now();
+      const text = await t.transcribe(audio, language);
+      const spokenMs = (audio.length / 16000) * 1000;
+      if (spokenMs >= 1000) streak = now() - start > spokenMs ? streak + 1 : 0;
+      if (streak >= SLOW_STREAK && !warned) {
+        warned = true;
+        onSlow();
+      }
+      return text;
+    },
+    release: () => t.release(),
+  };
+}
+
 /** ADR-011: on-device openWakeWord and Whisper. Models load once and stay warm. */
-export function createLocalEngines(store: ModelStore, settings: SettingsService) {
+export function createLocalEngines(
+  store: ModelStore,
+  settings: SettingsService,
+  hooks: { onSlow?(): void } = {},
+) {
   let vad: Promise<Vad> | null = null;
   let whisper: { id: ModelId; model: Promise<Transcriber> } | null = null;
 
@@ -37,7 +64,10 @@ export function createLocalEngines(store: ModelStore, settings: SettingsService)
     if (!store.installed(id)) return Promise.reject(notReady('Whisper model'));
     const old = whisper;
     void old?.model.then((t) => t.release()).catch(() => undefined);
-    const model = remember(loadWhisper(store.dir(id), id === 'whisper-small'), () => {
+    const loaded = loadWhisper(store.dir(id), id === 'whisper-small').then((t) =>
+      hooks.onSlow ? watchSpeed(t, hooks.onSlow) : t,
+    );
+    const model = remember(loaded, () => {
       if (whisper?.model === model) whisper = null;
     });
     whisper = { id, model };

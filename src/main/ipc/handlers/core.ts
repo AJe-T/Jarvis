@@ -41,6 +41,25 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
     return { ok: true };
   });
 
+  handle('chat:rewind', (req) => {
+    if (s.orchestrator.isBusy())
+      throw new JarvisError('INVALID', 'busy', 'Let Jarvis finish (or stop him) before rewinding.');
+    const text = s.conversations.rewind(req.conversationId, req.userIndex);
+    if (text === null)
+      throw new JarvisError('INVALID', 'no such message', 'That message is no longer there.');
+    s.audit.append('user', 'chat.rewind', {
+      conversationId: req.conversationId,
+      userIndex: req.userIndex,
+    });
+    if (!req.resend) return { text };
+    const { turnId } = s.orchestrator.send({
+      conversationId: req.conversationId,
+      text,
+      source: 'text',
+    });
+    return { text, turnId };
+  });
+
   handle('conversations:list', (req) => {
     const rows = s.conversations.list(req.limit + 1, req.cursor);
     const items = rows.slice(0, req.limit).map(toSummary);

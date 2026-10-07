@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ThinkFilter, checkLocalUrl, toOpenAiMessages, toOpenAiTools } from './local-client';
+import {
+  ThinkFilter,
+  checkLocalUrl,
+  selectTools,
+  toOpenAiMessages,
+  toOpenAiTools,
+} from './local-client';
 
 describe('local model client (ADR-013)', () => {
   it('translates tool calls and results to the OpenAI shape', () => {
@@ -72,5 +78,46 @@ describe('local model client (ADR-013)', () => {
     expect(checkLocalUrl('http://192.168.1.20:1234/v1').port).toBe('1234');
     expect(() => checkLocalUrl('https://api.example.com/v1')).toThrow();
     expect(() => checkLocalUrl('file:///etc/passwd')).toThrow();
+  });
+});
+
+describe('tool routing for local models (idea from isair/jarvis)', () => {
+  const tool = (name: string, description: string) => ({
+    type: 'function' as const,
+    function: { name, description, parameters: {} },
+  });
+  const many = [
+    tool('get_datetime', 'Current date and time'),
+    tool('search_memory', 'Search memory notes'),
+    tool('memory', 'Read and write memory files'),
+    tool('get_weather', 'Weather forecast for a town'),
+    tool('set_volume', 'Change the speaker volume'),
+    tool('open_app', 'Open an installed application'),
+    ...Array.from({ length: 20 }, (_, i) => tool(`other_${i}`, 'Something unrelated entirely')),
+  ];
+
+  it('offers core tools plus the ones matching the request', () => {
+    const picked = selectTools(many, [{ role: 'user', content: "What's the weather like?" }]);
+    expect(picked.map((t) => t.function.name)).toEqual([
+      'get_datetime',
+      'search_memory',
+      'memory',
+      'get_weather',
+    ]);
+  });
+
+  it('keeps tools this turn already called, and passes short lists through', () => {
+    const picked = selectTools(many, [
+      { role: 'user', content: 'turn the volume down' },
+      {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 't1', name: 'open_app', input: {} }],
+      },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] },
+    ]);
+    expect(picked.map((t) => t.function.name)).toEqual(
+      expect.arrayContaining(['set_volume', 'open_app']),
+    );
+    expect(selectTools(many.slice(0, 5), [{ role: 'user', content: 'hi' }])).toHaveLength(5);
   });
 });

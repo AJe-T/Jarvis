@@ -75,6 +75,7 @@ const LocalModelId = z.enum([
   'whisper-small',
   'openwakeword-hey-jarvis',
   'silero-vad',
+  'minilm-embed',
 ]);
 const CopilotId = z.string().regex(/^cp_[\w-]+$/);
 const CopilotCapture = z.object({
@@ -182,6 +183,15 @@ export const INVOKE = {
     z.object({ conversationId: z.string(), turnId: z.string() }),
   ),
   'chat:cancel': contract(z.object({ turnId: Id.optional() }), Ok),
+  /** isair/jarvis rewind: drop Sir's Nth message and what followed; resend = regenerate from there. */
+  'chat:rewind': contract(
+    z.object({
+      conversationId: Id,
+      userIndex: z.number().int().min(0).max(100_000),
+      resend: z.boolean(),
+    }),
+    z.object({ text: z.string(), turnId: z.string().optional() }),
+  ),
   'conversations:list': contract(
     z.object({ limit: z.number().int().min(1).max(200), cursor: z.string().max(64).optional() }),
     z.object({ items: z.array(ConversationSummarySchema), nextCursor: z.string().optional() }),
@@ -389,6 +399,13 @@ export const INVOKE = {
     Ok,
   ),
   'computer:calibrate': contract(Empty, z.object({ ok: z.boolean(), maxErrorPx: z.number() })),
+  /** isair/jarvis-style Logs view: newest lines of the (already redacted) log. */
+  'logs:tail': contract(
+    z.object({ lines: z.number().int().min(10).max(1000) }),
+    z.array(
+      z.object({ time: z.string(), level: z.string(), module: z.string(), text: z.string() }),
+    ),
+  ),
   'app:openFolder': contract(
     z.object({ which: z.enum(['userData', 'logs', 'vault', 'backups']) }),
     Ok,

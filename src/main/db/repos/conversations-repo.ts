@@ -167,23 +167,73 @@ export function createConversationsRepo(db: Db) {
       ).n;
     },
 
-    searchMessages(ftsQuery: string, limit: number) {
+    /** Full-text search; `range` (ISO instants, end exclusive) limits it to a period. */
+    searchMessages(ftsQuery: string, limit: number, range: { from?: string; to?: string } = {}) {
       return db
         .prepare(
-          `SELECT m.conversation_id AS conversationId, m.created_at AS createdAt, m.role AS role, c.title AS title,
+          `SELECT m.id AS id, m.conversation_id AS conversationId, m.created_at AS createdAt, m.role AS role, c.title AS title,
              snippet(messages_fts, 0, '[', ']', '…', 16) AS snippet
            FROM messages_fts JOIN messages m ON m.rowid = messages_fts.rowid
            JOIN conversations c ON c.id = m.conversation_id
-           WHERE messages_fts MATCH ? AND c.is_private = 0
+           WHERE messages_fts MATCH ? AND c.is_private = 0 AND m.created_at >= ? AND m.created_at < ?
            ORDER BY bm25(messages_fts) LIMIT ?`,
         )
-        .all(ftsQuery, limit) as Array<{
-        conversationId: string;
-        createdAt: string;
-        role: string;
-        title: string | null;
-        snippet: string;
-      }>;
+        .all(ftsQuery, range.from ?? '', range.to ?? '9999', limit) as unknown as MessageHit[];
+    },
+
+    /** What was said in a period, oldest first (date-scoped recall, idea from isair/jarvis's diary). */
+    messagesBetween(fromIso: string, toIso: string, limit: number): MessageHit[] {
+      return db
+        .prepare(
+          `SELECT m.id AS id, m.conversation_id AS conversationId, m.created_at AS createdAt, m.role AS role, c.title AS title,
+             substr(m.text_plain, 1, 240) AS snippet
+           FROM messages m JOIN conversations c ON c.id = m.conversation_id
+           WHERE c.is_private = 0 AND m.role IN ('user', 'assistant') AND m.text_plain != ''
+             AND m.created_at >= ? AND m.created_at < ?
+           ORDER BY m.created_at LIMIT ?`,
+        )
+        .all(fromIso, toIso, limit) as unknown as MessageHit[];
+    },
+
+    /** Messages by id (semantic hits), private conversations and out-of-range ones left out. */
+    messagesByIds(ids: string[], range: { from?: string; to?: string } = {}): MessageHit[] {
+      if (ids.length === 0) return [];
+      return db
+        .prepare(
+          `SELECT m.id AS id, m.conversation_id AS conversationId, m.created_at AS createdAt, m.role AS role, c.title AS title,
+             substr(m.text_plain, 1, 240) AS snippet
+           FROM messages m JOIN conversations c ON c.id = m.conversation_id
+           WHERE c.is_private = 0 AND m.created_at >= ? AND m.created_at < ?
+             AND m.id IN (SELECT value FROM json_each(?))`,
+        )
+        .all(range.from ?? '', range.to ?? '9999', JSON.stringify(ids)) as unknown as MessageHit[];
+    },
+
+    /**
+     * Chat rewind (idea from isair/jarvis): drops Sir's Nth typed/spoken message (0-based) and
+     * everything after it, so the conversation continues from just before it. Returns its text.
+     */
+    rewind(conversationId: string, userIndex: number): string | null {
+      const row = (
+        db
+          .prepare(
+            `SELECT seq, text_plain FROM messages WHERE conversation_id = ? AND role = 'user'
+               AND (source IS NULL OR source != 'system') ORDER BY seq`,
+          )
+          .all(conversationId) as Array<{ seq: number; text_plain: string }>
+      )[userIndex];
+      if (!row) return null;
+      tx(db, () => {
+        db.prepare('DELETE FROM messages WHERE conversation_id = ? AND seq >= ?').run(
+          conversationId,
+          row.seq,
+        );
+        // The rolling summary may describe what was just removed.
+        db.prepare(
+          'UPDATE conversations SET summary = NULL, summary_upto_seq = 0 WHERE id = ? AND summary_upto_seq >= ?',
+        ).run(conversationId, row.seq);
+      });
+      return row.text_plain;
     },
 
     deleteMessagesOlderThan(isoCutoff: string): number {
@@ -193,3 +243,12 @@ export function createConversationsRepo(db: Db) {
 }
 
 export type ConversationsRepo = ReturnType<typeof createConversationsRepo>;
+
+export interface MessageHit {
+  id: string;
+  conversationId: string;
+  createdAt: string;
+  role: string;
+  title: string | null;
+  snippet: string;
+}

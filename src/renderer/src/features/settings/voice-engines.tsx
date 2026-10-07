@@ -52,7 +52,7 @@ export function useModels(): {
   return { status, progress, refresh };
 }
 
-function ModelDownload({
+export function ModelDownload({
   id,
   models,
 }: {

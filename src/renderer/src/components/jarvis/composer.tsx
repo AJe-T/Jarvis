@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Mic, Paperclip, Send, Square, X } from 'lucide-react';
 import { call } from '../../lib/api';
 import { useAssistantStore } from '../../stores/assistant-store';
@@ -28,6 +28,13 @@ export function Composer(): React.JSX.Element {
   const live = useChatStore((s) => s.live);
   const send = useChatStore((s) => s.send);
   const cancel = useChatStore((s) => s.cancel);
+  const draft = useChatStore((s) => s.draft);
+  const takeDraft = useChatStore((s) => s.takeDraft);
+  // Rewind → edit puts the old message back here.
+  useEffect(() => {
+    const d = draft === null ? null : takeDraft();
+    if (d !== null) setText(d);
+  }, [draft, takeDraft]);
   const state = useAssistantStore((s) => s.state);
   const transcript = useAssistantStore((s) => s.transcript);
   const voiceMode = useSetting('voice.mode');

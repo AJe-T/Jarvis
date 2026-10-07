@@ -106,6 +106,8 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 **How it works**
 - **Saving:** "Remember…" saves a note with Claude's memory tool.
 - **Finding:** relevant notes are found with full-text search and added to the context of each turn.
+- **Semantic search** (idea from isair/jarvis; Settings → Memory → Download, 24 MB, on this PC): notes and past messages are also found by meaning, so "my sister's wedding" finds the note about Priya getting married. Keyword and meaning results are merged (reciprocal-rank fusion). New notes and messages are indexed in the background after each turn.
+- **Recall by date:** "What did we talk about yesterday?" or "last Monday" lists what was said that day (`search_conversations` with from/to dates; `/private` chats never appear).
 - **Learning:** after each turn a small model (the curator) proposes memory updates. Anything that looks like an instruction goes to a review queue (Memory view) instead of being saved.
 - **Your edits:** changes you make in Obsidian are picked up within seconds.
 
@@ -126,6 +128,11 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 - **Weather:** "What's the weather?" uses your home town (Settings → Everyday) and Open-Meteo; no key needed. "Detect" can find your town from your IP address, and only when you press it.
 - **Meal log:** "I just had a masala dosa" logs it with estimated calories and macros. "How am I doing today?" shows totals against your target.
 - **Look at my screen:** "What's on my screen?" or "read this error" sends one screenshot to Claude after you confirm.
+- **Read my screen's text (offline OCR):** `read_screen_text` uses Windows' built-in OCR on this PC; only the words go to the model, never the picture. Works with local models too. Asks first.
+- **World time:** "What time is it in Tokyo?" (`get_world_time`, Open-Meteo place lookup, exact time-zone maths).
+- **Local models get a short tool list:** with Ollama / LM Studio, each request is shown only the ~12 tools that match it (plus memory and the clock), as isair/jarvis does, so small models stay on track.
+- **Slow speech recognition:** if on-device Whisper keeps decoding slower than you speak, Jarvis suggests the smaller base.en model once.
+- **More MCP presets:** Chrome (DevTools, throwaway profile) and YouTube transcripts.
 
 ### 3.5a Expert AI models (HuggingGPT, idea from microsoft/JARVIS)
 - Claude acts as the controller: it plans the job, picks an expert model from the Hugging Face Hub (`find_ai_models`, most-downloaded models served by HF Inference), runs it (`run_ai_model`) and explains the result. Multi-step jobs are chained ("transcribe this recording, then summarise it").
@@ -196,7 +203,9 @@ Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem) in the
 - **Chat:**
   - Streaming replies with tool cards and citations.
   - Conversation history; `/private` conversations are not logged to the vault.
+  - **Rewind** (idea from isair/jarvis): hover one of your messages. **Edit from here** removes it and everything after and puts it back in the box; **Regenerate from here** asks again. Attachments are not re-sent; the vault's daily log keeps the original.
 - **Views:**
+  - **Settings → Advanced → Logs:** the newest log lines (secrets removed), warnings-only filter, and Open logs folder.
   - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent).
   - **Memory:** browse, search, forget, and the review queue.
   - **Connections**, **Reply copilot** and **Bible**.
@@ -322,6 +331,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 - `dictation.*`
 - `telegram.*`
 - `appearance.transparency`, `appearance.theme`
+- `memory.semanticSearch`
 
 ---
 
@@ -397,6 +407,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 018 | Reply copilot |
 | 019 | This Bible + generated reference |
 | 020 | Instant voice commands, HuggingGPT expert models, everyday plugins |
+| 021 | The rest of isair/jarvis: semantic memory, date recall, offline OCR, world time, rewind, local tool routing, logs |
 
 ---
 
@@ -409,7 +420,8 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.1 | Claude subscription connection |
 | 1.2 | On-device voice (Whisper, openWakeWord); 1.2.1 fixed the wake word never hearing anything |
 | 1.3 | Features from isair/jarvis, OpenJarvis and jev-chat-jarvis (conversational voice, dictation, everyday tools, local model, skills, automations, research, Telegram, reply copilot) and this Bible |
-| 1.4 | Voice fixes (always-listening model bug, no self-interruption, longer end-of-speech pause, PTT follow-ups, conversational replies); ideas from microsoft/JARVIS (HuggingGPT), sukeesh/Jarvis (plugins) and Priler/jarvis (instant commands); glass theme v2 (aurora backdrop, glass islands, Sora/Geist fonts, transparency modes, responsive down to 480 px) |
+| 1.4 | Voice fixes (always-listening model bug, no self-interruption, longer end-of-speech pause, PTT follow-ups, conversational replies); ideas from microsoft/JARVIS (HuggingGPT), sukeesh/Jarvis (plugins) and Priler/jarvis (instant commands); glass theme v2 (aurora backdrop, glass islands, Sora/Geist fonts, transparency modes, responsive down to 480 px), light and dark themes |
+| 1.5 | The rest of isair/jarvis: semantic (meaning-based) memory search, recall by date, offline screen OCR, world time, chat rewind, tool routing for local models, in-app logs, slow speech-recognition guidance, Chrome and YouTube MCP presets |
 
 ---
 
@@ -417,7 +429,8 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 
 JARVIS does not copy code from these projects; their **ideas** were studied and re-implemented. Full third-party list: [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
-- **isair/jarvis** (© Baris Sencan, non-commercial licence): transcript-first conversational listening, follow-up window, echo rejection, intent judge, dictation, weather / meals / screen tools, local-model support, fetch_web_page.
+- **isair/jarvis** (© Baris Sencan, non-commercial licence): transcript-first conversational listening, follow-up window, echo rejection, intent judge, dictation, weather / meals / screen tools, local-model support, fetch_web_page; in 1.5 hybrid semantic memory search, date-scoped recall, screenshot OCR, world time, chat rewind, keyword tool routing, the Logs view, slow-recognition guidance and two MCP catalogue entries.
+- **all-MiniLM-L6-v2** (sentence-transformers, Apache-2.0; Xenova's ONNX conversion) for semantic search.
 - **OpenJarvis** (Stanford Hazy Research, Apache-2.0): skills, scheduled agents and morning digest, deep research, channels (Telegram), news feeds.
 - **Jev chat assistant / jev-chat-jarvis** (MIT; its NOTICE asks for credit): "Based on ideas from Jev Chat Assistant (https://github.com/jev-chat/jev-chat-jarvis)" for the reply copilot's analyse → stance → draft → check → fill flow and scoring.
 - **microsoft/JARVIS** (MIT): HuggingGPT's plan → select model → execute → respond loop over Hugging Face models.

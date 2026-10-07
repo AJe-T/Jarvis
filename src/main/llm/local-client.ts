@@ -123,6 +123,66 @@ export function toOpenAiTools(
   });
 }
 
+type OpenAiTool = ReturnType<typeof toOpenAiTools>[number];
+
+/** Small local models drift when shown ~70 tools; isair/jarvis routes each request to a few. */
+export const LOCAL_TOOL_LIMIT = 12;
+/** Always offered: memory and the clock are relevant to almost anything. */
+const CORE_TOOLS = ['get_datetime', 'search_memory', 'memory'];
+const STOP = new Set(
+  'a an the and or of to in on for with my me i you it is are be do does can could would please what whats how when where who this that from at by about jarvis sir'.split(
+    ' ',
+  ),
+);
+const words = (text: string): Set<string> =>
+  new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 2 && !STOP.has(w))
+      .map((w) => w.replace(/(ing|ed|es|s)$/, '')),
+  );
+
+/**
+ * Keyword routing (isair/jarvis's KEYWORD strategy; code is ours): score each tool by words shared
+ * between Sir's latest message and the tool's name and description; keep tools this turn already used.
+ * ponytail: keyword overlap; switch to the semantic index's embeddings if routing misses too often.
+ */
+export function selectTools(
+  tools: OpenAiTool[],
+  messages: LlmRequest['messages'],
+  limit = LOCAL_TOOL_LIMIT,
+): OpenAiTool[] {
+  if (tools.length <= limit) return tools;
+  const used = new Set<string>();
+  let ask = '';
+  for (const m of messages) {
+    if (typeof m.content === 'string') {
+      if (m.role === 'user') ask = m.content;
+      continue;
+    }
+    const text = m.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join(' ');
+    if (m.role === 'user' && text.trim()) ask = text;
+    for (const b of m.content) if (b.type === 'tool_use') used.add(b.name);
+  }
+  const q = words(ask);
+  const scored = tools.map((t) => {
+    const name = words(t.function.name.replace(/_/g, ' '));
+    const desc = words(t.function.description);
+    let score = 0;
+    for (const w of q) score += (name.has(w) ? 3 : 0) + (desc.has(w) ? 1 : 0);
+    return { t, score };
+  });
+  const keep = new Set([...used, ...CORE_TOOLS]);
+  const picked = scored
+    .filter((x) => x.score > 0 && !keep.has(x.t.function.name))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(0, limit - keep.size))
+    .map((x) => x.t.function.name);
+  for (const n of picked) keep.add(n);
+  return tools.filter((t) => keep.has(t.function.name));
+}
+
 /** Removes <think>…</think> reasoning that some local models stream as ordinary text. */
 export class ThinkFilter {
   private inThink = false;
@@ -248,7 +308,7 @@ export function createLocalClient(
           'Choose a local model in Settings → Models & budget.',
         );
       const base = checkLocalUrl(cfg.baseUrl()).toString();
-      const tools = toOpenAiTools(req.tools, cfg.catalog);
+      const tools = selectTools(toOpenAiTools(req.tools, cfg.catalog), req.messages);
       const body = {
         model,
         stream: true,

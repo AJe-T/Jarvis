@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import clsx from 'clsx';
+import type { Res } from '@shared/ipc-contract';
 import { Button } from '../../components/ui/button';
 import { Section } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
@@ -55,6 +57,56 @@ export function AdvancedSection(): React.JSX.Element {
           )}
         </div>
       </Section>
+      <LogsPanel />
     </>
+  );
+}
+
+/** Logs (idea from isair/jarvis): what Jarvis did and why something failed, without opening files. */
+function LogsPanel(): React.JSX.Element {
+  const [rows, setRows] = useState<Res<'logs:tail'>>([]);
+  const [problemsOnly, setProblemsOnly] = useState(false);
+  const refresh = useCallback(() => void call('logs:tail', { lines: 300 }).then(setRows), []);
+  useEffect(refresh, [refresh]);
+  const shown = (problemsOnly ? rows.filter((r) => r.level !== 'info') : rows).slice().reverse();
+  return (
+    <Section
+      title="Logs"
+      description="Newest first. Secrets are removed before anything is written. Useful when the wake word, a model download or a connection misbehaves."
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button onClick={refresh}>Refresh</Button>
+        <Button variant="ghost" onClick={() => setProblemsOnly((v) => !v)}>
+          {problemsOnly ? 'Show everything' : 'Warnings and errors only'}
+        </Button>
+        <Button variant="ghost" onClick={() => void call('app:openFolder', { which: 'logs' })}>
+          Open logs folder
+        </Button>
+      </div>
+      <ol
+        aria-label="Log lines"
+        className="max-h-96 overflow-y-auto rounded-sm border border-glass-border bg-solid-inset p-2 font-code text-xs"
+      >
+        {shown.length === 0 && <li className="text-ink-500">Nothing logged yet.</li>}
+        {shown.map((r, i) => (
+          <li key={`${r.time}-${i}`} className="py-0.5 break-all">
+            <span className="text-ink-500">{r.time.slice(11, 19)}</span>{' '}
+            <span
+              className={clsx(
+                r.level === 'error' || r.level === 'fatal'
+                  ? 'text-alarm-500'
+                  : r.level === 'warn'
+                    ? 'text-lamp-400'
+                    : 'text-ink-300',
+              )}
+            >
+              {r.level}
+            </span>{' '}
+            {r.module && <span className="text-reactor-500">{r.module}</span>}{' '}
+            <span className="text-ink-100">{r.text}</span>
+          </li>
+        ))}
+      </ol>
+    </Section>
   );
 }

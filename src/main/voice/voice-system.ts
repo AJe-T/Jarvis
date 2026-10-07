@@ -118,7 +118,17 @@ export function createVoiceSystem(
     root: join(s.userData, 'models'),
     onProgress: (p) => s.emit('models:progress', p),
   });
-  const local = createLocalEngines(models, s.settings);
+  const local = createLocalEngines(models, s.settings, {
+    onSlow: () => {
+      logger.warn('speech recognition is slower than real time');
+      s.emit('notify', {
+        level: 'warn',
+        message:
+          'Speech recognition is running slower than you speak. Choose the smaller Whisper base.en in Settings → Voice for quicker replies.',
+        action: 'settings:voice',
+      });
+    },
+  });
   const dictations = createDictationRepo(s.db);
   const routineTriggers = (): RoutineTriggers[] =>
     (

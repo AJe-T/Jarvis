@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SettingsService } from '../../settings/settings-service';
-import { createLocalEngines } from './local-engines';
+import { createLocalEngines, watchSpeed } from './local-engines';
 import type { ModelStore } from './model-store';
 
 vi.mock('./onnx', () => ({
@@ -62,5 +62,35 @@ describe('local engines: always-listening', () => {
     expect(errors).toEqual([]);
     expect(heard).toEqual(['heard by whisper-base.en', 'heard by whisper-small.en']);
     ambient.close();
+  });
+});
+
+describe('slow speech recognition guidance (idea from isair/jarvis)', () => {
+  it('warns once after three phrases decode slower than they were spoken', async () => {
+    let t = 0;
+    let decodeMs = 3000;
+    const slow = { transcribe: async () => ((t += decodeMs), 'x'), release: async () => undefined };
+    let warned = 0;
+    const w = watchSpeed(
+      slow,
+      () => warned++,
+      () => t,
+    );
+    const twoSeconds = new Float32Array(32000);
+    await w.transcribe(twoSeconds);
+    await w.transcribe(twoSeconds);
+    expect(warned).toBe(0);
+    await w.transcribe(twoSeconds);
+    expect(warned).toBe(1);
+    for (let i = 0; i < 5; i++) await w.transcribe(twoSeconds);
+    expect(warned).toBe(1); // once per run
+    decodeMs = 500;
+    const fresh = watchSpeed(
+      slow,
+      () => warned++,
+      () => t,
+    );
+    for (let i = 0; i < 5; i++) await fresh.transcribe(twoSeconds);
+    expect(warned).toBe(1); // fast enough: no warning
   });
 });

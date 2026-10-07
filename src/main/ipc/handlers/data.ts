@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { app, shell } from 'electron';
 import { backupNow, listBackups } from '../../db/connection';
 import { JarvisError } from '../../errors';
+import { tailLog } from '../../logging/log-tail';
 import type { Services } from '../../services';
 import { handle } from '../handle';
 
@@ -32,6 +33,7 @@ export function registerDataHandlers(s: Services): void {
     }, 300);
     return { ok: true };
   });
+  handle('logs:tail', (req) => tailLog(join(s.userData, 'logs'), req.lines).catch(() => []));
   handle('app:openFolder', async (req) => {
     const target = {
       userData: s.userData,

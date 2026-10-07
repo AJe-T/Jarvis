@@ -260,7 +260,14 @@ async function boot(): Promise<void> {
       setActiveConversation: voice.setActiveConversation,
       isTest,
     },
-    voice.local,
+    {
+      models: voice.local.models,
+      // A downloaded model may be the memory embedder: start indexing right away.
+      changed: () => {
+        voice.local.changed();
+        void memory.semantic.sync();
+      },
+    },
     voice.dictations,
   );
   registerMcpHandlers(services, mcp.manager);

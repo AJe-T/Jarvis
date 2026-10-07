@@ -25,7 +25,12 @@ interface ChatStore {
   activity: UiToolCall[];
   /** True between sending the first message of a new chat and learning its conversation id. */
   awaitingId: boolean;
+  /** Text to put back into the composer (rewind → edit). */
+  draft: string | null;
   loadConversations(): Promise<void>;
+  /** isair/jarvis rewind: back to before Sir's Nth message; resend regenerates from there. */
+  rewind(userIndex: number, resend: boolean): Promise<void>;
+  takeDraft(): string | null;
   open(id: string): Promise<void>;
   newConversation(): void;
   send(text: string, source?: 'text' | 'voice', attachments?: Attachment[]): Promise<void>;
@@ -66,6 +71,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   live: null,
   activity: [],
   awaitingId: false,
+  draft: null,
 
   async loadConversations() {
     const { items } = await call('conversations:list', { limit: 100 });
@@ -112,6 +118,38 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       set({ awaitingId: false, messages: get().messages.filter((m) => m.id !== optimistic.id) });
       useUiStore.getState().toast({ level: 'error', message: cleanError(err) });
     }
+  },
+
+  async rewind(userIndex, resend) {
+    const id = get().activeId;
+    if (!id || get().live) return;
+    try {
+      const r = await call('chat:rewind', { conversationId: id, userIndex, resend });
+      await get().open(id);
+      if (r.turnId) {
+        const sent: UiMessage = {
+          id: `local-${Date.now()}`,
+          role: 'user',
+          text: r.text,
+          source: 'text',
+          createdAt: new Date().toISOString(),
+        };
+        set({
+          messages: [...get().messages, sent],
+          live: finishedTurns.has(r.turnId)
+            ? null
+            : { turnId: r.turnId, conversationId: id, text: '', toolCalls: [] },
+        });
+      } else set({ draft: r.text });
+    } catch (err) {
+      useUiStore.getState().toast({ level: 'error', message: cleanError(err) });
+    }
+  },
+
+  takeDraft() {
+    const d = get().draft;
+    if (d !== null) set({ draft: null });
+    return d;
   },
 
   async cancel() {
