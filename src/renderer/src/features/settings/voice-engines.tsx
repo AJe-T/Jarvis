@@ -131,7 +131,7 @@ function Choice<K extends SettingKey>(p: {
           className={clsx(
             'rounded-md border p-3 text-left transition-colors',
             value === o.value
-              ? 'border-reactor-500 bg-glass-inset'
+              ? 'border-accent-edge bg-glass-selected'
               : 'border-glass-border hover:border-ink-500',
           )}
         >

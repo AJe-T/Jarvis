@@ -53,10 +53,11 @@ function TreeNode({
           onClick={() => onSelect(entry.path)}
           aria-current={selected === entry.path ? 'true' : undefined}
           className={clsx(
-            'flex min-h-8 w-full items-center gap-1.5 rounded-sm pr-2 text-left text-sm',
+            'flex min-h-8 w-full items-center gap-1.5 rounded-sm pr-2 text-left text-sm transition-colors duration-[160ms]',
+            // §6.9: selected note = violet tint + 2px violet edge.
             selected === entry.path
-              ? 'bg-glass-selected text-ink-100'
-              : 'text-ink-300 hover:bg-glass-hover',
+              ? 'bg-glass-selected text-ink-100 shadow-[inset_2px_0_0_var(--accent-500)]'
+              : 'text-ink-300 hover:bg-glass-hover hover:text-ink-100',
           )}
           style={{ paddingLeft: 8 + depth * 14 }}
         >
@@ -140,13 +141,13 @@ export function MemoryView(): React.JSX.Element {
   const { meta, body } = note ? splitFrontmatter(note) : { meta: '', body: '' };
 
   return (
-    <div className="flex min-w-0 flex-1">
+    <div className="flex min-w-0 flex-1 gap-2 p-2">
       <aside
         aria-label="Memory notes"
-        className="flex w-56 shrink-0 flex-col border-r border-glass-border md:w-72"
+        className="glass-inset flex w-56 shrink-0 flex-col overflow-hidden rounded-lg md:w-72"
       >
         <div className="flex h-14 items-center gap-2 px-3">
-          <h1 className="font-display text-lg font-semibold">Memory</h1>
+          <h1 className="text-lg font-semibold">Memory</h1>
           <Button
             variant="ghost"
             className="ml-auto"
@@ -164,7 +165,7 @@ export function MemoryView(): React.JSX.Element {
             else setHits(null);
           }}
         >
-          <Search size={14} aria-hidden className="absolute top-2.5 left-5.5 text-ink-500" />
+          <Search size={14} aria-hidden className="absolute top-3 left-5.5 text-reactor-500/70" />
           <TextInput
             aria-label="Search memory"
             placeholder="Search memory"
@@ -182,7 +183,7 @@ export function MemoryView(): React.JSX.Element {
                   <button
                     type="button"
                     onClick={() => setSelected(h.vaultPath)}
-                    className="w-full rounded-sm px-3 py-2 text-left hover:bg-glass-hover"
+                    className="w-full rounded-sm px-3 py-2 text-left transition-colors duration-[160ms] hover:bg-glass-hover"
                   >
                     <span className="block text-sm text-ink-100">{h.title}</span>
                     <span className="block truncate text-xs text-ink-500">{h.snippet}</span>
@@ -204,11 +205,14 @@ export function MemoryView(): React.JSX.Element {
         <ReviewQueue />
       </aside>
 
-      <section className="flex min-w-0 flex-1 flex-col" aria-label="Note">
+      <section
+        className="glass-raised flex min-w-0 flex-1 flex-col overflow-hidden"
+        aria-label="Note"
+      >
         {selected && note !== null ? (
           <>
             <header className="flex h-14 shrink-0 items-center gap-2 border-b border-glass-border px-6">
-              <h2 className="truncate font-display text-lg font-semibold">
+              <h2 className="truncate text-lg font-semibold">
                 {selected.replace(/^Memory\//, '').replace(/\.md$/, '')}
               </h2>
               <div className="ml-auto flex gap-2">
@@ -220,10 +224,10 @@ export function MemoryView(): React.JSX.Element {
                 </Button>
               </div>
             </header>
-            <div className="flex-1 overflow-y-auto px-8 py-6">
+            <div key={selected} className="fade-in flex-1 overflow-y-auto px-6 py-7 md:px-10">
               <div className="mx-auto max-w-[72ch]">
                 {meta && (
-                  <pre className="mb-4 rounded-sm bg-glass-inset p-3 font-code text-xs text-ink-500">
+                  <pre className="mb-6 overflow-x-auto rounded-md border border-glass-border bg-glass-inset px-4 py-3 font-code text-xs leading-5 text-ink-500">
                     {meta}
                   </pre>
                 )}

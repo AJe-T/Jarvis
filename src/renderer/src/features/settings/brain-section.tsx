@@ -19,7 +19,7 @@ export function BrainSection(): React.JSX.Element {
           Also set a monthly spend limit in the{' '}
           <button
             type="button"
-            className="text-reactor-500 underline underline-offset-2"
+            className="text-accent-300 underline underline-offset-2"
             onClick={() =>
               void call('app:openExternal', {
                 url: 'https://console.anthropic.com/settings/limits',

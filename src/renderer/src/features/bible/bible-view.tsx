@@ -48,7 +48,7 @@ export function BibleView(): React.JSX.Element {
         aria-label="Bible contents"
         className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-glass-border px-3 py-4"
       >
-        <h1 className="px-2 font-display text-lg font-semibold text-ink-100">JARVIS Bible</h1>
+        <h1 className="px-2 text-xl font-semibold text-ink-100">JARVIS Bible</h1>
         <div role="tablist" className="flex gap-1">
           {(Object.keys(DOCS) as Array<keyof typeof DOCS>).map((d) => (
             <button

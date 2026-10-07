@@ -41,14 +41,11 @@ export function UsagePanel(): React.JSX.Element {
       </div>
 
       {summary && (
-        <section
-          aria-label="Spend"
-          className="rounded-md border border-glass-border bg-glass-inset p-4"
-        >
+        <section aria-label="Spend" className="glass-raised p-5">
           <p className="text-sm text-ink-300">
             {range === 'day' ? 'API spend today' : 'API spend this month'}
           </p>
-          <p className="font-display text-3xl font-semibold text-ink-100 tabular">
+          <p className="text-2xl font-semibold text-ink-100 tabular">
             {usd(summary.costUsd)}
             {summary.budget > 0 && (
               <span className="ml-2 text-base text-ink-500">of {usd(summary.budget)}</span>
@@ -64,7 +61,7 @@ export function UsagePanel(): React.JSX.Element {
               aria-label="Budget used"
             >
               <div
-                className={`h-2 rounded-pill ${pct >= 90 ? 'bg-alarm-500' : pct >= 70 ? 'bg-lamp-400' : 'bg-reactor-500'}`}
+                className={`h-2 rounded-pill ${pct >= 90 ? 'bg-alarm-fill' : pct >= 70 ? 'bg-lamp-400' : 'bg-reactor-500'}`}
                 style={{ width: `${pct}%` }}
               />
             </div>

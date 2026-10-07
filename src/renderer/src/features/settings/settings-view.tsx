@@ -12,9 +12,9 @@ export function SettingsView(): React.JSX.Element {
     <div className="flex min-w-0 flex-1">
       <nav
         aria-label="Settings sections"
-        className="w-40 shrink-0 overflow-y-auto border-r border-glass-border px-2 py-4 md:w-52"
+        className="w-40 shrink-0 overflow-y-auto border-r border-glass-border-subtle px-2 py-5 md:w-56 md:px-3"
       >
-        <h1 className="px-3 pb-3 font-display text-lg font-semibold text-ink-100">Settings</h1>
+        <h1 className="px-3 pb-4 text-xl font-semibold text-ink-100">Settings</h1>
         <ul className="flex flex-col gap-0.5">
           {SETTINGS_SECTIONS.map((s) => (
             <li key={s.id}>
@@ -23,9 +23,9 @@ export function SettingsView(): React.JSX.Element {
                 aria-current={s.id === current?.id ? 'page' : undefined}
                 onClick={() => go('settings', s.id)}
                 className={clsx(
-                  'w-full rounded-md px-3 py-1.5 text-left text-sm',
+                  'w-full rounded-md px-3 py-2 text-left text-ui transition-colors duration-[160ms]',
                   s.id === current?.id
-                    ? 'bg-glass-selected text-ink-100'
+                    ? 'bg-glass-selected text-ink-100 shadow-[inset_2px_0_0_var(--accent-500)]'
                     : 'text-ink-300 hover:bg-glass-hover',
                 )}
               >
@@ -35,8 +35,10 @@ export function SettingsView(): React.JSX.Element {
           ))}
         </ul>
       </nav>
-      <div className="flex-1 overflow-y-auto px-3 py-2 md:px-6 lg:px-8">
-        <div className="max-w-2xl">{Body && <Body />}</div>
+      <div className="flex-1 overflow-y-auto px-3 py-3 md:px-6 lg:px-10">
+        <div key={current?.id} className="fade-in max-w-3xl">
+          {Body && <Body />}
+        </div>
       </div>
     </div>
   );

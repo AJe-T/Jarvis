@@ -1,78 +1,134 @@
-/* Design-system.md §3.6 — the only place raw colour values live. */
+/* Design-system.md §3 ("Obsidian Intelligence") — the only place raw colour values live. */
 @property --spill-color {
   /* registered so the orb-state colour change can cross-fade */
   syntax: '<color>';
   inherits: true;
-  initial-value: rgba(63, 216, 245, 0.18);
+  initial-value: rgba(34, 211, 238, 0.1);
 }
 
 :root {
-  /* L0 backdrop */
-  --void-950: #04060e;
-  --aurora-blue: 22 115 255;
-  --aurora-a-blue: 0.28;
-  --aurora-violet: 138 77 255;
-  --aurora-a-violet: 0.32;
-  --aurora-indigo: 75 63 224;
-  --aurora-a-indigo: 0.38;
-  --spill-color: rgba(63, 216, 245, 0.18);
-  /* Two compact light sources behind the glass, so the frosting reads (contrast-checked). */
-  --orb-a: rgb(63 216 245 / 0.3);
-  --orb-b: rgb(138 77 255 / 0.4);
-  /* Spill per orb state (§6.1); never above 0.18 alpha (contrast guarantee, §3.5) */
-  --spill-idle: rgba(63, 216, 245, 0.12);
-  --spill-active: rgba(63, 216, 245, 0.18);
-  --spill-busy: rgba(63, 216, 245, 0.16);
-  --spill-awaiting: rgba(255, 181, 74, 0.16);
-  --spill-error: rgba(255, 107, 94, 0.14);
-  --grain-opacity: 0.035;
+  color-scheme: dark;
 
-  /* Glass surfaces */
-  --glass-pane: rgba(9, 13, 28, 0.64);
-  --glass-float: rgba(12, 17, 36, 0.72);
-  --glass-decision: rgba(12, 17, 36, 0.86);
-  --glass-inset: rgba(255, 255, 255, 0.05);
-  --glass-hover: rgba(255, 255, 255, 0.07);
-  --glass-selected: rgba(63, 216, 245, 0.1);
-  --glass-border: rgba(255, 255, 255, 0.14);
-  --glass-border-strong: rgba(255, 255, 255, 0.2);
-  --glass-highlight: rgba(255, 255, 255, 0.14);
-  --scrim: rgba(4, 6, 14, 0.6);
+  /* ── Palette (§3.1) ──────────────────────────────────────── */
+  --bg-950: #05060b;
+  --bg-900: #080b12;
+  --bg-850: #0b0f19;
+  --bg-800: #101528;
+  --indigo-950: #0a0b18;
+  --indigo-900: #10122a;
+  --indigo-800: #161a38;
+  --indigo-500: #6366f1; /* send-button gradient end only */
+  --violet-600: #7c3aed;
+  --violet-500: #8b5cf6;
+  --violet-400: #a78bfa;
+  --violet-300: #c4b5fd;
+  --cyan-500: #06b6d4;
+  --cyan-400: #22d3ee;
+  --cyan-300: #67e8f9;
+  --cyan-200: #a5f3fc; /* orb core */
+  --rose-400: #f0abfc; /* atmosphere only, never a UI colour */
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --error-text: #fca5a5; /* #F87171 is 3.7:1 as text on glass; it stays for fills and icons */
+  --info: #60a5fa;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #a8b1c2;
+  --text-muted: #697386; /* placeholders and disabled only: below 4.5:1 by design (§3.5) */
+  /* Orb energy for the amber and red states (§6.1) */
+  --orb-amber-core: #fde68a;
+  --orb-amber-glow: rgba(251, 191, 36, 0.3);
+  --orb-red-core: #fecaca;
+  --orb-red-glow: rgba(248, 113, 113, 0.28);
+  --orb-highlight: rgba(255, 255, 255, 0.45);
+
+  /* ── Atmosphere, L0 (§3.2) ───────────────────────────────── */
+  --void-950: var(--bg-950);
+  --atmos-violet: rgba(139, 92, 246, 0.15);
+  --atmos-cyan: rgba(34, 211, 238, 0.08);
+  --atmos-core: rgba(139, 92, 246, 0.035);
+  --atmos-rose: rgba(240, 171, 252, 0.035);
+  --grain-opacity: 0.03;
+  --spill-color: rgba(34, 211, 238, 0.1);
+  /* Orb light per state (§6.1); never above 0.12 alpha (contrast guarantee, §3.5) */
+  --spill-idle: rgba(34, 211, 238, 0.08);
+  --spill-active: rgba(34, 211, 238, 0.12);
+  --spill-think: rgba(139, 92, 246, 0.12);
+  --spill-awaiting: rgba(251, 191, 36, 0.1);
+  --spill-error: rgba(248, 113, 113, 0.1);
+
+  /* ── Glass levels (§3.3) ─────────────────────────────────── */
+  /* A white sheen per level over a half-transparent obsidian base: the base is what keeps
+     text at 4.5:1 over the brightest part of the atmosphere. */
+  --glass-base: rgba(5, 6, 11, 0.5);
+  --glass-1: rgba(255, 255, 255, 0.035); /* subtle: rail, main pane, status bar */
+  --glass-2: rgba(255, 255, 255, 0.055); /* standard: cards, inputs, chips */
+  --glass-3: rgba(255, 255, 255, 0.075); /* raised: drawer, toasts, settings groups */
+  --glass-4: rgba(255, 255, 255, 0.1); /* modal: confirmations */
+  --glass-inset: var(--glass-2);
+  --glass-composer: rgba(255, 255, 255, 0.065);
+  --glass-hover: rgba(255, 255, 255, 0.075);
+  --glass-press: rgba(255, 255, 255, 0.035);
+  --glass-selected: rgba(139, 92, 246, 0.1);
+  --glass-border-subtle: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-strong: rgba(255, 255, 255, 0.14);
+  --glass-border-modal: rgba(255, 255, 255, 0.18);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+  --scrim: rgba(2, 6, 23, 0.68);
   --blur-pane: 24px;
-  --blur-float: 32px;
-  --blur-scrim: 6px;
-  --glass-saturate: 160%;
+  --blur-raised: 28px;
+  --blur-modal: 36px;
+  --blur-scrim: 12px;
+  --glass-saturate: 150%;
 
-  /* Solid fallbacks */
-  --solid-pane: #0d1328;
-  --solid-float: #121933;
-  --solid-inset: #161d36;
-  --solid-hover: #1b2340;
+  /* Solid surfaces: code, dense data, tooltips, safety overlays (§3.4) */
+  --solid-pane: var(--bg-900);
+  --solid-float: var(--bg-800);
+  --solid-inset: var(--bg-850);
+  --solid-hover: var(--indigo-800);
 
-  /* Semantic */
-  --reactor-500: #3fd8f5;
-  --reactor-300: #93ecff;
-  --reactor-glow: rgba(63, 216, 245, 0.32);
-  --lamp-400: #ffb54a;
-  --lamp-tint: rgba(255, 181, 74, 0.1); /* taint banner fill (§6.5) */
-  --alarm-500: #ff8f86;
-  --ok-400: #46dfa0;
-
-  /* Ink */
-  --ink-100: #e6eefc;
-  --ink-300: #a7b6ce;
-  --ink-500: #a3b1ca;
+  /* ── Semantic roles used by components (§3.5) ───────────── */
+  --ink-100: var(--text-primary);
+  --ink-300: var(--text-secondary);
+  --ink-500: var(--text-tertiary);
+  --ink-muted: var(--text-muted);
+  --icon-rest: #8d99ae;
+  --reactor-500: var(--cyan-400); /* JARVIS energy: orb, voice, running work */
+  --reactor-300: var(--cyan-300);
+  --reactor-glow: rgba(34, 211, 238, 0.32);
+  --reactor-tint: rgba(34, 211, 238, 0.09);
+  --reactor-edge: rgba(34, 211, 238, 0.15);
+  --accent-600: var(--violet-600); /* interaction: primary buttons, focus, selection, links */
+  --accent-500: var(--violet-500);
+  --accent-300: var(--violet-300); /* violet as text: 500 is too dark to read on glass */
+  --accent-edge: rgba(139, 92, 246, 0.25);
+  --accent-focus: rgba(139, 92, 246, 0.45);
+  --accent-ring: rgba(139, 92, 246, 0.1);
+  --accent-hover: rgba(139, 92, 246, 0.1);
+  --bubble-sir: rgba(139, 92, 246, 0.07);
+  --bubble-sir-edge: rgba(139, 92, 246, 0.13);
+  --lamp-400: var(--warning);
+  --lamp-tint: rgba(251, 191, 36, 0.1);
+  --alarm-500: var(--error-text);
+  --alarm-fill: var(--error);
+  --alarm-tint: rgba(248, 113, 113, 0.1);
+  --ok-400: var(--success);
+  --ok-tint: rgba(52, 211, 153, 0.1);
+  --info-tint: rgba(34, 211, 238, 0.08);
+  --ink-on-accent: var(--text-primary);
   --ink-on-reactor: #04202a;
   --ink-on-lamp: #2a1700;
   --ink-on-alarm: #2a0503;
   --ink-on-ok: #03231a;
 
-  /* Type */
-  --font-display: 'Sora', 'Segoe UI Variable Display', 'Segoe UI', sans-serif;
-  --font-body: 'Geist', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  /* ── Type (§4) ───────────────────────────────────────────── */
+  --font-display: 'Outfit', 'Segoe UI Variable Display', 'Segoe UI', sans-serif;
+  --font-body: 'Outfit', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
   --font-code: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
 
-  /* Space, shape, depth */
+  /* ── Space, shape, depth ─────────────────────────────────── */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -81,83 +137,107 @@
   --space-6: 32px;
   --space-7: 48px;
   --space-8: 64px;
-  --shell-gap: 6px;
+  --shell-gap: 8px;
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-composer: 20px;
   --radius-pill: 999px;
-  --shadow-pane: 0 8px 32px -16px rgba(0, 0, 0, 0.5);
-  --shadow-float: 0 24px 48px -12px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --shadow-pane: 0 12px 40px rgba(0, 0, 0, 0.2);
+  --shadow-float: 0 20px 60px rgba(0, 0, 0, 0.25);
+  --shadow-accent: 0 6px 18px -6px rgba(124, 58, 237, 0.55);
 
-  /* Motion */
-  --dur-fast: 120ms;
+  /* ── Motion (§8) ─────────────────────────────────────────── */
+  --dur-fast: 160ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
-/* Light theme ("Daylight Workshop"): Settings → General → Theme. Same structure, frosted white glass
-   over a pastel aurora. Values checked by scripts/check-glass-contrast.mjs. */
+/* Light theme ("Obsidian Daylight"): Settings → General → Theme. Same roles, frosted white glass
+   over a pale lavender atmosphere. Checked by scripts/check-glass-contrast.mjs. */
 :root[data-theme='light'] {
   color-scheme: light;
-  --void-950: #e9eef8;
-  --aurora-blue: 120 170 255;
-  --aurora-a-blue: 0.45;
-  --aurora-violet: 180 150 255;
-  --aurora-a-violet: 0.42;
-  --aurora-indigo: 140 200 255;
-  --aurora-a-indigo: 0.4;
-  --orb-a: rgb(94 200 229 / 0.35);
-  --orb-b: rgb(192 140 255 / 0.35);
+  --void-950: #eef0f8;
+  --atmos-violet: rgba(139, 92, 246, 0.16);
+  --atmos-cyan: rgba(34, 211, 238, 0.12);
+  --atmos-core: rgba(139, 92, 246, 0.05);
+  --atmos-rose: rgba(240, 171, 252, 0.1);
+  --grain-opacity: 0.02;
   --spill-idle: rgba(8, 145, 178, 0.08);
   --spill-active: rgba(8, 145, 178, 0.12);
-  --spill-busy: rgba(8, 145, 178, 0.1);
-  --spill-awaiting: rgba(217, 119, 6, 0.12);
-  --spill-error: rgba(220, 38, 38, 0.1);
-  --grain-opacity: 0.025;
+  --spill-think: rgba(124, 58, 237, 0.1);
+  --spill-awaiting: rgba(217, 119, 6, 0.1);
+  --spill-error: rgba(220, 38, 38, 0.08);
 
-  --glass-pane: rgba(255, 255, 255, 0.6);
-  --glass-float: rgba(255, 255, 255, 0.74);
-  --glass-decision: rgba(255, 255, 255, 0.9);
-  --glass-inset: rgba(15, 23, 42, 0.04);
-  --glass-hover: rgba(15, 23, 42, 0.07);
-  --glass-selected: rgba(8, 145, 178, 0.12);
+  --glass-base: rgba(255, 255, 255, 0.5);
+  --glass-1: rgba(255, 255, 255, 0.2);
+  --glass-2: rgba(255, 255, 255, 0.45);
+  --glass-3: rgba(255, 255, 255, 0.4);
+  --glass-4: rgba(255, 255, 255, 0.6);
+  --glass-composer: rgba(255, 255, 255, 0.5);
+  --glass-hover: rgba(15, 23, 42, 0.05);
+  --glass-press: rgba(15, 23, 42, 0.08);
+  --glass-selected: rgba(124, 58, 237, 0.1);
+  --glass-border-subtle: rgba(15, 23, 42, 0.07);
   --glass-border: rgba(15, 23, 42, 0.1);
-  --glass-border-strong: rgba(15, 23, 42, 0.16);
+  --glass-border-strong: rgba(15, 23, 42, 0.14);
+  --glass-border-modal: rgba(15, 23, 42, 0.16);
   --glass-highlight: rgba(255, 255, 255, 0.8);
-  --scrim: rgba(226, 232, 245, 0.55);
+  --scrim: rgba(226, 228, 245, 0.6);
 
-  --solid-pane: #f6f8fd;
+  --solid-pane: #f6f7fc;
   --solid-float: #ffffff;
-  --solid-inset: #eef2f9;
-  --solid-hover: #e5eaf4;
-
-  --reactor-500: #0a5c73;
-  --reactor-300: #0e7490;
-  --reactor-glow: rgba(8, 145, 178, 0.28);
-  --lamp-400: #854000;
-  --lamp-tint: rgba(217, 119, 6, 0.12);
-  --alarm-500: #a31b12;
-  --ok-400: #036043;
+  --solid-inset: #eef0f7;
+  --solid-hover: #e6e8f3;
 
   --ink-100: #0f172a;
   --ink-300: #334155;
   --ink-500: #475569;
+  --ink-muted: #64748b;
+  --icon-rest: #64748b;
+  --reactor-500: #155e75;
+  --reactor-300: #0e7490;
+  --reactor-glow: rgba(8, 145, 178, 0.28);
+  --reactor-tint: rgba(8, 145, 178, 0.1);
+  --reactor-edge: rgba(8, 145, 178, 0.22);
+  --accent-600: #6d28d9;
+  --accent-500: #7c3aed;
+  --accent-300: #5b21b6;
+  --accent-edge: rgba(124, 58, 237, 0.3);
+  --accent-focus: rgba(124, 58, 237, 0.5);
+  --accent-ring: rgba(124, 58, 237, 0.12);
+  --accent-hover: rgba(124, 58, 237, 0.08);
+  --bubble-sir: rgba(124, 58, 237, 0.08);
+  --bubble-sir-edge: rgba(124, 58, 237, 0.16);
+  --lamp-400: #92400e;
+  --lamp-tint: rgba(217, 119, 6, 0.12);
+  --alarm-500: #b91c1c;
+  --alarm-fill: #dc2626;
+  --alarm-tint: rgba(220, 38, 38, 0.08);
+  --ok-400: #065f46;
+  --ok-tint: rgba(5, 150, 105, 0.1);
+  --info-tint: rgba(8, 145, 178, 0.08);
+  --ink-on-accent: #ffffff;
   --ink-on-reactor: #ffffff;
   --ink-on-lamp: #ffffff;
   --ink-on-alarm: #ffffff;
   --ink-on-ok: #ffffff;
 
-  --shadow-pane: 0 8px 32px -16px rgba(30, 41, 59, 0.25);
-  --shadow-float: 0 24px 48px -12px rgba(30, 41, 59, 0.25), 0 2px 6px rgba(30, 41, 59, 0.08);
+  --shadow-pane: 0 12px 40px rgba(30, 41, 59, 0.08);
+  --shadow-float: 0 20px 60px rgba(30, 41, 59, 0.14);
+  --shadow-accent: 0 6px 18px -6px rgba(109, 40, 217, 0.45);
 }
 
-/* §5.1 shell gap per breakpoint (compact 6px, md/lg 8px, xl 12px). */
-@media (min-width: 760px) {
+/* §5.1: small windows get tighter gaps and lighter blur (cheaper and calmer). */
+@media (max-width: 759px) {
   :root {
-    --shell-gap: 8px;
+    --shell-gap: 6px;
+    --blur-pane: 16px;
+    --blur-raised: 20px;
+    --blur-modal: 24px;
   }
 }
 @media (min-width: 1600px) {

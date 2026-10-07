@@ -152,6 +152,6 @@ describe('Orb (Design-system.md §5.1)', () => {
       removeEventListener: () => undefined,
     })) as never;
     const { container } = render(<Orb state="THINKING" size="sm" />);
-    expect(container.querySelector('.orb-spin')).toBeNull();
+    expect(container.querySelector('.orb-orbit, .orb-orbit-slow, .orb-particle')).toBeNull();
   });
 });

@@ -97,15 +97,12 @@ export function CopilotView(): React.JSX.Element {
         </header>
 
         {!capture ? (
-          <p className="rounded-md border border-glass-border p-4 text-sm text-ink-500">
+          <p className="glass-raised p-4 text-sm text-ink-500">
             No chat captured yet. Press {hotkey} while the chat is on screen.
           </p>
         ) : (
           <>
-            <section
-              aria-label="Conversation"
-              className="rounded-md border border-glass-border p-4"
-            >
+            <section aria-label="Conversation" className="glass-raised p-4">
               <div className="mb-2 flex items-center justify-between">
                 <p className="font-semibold text-ink-100">
                   {capture.chat.contact || 'Chat'}{' '}
@@ -185,7 +182,7 @@ export function CopilotView(): React.JSX.Element {
                 <h2 className="font-display text-lg font-semibold text-ink-100">
                   2 · How do you want to respond?
                 </h2>
-                <div className="rounded-md border border-glass-border p-3 text-sm text-ink-300">
+                <div className="glass-inset p-3 text-sm text-ink-300">
                   <p>
                     <b className="text-ink-100">They want:</b> {analysis.theyWant}
                   </p>
@@ -216,7 +213,7 @@ export function CopilotView(): React.JSX.Element {
                       className={clsx(
                         'rounded-md border p-3 text-left',
                         option === o.id
-                          ? 'border-reactor-500 bg-glass-inset'
+                          ? 'border-accent-edge bg-glass-selected'
                           : 'border-glass-border hover:border-ink-500',
                       )}
                     >

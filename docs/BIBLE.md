@@ -209,11 +209,14 @@ Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem) in the
   - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent).
   - **Memory:** browse, search, forget, and the review queue.
   - **Connections**, **Reply copilot** and **Bible**.
-- **Look ("Glass Workshop at Night", [Design-system](Design-system.md)):**
-  - Frosted glass islands (rail, chat, activity, status bar) floating over a slow blue/violet aurora; the orb's state colour lights the backdrop.
-  - Fonts: Sora (headings), Geist (text), JetBrains Mono (code), bundled so they work offline.
+- **Look ("Obsidian Intelligence", [Design-system](Design-system.md)):**
+  - Four levels of glass (control rail, main surface, activity console, dialogs) over a dark obsidian atmosphere with soft violet, cyan and rose light that drifts very slowly; the orb's state colour lights the room.
+  - Violet means you act (buttons, focus, selection, links); cyan means Jarvis acts (orb, voice, running tools).
+  - The orb is an eight-layer reactor: it breathes when idle, ripples with your voice, turns a violet ring while thinking, shows one segment per tool while acting, glows amber when it needs you, draws a wave while speaking.
+  - Fonts: Outfit (interface), JetBrains Mono (code and paths), bundled so they work offline.
   - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px Activity opens as a sheet (Esc closes it).
-  - **Settings → General → Theme:** Match Windows (default), Dark, Light (frosted white glass over a pastel aurora).
+  - Reduced motion (Windows animation effects off) stops the drift, rotation and particles; colours and text still show every state.
+  - **Settings → General → Theme:** Match Windows (default), Dark, Light (frosted white glass over a pale lavender atmosphere).
   - **Settings → General → Transparency:** Full glass (default), Auto, Reduced (no blur), Solid. Auto uses Solid when Windows "Transparency effects" is off, and Reduced on battery.
 - **Mini orb:** a small always-on-top orb (tray or chat header).
 - **Tray, start with Windows, start hidden.**
@@ -422,6 +425,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.3 | Features from isair/jarvis, OpenJarvis and jev-chat-jarvis (conversational voice, dictation, everyday tools, local model, skills, automations, research, Telegram, reply copilot) and this Bible |
 | 1.4 | Voice fixes (always-listening model bug, no self-interruption, longer end-of-speech pause, PTT follow-ups, conversational replies); ideas from microsoft/JARVIS (HuggingGPT), sukeesh/Jarvis (plugins) and Priler/jarvis (instant commands); glass theme v2 (aurora backdrop, glass islands, Sora/Geist fonts, transparency modes, responsive down to 480 px), light and dark themes |
 | 1.5 | The rest of isair/jarvis: semantic (meaning-based) memory search, recall by date, offline screen OCR, world time, chat rewind, tool routing for local models, in-app logs, slow speech-recognition guidance, Chrome and YouTube MCP presets |
+| 1.6 | "Obsidian Intelligence" redesign: four-level glass, violet/cyan roles, Outfit font, eight-layer orb with tool progress, view/modal/toast motion, re-coloured light theme |
 
 ---
 

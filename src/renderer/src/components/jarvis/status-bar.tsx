@@ -29,10 +29,12 @@ export function StatusBar(): React.JSX.Element {
   const ratio = budget > 0 ? day / budget : 0;
   return (
     <footer
-      className="glass-pane flex h-8 shrink-0 items-center gap-4 overflow-hidden rounded-md px-4 text-xs whitespace-nowrap text-ink-300 short:h-7"
+      className="glass-pane flex h-8 shrink-0 items-center gap-4 overflow-hidden rounded-md px-4 text-xs whitespace-nowrap text-ink-500 short:h-7"
       aria-label="Status"
     >
-      <span>Voice: {voice ? VOICE_LABEL[voice] : '—'}</span>
+      <span>
+        Voice: <span className="text-reactor-500">{voice ? VOICE_LABEL[voice] : '—'}</span>
+      </span>
       <span aria-hidden>·</span>
       <span>{modelLabel(model)}</span>
       <span aria-hidden>·</span>
@@ -58,7 +60,7 @@ export function StatusBar(): React.JSX.Element {
       )}
       <span className="ml-auto flex items-center gap-1.5">
         <span
-          className={clsx('size-2 rounded-pill', online ? 'bg-ok-400' : 'bg-alarm-500')}
+          className={clsx('size-2 rounded-pill', online ? 'bg-ok-400' : 'bg-alarm-fill')}
           aria-hidden
         />
         {online ? 'Online' : 'Offline'}

@@ -44,7 +44,7 @@ function TaskEditor({
       .then(onDone)
       .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }));
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-reactor-500 bg-glass-inset p-4">
+    <div className="flex flex-col gap-3 glass-raised border-accent-edge p-4">
       <TextInput
         aria-label="Task name"
         placeholder="Name, e.g. Weekly review"
@@ -208,12 +208,21 @@ export function AutomationsSection(): React.JSX.Element {
               <li
                 key={t.id}
                 className={clsx(
-                  'flex items-start gap-3 rounded-md border p-3',
-                  t.enabled ? 'border-glass-border' : 'border-glass-border opacity-75',
+                  'glass-inset flex flex-wrap items-start gap-3 rounded-lg p-4 transition-colors duration-[160ms]',
+                  !t.enabled && 'opacity-75',
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-ink-100">{t.name}</p>
+                  <p className="flex items-center gap-2 font-semibold text-ink-100">
+                    <span
+                      className={clsx(
+                        'size-2 shrink-0 rounded-pill',
+                        t.enabled ? 'bg-ok-400' : 'bg-ink-muted',
+                      )}
+                      aria-hidden
+                    />
+                    {t.name}
+                  </p>
                   <p className="text-sm text-ink-300">
                     {KINDS[t.kind]} · {t.scheduleText}
                     {t.speak ? ' · spoken' : ''}
@@ -269,7 +278,9 @@ export function AutomationsSection(): React.JSX.Element {
         {editing && !editing.id ? (
           <TaskEditor initial={editing} onDone={() => (setEditing(null), load())} />
         ) : (
-          <Button onClick={() => setEditing(blank())}>New automation</Button>
+          <Button variant="primary" className="self-start" onClick={() => setEditing(blank())}>
+            New automation
+          </Button>
         )}
       </Section>
       <Section

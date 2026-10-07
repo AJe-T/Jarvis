@@ -40,16 +40,19 @@ export function EmptyState(): React.JSX.Element {
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-3 md:px-6">
+    <div className="view-enter flex flex-1 flex-col items-center justify-center gap-7 px-3 md:px-6">
       <Orb state={state} level={level} size="lg" />
-      <h1 className="font-display text-xl font-semibold text-ink-100">{greeting()}</h1>
-      <div className="flex flex-wrap justify-center gap-2">
+      <h1 className="max-w-[18ch] text-center text-hero font-semibold text-ink-100">
+        {greeting()}
+      </h1>
+      <div className="flex max-w-xl flex-wrap justify-center gap-2.5">
         {chips.map((c) => (
           <button
             key={c}
             type="button"
             onClick={() => void send(c)}
-            className="glass-inset min-h-8 rounded-pill px-4 text-sm text-ink-300 transition-colors duration-[120ms] hover:text-ink-100"
+            // §6.3: glass chips; violet on hover, a 2px lift, a press on click.
+            className="glass-inset min-h-9 rounded-pill px-[18px] py-2 text-ui text-ink-300 transition-[background-color,border-color,color,translate,scale] duration-200 hover:border-accent-edge hover:bg-accent-hover hover:text-ink-100 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-[0.97]"
           >
             {c.charAt(0).toUpperCase() + c.slice(1)}
           </button>

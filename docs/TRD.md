@@ -75,7 +75,7 @@ chokidar 5.0.0  yaml 2.9.1 (frontmatter)  fuse.js 7.5.0  pino 10.4.0  pino-roll 
 msedge-tts 2.0.9           # TTS default (unofficial endpoint — wrapped behind provider)
 react 19.3.0  react-dom 19.3.0  react-markdown 10.1.0  remark-gfm 4.0.1  lucide-react 1.52.0  clsx 2.1.1
 @radix-ui/react-dialog 1.2.0  @radix-ui/react-tooltip 1.3.0  @radix-ui/react-switch 1.3.8
-# fonts: Sora, Geist, JetBrains Mono variable .woff2 in src/renderer/src/assets/fonts (OFL, bundled locally)
+# fonts: Outfit, JetBrains Mono variable .woff2 in src/renderer/src/assets/fonts (OFL, bundled locally)
 # not a dependency: @playwright/mcp (spawned with npx at a pinned version, ADR-005)
 
 # dev

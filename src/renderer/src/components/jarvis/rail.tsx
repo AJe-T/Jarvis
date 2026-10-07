@@ -26,7 +26,7 @@ export function Rail(): React.JSX.Element {
   return (
     <nav
       aria-label="Main"
-      className="glass-pane flex w-[52px] shrink-0 flex-col items-center gap-1 overflow-y-auto py-3 md:w-16"
+      className="glass-pane flex w-[56px] shrink-0 flex-col items-center gap-1.5 overflow-y-auto py-3 md:w-16"
     >
       {ITEMS.map(({ view: v, label, Icon }) => (
         <IconButton
@@ -35,6 +35,7 @@ export function Rail(): React.JSX.Element {
           active={view === v}
           aria-current={view === v ? 'page' : undefined}
           onClick={() => go(v)}
+          className="size-10"
         >
           <Icon size={18} strokeWidth={1.75} aria-hidden />
         </IconButton>

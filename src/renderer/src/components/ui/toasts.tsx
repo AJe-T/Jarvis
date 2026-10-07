@@ -34,12 +34,13 @@ export function Toasts(): React.JSX.Element {
             key={t.id}
             role={t.level === 'error' ? 'alert' : 'status'}
             className={clsx(
-              'glass-float pointer-events-auto flex items-start gap-2 rounded-lg p-3 text-sm',
+              // §6.8: compact glass, tinted by level; errors and warnings keep a 3px edge.
+              'glass-float toast-in pointer-events-auto flex items-start gap-2.5 rounded-lg p-3 text-sm',
               t.level === 'error'
-                ? 'shadow-[inset_3px_0_0_var(--alarm-500),var(--shadow-float)]'
+                ? '[background-image:linear-gradient(var(--alarm-tint),var(--alarm-tint))] shadow-[inset_3px_0_0_var(--alarm-fill),var(--shadow-float)]'
                 : t.level === 'warn'
-                  ? 'shadow-[inset_3px_0_0_var(--lamp-400),var(--shadow-float)]'
-                  : '',
+                  ? '[background-image:linear-gradient(var(--lamp-tint),var(--lamp-tint))] shadow-[inset_3px_0_0_var(--lamp-400),var(--shadow-float)]'
+                  : '[background-image:linear-gradient(var(--info-tint),var(--info-tint))]',
             )}
           >
             <Icon
@@ -59,7 +60,7 @@ export function Toasts(): React.JSX.Element {
               {t.action && (
                 <button
                   type="button"
-                  className="mt-1 text-reactor-500 underline underline-offset-2"
+                  className="mt-1 text-accent-300 underline underline-offset-2"
                   onClick={() => (
                     runAction(t.action as NonNullable<Toast['action']>),
                     dismiss(t.id)

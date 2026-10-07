@@ -2,668 +2,364 @@
 
 | Field | Value |
 |---|---|
-| Status | v2.0 — Glass theme |
+| Status | v3.0 — Obsidian Intelligence |
 | Last updated | 2026-10-07 |
-| Theme name | **Glass Workshop at Night** (dark glassmorphism) |
-| Stack | Electron · React · TypeScript · Tailwind · Framer Motion |
+| Theme name | **Obsidian Intelligence** (dark, default) · **Obsidian Daylight** (light) |
+| Stack | Electron · React · TypeScript · Tailwind v4 · CSS animations |
 | Related | [App-flow](App-flow.md) · [Code-style](Code-style.md) §6 · [PRD](PRD.md) F4.6 |
 
----
-
-## 0. Quick start for an AI builder
-
-This file is the **single source of truth** for the JARVIS look. Paste the prompt below together with this file.
-
-```text
-You are building the visual theme for JARVIS Desktop (Electron + React + TypeScript + Tailwind).
-Treat Design-system.md as the single source of truth. Implement in this order, and show me
-the result after each step before moving on:
-
-1. Fonts: add Sora, Geist and JetBrains Mono variable .woff2 files to
-   src/renderer/src/assets/fonts/ with the @font-face rules in §4.
-2. Tokens: create src/renderer/src/styles/tokens.css exactly as in §3.6.
-3. Glass utilities: create src/renderer/src/styles/glass.css from §3.7.
-4. Tailwind: map tokens as in §3.8. No raw hex/rgba values and no backdrop-filter
-   inside components; components use tokens and the glass-* classes only.
-5. Backdrop: build <AppBackdrop/> (aurora + reactor spill + grain) per §3.1 and §3.7.
-6. Shell: responsive layout per §5 (compact / medium / expanded / wide, floating glass islands).
-7. Components: restyle per §6, in this order: ConfirmDialog, Composer, chat messages,
-   tool call cards, Orb, then the rest.
-8. Transparency modes and performance guards per §7.
-9. Add scripts/check-glass-contrast.mjs from §3.5 and run it; it must exit 0.
-10. Go through every item in §12 and report pass/fail for each.
-
-Rules: never change a colour token, glass opacity or aurora opacity without re-running the
-contrast script. Do not add glow, gradients or blur anywhere this file does not specify.
-Ask me before deviating from this file.
-```
+This file is the **single source of truth** for the JARVIS look. The code lives in
+`src/renderer/src/styles/` (`tokens.css`, `glass.css`, `fonts.css`, `globals.css`) and
+`components/jarvis/orb.tsx`. Components use tokens and `glass-*` classes only.
 
 ---
 
-## 1. Design Direction: "Glass Workshop at Night"
+## 1. Direction
 
-JARVIS lives in Sir's workshop after dark: a deep blue void, slow aurora light from the city behind the windows, and frosted glass instrument panels floating in front of it. One element, **the reactor orb**, is the light source; its glow reaches through the glass and tints the room with Jarvis's state.
+JARVIS is an intelligent system running on this computer: calm, precise, a little mysterious.
+Obsidian depth, electric violet for interaction, ice cyan for JARVIS's own energy, and soft
+atmospheric light behind layered glass. It is beautiful through **lighting, depth, glass,
+typography, spacing and motion**, not through glow, neon or gradients.
 
-The glass is **disciplined**, not decorative: three structural layers, fixed recipes, guaranteed contrast.
-
-| Principle | Meaning in practice |
+| Principle | In practice |
 |---|---|
-| **Colour lives behind the glass, meaning lives on it** | Aurora hues (blue, violet, indigo) exist only in the backdrop (L0). On glass, colour means state: cyan = Jarvis is active, amber = needs Sir's decision, red = destructive / stop, green = done. Violet is never a UI state colour. |
-| **One reactor, everything else calm** | The orb is the only element that animates at rest. Its light spills onto the backdrop and changes colour with its state. Panels, text and controls stay still. |
-| **Glass is earned by depth** | Only structural layers are glass: panes (L1) and floating layers (L3). Buttons, badges, chips and messages never get their own blur. |
-| **Decisions are opaque** | The more important the decision, the less see-through the surface. Confirmation dialogs are the most solid thing on screen. |
-| **Show the work** | Every action Jarvis takes is visible (Activity drawer, tool cards). Trust comes from transparency of behaviour, not of pixels. |
-| **Readable first** | Every text colour passes 4.5:1 against the *worst-case* backdrop (§3.5). Chat column ≤ 72 characters; sentence-case labels; no all-caps eyebrows. |
+| **The orb is the light** | It is the only element with a strong glow; its state colour lights the room behind the glass (the spill). Nothing competes with it. |
+| **Colour lives in the atmosphere** | Violet, cyan and a trace of rose exist as soft light behind the glass. On the glass, colour means something. |
+| **Two accents, two meanings** | **Violet = Sir acts** (primary buttons, focus, selection, links). **Cyan = JARVIS acts** (orb, voice, running work). Amber = needs a decision, red = danger, green = done. Rose is never a UI colour. |
+| **Glass establishes hierarchy** | Four levels, fixed recipes. Code, dense data, tooltips and safety overlays are solid. |
+| **Decisions are deliberate** | Confirmations use the strongest glass; destructive buttons are flat red, never attractive. |
+| **Readable first** | Every text role passes 4.5:1 against the worst-case backdrop (§3.5), in both themes. |
 
-What we deliberately avoid: blur on every element; glass stacked on glass; white frosted glass in the dark theme; neon or rainbow gradients inside UI controls; glowing borders on panels; animated aurora; text shadows or text glow; sci-fi display fonts for body text; monospace for non-code labels.
+Avoid: glow on every border or icon, gradient text, gradients inside cards, neon text, sci-fi or
+decorative fonts, letter-spaced all-caps labels, emoji as icons, a UI-kit look.
+
+Visual priority: **1** orb · **2** conversation · **3** composer · **4** important actions ·
+**5** navigation · **6** supporting information.
 
 ---
 
-## 2. The Glass Stack
-
-Four layers, back to front. Every surface in the app belongs to exactly one.
+## 2. The glass stack
 
 ```text
  viewer
    ▼
-   L3  Float / Decision  tint 84–92% · blur 32px · strong border · shadow    (transient)
-   L2  Inset             white 4–6% fill · NO blur · hairline border
-   L1  Pane              tint 64% · blur 24px · saturate 160% · top highlight
-   L0  Backdrop          void + aurora + reactor spill + grain               (static)
+   L4  Modal glass      white 10%  · blur 36 · border 18%   confirmations only
+   L3  Raised glass     white 7.5% · blur 28 · border 14%   activity console, toasts, sheets, settings groups, tool cards
+   L2  Standard glass   white 5.5% · no blur · border 10%   cards, inputs, chips, list panels
+   L1  Subtle glass     white 3.5% · blur 24 · border 8%    rail, main surface, status bar
+   L0  Atmosphere       obsidian + violet / cyan / rose light + orb spill + grain (slow drift)
 ```
 
-| Layer | Used for | Recipe (class) |
+| Class | Level | Used for |
 |---|---|---|
-| **L0 Backdrop** | The window background behind everything | `--void-950` + three aurora radial gradients + reactor spill + 3.5% grain. Static. (`<AppBackdrop/>`) |
-| **L1 Pane** | Rail, chat column, Activity drawer (docked), status bar, Settings/Memory/Connections panes | `.glass-pane` — `--glass-pane` tint, `blur(24px) saturate(160%)`, 1px `--glass-border`, inset top highlight, `--radius-lg` |
-| **L2 Inset** | Composer, Sir bubbles, tool cards, chips, list rows, form fields, setting groups | `.glass-inset` — `--glass-inset` fill, 1px `--glass-border`, **no backdrop-filter**; hover `--glass-hover`; selected `--glass-selected` + 2px reactor bar |
-| **L3 Float** | Menus, popovers, toasts, overlay sheets, onboarding card | `.glass-float` — `--glass-float` tint, `blur(32px) saturate(160%)`, 1px `--glass-border-strong`, `--shadow-float`, `--radius-xl` |
-| **L3 Decision** | Confirmation dialogs only | `.glass-decision` — `--glass-decision` (92%) tint over `.glass-scrim` |
+| `.glass-pane` | L1 | Rail, main content surface, status bar |
+| `.glass-inset` | L2 | Cards, inputs, chips, memory list panel, automation cards |
+| `.glass-raised` | L3 inside a pane (no blur) | Settings groups, tool cards, memory note, usage cards |
+| `.glass-float` | L3 floating (blur) | Activity console, toasts, overlay sheets, onboarding card |
+| `.glass-decision` | L4 | Confirmation dialogs |
+| `.glass-scrim` | — | Behind dialogs and sheets: `rgba(2,6,23,.68)` + blur 12 |
+| `.composer` | L2.5 floating | The message composer (§6.2) |
 
-### Rules of the stack
+**Recipe.** Blurred levels paint their white sheen over a half-transparent obsidian base
+(`--glass-base`, 50%). The base is what keeps text at 4.5:1 over the brightest part of the
+atmosphere; the sheen gives each level its hierarchy. Nested levels (L2/L3 inside a pane) are tint
+only.
 
-1. **Blur only on L1, L3 and the scrim.** L2 never blurs; it inherits the frost of the pane under it.
-2. **At most two blurred layers over any pixel**, and the second must be transient (an L3 float or scrim).
-3. **Never put `backdrop-filter` on anything inside a scroll container or anything that moves** (messages, tool cards, list rows). Scrolling blurred elements is the single biggest GPU cost.
-4. **Never transition `backdrop-filter`, `filter` or blur radius.** Animate `opacity` and `transform` only.
-5. **No glass on glass to fake depth.** Depth inside a pane comes from L2 tints, not another blur.
-6. **Contrast guarantee:** tint opacities are *minimums*; aurora opacities are *maximums*. Aurora blobs may be moved or resized freely; their opacity may not go up and tint opacity may not go down without re-running §3.5.
+Rules:
+
+1. **Blur only on L1, floating L3, L4, the composer and the scrim.** Anything inside a scroll
+   container is tint only (no `backdrop-filter`): scrolling blurred elements is the biggest GPU cost.
+2. **Never transition `backdrop-filter` or blur radius.** Animate `opacity` and `transform`.
+3. Max blur 36px; most surfaces 24–28px. Below 760px wide every blur steps down (16/20/24px).
+4. Not everything is glass: code blocks, tables of data, tooltips, the mini-mode halo and the
+   Computer-Control overlay are solid (`--solid-*`).
 
 ---
 
-## 3. Colour Tokens
+## 3. Colour
 
-Dark is the primary theme. **v2.1 adds a light "Daylight Workshop" theme** (Settings → General → Theme: Match Windows / Dark / Light, `<html data-theme>`): frosted white glass (`rgba(255,255,255,.6)`) over a pastel aurora, ink `#0F172A / #334155 / #475569`, reactor `#0A5C73`, lamp `#854000`, alarm `#A31B12`, ok `#036043`; values live in `tokens.css` under `:root[data-theme='light']`. Both themes add two compact backdrop light orbs (`--orb-a`, `--orb-b`) so the frosting is visible. `scripts/check-glass-contrast.mjs` checks both themes (≥ 4.5:1 worst case); `tokens.css` is the source of truth where this doc's older numbers differ.
+### 3.1 Palette
 
-### 3.1 Backdrop & aurora (L0 only)
+| Group | Tokens |
+|---|---|
+| Background | `--bg-950 #05060B` · `--bg-900 #080B12` · `--bg-850 #0B0F19` · `--bg-800 #101528` |
+| Deep indigo | `--indigo-950 #0A0B18` · `--indigo-900 #10122A` · `--indigo-800 #161A38` · `--indigo-500 #6366F1` (send gradient only) |
+| Electric violet | `--violet-600 #7C3AED` · `--violet-500 #8B5CF6` · `--violet-400 #A78BFA` · `--violet-300 #C4B5FD` |
+| Ice cyan | `--cyan-500 #06B6D4` · `--cyan-400 #22D3EE` · `--cyan-300 #67E8F9` · `--cyan-200 #A5F3FC` (orb core) |
+| Subtle rose | `--rose-400 #F0ABFC` (atmosphere only) |
+| Semantic | `--success #34D399` · `--warning #FBBF24` · `--error #F87171` · `--error-text #FCA5A5` · `--info #60A5FA` |
+| Text | `--text-primary #F8FAFC` · `--text-secondary #CBD5E1` · `--text-tertiary #A8B1C2` · `--text-muted #697386` |
 
-| Token | Value | Use |
-|---|---|---|
-| `--void-950` | `#04060E` | Base of the backdrop; Electron `backgroundColor` (prevents a white flash on launch) |
-| `--aurora-blue` | `#1673FF` at max **0.20** | Blob A, top-left (12% 8%), radius 55vmax |
-| `--aurora-violet` | `#8A4DFF` at max **0.26** | Blob B, top-right (88% 18%), radius 50vmax |
-| `--aurora-indigo` | `#4B3FE0` at max **0.34** | Blob C, bottom (70% 100%), radius 60vmax |
-| `--spill-color` | reactor colour at max **0.18** | Reactor spill: 30vmax circle behind the orb's position. Follows orb state (§6.1) |
-| Grain | SVG fractal noise at 3.5% | Breaks gradient banding on 8-bit displays |
+### 3.2 Atmosphere (L0)
 
-Why this combination: cyan (the reactor) on a deep navy void, with blue and violet light behind it, gives the classic glass look while keeping the warm amber and red reserved for decisions and danger, so they still jump out.
-
-### 3.2 Glass surfaces
-
-| Token | Value | Use |
-|---|---|---|
-| `--glass-pane` | `rgba(9,13,28,0.64)` | L1 tint (v2.1: lighter so the backdrop reads through) |
-| `--glass-float` | `rgba(12,17,36,0.84)` | L3 tint |
-| `--glass-decision` | `rgba(12,17,36,0.92)` | Confirmation dialogs |
-| `--glass-inset` | `rgba(255,255,255,0.04)` | L2 fill |
-| `--glass-hover` | `rgba(255,255,255,0.06)` | L2 hover |
-| `--glass-selected` | `rgba(63,216,245,0.10)` | Selected rows (always with a 2px `--reactor-500` bar + `aria-selected`) |
-| `--glass-border` | `rgba(255,255,255,0.10)` | Pane and inset hairlines |
-| `--glass-border-strong` | `rgba(255,255,255,0.16)` | Floats, focused-within containers, orb lens |
-| `--glass-highlight` | `rgba(255,255,255,0.08)` | 1px inset top edge (the "light catching the glass") |
-| `--scrim` | `rgba(4,6,14,0.60)` | Behind dialogs and overlay sheets |
-| `--solid-pane` | `#0D1328` | Solid-mode replacement for `--glass-pane` (§7) |
-| `--solid-float` | `#121933` | Solid-mode replacement for float/decision, and tooltips in all modes |
-| `--solid-inset` | `#161D36` | Solid-mode replacement for `--glass-inset` |
-| `--solid-hover` | `#1B2340` | Solid-mode replacement for `--glass-hover` |
-
-Borders are decorative hairlines (1.3–1.7:1). Interactive components are identified by their fill, icon, label or placeholder; focus is shown by the reactor outline (≥ 7.5:1).
-
-### 3.3 Semantic state colours
-
-Meaning is unchanged from v1.0; only red was adjusted for glass.
-
-| Token | Hex | Use |
-|---|---|---|
-| `--reactor-500` | `#3FD8F5` | Primary: orb core, primary buttons, focus ring, links, selected bar |
-| `--reactor-300` | `#93ECFF` | Orb highlights, active text on dark |
-| `--reactor-glow` | `rgba(63,216,245,0.32)` | Orb glow only |
-| `--lamp-400` | `#FFB54A` | Needs decision: confirmations, warnings, "awaiting" state |
-| `--alarm-500` | `#FF6B5E` | Destructive actions, errors, kill switch, Computer-Control border. Was `#FF5446`, which fell below 4.5:1 on glass rows |
-| `--ok-400` | `#46DFA0` | Success ticks, connected status |
-
-### 3.4 Ink (text)
-
-| Token | Hex | Use |
-|---|---|---|
-| `--ink-100` | `#E6EEFC` | Primary text |
-| `--ink-300` | `#A7B6CE` | Secondary text |
-| `--ink-500` | `#8E9DB8` | Tertiary text (timestamps), min 13px. Was `#7F8FAA`, which measured 4.20:1 on a hovered glass row |
-| `--ink-on-reactor` | `#04202A` | Text on cyan buttons (9.9:1) |
-| `--ink-on-lamp` | `#2A1700` | Text on amber buttons/badges (9.8:1) |
-| `--ink-on-alarm` | `#2A0503` | Text on red buttons (6.7:1) |
-| `--ink-on-ok` | `#03231A` | Text on green badges (9.8:1) |
-
-Status colours are always paired with an icon or text, never colour alone.
-
-### 3.5 Contrast verification (worst case)
-
-Worst case = all three aurora blobs **and** the reactor spill stacked at maximum opacity on the same pixel, then `saturate(160%)`, then the glass tint. Real screens are always brighter-safe than this.
-
-| Token | Pane | Inset | Hover | Selected | Float | Decision |
-|---|---|---|---|---|---|---|
-| `--ink-100` | 13.67 | 12.30 | 11.60 | 11.07 | 14.35 | 15.26 |
-| `--ink-300` | 7.76 | 6.99 | 6.59 | 6.29 | 8.15 | 8.67 |
-| `--ink-500` | 5.82 | 5.24 | 4.94 | 4.71 | 6.11 | 6.50 |
-| `--reactor-500` | 9.38 | 8.44 | 7.96 | 7.59 | 9.85 | 10.47 |
-| `--lamp-400` | 9.08 | 8.17 | 7.71 | 7.35 | 9.54 | 10.14 |
-| `--alarm-500` | 5.71 | 5.13 | 4.84 | 4.62 | 5.99 | 6.37 |
-| `--ok-400` | 9.36 | 8.42 | 7.94 | 7.58 | 9.83 | 10.44 |
-
-All values ≥ 4.5:1 (WCAG AA). Solid mode is higher everywhere (e.g., `--ink-500` on `--solid-pane` = 6.72:1).
-
-Keep this check in the repo and run it in CI whenever tokens change:
-
-```js
-// scripts/check-glass-contrast.mjs  ·  run: node scripts/check-glass-contrast.mjs
-// Worst case: every aurora blob stacked at peak, then saturate(160%), then each glass tint.
-const hex = (s) => s.match(/\w\w/g).map((x) => parseInt(x, 16));
-const lin = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-const over = (top, a, bot) => top.map((t, i) => a * t + (1 - a) * bot[i]);
-const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-const saturate = ([r, g, b], s) => {
-  const m = [[.2126 + .7874 * s, .7152 - .7152 * s, .0722 - .0722 * s],
-             [.2126 - .2126 * s, .7152 + .2848 * s, .0722 - .0722 * s],
-             [.2126 - .2126 * s, .7152 - .7152 * s, .0722 + .9278 * s]];
-  return m.map(([a, b2, c]) => Math.min(255, Math.max(0, a * r + b2 * g + c * b)));
-};
-
-// Keep these in sync with tokens.css
-const AURORA = [['1673FF', .20], ['8A4DFF', .26], ['4B3FE0', .34], ['3FD8F5', .18]];
-const SATURATE = 1.6;
-let bg = hex('04060E');
-for (const [c, a] of AURORA) bg = over(hex(c), a, bg);
-bg = saturate(bg, SATURATE);
-const pane = over(hex('090D1C'), .74, bg);
-const surfaces = {
-  pane,
-  inset: over([255, 255, 255], .04, pane),
-  hover: over([255, 255, 255], .06, pane),
-  selected: over(hex('3FD8F5'), .10, pane),
-  float: over(hex('0C1124'), .84, bg),
-};
-const inks = { 'ink-100': 'E6EEFC', 'ink-300': 'A7B6CE', 'ink-500': '8E9DB8', 'reactor-500': '3FD8F5',
-               'lamp-400': 'FFB54A', 'alarm-500': 'FF6B5E', 'ok-400': '46DFA0' };
-
-let fails = 0, min = Infinity;
-for (const [n, c] of Object.entries(inks)) for (const [s, rgb] of Object.entries(surfaces)) {
-  const r = ratio(hex(c), rgb); min = Math.min(min, r);
-  if (r < 4.5) { fails++; console.log(`FAIL  --${n} on ${s}: ${r.toFixed(2)}:1`); }
-}
-console.log(fails ? `${fails} failure(s)` : `PASS  all text tokens >= 4.5:1 on every glass surface (lowest ${min.toFixed(2)}:1)`);
-process.exit(fails ? 1 : 0);
-```
-
-Expected output: `PASS  all text tokens >= 4.5:1 on every glass surface (lowest 4.62:1)`.
-
-### 3.6 `tokens.css`
+`#05060B` base with four soft lights, an orb spill and 3% grain (`.app-backdrop`, `.atmosphere`):
 
 ```css
-/* src/renderer/src/styles/tokens.css */
-@property --spill-color {            /* registered so the orb-state colour change can cross-fade */
-  syntax: '<color>';
-  inherits: true;
-  initial-value: rgba(63, 216, 245, 0.18);
-}
-
-:root {
-  /* L0 backdrop */
-  --void-950:#04060E;
-  --aurora-blue:22 115 255;  --aurora-a-blue:.20;
-  --aurora-violet:138 77 255; --aurora-a-violet:.26;
-  --aurora-indigo:75 63 224; --aurora-a-indigo:.34;
-  --spill-color:rgba(63,216,245,.18);
-  --grain-opacity:.035;
-
-  /* Glass surfaces */
-  --glass-pane:rgba(9,13,28,.74);  --glass-float:rgba(12,17,36,.84); --glass-decision:rgba(12,17,36,.92);
-  --glass-inset:rgba(255,255,255,.04); --glass-hover:rgba(255,255,255,.06); --glass-selected:rgba(63,216,245,.10);
-  --glass-border:rgba(255,255,255,.10); --glass-border-strong:rgba(255,255,255,.16); --glass-highlight:rgba(255,255,255,.08);
-  --scrim:rgba(4,6,14,.60);
-  --blur-pane:24px; --blur-float:32px; --blur-scrim:6px; --glass-saturate:160%;
-
-  /* Solid fallbacks */
-  --solid-pane:#0D1328; --solid-float:#121933; --solid-inset:#161D36; --solid-hover:#1B2340;
-
-  /* Semantic */
-  --reactor-500:#3FD8F5; --reactor-300:#93ECFF; --reactor-glow:rgba(63,216,245,.32);
-  --lamp-400:#FFB54A; --alarm-500:#FF6B5E; --ok-400:#46DFA0;
-
-  /* Ink */
-  --ink-100:#E6EEFC; --ink-300:#A7B6CE; --ink-500:#8E9DB8;
-  --ink-on-reactor:#04202A; --ink-on-lamp:#2A1700; --ink-on-alarm:#2A0503; --ink-on-ok:#03231A;
-
-  /* Type */
-  --font-display:"Sora", "Segoe UI Variable Display", "Segoe UI", sans-serif;
-  --font-body:"Geist", "Segoe UI Variable Text", "Segoe UI", sans-serif;
-  --font-code:"JetBrains Mono", "Cascadia Mono", Consolas, monospace;
-
-  /* Space, shape, depth */
-  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px; --space-7:48px; --space-8:64px;
-  --shell-gap:8px;
-  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-xl:24px; --radius-pill:999px;
-  --shadow-pane:0 8px 32px -16px rgba(0,0,0,.50);
-  --shadow-float:0 24px 48px -12px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.25);
-
-  /* Motion */
-  --dur-fast:120ms; --dur-base:200ms; --dur-slow:320ms;
-  --ease-standard:cubic-bezier(.2,.8,.2,1); --ease-exit:cubic-bezier(.4,0,1,1);
-}
+radial-gradient(circle at 85% 10%, rgba(139,92,246,.15),  transparent 32%),  /* violet */
+radial-gradient(circle at 10% 85%, rgba(34,211,238,.08),  transparent 30%),  /* cyan */
+radial-gradient(circle at 50% 45%, rgba(139,92,246,.035), transparent 45%),  /* core */
+radial-gradient(circle at 70% 80%, rgba(240,171,252,.035), transparent 25%)  /* rose */
 ```
 
-### 3.7 `glass.css` (utilities + backdrop)
+The light layer is 24% oversized and drifts with `transform` only (48 s, alternate, ±1.5%, scale
+1→1.04), so Sir barely notices it. The drift is off in reduced/solid transparency, below 760px wide
+and under `prefers-reduced-motion`, because a moving backdrop makes every pane re-blur each frame.
 
-```css
-/* src/renderer/src/styles/glass.css */
+The **orb spill** is a 28vmax light centred on the visible orb; its colour follows the orb state
+(`--spill-*`, max alpha 0.12) and cross-fades over 320 ms.
 
-/* ---------- L0 backdrop: <AppBackdrop/> renders <div class="app-backdrop"><div class="reactor-spill"/></div> */
-.app-backdrop {
-  position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-  background:
-    radial-gradient(55vmax 55vmax at 12% 8%,   rgb(var(--aurora-blue)   / var(--aurora-a-blue)),   transparent 60%),
-    radial-gradient(50vmax 50vmax at 88% 18%,  rgb(var(--aurora-violet) / var(--aurora-a-violet)), transparent 60%),
-    radial-gradient(60vmax 60vmax at 70% 100%, rgb(var(--aurora-indigo) / var(--aurora-a-indigo)), transparent 60%),
-    var(--void-950);
-}
-.reactor-spill {                                    /* --spill-x / --spill-y set from the orb's on-screen position */
-  position: absolute; inset: 0;
-  background: radial-gradient(circle 30vmax at var(--spill-x, 50%) var(--spill-y, 12%), var(--spill-color), transparent 65%);
-  transition: --spill-color var(--dur-slow) var(--ease-standard);
-}
-.app-backdrop::after {                              /* grain: kills gradient banding; works offline */
-  content: ""; position: absolute; inset: 0; opacity: var(--grain-opacity);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-}
+### 3.3 Glass tokens
 
-/* ---------- L1 pane */
-.glass-pane {
-  background: var(--glass-pane);
-  -webkit-backdrop-filter: blur(var(--blur-pane)) saturate(var(--glass-saturate));
-          backdrop-filter: blur(var(--blur-pane)) saturate(var(--glass-saturate));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-pane);
-}
+| Token | Dark | Use |
+|---|---|---|
+| `--glass-1 … --glass-4` | white 3.5 / 5.5 / 7.5 / 10% | Level sheens (§2) |
+| `--glass-base` | `rgba(5,6,11,.5)` | Obsidian base under blurred levels |
+| `--glass-hover` / `--glass-press` | white 7.5% / 3.5% | Hover brighter, press darker |
+| `--glass-selected` | violet 10% | Selected rows (always with a 2px violet edge) |
+| `--glass-border-subtle / border / strong / modal` | white 8 / 10 / 14 / 18% | Hairlines per level |
+| `--glass-highlight` | white 6% | 1px inset top edge |
+| `--shadow-float` | `0 20px 60px rgba(0,0,0,.25)` | Floating glass; no heavy dark shadows |
 
-/* ---------- L2 inset (never blurs) */
-.glass-inset { background: var(--glass-inset); border: 1px solid var(--glass-border); border-radius: var(--radius-md); }
-.glass-inset:where(:hover, [data-hover]) { background: var(--glass-hover); }
-.glass-inset[aria-selected="true"] { background: var(--glass-selected); box-shadow: inset 2px 0 0 var(--reactor-500); }
-.glass-inset:focus-within { border-color: var(--glass-border-strong); }
+### 3.4 Semantic roles (what components use)
 
-/* ---------- L3 float + decision + scrim */
-.glass-float, .glass-decision {
-  -webkit-backdrop-filter: blur(var(--blur-float)) saturate(var(--glass-saturate));
-          backdrop-filter: blur(var(--blur-float)) saturate(var(--glass-saturate));
-  border: 1px solid var(--glass-border-strong);
-  border-radius: var(--radius-xl);
-  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-float);
-}
-.glass-float    { background: var(--glass-float); }
-.glass-decision { background: var(--glass-decision); }
-.glass-scrim {
-  background: var(--scrim);
-  -webkit-backdrop-filter: blur(var(--blur-scrim)); backdrop-filter: blur(var(--blur-scrim));
-}
+| Role | Dark | Light | Meaning |
+|---|---|---|---|
+| `ink-100 / 300 / 500` | text primary / secondary / tertiary | `#0F172A / #334155 / #475569` | Text hierarchy |
+| `ink-muted` | `#697386` | `#64748B` | Placeholders and disabled only |
+| `icon-rest` | `#8D99AE` | `#64748B` | Icons at rest (non-text, ≥ 3:1) |
+| `reactor-500 / 300` | cyan 400 / 300 | `#155E75 / #0E7490` | JARVIS energy: orb, voice, running work |
+| `accent-600 / 500 / 300` | violet 600 / 500 / 300 | `#6D28D9 / #7C3AED / #5B21B6` | Fill / edge+focus / text (links) |
+| `lamp-400` | warning | `#92400E` | Needs a decision |
+| `alarm-500` / `alarm-fill` | `#FCA5A5` / `#F87171` | `#B91C1C` / `#DC2626` | Error text and icons / destructive fills |
+| `ok-400` | success | `#065F46` | Done, connected, enabled |
+| `solid-inset / solid-float` | bg 850 / bg 800 | `#EEF0F7 / #FFFFFF` | Code blocks / tooltips, mini mode, overlay |
 
-/* ---------- Focus (works on every layer; outline follows border-radius and never replaces a component's shadow) */
-:focus-visible { outline: 2px solid var(--reactor-500); outline-offset: 2px; }
+`#F87171` as text is only 3.7:1 on glass, so error **text** uses `--error-text`; the palette red
+stays for fills, icons and the Computer-Control border. Violet 500 is too dark to read as text;
+links and violet text use `accent-300`. Status colours always come with an icon or words.
 
-/* ---------- Transparency modes (set on <html data-glass="...">, see §7) */
-:root[data-glass="reduced"] {                      /* same look, no blur: tint raised to compensate */
-  --glass-pane: rgba(9,13,28,.86); --glass-float: rgba(12,17,36,.92); --glass-decision: rgba(12,17,36,.95);
-}
-:root[data-glass="solid"] {                        /* no transparency at all */
-  --glass-pane: var(--solid-pane); --glass-float: var(--solid-float); --glass-decision: var(--solid-float);
-  --glass-inset: var(--solid-inset); --glass-hover: var(--solid-hover); --scrim: rgba(4,6,14,.72);
-}
-[data-glass="solid"] .app-backdrop { background: var(--void-950); }
-[data-glass="solid"] .app-backdrop > *, [data-glass="solid"] .app-backdrop::after { display: none; }
-:is([data-glass="reduced"], [data-glass="solid"]) :is(.glass-pane, .glass-float, .glass-decision, .glass-scrim) {
-  -webkit-backdrop-filter: none; backdrop-filter: none;
-}
+### 3.5 Contrast guarantee
 
-@media (prefers-reduced-motion: reduce) {
-  .reactor-spill { transition: none; }
-}
-```
+`npm run check:contrast` (`scripts/check-glass-contrast.mjs`, in CI) stacks every atmosphere light
+and the orb spill at peak on one pixel, applies `saturate(150%)`, then each glass level, for both
+themes. Every text role must reach **4.5:1** on: pane, inset, hover, selected, Sir bubble, raised,
+float, float + inset, float + hover, modal. Text on filled buttons and badges is checked too.
 
-### 3.8 Tailwind mapping
+Current result: dark lowest **4.71:1**, light lowest **4.60:1**.
 
-Mobile-first: base styles are the compact layout; `md`, `lg`, `xl` add space.
+Known exception, kept on purpose: `--text-muted` (#697386) is the requested placeholder colour and
+measures about 2:1 on glass. It is used only for placeholders and disabled text, never for content.
 
-```js
-// tailwind.config.js (excerpt, v3 syntax; on Tailwind v4 declare the same names in an @theme block)
-export default {
-  theme: {
-    screens: { md: '760px', lg: '1200px', xl: '1600px', short: { raw: '(max-height: 599px)' } },
-    extend: {
-      colors: {
-        void:    { 950: 'var(--void-950)' },
-        glass:   { pane: 'var(--glass-pane)', float: 'var(--glass-float)', inset: 'var(--glass-inset)',
-                   hover: 'var(--glass-hover)', selected: 'var(--glass-selected)',
-                   border: 'var(--glass-border)', 'border-strong': 'var(--glass-border-strong)' },
-        reactor: { 300: 'var(--reactor-300)', 500: 'var(--reactor-500)' },
-        lamp:    { 400: 'var(--lamp-400)' },
-        alarm:   { 500: 'var(--alarm-500)' },
-        ok:      { 400: 'var(--ok-400)' },
-        ink:     { 100: 'var(--ink-100)', 300: 'var(--ink-300)', 500: 'var(--ink-500)',
-                   'on-reactor': 'var(--ink-on-reactor)', 'on-lamp': 'var(--ink-on-lamp)',
-                   'on-alarm': 'var(--ink-on-alarm)', 'on-ok': 'var(--ink-on-ok)' },
-      },
-      fontFamily:   { display: 'var(--font-display)', body: 'var(--font-body)', code: 'var(--font-code)' },
-      borderRadius: { sm: 'var(--radius-sm)', md: 'var(--radius-md)', lg: 'var(--radius-lg)', xl: 'var(--radius-xl)' },
-      boxShadow:    { pane: 'var(--shadow-pane)', float: 'var(--shadow-float)' },
-      transitionDuration: { fast: 'var(--dur-fast)', base: 'var(--dur-base)', slow: 'var(--dur-slow)' },
-    },
-  },
-};
-```
+Never raise an atmosphere alpha, lower `--glass-base`, or change a text token without re-running
+the script.
 
-**Lint rules** (extends [Code-style](Code-style.md) §6): no raw hex or `rgba()` in components; no `backdrop-filter`, `backdrop-blur-*` or `blur-*` utilities in components. Glass comes only from the `glass-*` classes.
+### 3.6 Tailwind
+
+Tokens map to utilities in the `@theme inline` block of `globals.css` (`bg-glass-inset`,
+`text-ink-300`, `text-accent-300`, `bg-alarm-fill`, `shadow-float`, …). Breakpoints: `md` 760,
+`lg` 1200, `xl` 1600, plus the `short` variant (height < 600). No raw hex or `rgba()` in
+components, no `backdrop-filter` or blur utilities in components.
 
 ---
 
 ## 4. Typography
 
-| Role | Family | Weights | Why |
-|---|---|---|---|
-| Display (orb status line, section headings, empty-state greeting, onboarding) | **Sora** | 500, 600 | Geometric, round-shouldered letterforms that echo the rounded glass panes; futuristic without sci-fi costume. Replaces Chakra Petch, whose chamfered corners fought the soft glass radii. |
-| Body & UI (chat, settings, dialogs, dialog titles) | **Geist** | 400, 500, 600 | Tall x-height and open apertures stay crisp on translucent, colour-shifting surfaces at 13–15px; tabular figures for costs and timestamps. |
-| Code only (code blocks, PowerShell previews, file paths in dialogs) | **JetBrains Mono** | 400 | Clear distinction of code from prose; unambiguous `0/O`, `1/l/I`. |
+| Role | Family | Weights |
+|---|---|---|
+| Everything in the interface | **Outfit** | 400 body · 500 secondary · 600 headings and buttons · 700 hero only |
+| Code, JSON, terminal output, file paths, technical values, logs, YAML front matter | **JetBrains Mono** | 400 |
 
-All three are SIL Open Font License. **Bundle variable `.woff2` files locally** in `src/renderer/src/assets/fonts/` so Vite fingerprints them and the app works offline (no CDN).
+Both are SIL OFL, bundled as variable `.woff2` in `src/renderer/src/assets/fonts/` (licences in
+`resources/fonts/`), so the app works offline.
 
-```css
-/* src/renderer/src/styles/fonts.css */
-@font-face { font-family:"Sora";           src:url("../assets/fonts/Sora-Variable.woff2") format("woff2");          font-weight:100 800; font-display:swap; }
-@font-face { font-family:"Geist";          src:url("../assets/fonts/Geist-Variable.woff2") format("woff2");         font-weight:100 900; font-display:swap; }
-@font-face { font-family:"JetBrains Mono"; src:url("../assets/fonts/JetBrainsMono-Variable.woff2") format("woff2"); font-weight:100 800; font-display:swap; }
-```
+| Utility | Size / line | Use |
+|---|---|---|
+| `text-xs` | 12 / 16 | Metadata, badges, keyboard hints |
+| `text-sm` | 13 / 18 | Secondary information |
+| `text-ui` | 14 / 20 | Compact UI: buttons, nav items, chips |
+| `text-base` | 15 / 24 | Default body, chat |
+| `text-lg` | 19 / 28 | Section titles, dialog titles |
+| `text-xl` | 24 / 32 | Page titles (Memory, Activity, Settings) |
+| `text-2xl` | 32 / 40 | Onboarding headings |
+| `text-hero` | 32–52 / 1.1, −0.03em | Empty-state greeting only |
 
-Type scale (1.25 ratio, base 15px for dense desktop UI):
-
-| Token | Size / line-height | Family | Use |
-|---|---|---|---|
-| `text-xs` | 12 / 16 | Geist 500 | Badges, keyboard hints |
-| `text-sm` | 13 / 18 | Geist 400 | Meta, timestamps, tool card details |
-| `text-base` | 15 / 24 | Geist 400 | Chat body, form text |
-| `text-lg` | 19 / 28 | Geist 600 (dialogs) · Sora 600 (panel headings) | Dialog titles, panel headings |
-| `text-xl` | 24 / 32 | Sora 600 | Empty-state greeting |
-| `text-2xl` | 30 / 36 | Sora 600 | Onboarding headings |
-
-Rules:
-
-- Sentence case everywhere; no letter-spaced all-caps labels.
-- **No font weight below 400 on glass** — thin strokes shimmer over shifting colour.
-- **No text shadows or text glow.** Only the orb glows.
-- Sora never below 17px; anything smaller uses Geist.
-- Chat line length ≤ 72ch; numbers in tables and the status bar use `font-variant-numeric: tabular-nums`.
+Sentence case everywhere; tabular figures for costs, times and counts; no text shadow or glow;
+no weight below 400 on glass.
 
 ---
 
-## 5. Responsive Layout
+## 5. Layout
 
-### 5.1 Window sizing & breakpoints
+### 5.1 Shell and breakpoints
 
-Default window **1100 × 760**, minimum **480 × 520** (lets the app use Windows Snap half-screen on 1280–1366px laptops). Breakpoints are on the window's inner width.
+Floating glass islands separated by `--shell-gap` (6 / 8 / 12px): **control rail** (L1, 56–64px,
+40px targets), **main surface** (L1, the largest), **activity console** (raised float), **status
+bar** (L1, 32px; 28px when short). Default window 1100 × 760, minimum 480 × 520.
 
-| Mode | Width | Shell gap | Rail | Chat column | Activity drawer | Status bar |
-|---|---|---|---|---|---|---|
-| **compact** (base) | 480–759 | 6px | 52px icon rail, 40px targets | Fills; 12px padding | Overlay sheet from right (`glass-float`, max 360px / 88% width) over scrim | Condensed: connectivity + today's cost |
-| **medium** (`md`) | 760–1199 | 8px | 64px icon rail | Fills; ≤ 72ch, centred; 16px padding | Overlay sheet 340px (`glass-float`) | Full |
-| **expanded** (`lg`) | 1200–1599 | 8px | 64px icon rail | ≤ 72ch, centred; 24px padding | Docked pane 320px (`glass-pane`), collapsible | Full |
-| **wide** (`xl`) | ≥ 1600 | 12px | 200px rail with labels | ≤ 72ch, centred | Docked pane 360px | Full |
-| **short** (any width) | height < 600 | — | — | Empty-state orb uses `md` (96px); composer max 4 lines | — | 28px tall |
+| Mode | Width | Activity console | Notes |
+|---|---|---|---|
+| compact | < 760 | Overlay sheet (≤ 88% width) over the scrim; Esc closes | Less padding, lighter blur, no drift |
+| medium | 760–1199 | Overlay sheet 340px | Starts closed |
+| expanded | 1200–1599 | Docked, 320px | |
+| wide | ≥ 1600 | Docked, 360px | Wider gaps |
 
-The shell is a set of **floating glass islands** (rail, chat, drawer, status bar) separated by `--shell-gap`, so a thin line of aurora shows between them. This gap is the signature of the theme; don't merge panes into one slab.
+Chat column ≤ 72ch, centred. Never a horizontal page scroll.
 
-### 5.2 Main window — expanded
+### 5.2 Empty state
 
-```text
-┌─ L0 aurora backdrop ───────────────────────────────────────────────────────┐
-│ ╭────╮ ╭────────────────────────────────────────────╮ ╭──────────────────╮ │
-│ │ Ch │ │ (o) Jarvis · Listening                     │ │ Activity         │ │
-│ │ Me │ │                                            │ │ ✓ open_app  VS…  │ │
-│ │ Ac │ │             ╭───────────────────────────╮  │ │ ✓ open_app  Chr… │ │
-│ │ Co │ │             │ Sir: Open VS Code, Chrome │  │ │                  │ │
-│ │ Se │ │             ╰───────────────────────────╯  │ │                  │ │
-│ │    │ │ Jarvis: Both are open, sir.                │ │                  │ │
-│ │    │ │  [tool card] [tool card]                   │ │                  │ │
-│ │    │ │ ╭────────────────────────────────────────╮ │ │                  │ │
-│ │    │ │ │ Message Jarvis…          mic  att  ⏎   │ │ │                  │ │
-│ ╰────╯ ╰─╰────────────────────────────────────────╯─╯ ╰──────────────────╯ │
-│ ╭────────────────────────────────────────────────────────────────────────╮ │
-│ │ Voice: wake word · Sonnet 5.5 · Today $0.42 / $2 · ● Online            │ │
-│ ╰────────────────────────────────────────────────────────────────────────╯ │
-└────────────────────────────────────────────────────────────────────────────┘
-  L1 panes: rail, chat, drawer, status bar  ·  L2 insets: Sir bubble, tool cards, composer
-```
+Large orb (160px) above the greeting in `text-hero` ("Good evening, sir. What shall we work on?"),
+then up to three glass suggestion chips. The orb's spill is the ambient light behind it.
 
-### 5.3 Main window — compact
+### 5.3 Mini mode
 
-```text
-┌─ L0 aurora ──────────────────────────┐
-│ ╭────╮ ╭───────────────────────────╮ │
-│ │ Ch │ │ (o) Jarvis · Idle   [Act] │ │ ← opens Activity as overlay sheet
-│ │ Me │ │                           │ │
-│ │ Ac │ │   ╭─────────────────────╮ │ │
-│ │ Co │ │   │ Sir: Open VS Code   │ │ │
-│ │ Se │ │   ╰─────────────────────╯ │ │
-│ │    │ │ Jarvis: It's open, sir.   │ │
-│ │    │ │ ╭───────────────────────╮ │ │
-│ │    │ │ │ Message Jarvis…  mic ⏎│ │ │
-│ ╰────╯ ╰─╰───────────────────────╯─╯ │
-│ ╭──────────────────────────────────╮ │
-│ │ ● Online · $0.42                 │ │
-│ ╰──────────────────────────────────╯ │
-└──────────────────────────────────────┘
-```
+Frameless, always-on-top, transparent window: the orb (96px) in a **small glass halo**
+(`--solid-float` at 75%, strong hairline, top highlight, soft shadow; a transparent window cannot
+blur the desktop, so the halo is tinted, not blurred). Click opens the main window; drag moves it.
+Listening shows the cyan ripple; speaking shows the waveform. Caption bubble beside it.
 
-Rail destinations: Chat, Memory, Activity (full log), Connections (MCP), Settings. Icons always have tooltips and accessible names; labels appear only in `xl`.
+### 5.4 Computer-Control overlay
 
-### 5.4 Empty state (new conversation)
-
-The orb is large (160px; 96px in `short`) and centred on the chat pane, sitting in its glass lens (§6.1), with one line beneath it in Sora: "Good evening, sir. What shall we work on?" plus three suggestion chips (`glass-inset`, pill) drawn from recent routines. The reactor spill is centred behind the orb.
-
-When the first message is sent, the orb animates to its compact 40px position at the top of the chat column and the spill follows it (`--spill-x/y`). This is the app's **single orchestrated motion moment**.
-
-### 5.5 Mini mode (P1)
-
-Frameless, always-on-top, 112 × 112 transparent window with the orb only; click → expand main window; drag to move; 2-line caption bubble while speaking.
-
-⚠ CSS `backdrop-filter` only blurs content *inside* the page, never the desktop behind a transparent window. Mini mode therefore uses a **solid-tint disc** (`--solid-float` at 100%, `--glass-border-strong` ring, `--glass-highlight` top edge) instead of real blur. The caption bubble uses the same recipe.
-
-### 5.6 Computer-Control overlay
-
-Click-through, transparent, full-screen window with a 4px `--alarm-500` border and a top-centre pill: "Jarvis is controlling your PC · Stop (Ctrl+Alt+Shift+X)". The pill is the only clickable region. Excluded from screenshots (`setContentProtection(true)`).
-
-**This overlay is never glass.** The pill is solid `--solid-float` with a 1px `--alarm-500` border, an alarm-red dot and `--ink-100` text. Safety signals must look identical on any wallpaper.
+Click-through full-screen window with a 4px `--alarm-fill` border and a solid pill ("Jarvis is
+controlling your PC · Stop (Ctrl+Alt+Shift+X)"). **Never glass:** safety signals must look the
+same on any wallpaper. Excluded from screenshots.
 
 ---
 
 ## 6. Components
 
-### 6.1 Orb (`components/jarvis/Orb.tsx`) — the signature element
+### 6.1 Orb (`components/jarvis/orb.tsx`) — the signature
 
-Implementation: SVG + CSS/Framer Motion (no WebGL in v1). Concentric rings around a core; audio level (`voice:level`) drives core scale while listening. The orb is not glass; it is the light source. At `lg` and `md` sizes it sits in a circular **lens**: 1px `--glass-border-strong` ring with a `--glass-highlight` top edge, no fill, no blur.
+SVG, eight layers: **1** ambient glow · **2** outer transparent ring · **3** slow orbital ring with
+one satellite (24 s per turn) · **4** violet energy arc · **5** cyan energy ring · **6** core
+(radial gradient, cyan-200 → cyan-400) · **7** inner highlight · **8** motes (6–12 tiny cyan/violet
+particles, md/lg only). Only selected rings rotate; the whole orb never spins.
 
-The orb publishes its state colour to the backdrop by setting `--spill-color` on `<html>`.
+| State | Visual | Motion |
+|---|---|---|
+| `IDLE` | Cyan core, soft glow, violet arc at rest | Core and glow breathe (scale 1→1.025, opacity .65→.85, 4.5 s); orbital ring turns slowly |
+| `LISTENING` | Brighter | Core scale follows mic RMS (0.95→1.12); a cyan ripple whose strength follows the voice |
+| `THINKING` | Core dimmed to 78% | Violet arc thickens and turns (1.6 s); all motes drift |
+| `ACTING` | Segmented ring, one arc per tool call: cyan done, violet running, dim pending, red failed | Segments light as tools run |
+| `AWAITING_CONFIRMATION` | Amber core and glow | Gentle breathing (2.4 s); never flashes |
+| `SPEAKING` | Cyan | A soft waveform ring follows the TTS level |
+| `ERROR` | Red core | One short pulse + small shake, then static |
+| `SLEEP` | Thin cyan outline only | None, no glow |
 
-| State | Visual | Motion | Backdrop spill (`--spill-color`) |
-|---|---|---|---|
-| `IDLE` | Core `--reactor-500` at 60% opacity, soft glow | Slow breathing (4 s opacity 0.6↔0.8) | `rgba(63,216,245,.12)` |
-| `LISTENING` | Core full brightness, outer ring visible | Core scale follows mic RMS (0.9–1.15), ring pulses | `rgba(63,216,245,.18)` |
-| `THINKING` | Inner ring segments | Ring rotates 1.2 s/turn | `rgba(63,216,245,.16)` |
-| `ACTING` | Segmented ring with progress ticks | Ticks advance per tool call | `rgba(63,216,245,.16)` |
-| `AWAITING_CONFIRMATION` | Core shifts to `--lamp-400` | Gentle 1 s pulse | `rgba(255,181,74,.16)` |
-| `SPEAKING` | Core cyan, waveform ring | Ring amplitude follows TTS output level | `rgba(63,216,245,.18)` |
-| `ERROR` | Core `--alarm-500`, ring dimmed | Single shake (200 ms) then static | `rgba(255,107,94,.14)` |
-| `SLEEP` / voice off | Core `--ink-500` outline only | None | `transparent` |
+Props: `state`, `level` (0–1), `size` (`sm` 40 · `md` 96 · `lg` 160), `spill`, `steps`.
+`role="img"`, `aria-label="Jarvis is {state}"`, debounced `aria-live` announcement. Under reduced
+motion: no rotation, ripple, motes, waveform motion or scaling; state is shown by colour and text.
 
-Spill opacity never exceeds 0.18 (contrast guarantee). The spill colour cross-fades over `--dur-slow`; it does not pulse with the orb.
+### 6.2 Rail and composer
 
-Props: `state: AssistantState`, `level?: number (0–1)`, `size: 'sm'(40) | 'md'(96) | 'lg'(160)`.
-Accessibility: `role="img"`, `aria-label="Jarvis is {state}"`; a visually hidden `aria-live="polite"` region announces state changes (debounced). `prefers-reduced-motion`: no rotation/scale, spill changes instantly; state shown by colour + status text only.
+- **Rail icons**: lucide 18px / 1.75 stroke, `icon-rest` at rest; hover `glass-hover` + scale 1.04
+  (180 ms); **active** = cyan tint 9%, cyan edge 15%, cyan-300 icon with a faint glow (the only
+  icon glow). Tooltips on every icon.
+- **Composer** (`.composer`): white 6.5% over the obsidian base, blur 24, 14% hairline, radius 20,
+  top highlight, float shadow. Focus-within: violet edge 45% + 3px violet ring 10%. Placeholder
+  `--text-muted`, text `--text-primary`. Max 8 lines (4 when short).
+- **Send**: circular, violet-500 → indigo-500 gradient, faint cyan top highlight, small violet
+  shadow; hover lifts 1px, press 0.96. Glass while disabled.
+- **Mic**: cyan; listening = cyan tint + a breathing ring (`.mic-live`). **Attach**: neutral glass.
+  While a turn runs, Send becomes **Stop** (red edge, square icon).
 
-### 6.2 Composer
+### 6.3 Chat and chips
 
-- Surface: `glass-inset`, `--radius-lg`, min-height 52px; on focus-within: `--glass-border-strong` border plus the reactor focus ring on the textarea.
-- Multiline textarea (Enter to send, Shift+Enter newline), mic button (shows hotkey hint), attach button (P1), send button (`--reactor-500` fill, `--ink-on-reactor` icon).
-- While a turn is running, Send becomes **Stop** (`--alarm-500` outline + square icon; cancels turn).
-- Placeholder (`--ink-500`): "Message Jarvis…"; voice-mode hint below when wake word is on: "Say 'Jarvis' or press Ctrl+Alt+Space".
-- Max height: 8 lines (4 in `short`), then scrolls internally.
-
-### 6.3 Chat messages
-
-| Variant | Style |
+| Element | Style |
 |---|---|
-| Sir | Right-aligned `glass-inset` bubble, `--ink-100`, `--radius-lg` with 6px bottom-right corner, max 80% width (88% in compact) |
-| Jarvis | Left-aligned, no bubble, full column width, directly on the pane; Markdown rendered (GFM tables, code blocks with copy button); citations as numbered links in `--reactor-500` |
-| Code block | `--solid-inset` background (solid, for legibility), `--radius-md`, `--font-code`, copy button top-right |
-| System notice | Centred, `text-sm`, `--ink-500` (e.g., "Conversation saved to Obsidian") |
-| Interrupted | Jarvis text + `--ink-500` "(interrupted)" |
+| Sir | Right-aligned bubble: violet 7% fill, violet 13% hairline, radius 18 (6 at bottom-right), max 80% (88% compact) |
+| Jarvis | No bubble, full column width, Markdown; links `accent-300` |
+| Code | `--solid-inset`, JetBrains Mono, copy button |
+| Streaming | 2px cyan caret; no per-character animation, no typewriter |
+| Chips | `glass-inset` pill, 10×18px padding; hover violet 10% fill + violet 25% edge + 2px lift; press 0.97; 200 ms |
 
-Streaming: text appears as it arrives with a 2px cyan caret; no per-token animation. Messages never blur and never animate in beyond a 120ms opacity fade.
+### 6.4 Tool cards
 
-### 6.4 Tool call card
+`glass-raised` rows (radius 12, ≥ 40px). Status: pending = small muted dot · running = cyan ring
+spinner · waiting = amber breathing dot (+ 2px amber left edge) · success = green check + ms ·
+error = red cross with one pulse · declined/blocked = muted slash. Tier badges are pills (SAFE
+neutral, CONFIRM amber, BLOCKED red). Expanding rotates the chevron and fades the details up 6px
+(200 ms); details are JetBrains Mono on `--solid-inset`.
 
-Compact `glass-inset` row (`--radius-md`, 40px min height) inside a Jarvis message and in the Activity drawer.
+### 6.5 Confirmation dialog (`confirm-dialog.tsx`) — safety-critical
 
-```text
-[icon] Open Visual Studio Code            SAFE   ✓ 120 ms   ▸
-```
-
-| Status | Indicator |
-|---|---|
-| pending | `--ink-500` dot |
-| awaiting confirmation | `--lamp-400` dot + "Waiting for you"; card gets a 2px left `--lamp-400` bar |
-| running | cyan spinner (reduced motion: static "Running") |
-| success | `--ok-400` check |
-| error | `--alarm-500` cross + one-line error |
-| denied / blocked | `--ink-500` slash + "Declined" / "Not permitted" |
-
-Expand (▸) shows input JSON (redacted) and output preview in `--font-code` on `--solid-inset`. Tier badges (pill, `text-xs`): SAFE = `--glass-border-strong` outline, CONFIRM = `--lamp-400` outline, BLOCKED = `--alarm-500` outline.
-
-### 6.5 Confirmation dialog (`ConfirmDialog.tsx`) — safety-critical
-
-```text
-┌──────────────────────────────────────────────────────┐
-│ ⚠  Move 14 files to the Recycle Bin?                 │  ← title = exact action (Geist 600, text-lg)
-│                                                      │
-│ Jarvis wants to delete files older than 30 days      │  ← one-sentence purpose
-│ from Downloads.                                      │
-│                                                      │
-│ ▾ Show the 14 files                                  │  ← details (paths in mono, on --solid-inset)
-│                                                      │
-│ ⓘ Suggested after reading github.com/...             │  ← taint banner (amber), only if tainted
-│                                                      │
-│           [ Cancel ]   [ Move to Recycle Bin ]       │  ← primary button named by action
-└──────────────────────────────────────────────────────┘
-```
+Behaviour is unchanged; only the presentation follows v3.
 
 | Rule | Detail |
 |---|---|
-| Surface | `glass-decision` (92% tint, the most opaque glass in the app) centred over `glass-scrim`; width 480px (compact: window width − 24px) |
-| Destructive accent | 1px border `--alarm-500` at 50% + alarm icon in the title |
-| Confirm-tier accent | 2px top hairline `--lamp-400` + warning icon |
-| Taint banner | `rgba(255,181,74,.10)` fill, 1px `--lamp-400` at 40% border, `--lamp-400` icon, `--ink-100` text |
-| Role | `role="alertdialog"`, focus trapped, title is `aria-labelledby` |
-| Button naming | Primary button repeats the action verb ("Move to Recycle Bin", "Run script", "Close Chrome"), never "OK"/"Yes" |
-| Destructive | Primary button `--alarm-500` fill + `--ink-on-alarm`; **initial focus on Cancel**; Enter does not approve; approve via click or `Ctrl+Enter` |
-| Non-destructive | Primary `--reactor-500` fill + `--ink-on-reactor`; initial focus on primary; Enter approves; voice "yes" approves |
-| Cancel button | `glass-inset` with `--ink-100` text |
-| PowerShell | Full script in a scrollable `--solid-inset` code block with line numbers; purpose above it |
-| Timeout | Auto-deny after 120 s with a visible countdown in the last 20 s |
-| Queue | One dialog at a time; queued count shown ("1 of 3") |
-| Window | If the main window is hidden, show it and flash the taskbar; also speak the prompt in voice mode |
-| Transparency modes | Same layout in all three modes; in solid mode it is fully opaque |
+| Surface | `glass-decision` (L4) over `glass-scrim`; width 480px (compact: window − 24px); opens with opacity + 6px rise + scale .98→1 (200 ms), no bounce |
+| Destructive | Red hairline at 50% + red icon; primary button **flat red** (`alarm-fill`), dark text; **initial focus on Cancel**; Enter does not approve; approve by click or Ctrl+Enter |
+| Confirm tier | 2px amber top edge + amber icon |
+| Non-destructive | Primary violet (`.btn-accent`); initial focus on primary; Enter approves; voice "yes" approves |
+| Taint banner | Amber 10% fill, amber 40% hairline, amber icon, primary text |
+| Role | `alertdialog`, focus trapped and restored |
+| Buttons | Primary repeats the verb ("Move to Recycle Bin"), never "OK" / "Yes" |
+| Details | Paths and PowerShell in JetBrains Mono on `--solid-inset`, line numbers for scripts |
+| Timeout / queue / window | Auto-deny after 120 s with a countdown in the last 20 s; one at a time ("1 of 3"); shows and flashes the window if hidden |
 
-### 6.6 Other components
+### 6.6 Controls
 
-| Component | Surface | Notes |
-|---|---|---|
-| Status bar | `glass-pane` island, 32px (28px short) | Voice mode, current model, today's cost vs budget (amber + icon at 80%, red + icon at 100%), connectivity, MCP issues count; tabular figures |
-| Activity drawer | Docked `glass-pane` (`lg`+) / overlay `glass-float` sheet (compact, `md`) | Live tool timeline for the current conversation; filter by status (`glass-inset` pills); "Open full log" |
-| Buttons | Primary: `--reactor-500` fill · Secondary: `glass-inset` · Destructive: `--alarm-500` fill · Ghost: text only | 36px height (32px min hit area), `--radius-md`; hover lightens fill 8%; no glow on buttons |
-| Toasts | `glass-float`, `--radius-lg`, bottom-right, 4 s, max 3 | Errors persist until dismissed and get a 3px left `--alarm-500` bar + icon |
-| Menus / popovers | `glass-float`, `--radius-md` | Rows are L2 hover states |
-| Tooltips | `--solid-float`, no blur, `--radius-sm`, `text-xs` | Too small and frequent for blur to be worth its cost |
-| Settings | `glass-pane`; each group is a `glass-inset` section (`--radius-lg`) | Groups: General, Appearance (transparency mode §7), Voice, Models & budget, Files & permissions, Memory, Connections, Privacy, Hotkeys, Advanced. Secrets field shows "•••• 1a2b" + Replace |
-| Memory browser | Two `glass-pane` islands (`lg`+); stacked list → note navigation in compact | Left: tree of `Memory/`; right: rendered note with "Open in Obsidian" and "Forget" (red, confirm) |
-| Connections | `glass-pane` with `glass-inset` rows | MCP server list with status dot + text, tool count, trust badge, enable toggle, per-tool tier overrides |
-| Toggles | Track `--glass-inset` + `--glass-border-strong`; on: `--reactor-500` track, `--void-950` thumb | Always with a text label |
-| Onboarding | Full aurora backdrop; one `glass-float` card, max 560px, centred (compact: full width − 24px) | 5-step stepper (Welcome → Brain key → Vault → Voice → Safety); each step ≤ 1 screen; the Safety step previews the confirmation dialog |
+| Control | Style |
+|---|---|
+| Buttons | 36px, radius 12, `text-ui` 500. **Primary** violet-600 with a top highlight and small violet shadow (white text 5.4:1) · **Secondary** glass · **Danger** flat red · **Ghost** text. Press scales to 0.98 |
+| Inputs, selects, text areas | `glass-inset`; focus = violet edge + 3px violet ring (replaces the outline) |
+| Switches | Off: white 7.5% track + 14% hairline · On: violet-600 · Thumb `#F8FAFC`; 180 ms |
+| Focus | Everything else: 2px violet outline, 2px offset, on every layer |
+| Hover / press / disabled | Hover one step brighter, press one step darker, disabled 50% opacity; at most 2–3 properties change |
+
+### 6.7 Loading
+
+No generic spinners: the orb carries turn-level state, tool cards use the cyan ring, waiting checks
+use glass skeletons (`.skeleton`, slow 1.8 s shimmer), busy labels may use `.pulse-dots`.
+
+### 6.8 Toasts
+
+`glass-float`, radius 18, bottom-right, max 3, 4 s (errors stay until dismissed). Tinted by level:
+info cyan 8%, warning amber 10%, error red 10% (warning and error keep a 3px left edge + icon).
+Enter with opacity + 6px rise.
+
+### 6.9 Memory
+
+Three levels: app rail (L1) · note list (`glass-inset` panel) · note (`glass-raised` panel). Selected
+note: violet tint + 2px violet left edge; hover `glass-hover` (160 ms). Search: glass input, muted
+cyan icon, violet focus. YAML front matter sits in a quiet glass block in JetBrains Mono; the body
+is Outfit with generous padding.
+
+### 6.10 Activity console
+
+Docked `glass-float` from `lg`, a sheet below; filter pills (selected = violet tint + violet edge);
+compact tool rows (§6.4); "Open full log" in `accent-300`.
+
+### 6.11 Settings, automations, status bar, onboarding
+
+- **Settings**: left navigation (selected = violet tint + 2px violet edge), each group a large
+  `glass-raised` section with related fields together (not one card per field); content fades in
+  when the section changes.
+- **Automations**: `glass-inset` cards with a status dot + text (green = enabled, muted = off);
+  "New automation" is the violet primary; Edit / Delete are neutral.
+- **Status bar**: L1, `text-xs` tertiary text; voice in cyan; budget neutral, amber at 80%, red at
+  100%; green online dot.
+- **Onboarding**: atmosphere + one `glass-float` card (max 560px); each step rises in.
 
 ---
 
-## 7. Transparency Modes, Fallbacks & Performance
+## 7. Theme and transparency
 
-The `<html>` element carries `data-glass="full" | "reduced" | "solid"`.
+`<html data-theme="dark|light">` (Settings → General → Theme: Match Windows / Dark / Light) and
+`<html data-glass="full|reduced|solid">` (Settings → General → Transparency: Auto / Full glass /
+Reduced / Solid; default Full glass). Both apply live.
 
-| Mode | Look | When it is used |
-|---|---|---|
-| **full** | Aurora + blur + tints as specified | Default on AC power with GPU compositing |
-| **reduced** | Aurora + tints (raised to 86% / 92%), **no blur** | On battery; GPU compositing unavailable |
-| **solid** | No aurora, no transparency; solid tokens | OS "Transparency effects" off / `prefers-reduced-transparency: reduce`; or chosen by Sir |
-
-Settings → Appearance → Transparency offers **Auto** (default), Full glass, Reduced, Solid. Auto picks a mode in this order:
-
-1. `prefers-reduced-transparency: reduce` matches (where the OS reports it) → **solid**
-2. `app.getGPUFeatureStatus().gpu_compositing` is not `"enabled"` → **reduced**
-3. `powerMonitor.isOnBatteryPower()` is true → **reduced** (listen to `on-battery` / `on-ac` to switch live)
-4. Otherwise → **full**
-
-Switching mode must apply live, without a reload.
-
-Why "reduced" is a good battery default: the backdrop is already made of soft gradients, so removing blur from panes changes very little visually. Blur matters most on floats sitting over text, which are transient.
-
-**Electron window setup (main process):**
-
-```ts
-new BrowserWindow({
-  width: 1100, height: 760, minWidth: 480, minHeight: 520,
-  backgroundColor: '#04060E',            // = --void-950; no white flash before first paint
-  // Optional custom title bar so the aurora runs under it:
-  titleBarStyle: 'hidden',
-  titleBarOverlay: { color: '#00000000', symbolColor: '#E6EEFC', height: 40 },
-  // Verify caption buttons stay legible on your Electron version; if transparency
-  // is not honoured, use color: '#0B1124'.
-});
-```
-
-Native Windows acrylic/mica (`backgroundMaterial`) is a **P2 experiment, not the default**: it blurs the user's wallpaper, which we cannot control, so the contrast guarantee in §3.5 would no longer hold.
-
-**Performance budget:**
-
-| Rule | Target |
+| Mode | Look |
 |---|---|
-| Blurred surfaces visible at once | ≤ 4 at rest (rail, chat, drawer, status bar); + 1 float or scrim when open |
-| Blur on scrolling or moving content | Never |
-| Animated `backdrop-filter` / blur radius | Never |
-| Idle app, window focused | No continuous repaints except the orb (check DevTools → Rendering → Paint flashing) |
-| Window resize | No visible lag at 1440p on integrated graphics in full mode; if there is, reduce `--blur-pane` to 16px before anything else |
+| full | Atmosphere with drift, blur, levels as in §2 |
+| reduced | No blur, no drift; obsidian base raised to 80% |
+| solid | No atmosphere, no transparency (opaque base) |
+
+Auto: OS "reduce transparency" → solid; on battery → reduced; otherwise full. Without
+`backdrop-filter` support the base rises to 82%.
+
+Performance budget: ≤ 4 blurred surfaces at rest + 1 transient; no blur on scrolling content; no
+animated `backdrop-filter`; animations use `transform` and `opacity` only; the drift is the one
+always-on background motion and is switched off wherever it would cost (§3.2).
 
 ---
 
@@ -671,88 +367,88 @@ Native Windows acrylic/mica (`backgroundMaterial`) is a **P2 experiment, not the
 
 | Token | Value | Use |
 |---|---|---|
-| `--dur-fast` | 120 ms | Hover/press feedback, message fade-in |
-| `--dur-base` | 200 ms | Dialogs, drawers, sheets, toasts enter |
-| `--dur-slow` | 320 ms | Orb resize (empty state → compact), spill colour cross-fade |
-| Easing | `--ease-standard` enter, `--ease-exit` leave | |
+| `--dur-fast` | 160 ms | Hover, press, row highlight |
+| `--dur-base` | 200 ms | View change, dialogs, toasts, expand |
+| `--dur-slow` | 320 ms | Spill cross-fade |
+| `--ease-standard` | `cubic-bezier(.2,.8,.2,1)` | Everything |
 
-Glass surfaces enter with `opacity 0→1` and `translateY(8px)→0` (sheets: `translateX(16px)→0`); the blur is present from the first frame, never animated. The aurora never moves. Only the orb animates without user action; everything else animates only in response to Sir (open, expand, confirm). Respect `prefers-reduced-motion` globally (opacity-only transitions, no orb rotation/scale, instant spill changes).
+- Switching views: opacity 0→1 + translateY 6px→0 (220 ms). No sideways slides.
+- Modals: opacity + 6px + scale .98→1 (200 ms). No bounce.
+- Always-on motion: the orb, and the slow atmosphere drift (§3.2). Nothing else moves unless Sir
+  acts or JARVIS's state changes.
+- Reduced motion: no rotation, particles, drift, waveform or scaling; colour and opacity changes
+  stay.
+
+No animation library: CSS keyframes and transitions cover every case above.
 
 ---
 
-## 9. Iconography & Sound
+## 9. Iconography
 
-- Icons: **lucide-react**, 18px default, 1.75 stroke, `--ink-300` at rest, `--ink-100` on hover/active, state colour only when they carry state; always with text or `aria-label`.
-- Sounds (P1, toggle in Settings, bundled locally): soft rising chime on LISTENING, lower chime on cancel, two-tone for confirmation needed. Max 300 ms each, −18 LUFS.
+Lucide only, 18px, stroke 1.75, `icon-rest` at rest, primary text on hover, state colour only when
+the icon carries state; every icon button has an accessible label and tooltip. No emoji as icons.
 
 ---
 
-## 10. Writing in the Interface
+## 10. Writing in the interface
 
 | Do | Don't |
 |---|---|
 | "Move 14 files to the Recycle Bin?" | "Are you sure?" |
 | "Couldn't reach Claude. Check your internet connection or API key in Settings → Brain." | "Oops! Something went wrong." |
 | "Connections" | "MCP server configuration" |
-| "Saved to Obsidian" (matches "Save to Obsidian" setting name) | Different names for the same action |
-| "Transparency: Auto" | "Glassmorphism engine" |
-| Sentence case labels | Title Case Or ALL CAPS |
+| "Transparency: Full glass" | "Glassmorphism engine" |
+| Sentence case | Title Case or ALL CAPS |
 
-The butler persona ("sir", dry wit) appears **only in Jarvis's own messages and speech**. UI chrome (buttons, settings, errors) uses plain, neutral language.
-
----
-
-## 11. Accessibility Checklist
-
-- [ ] Full keyboard navigation; visible 2px `--reactor-500` focus outline with 2px offset on every layer.
-- [ ] All interactive elements ≥ 32×32px hit area (40px in compact rail).
-- [ ] `node scripts/check-glass-contrast.mjs` passes (all text ≥ 4.5:1 against the worst-case backdrop).
-- [ ] Final assistant messages announced via `aria-live="polite"` (not per token).
-- [ ] Confirmation dialog is `alertdialog`, traps focus, restores focus on close.
-- [ ] Colour never the only signal (icons/text accompany status colours; selected rows have a bar + `aria-selected`).
-- [ ] Reduced-motion mode verified.
-- [ ] Solid transparency mode verified with Windows "Transparency effects" turned off.
-- [ ] Text scales with Windows display scaling (use rem units; test at 100%, 125%, 150%).
+The butler persona ("sir") appears only in Jarvis's own messages and speech.
 
 ---
 
-## 12. Acceptance Criteria for the Build
+## 11. Accessibility checklist
 
-The theme is done when every item passes:
+- [ ] Keyboard reaches everything; 2px violet focus (inputs: violet edge + ring) on every layer.
+- [ ] Hit areas ≥ 36×36 (32 minimum); rail targets 40.
+- [ ] `npm run check:contrast` passes (both themes).
+- [ ] Final replies announced via `aria-live="polite"`, not per token.
+- [ ] Confirmation dialog is `alertdialog`, traps and restores focus.
+- [ ] Colour is never the only signal (icons or text with every status; selected rows have an edge).
+- [ ] Reduced motion verified; solid transparency verified with Windows transparency off.
+- [ ] Text scales with Windows display scaling (rem units; 100 / 125 / 150%).
 
-- [ ] `tokens.css`, `glass.css`, `fonts.css` and `<AppBackdrop/>` exist and match §3.6, §3.7, §4.
-- [ ] No raw hex/`rgba()`, `backdrop-filter` or Tailwind blur utilities inside components (lint passes).
+---
+
+## 12. Acceptance criteria
+
+- [ ] No raw colours, `backdrop-filter` or blur utilities in components.
 - [ ] Contrast script exits 0.
-- [ ] Window at 480, 760, 1200 and 1600px wide: layout matches §5.1, no horizontal scrollbar, drawer docks/overlays correctly.
-- [ ] Window height 560px: `short` rules apply (96px orb, 4-line composer).
-- [ ] Shell shows separate glass islands with aurora visible in the gaps.
-- [ ] All three transparency modes render correctly and switch live from Settings.
-- [ ] Orb state changes cross-fade the backdrop spill; spill tracks the orb from empty state to compact.
-- [ ] Nothing inside a scroll container has `backdrop-filter`; no transition targets `backdrop-filter` or `filter`.
-- [ ] Orb is the only thing animating at rest (Paint flashing check).
-- [ ] Every rule in §6.5 (confirmation dialog) passes.
-- [ ] Mini mode and Computer-Control overlay use solid recipes (§5.5, §5.6), not CSS blur.
-- [ ] Fonts load with the network offline.
-- [ ] §11 checklist passes.
+- [ ] 480, 760, 1100, 1280, 1440, 1600px wide: no horizontal scroll; console docks from 1200.
+- [ ] 560px tall: `short` rules apply.
+- [ ] Both themes and all three transparency modes render and switch live.
+- [ ] Orb shows all eight states as in §6.1; spill follows it.
+- [ ] Nothing inside a scroll container blurs.
+- [ ] Confirmation rules in §6.5 pass (e2e).
+- [ ] Mini mode and overlay use solid recipes.
+- [ ] Fonts load offline.
 
 ---
 
-## 13. Changelog: v1.0 → v2.0
+## 13. Changelog
 
-| Area | v1.0 | v2.0 | Why |
+### v2.0 → v3.0 (Obsidian Intelligence)
+
+| Area | v2.0 | v3.0 | Why |
 |---|---|---|---|
-| Direction | Flat "Workshop at Night" | "Glass Workshop at Night": aurora backdrop + frosted glass islands | Glassmorphism requested |
-| Background | Flat `#060A12` | `#04060E` void + blue/violet/indigo aurora + reactor spill + grain | Glass needs colour behind it to read as glass |
-| Surfaces | Solid `--night-900/800/700/600` | Four-layer glass stack (L0–L3); solid tokens kept as fallback | Consistent depth with fixed recipes |
-| Orb | Glow only | Glow + backdrop spill that changes colour with state | The reactor "lights the room" |
-| Display font | Chakra Petch | Sora | Chamfered corners clashed with rounded glass |
-| Body font | IBM Plex Sans | Geist | Crisper on translucent, colour-shifting surfaces |
-| `--ink-500` | `#7F8FAA` | `#8E9DB8` | Old value measured 4.20:1 on a hovered glass row |
-| `--alarm-500` | `#FF5446` | `#FF6B5E` | Old value fell below 4.5:1 on glass rows |
-| New ink tokens | — | `--ink-on-lamp`, `--ink-on-ok` | Text on amber/green badges |
-| Radii | 6 / 10px | 8 / 12 / 16 / 24px | Glass reads softer with larger radii |
-| Minimum window | 720 × 520 | 480 × 520 | Allows Windows Snap half-screen on 1280–1366px laptops |
-| Responsive | One layout | compact / medium / expanded / wide + short-height mode | App must work snapped, maximised and on ultrawide |
-| Transparency | — | Full / reduced / solid modes, auto from OS setting, battery and GPU status | Performance and accessibility |
-| Font location | `resources/fonts/` | `src/renderer/src/assets/fonts/` | Vite bundles renderer assets; `resources/` is for main-process files |
-| Contrast check | Manual checker | Worst-case script in repo (§3.5) | Guarantee survives future token edits |
+| Direction | Glass Workshop at Night (blue aurora, cyan everywhere) | Obsidian Intelligence: obsidian, violet interaction, cyan JARVIS energy | v2 felt too blue, flat and generic |
+| Atmosphere | Static blue/violet/indigo aurora + two light orbs | Violet, cyan, core and rose lights; slow 48 s drift | Deeper and alive without being a wallpaper |
+| Glass | Dark tints (64–86%) | Four white-sheen levels over a 50% obsidian base | Clearer hierarchy; base keeps the contrast guarantee |
+| Accent | Cyan for buttons, focus, links, selection | Violet for interaction; cyan only for JARVIS (orb, voice, running) | Two accents, two meanings |
+| Fonts | Sora + Geist | Outfit (UI) + JetBrains Mono (code) | One modern family with personality |
+| Orb | Core + rings | Eight-layer reactor, segmented tool progress, waveform, motes | The orb is the signature |
+| Error colour | `#FF8F86` | `#F87171` fills, `#FCA5A5` text | Requested palette; text stays ≥ 4.5:1 |
+| Motion | Orb only | View, modal, toast, expand transitions; status micro-animations | Motion explains state |
+| Light theme | Daylight Workshop | Obsidian Daylight (same roles, frosted white) | Kept, re-coloured to match |
+
+### v1.0 → v2.0
+
+Flat theme → aurora backdrop and glass islands; Chakra Petch / IBM Plex Sans → Sora / Geist;
+transparency modes; responsive down to 480px; worst-case contrast script in CI.

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban, Check, ChevronDown, ChevronRight, Circle, Loader2, Wrench, X } from 'lucide-react';
+import { Ban, Check, ChevronRight, Wrench, X } from 'lucide-react';
 import clsx from 'clsx';
 import type { UiToolCall } from '@shared/types';
 
@@ -28,14 +28,15 @@ function StatusIndicator({ call }: { call: UiToolCall }): React.JSX.Element {
   switch (call.status) {
     case 'awaiting':
       return (
-        <span className="flex items-center gap-1 text-lamp-400">
-          <Circle size={10} fill="currentColor" aria-hidden /> Waiting for you
+        <span className="flex items-center gap-1.5 text-lamp-400">
+          <span className="dot-breathe size-2 rounded-pill bg-lamp-400" aria-hidden /> Waiting for
+          you
         </span>
       );
     case 'running':
       return (
-        <span className="flex items-center gap-1 text-reactor-500">
-          <Loader2 size={14} className="spin" aria-hidden /> Running
+        <span className="flex items-center gap-1.5 text-reactor-500">
+          <span className="ring-spin size-3" aria-hidden /> Running
         </span>
       );
     case 'success':
@@ -47,15 +48,15 @@ function StatusIndicator({ call }: { call: UiToolCall }): React.JSX.Element {
     case 'error':
       return (
         <span className="flex items-center gap-1 text-alarm-500">
-          <X size={14} aria-hidden /> Failed
+          <X size={14} className="pulse-once" aria-hidden /> Failed
         </span>
       );
     case 'not_run':
       return <span className="text-ink-500">Not run</span>;
     default:
       return (
-        <span className="flex items-center gap-1 text-ink-500">
-          <Circle size={8} fill="currentColor" aria-hidden /> Pending
+        <span className="flex items-center gap-1.5 text-ink-500">
+          <span className="size-1.5 rounded-pill bg-ink-500" aria-hidden /> Pending
         </span>
       );
   }
@@ -73,18 +74,18 @@ export function ToolCallCard({
   return (
     <div
       className={clsx(
-        'glass-inset text-sm',
+        'glass-raised rounded-md text-sm',
         // §6.4: awaiting Sir gets a 2px amber bar.
         call.status === 'awaiting' && 'shadow-[inset_2px_0_0_var(--lamp-400)]',
       )}
     >
       <button
         type="button"
-        className="flex min-h-10 w-full items-center gap-2 px-2.5 py-1.5 text-left"
+        className="flex min-h-10 w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors duration-[160ms] hover:bg-glass-hover"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <Wrench size={14} className="shrink-0 text-ink-500" aria-hidden />
+        <Wrench size={14} className="shrink-0 text-icon-rest" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-ink-100" title={call.humanSummary}>
           {call.humanSummary}
         </span>
@@ -96,13 +97,20 @@ export function ToolCallCard({
           </span>
         )}
         <StatusIndicator call={call} />
-        {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+        <ChevronRight
+          size={14}
+          className={clsx(
+            'shrink-0 text-icon-rest transition-transform duration-200',
+            open && 'rotate-90',
+          )}
+          aria-hidden
+        />
       </button>
       {call.status === 'error' && call.error && !open && (
-        <p className="truncate px-2.5 pb-1.5 text-alarm-500">{call.error}</p>
+        <p className="truncate px-3 pb-1.5 text-alarm-500">{call.error}</p>
       )}
       {open && (
-        <div className="space-y-2 rounded-b-md border-t border-glass-border bg-solid-inset px-2.5 py-2 font-code text-xs text-ink-300">
+        <div className="expand-in space-y-2 rounded-b-md border-t border-glass-border bg-solid-inset px-3 py-2.5 font-code text-xs text-ink-300">
           <div>
             <div className="mb-1 font-body text-ink-500">{call.toolName} · input</div>
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all">

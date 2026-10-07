@@ -49,14 +49,21 @@ export function ClaudeCodeCard(): React.JSX.Element {
     return () => (clearInterval(t), clearTimeout(stop));
   }, [waiting, status?.loggedIn, refresh]);
 
-  if (!status) return <p className="text-sm text-ink-500">Checking Claude Code…</p>;
+  if (!status)
+    return (
+      <div role="status" className="flex flex-col gap-2">
+        <span className="sr-only">Checking Claude Code…</span>
+        <span className="skeleton block h-4 w-56" aria-hidden />
+        <span className="skeleton block h-4 w-40" aria-hidden />
+      </div>
+    );
   if (!status.found)
     return (
       <div role="status" className="rounded-md border border-lamp-400 p-3 text-sm text-ink-100">
         Claude Code isn&apos;t installed on this PC. Install it, sign in, then come back here.{' '}
         <button
           type="button"
-          className="text-reactor-500 underline"
+          className="text-accent-300 underline"
           onClick={() =>
             void call('app:openExternal', { url: 'https://claude.com/product/claude-code' })
           }
@@ -177,7 +184,7 @@ export function ConnectionPicker(): React.JSX.Element {
             className={clsx(
               'rounded-md border p-3 text-left transition-colors',
               provider === o.id
-                ? 'border-reactor-500 bg-glass-inset'
+                ? 'border-accent-edge bg-glass-selected'
                 : 'border-glass-border hover:border-ink-500',
             )}
           >

@@ -104,7 +104,7 @@ function ConfirmDialogBody({ req }: { req: ConfirmRequest }): React.JSX.Element 
   return (
     <Dialog.Root open onOpenChange={(o) => !o && respond('deny', 'keyboard')}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 glass-scrim" />
+        <Dialog.Overlay className="glass-scrim fade-in fixed inset-0 z-40" />
         <Dialog.Content
           role="alertdialog"
           aria-describedby="confirm-summary"
@@ -115,7 +115,7 @@ function ConfirmDialogBody({ req }: { req: ConfirmRequest }): React.JSX.Element 
           }}
           className={clsx(
             // §6.5: the most opaque glass in the app; destructive gets a red edge, confirm-tier an amber top hairline.
-            'glass-decision fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[min(30rem,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto p-6',
+            'glass-decision modal-in fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[min(30rem,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto p-6',
             req.destructive ? 'border-alarm-500/50' : 'border-t-2 border-t-lamp-400',
           )}
         >

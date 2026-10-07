@@ -13,8 +13,8 @@ import { AddConnection } from './add-connection';
 
 const STATUS: Record<McpServerView['status'], { label: string; dot: string }> = {
   ready: { label: 'Connected', dot: 'bg-ok-400' },
-  connecting: { label: 'Connecting…', dot: 'bg-lamp-400' },
-  error: { label: 'Error', dot: 'bg-alarm-500' },
+  connecting: { label: 'Connecting…', dot: 'bg-lamp-400 dot-breathe' },
+  error: { label: 'Error', dot: 'bg-alarm-fill' },
   disabled: { label: 'Off', dot: 'bg-ink-500' },
 };
 
@@ -45,7 +45,7 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
   }
 
   return (
-    <li className="rounded-md border border-glass-border bg-glass-inset">
+    <li className="glass-inset rounded-lg">
       <div className="flex items-center gap-3 p-3">
         <span
           className={clsx('size-2.5 shrink-0 rounded-pill', STATUS[s.status].dot)}
@@ -151,8 +151,8 @@ export function ConnectionsView(): React.JSX.Element {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center border-b border-glass-border px-6">
-        <h1 className="font-display text-lg font-semibold">Connections</h1>
+      <header className="flex h-14 shrink-0 items-center border-b border-glass-border-subtle px-6">
+        <h1 className="text-xl font-semibold text-ink-100">Connections</h1>
         <Button variant="primary" className="ml-auto" onClick={() => setAdding(true)}>
           <Plus size={14} aria-hidden /> Add connection
         </Button>

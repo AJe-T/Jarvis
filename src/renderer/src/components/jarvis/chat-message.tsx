@@ -112,7 +112,7 @@ export function ChatMessage({
             </IconButton>
           </div>
         )}
-        <div className="glass-inset max-w-[88%] rounded-lg rounded-br-[6px] px-4 py-2 whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
+        <div className="max-w-[88%] rounded-lg rounded-br-[6px] border border-bubble-sir-edge bg-bubble-sir px-4 py-2.5 whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
           {message.text}
         </div>
       </div>
@@ -128,7 +128,7 @@ export function ChatMessage({
             <li key={c.url}>
               <a
                 href={c.url}
-                className="text-reactor-500 underline underline-offset-2"
+                className="text-accent-300 underline underline-offset-2"
                 onClick={(e) => {
                   e.preventDefault();
                   void call('app:openExternal', { url: c.url });

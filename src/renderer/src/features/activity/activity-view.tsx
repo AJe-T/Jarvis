@@ -34,8 +34,8 @@ export function ActivityView(): React.JSX.Element {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-glass-border px-6">
-        <h1 className="font-display text-lg font-semibold">Activity</h1>
+      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-glass-border-subtle px-6">
+        <h1 className="text-xl font-semibold text-ink-100">Activity</h1>
         <div role="tablist" className="flex gap-1">
           {(['actions', 'audit', 'usage'] as const).map((t) => (
             <button

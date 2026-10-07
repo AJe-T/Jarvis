@@ -50,7 +50,7 @@ export function DictationSection(): React.JSX.Element {
               <span className="text-ink-100">{h.final_text}</span>
               <button
                 type="button"
-                className="ml-2 text-xs text-reactor-500 underline"
+                className="ml-2 text-xs text-accent-300 underline"
                 onClick={() => void navigator.clipboard.writeText(h.final_text)}
               >
                 Copy

@@ -92,7 +92,7 @@ export function Onboarding(): React.JSX.Element {
                 i < step
                   ? 'border-ok-400 text-ok-400'
                   : i === step
-                    ? 'border-reactor-500 text-reactor-500'
+                    ? 'border-accent-500 text-accent-300'
                     : 'border-glass-border text-ink-500',
               )}
             >
@@ -106,7 +106,10 @@ export function Onboarding(): React.JSX.Element {
         ))}
       </ol>
 
-      <section className="glass-float flex w-full max-w-[560px] flex-col gap-5 p-6 md:p-8">
+      <section
+        key={step}
+        className="glass-float view-enter flex w-full max-w-[560px] flex-col gap-5 p-6 md:p-8"
+      >
         {step === 0 && (
           <>
             <div className="flex justify-center">
@@ -148,7 +151,7 @@ export function Onboarding(): React.JSX.Element {
               Tip: also set a monthly spend limit in the{' '}
               <button
                 type="button"
-                className="text-reactor-500 underline"
+                className="text-accent-300 underline"
                 onClick={() =>
                   void call('app:openExternal', {
                     url: 'https://console.anthropic.com/settings/limits',

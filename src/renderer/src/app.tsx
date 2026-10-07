@@ -31,7 +31,7 @@ function DbBanner(): React.JSX.Element | null {
   return (
     <div
       role="alert"
-      className="flex items-center gap-3 rounded-md bg-alarm-500 px-4 py-2 text-sm text-ink-on-alarm"
+      className="flex items-center gap-3 rounded-md bg-alarm-fill px-4 py-2 text-sm text-ink-on-alarm"
     >
       Jarvis's database failed its integrity check. Some history may be missing.
       <button type="button" className="underline" onClick={() => go('settings', 'data')}>
@@ -41,7 +41,7 @@ function DbBanner(): React.JSX.Element | null {
   );
 }
 
-/** §5.1: floating glass islands over the aurora; the gaps between them are the theme's signature. */
+/** §5.1: floating glass islands over the atmosphere: control rail, main surface, console, status. */
 function Shell(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const activityOpen = useUiStore((s) => s.activityOpen);
@@ -65,7 +65,10 @@ function Shell(): React.JSX.Element {
         <Rail />
         <main className="glass-pane flex min-w-0 flex-1 overflow-hidden">
           {Current ? (
-            <Current />
+            // §8: each view rises in (opacity + 6px), never slides sideways.
+            <div key={view} className="view-enter flex min-w-0 flex-1">
+              <Current />
+            </div>
           ) : (
             <p className="m-auto text-ink-500">This area is not available yet.</p>
           )}

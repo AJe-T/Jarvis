@@ -62,12 +62,13 @@ function useTheme(): void {
   }, [theme]);
 }
 
-/** L0 (§3.1): aurora + reactor spill + grain. Static; only the spill colour cross-fades. */
+/** L0 (§3.2): atmosphere (slow drift) + reactor spill + grain. */
 export function AppBackdrop(): React.JSX.Element {
   useGlassMode();
   useTheme();
   return (
     <div className="app-backdrop" aria-hidden>
+      <div className="atmosphere" />
       <div className="reactor-spill" />
     </div>
   );

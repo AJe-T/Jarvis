@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { History, Minimize2, PanelRight, Plus } from 'lucide-react';
-import { Orb } from '../../components/jarvis/orb';
+import { Orb, type OrbStep } from '../../components/jarvis/orb';
 import { ChatMessage, Markdown, ToolCards } from '../../components/jarvis/chat-message';
 import { Composer } from '../../components/jarvis/composer';
 import { IconButton } from '../../components/ui/button';
@@ -40,6 +40,15 @@ export function ChatView(): React.JSX.Element {
   const toggleActivity = useUiStore((s) => s.toggleActivity);
   const scrollRef = useRef<HTMLDivElement>(null);
   const empty = messages.length === 0 && !live;
+  const steps = (live?.toolCalls ?? []).map((c): OrbStep =>
+    c.status === 'success'
+      ? 'done'
+      : c.status === 'error'
+        ? 'error'
+        : c.status === 'running' || c.status === 'awaiting'
+          ? 'running'
+          : 'pending',
+  );
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -66,7 +75,7 @@ export function ChatView(): React.JSX.Element {
             style={{ opacity: empty ? 0 : 1 }}
             aria-hidden={empty}
           >
-            <Orb state={state} level={level} size="sm" spill={!empty} />
+            <Orb state={state} level={level} size="sm" spill={!empty} steps={steps} />
             <span className="text-sm font-semibold text-ink-300">
               {state === 'ERROR' && detail ? detail : STATUS_LINE[state]}
             </span>

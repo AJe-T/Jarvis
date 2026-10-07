@@ -9,7 +9,7 @@ export function createMainWindow(opts: { startHidden?: boolean } = {}): BrowserW
     minWidth: 480,
     minHeight: 520,
     show: false,
-    backgroundColor: '#04060E', // = --void-950; no white flash before first paint
+    backgroundColor: '#05060B', // = --bg-950; no white flash before first paint
     title: 'Jarvis',
     icon: join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,
