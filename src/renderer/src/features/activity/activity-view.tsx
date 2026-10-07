@@ -70,7 +70,7 @@ export function ActivityView(): React.JSX.Element {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={clsx(
-                // §6.6: Notion underline tabs.
+                // §6.6: underline tabs.
                 '-mb-px border-b-2 pb-2.5 text-ui font-medium transition-colors duration-[120ms]',
                 tab === t
                   ? 'border-ink-100 text-ink-100'

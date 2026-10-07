@@ -41,7 +41,7 @@ function DbBanner(): React.JSX.Element | null {
   );
 }
 
-/** §5.1: Notion-style shell: a warm sidebar, a white canvas, hairline dividers, no gaps. */
+/** §5.1: Vercel-style shell: a near-white sidebar, a white canvas, hairline dividers, no gaps. */
 function Shell(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const activityOpen = useUiStore((s) => s.activityOpen);

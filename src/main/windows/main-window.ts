@@ -10,7 +10,7 @@ export function createMainWindow(opts: { startHidden?: boolean } = {}): BrowserW
     minHeight: 520,
     show: false,
     // = --bg-main for the Windows theme, so there is no flash before first paint.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#191919' : '#FFFFFF',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0A0A0A' : '#FFFFFF',
     title: 'Jarvis',
     icon: join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,

@@ -31,6 +31,10 @@ if (steps.includes('chat')) {
   await page.getByRole('button', { name: 'I understand' }).click();
   await page.waitForTimeout(500);
   await page.screenshot({ path: join(outDir, '04-empty.png') });
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, '04-empty-dark.png') });
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'light'));
   await page.getByLabel('Message Jarvis').fill('hello there');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(1200);

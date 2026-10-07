@@ -5,8 +5,8 @@ bundled third-party assets and separately-run components whose licences require 
 
 | Component | URL | Licence | Where used |
 |---|---|---|---|
-| Outfit (variable woff2, latin subset) | https://github.com/Outfitio/Outfit-Fonts | SIL OFL 1.1 | Interface font |
-| JetBrains Mono (variable woff2, latin subset) | https://github.com/JetBrains/JetBrainsMono | SIL OFL 1.1 | Code font |
+| Geist (variable woff2) | https://github.com/vercel/geist-font | SIL OFL 1.1 | Interface font |
+| Geist Mono (variable woff2) | https://github.com/vercel/geist-font | SIL OFL 1.1 | Code and label font |
 | Playwright MCP (@playwright/mcp, run as a separate process via npx) | https://github.com/microsoft/playwright-mcp | Apache-2.0 | Browser connector |
 | Notion MCP server (@notionhq/notion-mcp-server, optional, run via npx) | https://github.com/makenotion/notion-mcp-server | MIT | Notion connector |
 | MCP filesystem server (@modelcontextprotocol/server-filesystem, optional, run via npx) | https://github.com/modelcontextprotocol/servers | MIT | Filesystem connector |

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import clsx from 'clsx';
 import { Orb } from '../../components/jarvis/orb';
 import { call } from '../../lib/api';
 import { useAssistantStore } from '../../stores/assistant-store';
@@ -17,10 +16,7 @@ const FALLBACK_CHIPS = [
   'What can you do?',
 ];
 
-/** §5.2: Notion-style pastel feature cards for the suggestions. */
-const TINTS = ['bg-tint-peach', 'bg-tint-mint', 'bg-tint-lavender'] as const;
-
-/** Design-system.md §5.2: orb, one line, three suggestion cards from routines. */
+/** Design-system.md §5.2: brand mesh behind the orb, one line, three suggestion cards from routines. */
 export function EmptyState(): React.JSX.Element {
   const state = useAssistantStore((s) => s.state);
   const level = useAssistantStore((s) => (s.state === 'SPEAKING' ? s.outLevel : s.micLevel));
@@ -45,20 +41,17 @@ export function EmptyState(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6">
-      <div className="flex w-full max-w-3xl flex-col items-center gap-5">
+      <div className="mesh flex w-full max-w-3xl flex-col items-center gap-5">
         <Orb state={state} level={level} size="lg" />
         <h1 className="text-center text-hero font-semibold text-ink-100">{greeting()}</h1>
         {/* suggestions as an even grid of left-aligned cards */}
         <div className="mt-3 grid w-full gap-2 md:grid-cols-3">
-          {chips.map((c, i) => (
+          {chips.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => void send(c)}
-              className={clsx(
-                'min-h-20 rounded-lg px-5 py-4 text-left text-ui font-medium text-tint-ink transition-[filter] duration-[120ms] hover:brightness-[0.97]',
-                TINTS[i % TINTS.length],
-              )}
+              className="card min-h-20 px-5 py-4 text-left text-ui font-medium text-ink-100 transition-colors duration-[120ms] hover:bg-surface-2"
             >
               {c.charAt(0).toUpperCase() + c.slice(1)}
             </button>

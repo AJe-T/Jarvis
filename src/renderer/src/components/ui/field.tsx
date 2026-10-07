@@ -30,7 +30,7 @@ export function TextInput({
   return (
     <input
       className={clsx(
-        'min-h-9 rounded-md border border-line bg-surface-2 px-3 text-base text-ink-100 transition-[border-color,box-shadow] duration-[160ms]',
+        'min-h-9 rounded-sm border border-line bg-surface-1 px-3 text-base text-ink-100 transition-[border-color,box-shadow] duration-[160ms]',
         className,
       )}
       {...rest}

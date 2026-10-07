@@ -1,74 +1,80 @@
-/* Design-system.md §3 ("Workspace", after Notion) — the only place raw colour values live.
-   Warm neutrals, Notion purple for the main action and for Jarvis, link blue for links, and soft
-   pastel tags for status. Light is the signature look; dark follows Notion's app dark mode. */
+/* Design-system.md §3 ("Geist", after Vercel) — the only place raw colour values live.
+   Ink on near-white: black ink carries the main action, one blue carries focus, links and
+   Jarvis, and the develop / preview / ship mesh gradient is the only decoration (hero only).
+   Dark is the polarity flip: near-black canvas, white ink as the main action. */
 
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
 
   /* Surfaces */
-  --bg-app: #f7f6f3; /* sidebar, status bar */
+  --bg-app: #fafafa; /* sidebar, status bar */
   --bg-main: #ffffff; /* canvas */
-  --surface-1: #ffffff; /* cards (with a hairline) */
-  --surface-2: #f6f5f4; /* inputs' rest, code, Sir's message, segmented tracks */
-  --hover: rgba(55, 53, 47, 0.06);
-  --press: rgba(55, 53, 47, 0.1);
-  --selected: #ecebe8;
+  --surface-1: #ffffff; /* cards (hairline + stacked shadow) */
+  --surface-2: #f5f5f5; /* inputs' rest, code, Sir's message, segmented tracks */
+  --hover: rgba(0, 0, 0, 0.05);
+  --press: rgba(0, 0, 0, 0.08);
+  --selected: #ebebeb;
 
   /* Hairlines */
-  --line-subtle: #ede9e4;
-  --line: #e5e3df;
-  --line-strong: #c8c4be;
+  --line-subtle: #f2f2f2;
+  --line: #ebebeb;
+  --line-strong: #c9c9c9;
 
   /* Text */
-  --ink-100: #1a1a1a;
-  --ink-300: #5d5b54;
-  --ink-500: #6b6963;
-  --icon-rest: #787671;
-  --ink-strong: #000000; /* active pill tabs, brand mark */
+  --ink-100: #171717;
+  --ink-300: #4d4d4d;
+  --ink-500: #666666;
+  --icon-rest: #666666;
+  --ink-strong: #171717; /* active pill tabs, brand mark, selection */
   --on-strong: #ffffff;
 
-  /* Primary: Notion purple (main action, focus, Jarvis) and link blue (links only) */
-  --accent-600: #5645d4; /* button fill, white text 6.6:1 */
-  --accent-700: #4534b3; /* pressed */
-  --accent-500: #5645d4; /* focus ring, orb, featured edges */
-  --accent-300: #0069c2; /* links and accent text */
-  --accent-tint: #e6e0f5; /* lavender */
-  --accent-edge: rgba(86, 69, 212, 0.35);
-  --accent-glow: rgba(86, 69, 212, 0.2);
+  /* Primary: black ink (main action); blue (focus, links, Jarvis) */
+  --accent-600: #171717; /* button fill */
+  --accent-700: #383838; /* hover / pressed */
+  --accent-500: #0070f3; /* focus ring, orb, caret */
+  --accent-300: #005bc0; /* links and accent text */
+  --accent-tint: #d3e5ff;
+  --accent-edge: rgba(0, 112, 243, 0.35);
+  --accent-glow: rgba(0, 112, 243, 0.2);
   --ink-on-accent: #ffffff;
-  --accent-tag-ink: #391c57;
+  --accent-tag-ink: #004ea8;
 
-  /* Status as pastel tags */
-  --alarm-500: #c92a2a;
-  --alarm-fill: #e03131;
-  --alarm-tint: #fde0ec; /* rose */
-  --alarm-tag-ink: #a02e6d;
-  --lamp-400: #a84500;
-  --lamp-tint: #ffe8d4; /* peach */
-  --lamp-tag-ink: #793400;
-  --ok-400: #0d7329;
-  --ok-tint: #d9f3e1; /* mint */
-  --neutral-tint: #f0eeec;
+  /* Status */
+  --alarm-500: #c50000;
+  --alarm-fill: #c50000;
+  --alarm-tint: #f7d4d6;
+  --alarm-tag-ink: #a80000;
+  --lamp-400: #964c00;
+  --lamp-tint: #ffefcf;
+  --lamp-tag-ink: #8a4300;
+  --ok-400: #236c33;
+  --ok-tint: #d9f5e0;
+  --neutral-tint: #f2f2f2;
   --ink-on-alarm: #ffffff;
 
-  /* Feature card tints (empty-state suggestions) */
-  --tint-peach: #ffe8d4;
-  --tint-mint: #d9f3e1;
-  --tint-lavender: #e6e0f5;
-  --tint-ink: #37352f;
+  /* Brand mesh (develop → preview → ship), empty-state hero only */
+  --mesh-1: #007cf0;
+  --mesh-2: #00dfd8;
+  --mesh-3: #7928ca;
+  --mesh-4: #ff0080;
+  --mesh-5: #ff4d4d;
+  --mesh-6: #f9cb28;
+  --mesh-opacity: 0.22;
 
-  /* Elevation (§2) */
-  --shadow-sm: rgba(15, 15, 15, 0.04) 0 1px 2px 0;
-  --shadow-pop: rgba(15, 15, 15, 0.16) 0 16px 48px -8px, rgba(15, 15, 15, 0.06) 0 0 0 1px;
-  --scrim: rgba(15, 15, 15, 0.4);
+  /* Elevation (§2): stacked small offsets, never one heavy drop */
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.02), 0 2px 2px rgba(0, 0, 0, 0.04);
+  --shadow-pop:
+    0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.02),
+    0 8px 16px -4px rgba(0, 0, 0, 0.04), 0 24px 32px -8px rgba(0, 0, 0, 0.06);
+  --scrim: rgba(0, 0, 0, 0.4);
 
-  /* Type: Outfit everywhere; JetBrains Mono only for code */
-  --font-body: 'Outfit', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  /* Type: Geist for everything, Geist Mono for code and technical labels */
+  --font-body: 'Geist', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
   --font-display: var(--font-body);
-  --font-code: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  --font-code: 'Geist Mono', 'Cascadia Mono', Consolas, monospace;
 
-  /* Shape (8px buttons, 12px cards) */
+  /* Shape (6px controls, 8px cards, 12px dialogs) */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -82,48 +88,48 @@
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Dark: Settings → General → Theme. Notion's app dark mode. */
+/* Dark: Settings → General → Theme. Vercel dark: near-black canvas, white ink primary. */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-app: #202020;
-  --bg-main: #191919;
-  --surface-1: #202020;
-  --surface-2: #252525;
-  --hover: rgba(255, 255, 255, 0.055);
-  --press: rgba(255, 255, 255, 0.09);
-  --selected: #2c2c2c;
-  --line-subtle: #262626;
-  --line: #2f2f2f;
-  --line-strong: #3f3f3f;
-  --ink-100: #ebebea;
-  --ink-300: #b5b4b1;
-  --ink-500: #9b9a97;
-  --icon-rest: #9b9a97;
-  --ink-strong: #ffffff;
-  --on-strong: #191919;
-  --accent-600: #5645d4;
-  --accent-700: #6a5ae0;
-  --accent-500: #8577ea;
-  --accent-300: #5aa6d6;
-  --accent-tint: #2b2540;
-  --accent-edge: rgba(133, 119, 234, 0.4);
-  --accent-glow: rgba(133, 119, 234, 0.24);
-  --accent-tag-ink: #c9bff7;
-  --alarm-500: #ff7369;
-  --alarm-fill: #e03131;
-  --alarm-tint: #3b2026;
-  --alarm-tag-ink: #ff9a92;
-  --lamp-400: #ffa344;
-  --lamp-tint: #3b2a1d;
-  --lamp-tag-ink: #ffb46b;
-  --ok-400: #4dab9a;
-  --ok-tint: #1f3326;
-  --neutral-tint: #2f2f2f;
-  --tint-peach: #3b2a1d;
-  --tint-mint: #1f3326;
-  --tint-lavender: #2b2540;
-  --tint-ink: #ebebea;
-  --shadow-sm: rgba(0, 0, 0, 0.3) 0 1px 2px 0;
-  --shadow-pop: rgba(0, 0, 0, 0.5) 0 16px 48px -8px, rgba(255, 255, 255, 0.06) 0 0 0 1px;
-  --scrim: rgba(0, 0, 0, 0.55);
+  --bg-app: #0a0a0a;
+  --bg-main: #0a0a0a;
+  --surface-1: #111111;
+  --surface-2: #1a1a1a;
+  --hover: rgba(255, 255, 255, 0.06);
+  --press: rgba(255, 255, 255, 0.1);
+  --selected: #232323;
+  --line-subtle: #1a1a1a;
+  --line: #2e2e2e;
+  --line-strong: #454545;
+  --ink-100: #ededed;
+  --ink-300: #a1a1a1;
+  --ink-500: #8f8f8f;
+  --icon-rest: #8f8f8f;
+  --ink-strong: #ededed;
+  --on-strong: #0a0a0a;
+  --accent-600: #ededed;
+  --accent-700: #cccccc;
+  --accent-500: #52a8ff;
+  --accent-300: #52a8ff;
+  --accent-tint: #0d2847;
+  --accent-edge: rgba(82, 168, 255, 0.4);
+  --accent-glow: rgba(82, 168, 255, 0.24);
+  --ink-on-accent: #0a0a0a;
+  --accent-tag-ink: #8cc4ff;
+  --alarm-500: #ff6166;
+  --alarm-fill: #c50000;
+  --alarm-tint: #3c1618;
+  --alarm-tag-ink: #ff9592;
+  --lamp-400: #f5a623;
+  --lamp-tint: #33240d;
+  --lamp-tag-ink: #ffc96b;
+  --ok-400: #62c073;
+  --ok-tint: #0f2e18;
+  --neutral-tint: #1f1f1f;
+  --mesh-opacity: 0.3;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-pop:
+    0 0 0 1px rgba(255, 255, 255, 0.1), 0 8px 16px -4px rgba(0, 0, 0, 0.4),
+    0 24px 32px -8px rgba(0, 0, 0, 0.5);
+  --scrim: rgba(0, 0, 0, 0.6);
 }

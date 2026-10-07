@@ -20,7 +20,7 @@ const ITEMS: Array<{ view: View; label: string; Icon: typeof Brain }> = [
   { view: 'settings', label: 'Settings', Icon: Settings },
 ];
 
-/** §6.2: Notion-style sidebar. Icons with labels from 1200px; icons only (with tooltips) below. */
+/** §6.2: Sidebar. Icons with labels from 1200px; icons only (with tooltips) below. */
 export function Rail(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const go = useUiStore((s) => s.go);

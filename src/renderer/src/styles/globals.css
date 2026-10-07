@@ -48,10 +48,6 @@
   --color-lamp-tag-ink: var(--lamp-tag-ink);
   --color-ok-tint: var(--ok-tint);
   --color-neutral-tint: var(--neutral-tint);
-  --color-tint-peach: var(--tint-peach);
-  --color-tint-mint: var(--tint-mint);
-  --color-tint-lavender: var(--tint-lavender);
-  --color-tint-ink: var(--tint-ink);
 
   --shadow-pop: var(--shadow-pop);
   --shadow-sm: var(--shadow-sm);
@@ -67,17 +63,20 @@
   --text-sm--line-height: 1.125rem;
   --text-ui: 0.875rem;
   --text-ui--line-height: 1.25rem;
+  --text-ui--letter-spacing: -0.02em;
   --text-base: 1rem;
   --text-base--line-height: 1.55;
   --text-lg: 1.0625rem;
   --text-lg--line-height: 1.5rem;
   --text-xl: 1.25rem;
   --text-xl--line-height: 1.75rem;
+  --text-xl--letter-spacing: -0.03em;
   --text-2xl: 1.75rem;
   --text-2xl--line-height: 1.25;
+  --text-2xl--letter-spacing: -0.04em;
   --text-hero: 2.25rem;
   --text-hero--line-height: 1.2;
-  --text-hero--letter-spacing: -0.02em;
+  --text-hero--letter-spacing: -0.045em;
 
   --radius-xs: var(--radius-xs);
   --radius-sm: var(--radius-sm);
@@ -105,14 +104,18 @@ body {
   overflow: hidden;
 }
 
-/* §11: one focus system: 2px blue outline, 2px offset. */
-:focus-visible {
-  outline: 2px solid var(--accent-500);
-  outline-offset: 2px;
+/* §11: one focus system: 2px blue outline, 2px offset. In the base layer so the text-field and
+   composer recipes (components layer) can replace it with their edge ring. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent-500);
+    outline-offset: 2px;
+  }
 }
 
 ::selection {
-  background: var(--accent-tint);
+  background: var(--ink-strong);
+  color: var(--on-strong);
 }
 
 ::placeholder {
@@ -329,6 +332,7 @@ body {
 .md h3 {
   font-family: var(--font-display);
   font-weight: 600;
+  letter-spacing: -0.03em;
   margin: 1rem 0 0.5rem;
 }
 .md blockquote {

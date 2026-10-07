@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import type { UiToolCall } from '@shared/types';
 
 const TIER_CLASS = {
-  // §6.4: Notion-style pastel tags.
+  // §6.4: soft-tinted pill tags.
   SAFE: 'bg-neutral-tint text-ink-300',
   CONFIRM: 'bg-lamp-tint text-lamp-tag-ink',
   BLOCKED: 'bg-alarm-tint text-alarm-tag-ink',

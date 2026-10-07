@@ -1,16 +1,17 @@
-/* Design-system.md §2 — surface recipes (after Notion): flat canvas, 1px hairlines, shadows only
-   on things that float. */
+/* Design-system.md §2 — surface recipes (after Vercel): 1px hairlines everywhere, small stacked
+   shadows on cards, a deeper stack on things that float. */
 
 /* Main canvas and the activity column (dividers come from the layout) */
 .panel {
   background: var(--bg-main);
 }
 
-/* Cards: 12px radius, hairline, no shadow */
+/* Cards: 8px radius, hairline, stacked soft shadow */
 .card {
   background: var(--surface-1);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Quiet fills: chips, attachments, list cards */
@@ -42,7 +43,7 @@
   background: var(--scrim);
 }
 
-/* Text fields: 2px purple edge on focus (1px border + 1px ring, so nothing shifts) */
+/* Text fields: 2px blue edge on focus (1px border + 1px ring, so nothing shifts) */
 :where(
   input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
   select,
@@ -56,7 +57,7 @@
 /* Message composer */
 .composer {
   background: var(--bg-main);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   transition:
@@ -71,7 +72,7 @@
   box-shadow: none;
 }
 
-/* Primary action: Notion purple, 8px rectangle */
+/* Primary action: black ink (white ink in dark), 6px rectangle */
 .btn-accent {
   background: var(--accent-600);
   color: var(--ink-on-accent);
@@ -80,13 +81,36 @@
   background: var(--accent-700);
 }
 
-/* Tags (§6.6): soft pastel labels */
+/* Tags (§6.6): soft-tinted pills */
 .tag {
   display: inline-flex;
   align-items: center;
-  border-radius: var(--radius-xs);
-  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  padding: 0 8px;
   font-size: 0.75rem;
   line-height: 1.25rem;
-  font-weight: 600;
+  font-weight: 500;
+}
+
+/* Brand mesh (§5.2): develop / preview / ship as one blurred backdrop behind the empty-state hero.
+   Hero scale only; never cropped to a swatch or reused on small parts. */
+.mesh {
+  position: relative;
+  isolation: isolate;
+}
+.mesh::before {
+  content: '';
+  position: absolute;
+  inset: -12% -4% 30%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--mesh-opacity);
+  filter: blur(56px);
+  background:
+    radial-gradient(40% 50% at 18% 45%, var(--mesh-1), transparent 70%),
+    radial-gradient(35% 45% at 34% 72%, var(--mesh-2), transparent 70%),
+    radial-gradient(38% 50% at 52% 30%, var(--mesh-3), transparent 70%),
+    radial-gradient(32% 45% at 66% 62%, var(--mesh-4), transparent 70%),
+    radial-gradient(30% 40% at 80% 35%, var(--mesh-5), transparent 70%),
+    radial-gradient(30% 40% at 88% 70%, var(--mesh-6), transparent 70%);
 }

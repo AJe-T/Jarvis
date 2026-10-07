@@ -46,7 +46,7 @@ export function ActivityDrawer(): React.JSX.Element {
             aria-pressed={filter === id}
             onClick={() => setFilter(id)}
             className={clsx(
-              // §6.6: Notion pill tabs; the active one is solid ink.
+              // §6.6: pill tabs; the active one is solid ink.
               'h-7 rounded-pill border px-3 text-xs font-medium transition-colors duration-[120ms]',
               filter === id
                 ? 'border-ink-strong bg-ink-strong text-on-strong'

@@ -209,14 +209,14 @@ Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem) in the
   - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent).
   - **Memory:** browse, search, forget, and the review queue.
   - **Connections**, **Reply copilot** and **Bible**.
-- **Look ("Workspace", modelled on Notion, [Design-system](Design-system.md)):**
-  - Warm white page, warm grey sidebar with labels (icons only on narrow windows), thin hairlines, no gaps.
-  - Purple for the main button and for Jarvis, blue for links; status as soft pastel tags (peach = needs you, rose = blocked, mint = done).
+- **Look ("Geist", modelled on Vercel, [Design-system](Design-system.md)):**
+  - Near-white sidebar with labels (icons only on narrow windows), white page, thin `#EBEBEB` hairlines, no gaps; cards carry a faint stacked shadow.
+  - Solid black ink for the main button (white in dark), one blue for focus, links and Jarvis; status as soft pill tags (amber = needs you, red = blocked, green = done). A blurred blue-violet-pink-amber mesh sits behind the orb on the empty chat, and nowhere else.
   - Every screen has the same 48 px header and the same centred column, so things line up across the app.
   - The orb is a calm status mark: it breathes when idle, a ring reacts to your voice, an arc turns while thinking, one segment per tool while acting, orange when it needs you, a wave while speaking.
-  - Font: Outfit everywhere; JetBrains Mono only for code and paths. Bundled, works offline.
+  - Font: Geist everywhere, tight tracking on headings; Geist Mono for code and paths. Bundled, works offline.
   - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px Activity opens as a sheet (Esc closes it).
-  - **Settings → General → Theme:** Match Windows (default), Light, Dark (Notion-style dark).
+  - **Settings → General → Theme:** Match Windows (default), Light, Dark (near-black, Vercel-style).
 - **Mini orb:** a small always-on-top orb (tray or chat header).
 - **Tray, start with Windows, start hidden.**
 - **Settings → Data & backups:**
@@ -424,6 +424,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.6 | "Obsidian Intelligence" redesign: four-level glass, violet/cyan roles, Outfit font, eight-layer orb with tool progress, view/modal/toast motion, re-coloured light theme |
 | 1.7 | "Graphite" redesign: solid neutral surfaces, one blue accent, consistent page grid, simpler orb; Transparency setting removed |
 | 1.8 | "Workspace" redesign modelled on Notion: warm canvas and sidebar, purple primary, link blue, pastel tags and suggestion cards, labelled sidebar |
+| 1.9 | "Geist" redesign modelled on Vercel: ink-on-white, solid-ink primary, one blue, brand mesh behind the empty-state hero, Geist + Geist Mono, stacked shadows, pill tags |
 
 ---
 
