@@ -36,7 +36,7 @@ function tone(state: AssistantState): string {
 
 const STEP_COLOR: Record<OrbStep, string> = {
   pending: 'var(--line-strong)',
-  running: 'var(--accent-300)',
+  running: 'var(--accent-edge)',
   done: 'var(--accent-500)',
   error: 'var(--alarm-500)',
 };

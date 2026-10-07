@@ -4,9 +4,10 @@ import clsx from 'clsx';
 import type { UiToolCall } from '@shared/types';
 
 const TIER_CLASS = {
-  SAFE: 'bg-surface-2 text-ink-500',
-  CONFIRM: 'bg-lamp-tint text-lamp-400',
-  BLOCKED: 'bg-alarm-tint text-alarm-500',
+  // §6.4: Notion-style pastel tags.
+  SAFE: 'bg-neutral-tint text-ink-300',
+  CONFIRM: 'bg-lamp-tint text-lamp-tag-ink',
+  BLOCKED: 'bg-alarm-tint text-alarm-tag-ink',
 } as const;
 
 function StatusIndicator({ call }: { call: UiToolCall }): React.JSX.Element {
@@ -89,11 +90,7 @@ export function ToolCallCard({
         <span className="min-w-0 flex-1 truncate text-ink-100" title={call.humanSummary}>
           {call.humanSummary}
         </span>
-        {!compact && (
-          <span className={clsx('rounded-sm px-1.5 text-xs font-medium', TIER_CLASS[call.tier])}>
-            {call.tier}
-          </span>
-        )}
+        {!compact && <span className={clsx('tag', TIER_CLASS[call.tier])}>{call.tier}</span>}
         <StatusIndicator call={call} />
         <ChevronRight
           size={14}

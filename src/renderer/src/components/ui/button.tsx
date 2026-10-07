@@ -5,10 +5,10 @@ import clsx from 'clsx';
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
 const VARIANTS: Record<Variant, string> = {
-  // §6.6: blue acts, neutral is secondary, red is deliberate.
-  primary: 'btn-accent font-semibold',
-  secondary: 'border border-line bg-surface-1 text-ink-100 hover:bg-hover active:bg-press',
-  danger: 'bg-alarm-fill text-ink-on-alarm font-semibold hover:brightness-110',
+  // §6.6 (after Notion): purple is the main action, outlined is secondary, red is deliberate.
+  primary: 'btn-accent',
+  secondary: 'border border-line-strong bg-transparent text-ink-100 hover:bg-hover active:bg-press',
+  danger: 'bg-alarm-fill text-ink-on-alarm hover:brightness-95',
   ghost: 'text-ink-300 hover:bg-hover hover:text-ink-100 active:bg-press',
 };
 
@@ -25,7 +25,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       className={clsx(
-        'inline-flex h-9 items-center justify-center gap-2 rounded-md px-3.5 text-ui font-medium whitespace-nowrap transition-colors duration-[120ms] disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex h-9 items-center justify-center gap-2 rounded-md px-4 text-ui font-medium whitespace-nowrap transition-colors duration-[120ms] disabled:cursor-not-allowed disabled:opacity-50',
         VARIANTS[variant],
         className,
       )}
@@ -58,8 +58,8 @@ export function IconButton({
           aria-label={label}
           aria-pressed={active}
           className={clsx(
-            'inline-flex size-9 items-center justify-center rounded-md transition-colors duration-[120ms] disabled:opacity-40',
-            // §6.2: active = neutral highlight + full-strength icon; no glow.
+            'inline-flex size-8 items-center justify-center rounded-sm transition-colors duration-[120ms] disabled:opacity-40',
+            // §6.2: active = soft grey highlight, like a selected Notion sidebar row.
             active
               ? 'bg-selected text-ink-100'
               : 'text-icon-rest hover:bg-hover hover:text-ink-100 active:bg-press',

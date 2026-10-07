@@ -61,7 +61,7 @@ export function ActivityView(): React.JSX.Element {
       </PageHeader>
 
       <PageBody className="flex flex-col gap-4">
-        <div role="tablist" className="flex w-fit gap-1 rounded-md bg-surface-2 p-1">
+        <div role="tablist" className="-mt-2 flex gap-5 border-b border-line">
           {(['actions', 'audit', 'usage'] as const).map((t) => (
             <button
               key={t}
@@ -70,10 +70,11 @@ export function ActivityView(): React.JSX.Element {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={clsx(
-                'h-7 rounded-sm px-3 text-sm transition-colors duration-[120ms]',
+                // §6.6: Notion underline tabs.
+                '-mb-px border-b-2 pb-2.5 text-ui font-medium transition-colors duration-[120ms]',
                 tab === t
-                  ? 'bg-surface-1 font-medium text-ink-100 shadow-sm'
-                  : 'text-ink-300 hover:text-ink-100',
+                  ? 'border-ink-100 text-ink-100'
+                  : 'border-transparent text-ink-500 hover:text-ink-100',
               )}
             >
               {TAB_LABEL[t]}

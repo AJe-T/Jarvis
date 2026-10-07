@@ -1,20 +1,19 @@
-/* Design-system.md §2 — surface recipes. Solid, bordered, no blur. */
+/* Design-system.md §2 — surface recipes (after Notion): flat canvas, 1px hairlines, shadows only
+   on things that float. */
 
-/* Main content panel and the activity panel */
+/* Main canvas and the activity column (dividers come from the layout) */
 .panel {
   background: var(--bg-main);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
 }
 
-/* Cards and grouped sections inside a panel */
+/* Cards: 12px radius, hairline, no shadow */
 .card {
   background: var(--surface-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
 }
 
-/* Small bordered fills: chips, list cards, attachments */
+/* Quiet fills: chips, attachments, list cards */
 .inset {
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -24,26 +23,26 @@
   background: var(--selected);
 }
 
-/* Things that float above the page: toasts, menus, sheets */
+/* Floating: toasts, menus, sheets */
 .popover {
   background: var(--surface-1);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
 }
 
 /* Confirmation dialogs */
 .dialog {
-  background: var(--surface-1);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xl);
+  background: var(--bg-main);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
 }
 .scrim {
   background: var(--scrim);
 }
 
-/* Text fields: blue edge + soft ring instead of the outline */
+/* Text fields: 2px purple edge on focus (1px border + 1px ring, so nothing shifts) */
 :where(
   input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
   select,
@@ -51,31 +50,43 @@
 ):focus-visible {
   outline: none;
   border-color: var(--accent-500);
-  box-shadow: 0 0 0 3px var(--accent-tint);
+  box-shadow: 0 0 0 1px var(--accent-500);
 }
 
 /* Message composer */
 .composer {
-  background: var(--surface-1);
+  background: var(--bg-main);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   transition:
     border-color var(--dur-base) var(--ease-standard),
     box-shadow var(--dur-base) var(--ease-standard);
 }
 .composer:focus-within {
   border-color: var(--accent-500);
-  box-shadow: 0 0 0 3px var(--accent-tint);
+  box-shadow: 0 0 0 1px var(--accent-500);
 }
 .composer textarea:focus-visible {
   box-shadow: none;
 }
 
-/* Primary action */
+/* Primary action: Notion purple, 8px rectangle */
 .btn-accent {
   background: var(--accent-600);
   color: var(--ink-on-accent);
 }
 .btn-accent:hover:not(:disabled) {
-  filter: brightness(1.1);
+  background: var(--accent-700);
+}
+
+/* Tags (§6.6): soft pastel labels */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-xs);
+  padding: 0 6px;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 600;
 }

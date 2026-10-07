@@ -29,7 +29,7 @@ export function StatusBar(): React.JSX.Element {
   const ratio = budget > 0 ? day / budget : 0;
   return (
     <footer
-      className="flex h-7 shrink-0 items-center gap-3 overflow-hidden border-t border-line-subtle px-4 text-xs whitespace-nowrap text-ink-500"
+      className="flex h-7 shrink-0 items-center gap-3 overflow-hidden border-t border-line bg-app px-4 text-xs whitespace-nowrap text-ink-500"
       aria-label="Status"
     >
       <span>

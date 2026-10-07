@@ -2,9 +2,9 @@
 
 | Field | Value |
 |---|---|
-| Status | v4.0 — Graphite |
+| Status | v5.0 — Workspace (after Notion) |
 | Last updated | 2026-10-08 |
-| Theme | **Graphite** (dark, default) and **Graphite Light** |
+| Theme | **Workspace** light (signature) and **Workspace Dark** (Notion app dark) |
 | Stack | Electron · React · TypeScript · Tailwind v4 · CSS transitions |
 | Related | [App-flow](App-flow.md) · [Code-style](Code-style.md) §6 · [PRD](PRD.md) F4.6 |
 
@@ -16,80 +16,84 @@ This file is the **single source of truth** for the JARVIS look. The code lives 
 
 ## 1. Direction
 
-A calm, professional desktop tool in the spirit of Linear, Vercel and the Claude desktop app:
-neutral graphite surfaces, one blue accent, crisp 1px borders, generous but consistent spacing,
-and one typeface. No glass, no gradients, no glow, no decoration that doesn't carry meaning.
+Modelled on Notion's design language (from the reference analysis Sir supplied): a warm white
+canvas, a warm-grey sidebar, 1px hairlines, **Notion purple** (`#5645D4`) for the main action and
+for Jarvis, **link blue** for links only, and soft **pastel tags and cards** for status and
+suggestions. 8px rectangular buttons (not pills), 12px cards, shadows only on floating things.
+Outfit replaces Notion Sans (Sir's standing choice of typeface).
 
 | Principle | In practice |
 |---|---|
-| **Three colours** | Graphite neutrals for everything, **one blue** for interaction and for Jarvis, **red** only for danger. Amber and green appear only as small status marks (needs a decision / done). |
-| **Borders, not effects** | Depth comes from a slightly lighter surface and a 1px line. Shadows only on things that float (dialogs, toasts, menus). |
-| **One grid** | Every view uses the same 48px header and the same centred 768px column (§5.3), so edges line up across the app. |
-| **Readable first** | Every text role passes 4.5:1 on every surface, in both themes (§3.5). |
+| **Sober geometry** | Buttons 8px rectangles, cards 12px, pills only for filter tabs and badges. |
+| **Purple and blue have different jobs** | Purple = main action, focus, selection edges, the orb. Blue = inline links. Never mixed. |
+| **Colour as pastel tags** | Status uses Notion's tag pairs: peach (needs a decision), rose (blocked/error), mint (done), lavender (accent), grey (neutral). |
+| **One grid** | Same 48px header and centred 768px column on every view (§5.3). |
+| **Readable first** | Every text role passes 4.5:1 on every surface, both themes (§3.5). |
 
 ---
 
 ## 2. Surfaces
 
-| Class / utility | Dark | Light | Used for |
+| Class / utility | Light | Dark | Used for |
 |---|---|---|---|
-| `bg-app` | `#0B0B0D` | `#F4F4F5` | Window, sidebar, status bar |
-| `.panel` (`bg-main`) | `#111113` | `#FFFFFF` | Main content panel and the activity panel; 1px `line`, radius 12 |
-| `.card` (`bg-surface-1`) | `#18181B` | `#FFFFFF` | Settings groups, tool cards, suggestion cards, connections |
-| `.inset` (`bg-surface-2`) | `#1F1F23` | `#F4F4F5` | Inputs, code, chips, attachments, Sir's message |
-| `bg-selected` | `#26262B` | `#ECECEF` | Selected nav item or row |
-| `.popover` | surface-1 + strong line + shadow | same | Toasts, menus, overlay sheets |
-| `.dialog` | surface-1 + strong line + shadow, radius 12 | same | Confirmations |
-| `.scrim` | black 60% | ink 35% | Behind dialogs and sheets |
-| `.composer` | surface-1, strong line, radius 12; focus = blue edge + 3px blue ring | same | Message box |
+| `bg-app` | `#F7F6F3` | `#202020` | Sidebar, status bar |
+| `.panel` (`bg-main`) | `#FFFFFF` | `#191919` | Canvas: main view and the activity column (hairline dividers, no radius) |
+| `.card` (`bg-surface-1`) | `#FFFFFF` + `#E5E3DF` hairline | `#202020` + `#2F2F2F` | Settings groups, tool cards, connections; radius 12, no shadow |
+| `.inset` (`bg-surface-2`) | `#F6F5F4` | `#252525` | Inputs at rest, code, Sir's message, chips |
+| `bg-selected` | `#ECEBE8` | `#2C2C2C` | Selected sidebar row or list item |
+| `.popover` | surface-1 + hairline + level-4 shadow | same | Toasts, menus, sheets |
+| `.dialog` | canvas + hairline + level-4 shadow, radius 12 | same | Confirmations |
+| `.composer` | canvas, strong hairline, small shadow; focus = 2px purple edge | same | Message box |
+| `.tag` | pastel fill + deep ink, radius 4 | dark tints | Tier and status labels |
 
-Lines: `line-subtle` (dividers inside a panel), `line` (cards, inputs), `line-strong` (floating
-things, hover edges).
+Elevation: flat cards (hairline only) · `shadow-sm` (composer) · `shadow-pop` =
+`rgba(15,15,15,.16) 0 16px 48px -8px` (dialogs, toasts, sheets).
 
 ---
 
 ## 3. Colour
 
-### 3.1 Neutrals (text)
+### 3.1 Neutrals
 
-| Role | Dark | Light | Use |
+| Role | Light | Dark | Use |
 |---|---|---|---|
-| `ink-100` | `#F4F4F5` | `#09090B` | Primary text |
-| `ink-300` | `#A1A1AA` | `#52525B` | Secondary text |
-| `ink-500` | `#9A9AA3` | `#62626B` | Tertiary text, timestamps, placeholders |
-| `icon-rest` | `#9A9AA3` | `#62626B` | Icons at rest |
+| `ink-100` | `#1A1A1A` | `#EBEBEA` | Primary text |
+| `ink-300` | `#5D5B54` (slate) | `#B5B4B1` | Secondary text |
+| `ink-500` | `#6B6963` | `#9B9A97` | Tertiary text, timestamps, placeholders |
+| `icon-rest` | `#787671` (steel) | `#9B9A97` | Icons |
+| `ink-strong` / `on-strong` | black / white | white / `#191919` | Brand mark, active pill tab |
 
-### 3.2 Accent (the one colour)
+### 3.2 Primary and links
 
-| Role | Dark | Light | Use |
+| Role | Light | Dark | Use |
 |---|---|---|---|
-| `accent-600` | `#2563EB` | `#2563EB` | Primary buttons, send, switches on, brand mark (white text 5.2:1) |
-| `accent-500` | `#3B82F6` | `#2563EB` | Focus ring, the orb, selected-card edges |
-| `accent-300` | `#60A5FA` | `#1D4ED8` | Links and accent text |
-| `accent-tint` | blue 12% | blue 8% | Focus ring halo, selection |
+| `accent-600` / `accent-700` | `#5645D4` / `#4534B3` | `#5645D4` / `#6A5AE0` | Primary button rest / pressed (white text 6.6:1) |
+| `accent-500` | `#5645D4` | `#8577EA` | Focus edge, the orb, selection edges |
+| `accent-300` | `#0069C2` | `#5AA6D6` | Links (Notion link blue, darkened to reach 4.5:1 on grey) |
+| `accent-tint` | `#E6E0F5` lavender | `#2B2540` | Accent tag background |
 
-### 3.3 Status (small marks only)
+### 3.3 Status tags
 
-| Role | Dark | Light | Meaning |
+| Meaning | Tag fill / ink (light) | Tag fill / ink (dark) | Text colour |
 |---|---|---|---|
-| `alarm-500` / `alarm-fill` | `#F87171` / `#DC2626` | `#B91C1C` / `#DC2626` | Errors (text, icons) / destructive buttons |
-| `lamp-400` | `#F59E0B` | `#92400E` | Jarvis needs a decision |
-| `ok-400` | `#22C55E` | `#166534` | Done, connected, enabled |
+| Needs a decision | peach `#FFE8D4` / `#793400` | `#3B2A1D` / `#FFB46B` | `lamp-400` `#A84500` / `#FFA344` |
+| Error, blocked | rose `#FDE0EC` / `#A02E6D` | `#3B2026` / `#FF9A92` | `alarm-500` `#C92A2A` / `#FF7369`; fill `#E03131` |
+| Done, connected | mint `#D9F3E1` | `#1F3326` | `ok-400` `#0D7329` / `#4DAB9A` |
+| Neutral | grey `#F0EEEC` / slate | `#2F2F2F` | n/a |
 
-Status colours always come with an icon or words.
+Empty-state suggestion cards use the peach, mint and lavender feature tints with charcoal text.
 
 ### 3.4 Tailwind
 
-Tokens map to utilities in the `@theme inline` block of `globals.css` (`bg-surface-1`,
-`text-ink-300`, `border-line`, `text-accent-300`, `bg-alarm-fill`, `shadow-pop`, …).
-Breakpoints: `md` 760, `lg` 1200, `xl` 1600, and the `short` variant (height < 600).
-No raw hex or `rgba()` in components.
+Tokens map to utilities in `globals.css` (`bg-surface-1`, `text-ink-300`, `border-line`,
+`text-accent-300`, `bg-tint-peach`, `text-lamp-tag-ink`, `shadow-pop`, ...). Breakpoints `md` 760,
+`lg` 1200, `xl` 1600, `short` (height < 600). No raw hex or `rgba()` in components.
 
 ### 3.5 Contrast check
 
-`npm run check:contrast` (`scripts/check-glass-contrast.mjs`, run in CI) checks every text role on
-every surface, plus hover, in both themes (≥ 4.5:1), icons (≥ 3:1) and text on filled buttons.
-Current lowest: dark **5.11:1**, light **5.03:1**.
+`npm run check:contrast` checks every text role on every surface (+ hover) in both themes
+(>= 4.5:1), icons (>= 3:1), button text and every tag pair. Current lowest: light **4.52:1**,
+dark **4.62:1**.
 
 ---
 
@@ -103,9 +107,9 @@ Both are SIL OFL, bundled in `src/renderer/src/assets/fonts/` (licences in `reso
 | `text-xs` | 12 / 16 | Badges, metadata, status bar |
 | `text-sm` | 13 / 18 | Secondary text, nav items |
 | `text-ui` | 14 / 20 | Buttons, page titles in the header |
-| `text-base` | 15 / 24 | Body, chat, section titles |
-| `text-2xl` | 26 / 34 | Onboarding headings |
-| `text-hero` | 28 / 36 | Empty-state greeting |
+| `text-base` | 16 / 1.55 | Body, chat, section titles |
+| `text-2xl` | 28 / 1.25 | Onboarding headings |
+| `text-hero` | 36 / 1.2, -0.02em | Empty-state greeting |
 
 Weights: 400 body, 500 labels and selected items, 600 titles and buttons. Sentence case, no
 letter-spaced capitals, tabular figures for numbers.
@@ -131,16 +135,17 @@ letter-spaced capitals, tabular figures for numbers.
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Sidebar** (56–64px) on the window colour: brand mark, views, Settings pinned to the bottom.
-  Icon buttons 40px; active = `bg-selected` + full-strength icon.
-- **Panels** separated by an 8px gap (6px below 760px).
-- **Activity**: docked panel from 1200px; below that a sheet over a scrim (Esc closes).
+- **Sidebar** (`bg-app`, hairline right edge): brand mark + "Jarvis", views, Settings pinned to
+  the bottom. Icons with labels (240px) from 1200px, icons only (56px, tooltips) below. Rows are
+  36px; active = `bg-selected` + 500 weight, like Notion's sidebar.
+- **Canvas** fills the rest with no gaps; the activity column sits beside it behind a hairline.
+- **Activity**: docked column from 1200px; below that a sheet over a scrim (Esc closes).
 - Default window 1100 × 760, minimum 480 × 520. Never a horizontal page scroll.
 
 ### 5.2 Empty state
 
-Orb (112px), the greeting in `text-hero`, then up to three suggestion **cards** in an even
-three-column grid the same width as the composer.
+Orb (112px), the greeting in `text-hero`, then up to three suggestion cards in Notion's pastel
+feature tints (peach, mint, lavender) in an even three-column grid as wide as the composer.
 
 ### 5.3 Page structure (`components/ui/page.tsx`)
 
@@ -161,14 +166,14 @@ never translucent.
 
 ### 6.1 Orb (`components/jarvis/orb.tsx`)
 
-A calm status mark: a blue core with a white centre, a grey track and one state ring.
+A calm status mark: a purple core with a white centre, a grey track and one state ring.
 
 | State | Visual |
 |---|---|
 | `IDLE` | Core breathes slowly; no ring |
 | `LISTENING` | Ring brightens with mic level; core scales 0.94→1.08; a soft ripple |
 | `THINKING` | A short arc turns around the track (1.4 s) |
-| `ACTING` | One segment per tool call: blue done, light blue running, grey pending, red failed |
+| `ACTING` | One segment per tool call: purple done, pale purple running, grey pending, red failed |
 | `AWAITING_CONFIRMATION` | Amber core and ring, gentle breathing |
 | `SPEAKING` | The ring becomes a gentle wave that follows the voice level |
 | `ERROR` | Red, one small shake, then still |
@@ -190,26 +195,26 @@ shows a 2px blue caret.
 
 ### 6.4 Tool cards
 
-`.card` rows (40px). Tier badges are small tinted labels (SAFE neutral, CONFIRM amber, BLOCKED
-red). Status: grey dot pending · blue ring spinner running · amber dot waiting (+ amber left edge) ·
-green check with ms · red cross failed · grey slash declined. Details on `surface-2` in mono.
+`.card` rows (40px). Tier badges are `.tag`s: SAFE grey, CONFIRM peach, BLOCKED rose. Status:
+grey dot pending · purple ring spinner running · orange dot waiting (+ orange left edge) · green
+check with ms · red cross failed · grey slash declined. Details on `surface-2` in mono.
 
 ### 6.5 Confirmation dialog — safety-critical
 
 `.dialog` over `.scrim`, 480px. Destructive: red edge, red icon, **flat red** primary button,
-initial focus on Cancel, Enter does not approve (click or Ctrl+Enter). Confirm tier: amber top
-line. Non-destructive primary is blue. Buttons repeat the verb. Taint banner amber. Countdown in
+initial focus on Cancel, Enter does not approve (click or Ctrl+Enter). Confirm tier: orange top
+line. Non-destructive primary is purple. Buttons repeat the verb. Taint banner amber. Countdown in
 the last 20 s; one at a time ("1 of 3"). Behaviour unchanged from earlier versions.
 
 ### 6.6 Controls
 
 | Control | Style |
 |---|---|
-| Buttons | 36px, radius 8, `text-ui` 500. Primary blue · Secondary bordered surface · Danger red · Ghost text |
-| Inputs, selects | `surface-2`, 1px line; focus = blue border + 3px blue halo |
-| Switches | 36 × 20; off `line-strong`, on blue; white thumb |
-| Tabs | Segmented control on `surface-2`; the active tab is a raised `surface-1` chip |
-| Focus | 2px blue outline, 2px offset, everywhere |
+| Buttons | 36px, radius 8 (rectangles), `text-ui` 500. Primary purple (pressed `accent-700`) · Secondary outlined (`line-strong`) · Danger red · Ghost text |
+| Inputs, selects | `surface-2`, 1px hairline; focus = 2px purple edge |
+| Switches | 36 × 20; off `line-strong`, on purple; white thumb |
+| Tabs | Notion underline tabs (2px ink underline on the active one); filters are pill tabs, the active one solid ink |
+| Focus | 2px purple outline, 2px offset, everywhere |
 
 ### 6.7 Loading
 
@@ -259,7 +264,7 @@ next. The butler voice ("sir") appears only in Jarvis's own messages.
 
 ## 11. Accessibility checklist
 
-- [ ] Keyboard reaches everything; visible blue focus.
+- [ ] Keyboard reaches everything; visible purple focus.
 - [ ] Hit areas ≥ 36px (rail 40px).
 - [ ] `npm run check:contrast` passes.
 - [ ] Replies announced politely, not per token; dialog traps and restores focus.
@@ -272,6 +277,7 @@ next. The butler voice ("sir") appears only in Jarvis's own messages.
 
 | Version | Change |
 |---|---|
+| v5.0 Workspace | Notion-style: warm white canvas and grey sidebar, Notion purple primary, link blue for links, pastel tags and suggestion cards, labelled sidebar from 1200px, underline and pill tabs, 8px buttons / 12px cards, level-4 shadows on floats only. Dark follows Notion's app dark mode. |
 | v4.0 Graphite | Replaced the glass themes: neutral graphite surfaces, one blue accent, red for danger; solid bordered panels; one page grid (48px header, 768px column) for every view; Outfit only (JetBrains Mono for code); simpler orb; Transparency setting removed. |
 | v3.0 Obsidian Intelligence | Four-level glass with violet/cyan accents (retired). |
 | v2.0 Glass Workshop | Aurora glass islands (retired). |

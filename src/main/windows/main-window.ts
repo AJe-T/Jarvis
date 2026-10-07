@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { BrowserWindow, app } from 'electron';
+import { BrowserWindow, app, nativeTheme } from 'electron';
 import { HARDENED_WEB_PREFERENCES, hardenWindow } from './hardening';
 
 export function createMainWindow(opts: { startHidden?: boolean } = {}): BrowserWindow {
@@ -9,7 +9,8 @@ export function createMainWindow(opts: { startHidden?: boolean } = {}): BrowserW
     minWidth: 480,
     minHeight: 520,
     show: false,
-    backgroundColor: '#05060B', // = --bg-950; no white flash before first paint
+    // = --bg-main for the Windows theme, so there is no flash before first paint.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#191919' : '#FFFFFF',
     title: 'Jarvis',
     icon: join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,

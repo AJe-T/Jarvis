@@ -25,8 +25,8 @@ export function ActivityDrawer(): React.JSX.Element {
   return (
     <aside
       aria-label="Activity"
-      // §6.10: a second panel beside the chat from lg; a sheet over the page below that.
-      className="panel flex w-80 shrink-0 flex-col overflow-hidden xl:w-90 max-lg:fixed max-lg:inset-y-2 max-lg:right-2 max-lg:z-30 max-lg:w-[min(340px,88%)] max-lg:shadow-pop"
+      // §6.10: a column beside the chat from lg; a sheet over the page below that.
+      className="panel flex w-80 shrink-0 flex-col overflow-hidden border-l border-line xl:w-90 max-lg:fixed max-lg:inset-y-2 max-lg:right-2 max-lg:z-30 max-lg:w-[min(340px,88%)] max-lg:rounded-lg max-lg:border max-lg:shadow-pop"
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-line-subtle px-4">
         <h2 className="text-ui font-semibold text-ink-100">Activity</h2>
@@ -38,7 +38,7 @@ export function ActivityDrawer(): React.JSX.Element {
           Open full log
         </button>
       </div>
-      <div className="flex gap-1 px-3 pb-2" role="group" aria-label="Filter activity">
+      <div className="flex gap-1.5 px-4 py-3" role="group" aria-label="Filter activity">
         {FILTERS.map(([id, label]) => (
           <button
             key={id}
@@ -46,17 +46,18 @@ export function ActivityDrawer(): React.JSX.Element {
             aria-pressed={filter === id}
             onClick={() => setFilter(id)}
             className={clsx(
-              'min-h-7 rounded-pill border px-3 text-xs transition-colors duration-[160ms]',
+              // §6.6: Notion pill tabs; the active one is solid ink.
+              'h-7 rounded-pill border px-3 text-xs font-medium transition-colors duration-[120ms]',
               filter === id
-                ? 'border-accent-edge bg-selected text-ink-100'
-                : 'border-transparent text-ink-500 hover:bg-hover hover:text-ink-100',
+                ? 'border-ink-strong bg-ink-strong text-on-strong'
+                : 'border-line text-ink-300 hover:bg-hover hover:text-ink-100',
             )}
           >
             {label}
           </button>
         ))}
       </div>
-      <ol className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 pb-3">
+      <ol className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 pb-4">
         {shown.length === 0 && (
           <li className="px-1 py-4 text-sm text-ink-500">Actions Jarvis takes appear here.</li>
         )}

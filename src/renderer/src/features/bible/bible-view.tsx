@@ -53,7 +53,7 @@ export function BibleView(): React.JSX.Element {
           <h1 className="text-ui font-semibold text-ink-100">JARVIS Bible</h1>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-          <div role="tablist" className="flex gap-1 rounded-md bg-surface-2 p-1">
+          <div role="tablist" className="flex gap-4 border-b border-line">
             {(Object.keys(DOCS) as Array<keyof typeof DOCS>).map((d) => (
               <button
                 key={d}
@@ -62,10 +62,10 @@ export function BibleView(): React.JSX.Element {
                 aria-selected={doc === d}
                 onClick={() => (setDoc(d), setActive(0), setQuery(''))}
                 className={clsx(
-                  'h-7 flex-1 rounded-sm px-2 text-xs transition-colors duration-[120ms]',
+                  '-mb-px border-b-2 pb-2 text-sm font-medium transition-colors duration-[120ms]',
                   doc === d
-                    ? 'bg-surface-1 font-medium text-ink-100 shadow-sm'
-                    : 'text-ink-300 hover:text-ink-100',
+                    ? 'border-ink-100 text-ink-100'
+                    : 'border-transparent text-ink-500 hover:text-ink-100',
                 )}
               >
                 {DOCS[d].label}

@@ -31,7 +31,7 @@ function DbBanner(): React.JSX.Element | null {
   return (
     <div
       role="alert"
-      className="mx-2 mt-2 flex items-center gap-3 rounded-md bg-alarm-fill px-4 py-2 text-sm text-ink-on-alarm"
+      className="flex items-center gap-3 bg-alarm-fill px-4 py-2 text-sm text-ink-on-alarm"
     >
       Jarvis's database failed its integrity check. Some history may be missing.
       <button type="button" className="underline" onClick={() => go('settings', 'data')}>
@@ -41,7 +41,7 @@ function DbBanner(): React.JSX.Element | null {
   );
 }
 
-/** §5.1: sidebar and status bar sit on the window colour; content and activity are bordered panels. */
+/** §5.1: Notion-style shell: a warm sidebar, a white canvas, hairline dividers, no gaps. */
 function Shell(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const activityOpen = useUiStore((s) => s.activityOpen);
@@ -61,7 +61,7 @@ function Shell(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col bg-app">
       <DbBanner />
-      <div className="flex min-h-0 flex-1 gap-[var(--shell-gap)] p-[var(--shell-gap)] pl-0">
+      <div className="flex min-h-0 flex-1">
         <Rail />
         <main className="panel flex min-w-0 flex-1 overflow-hidden">
           {Current ? (
