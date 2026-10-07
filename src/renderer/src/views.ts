@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { ConfirmDialog } from './components/jarvis/confirm-dialog';
 import { ActivityView } from './features/activity/activity-view';
 import { ConnectionsView } from './features/connections/connections-view';
+import { CopilotView } from './features/copilot/copilot-view';
 import { MemoryView } from './features/memory/memory-view';
 import { installVoiceBridge } from './features/voice/voice-bridge';
 import { registerBridge } from './lib/ipc-bridge';
@@ -15,6 +16,7 @@ export const EXTRA_VIEWS: Partial<Record<View, ComponentType>> = {
   activity: ActivityView,
   memory: MemoryView,
   connections: ConnectionsView,
+  copilot: CopilotView,
 };
 export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog];
 

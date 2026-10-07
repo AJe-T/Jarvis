@@ -20,6 +20,8 @@ import { createMemorySystem } from './memory/memory-system';
 import { createResearchTool } from './agent/research';
 import { createAutomation } from './automation/automation';
 import { createTelegramChannel } from './channels/telegram';
+import { copilotTool, createCopilot } from './copilot/copilot';
+import { registerCopilotHandlers } from './ipc/handlers/copilot';
 import { registerTelegramHandlers } from './ipc/handlers/telegram';
 import { registerAutomationHandlers } from './ipc/handlers/automation';
 import { registerSkillHandlers } from './ipc/handlers/skills';
@@ -34,7 +36,7 @@ import { createComputerOverlay } from './windows/overlay-window';
 import { createMiniWindow } from './windows/mini-window';
 import { applyRetention, registerDataHandlers } from './ipc/handlers/data';
 import { handle } from './ipc/handle';
-import { errorMessage } from './errors';
+import { JarvisError, errorMessage } from './errors';
 import { initFileLogging, logger } from './logging/logger';
 import { createServices, type Services } from './services';
 import { createFakeOs, createWindowsOs } from './tools/native/os';
@@ -294,6 +296,35 @@ async function boot(): Promise<void> {
   registerTelegramHandlers(services, telegram);
   if (!isTest) void telegram.start();
   app.on('will-quit', () => telegram.stop());
+  // Reply copilot (idea from jev-chat-jarvis): hotkey reads the chat in front, then opens the panel.
+  const copilot = createCopilot(services);
+  registerCopilotHandlers(copilot);
+  services.registry.register(
+    copilotTool(copilot, (cap) => {
+      emit('copilot:captured', cap);
+      emit('nav:open', { view: 'copilot' });
+      showMainWindow();
+    }),
+  );
+  extraHotkeys.push({
+    key: 'hotkeys.copilot',
+    enabled: () => services.settings.get('copilot.enabled'),
+    fn: () =>
+      void copilot
+        .capture()
+        .then((cap) => {
+          emit('copilot:captured', cap);
+          emit('nav:open', { view: 'copilot' });
+          showMainWindow();
+        })
+        .catch((err: unknown) =>
+          emit('notify', {
+            level: 'error',
+            message:
+              err instanceof JarvisError && err.userMessage ? err.userMessage : errorMessage(err),
+          }),
+        ),
+  });
   app.on('will-quit', () => automation.stop());
   applyRetention(services);
   setInterval(() => applyRetention(services), 6 * 3600_000).unref();

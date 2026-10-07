@@ -27,6 +27,8 @@ export interface OsAdapter {
   pasteText(text: string): Promise<void>;
   /** Title and process name of the window in front (for dictation and the reply copilot). */
   foregroundWindow(): Promise<{ title: string; process: string }>;
+  /** Brings the window with this exact title to the front; false if it isn't open. */
+  focusWindow(title: string): Promise<boolean>;
 }
 
 export interface ElectronBits {
@@ -88,6 +90,13 @@ export function createWindowsOs(e: ElectronBits): OsAdapter {
       if (r.exitCode !== 0) throw new ToolError(r.stderr || 'Paste failed.');
       // Give the target app time to read the clipboard before putting Sir's clipboard back.
       setTimeout(() => void e.clipboard.writeText(previous).catch(() => undefined), 600);
+    },
+    async focusWindow(title) {
+      const r = await runPowerShell(
+        '$ok = (New-Object -ComObject WScript.Shell).AppActivate([string]$P.title); Start-Sleep -Milliseconds 300; if ($ok) { "1" } else { "0" }',
+        { params: { title }, timeoutMs: 10_000 },
+      );
+      return r.exitCode === 0 && r.stdout.trim() === '1';
     },
     async foregroundWindow() {
       return runPowerShellJson<{ title: string; process: string }>(FOREGROUND_SCRIPT, {
@@ -160,6 +169,10 @@ export function createFakeOs(
     },
     async pasteText(text) {
       calls.push({ op: 'pasteText', args: [text] });
+    },
+    async focusWindow(title) {
+      calls.push({ op: 'focusWindow', args: [title] });
+      return true;
     },
     async foregroundWindow() {
       calls.push({ op: 'foregroundWindow', args: [] });

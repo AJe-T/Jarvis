@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
-export type View = 'chat' | 'memory' | 'activity' | 'connections' | 'settings';
+export type View =
+  'chat' | 'memory' | 'activity' | 'connections' | 'settings' | 'copilot' | 'bible';
 
 export interface Toast {
   id: number;

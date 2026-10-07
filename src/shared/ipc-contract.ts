@@ -76,6 +76,36 @@ const LocalModelId = z.enum([
   'openwakeword-hey-jarvis',
   'silero-vad',
 ]);
+const CopilotId = z.string().regex(/^cp_[\w-]+$/);
+const CopilotCapture = z.object({
+  id: CopilotId,
+  windowTitle: z.string(),
+  chat: z.object({
+    app: z.string(),
+    contact: z.string(),
+    isGroup: z.boolean(),
+    messages: z.array(
+      z.object({ from: z.enum(['me', 'them']), text: z.string(), time: z.string().optional() }),
+    ),
+  }),
+});
+const CopilotAnalysis = z.object({
+  theyWant: z.string(),
+  tone: z.string(),
+  pressure: z.enum(['low', 'medium', 'high']),
+  boundaries: z.array(z.string()),
+  friction: z.array(z.string()),
+  options: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      stance: z.string(),
+      mustInclude: z.array(z.string()),
+      avoid: z.array(z.string()),
+      needsDetail: z.string().nullable(),
+    }),
+  ),
+});
 const TelegramStatus = z.object({
   running: z.boolean(),
   paired: z.boolean(),
@@ -202,6 +232,30 @@ export const INVOKE = {
   'llm:localTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
   'location:detect': contract(Empty, z.object({ town: z.string() })),
   'telegram:status': contract(Empty, TelegramStatus),
+  'copilot:capture': contract(Empty, CopilotCapture),
+  'copilot:analyse': contract(
+    z.object({
+      id: CopilotId,
+      scene: z.enum(['work', 'romance', 'friends', 'family', 'general']),
+      relationship: z.string().max(30),
+      dispute: z.boolean(),
+    }),
+    CopilotAnalysis,
+  ),
+  'copilot:draft': contract(
+    z.object({ id: CopilotId, optionId: z.string().max(20), details: z.string().max(500) }),
+    z.array(
+      z.object({
+        text: z.string(),
+        state: z.enum(['eligible', 'confirm', 'blocked']),
+        score: z.number(),
+        topPick: z.boolean(),
+        problems: z.array(z.string()),
+        note: z.string(),
+      }),
+    ),
+  ),
+  'copilot:fill': contract(z.object({ id: CopilotId, text: z.string().min(1).max(4000) }), Ok),
   'telegram:restart': contract(Empty, TelegramStatus),
   'telegram:unpair': contract(Empty, Ok),
   'tasks:list': contract(Empty, z.array(TaskView)),
@@ -383,6 +437,7 @@ export const EVENTS = {
   'tts:stop': z.object({ utteranceId: z.string().optional() }),
   'dictation:done': z.object({ text: z.string(), app: z.string() }),
   'tasks:changed': z.object({}),
+  'copilot:captured': CopilotCapture,
   'telegram:status': TelegramStatus,
   'models:progress': z.object({
     id: z.string(),
@@ -412,7 +467,7 @@ export const EVENTS = {
   'memory:changed': z.object({ vaultPaths: z.array(z.string()) }),
   'computer:active': z.object({ active: z.boolean() }),
   'nav:open': z.object({
-    view: z.enum(['chat', 'memory', 'activity', 'connections', 'settings']),
+    view: z.enum(['chat', 'memory', 'activity', 'connections', 'settings', 'copilot', 'bible']),
     section: z.string().optional(),
   }),
 } satisfies Record<EventChannel, z.ZodType>;

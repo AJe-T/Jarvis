@@ -111,6 +111,9 @@ export const SETTINGS = {
   'hotkeys.kill': { schema: accelerator, default: 'Ctrl+Alt+Shift+X' },
   /** Dictation (ideas from isair/jarvis): press to start, speak, pause or press again to type it. */
   'hotkeys.dictation': { schema: accelerator, default: 'Ctrl+Alt+D' },
+  /** Reply copilot (idea from jev-chat-jarvis): read the chat in front and help draft a reply. */
+  'hotkeys.copilot': { schema: accelerator, default: 'Ctrl+Alt+R' },
+  'copilot.enabled': { schema: z.boolean(), default: true },
   'dictation.enabled': { schema: z.boolean(), default: false },
   'dictation.removeFillers': { schema: z.boolean(), default: true },
   /** "heard → written" fixes, one per line, e.g. "jarvis => JARVIS". */

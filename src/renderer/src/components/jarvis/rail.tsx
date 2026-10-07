@@ -1,4 +1,12 @@
-import { Activity, Brain, MessageSquare, Plug, Settings } from 'lucide-react';
+import {
+  Activity,
+  BookOpen,
+  Brain,
+  MessageSquare,
+  MessagesSquare,
+  Plug,
+  Settings,
+} from 'lucide-react';
 import { IconButton } from '../ui/button';
 import { useUiStore, type View } from '../../stores/ui-store';
 
@@ -7,6 +15,8 @@ const ITEMS: Array<{ view: View; label: string; Icon: typeof Brain }> = [
   { view: 'memory', label: 'Memory', Icon: Brain },
   { view: 'activity', label: 'Activity', Icon: Activity },
   { view: 'connections', label: 'Connections', Icon: Plug },
+  { view: 'copilot', label: 'Reply copilot', Icon: MessagesSquare },
+  { view: 'bible', label: 'Bible', Icon: BookOpen },
   { view: 'settings', label: 'Settings', Icon: Settings },
 ];
 
