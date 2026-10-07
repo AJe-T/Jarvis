@@ -84,7 +84,11 @@ Trust boundaries: Renderer ↔ Main (IPC), Main ↔ child processes (MCP/PowerSh
 | `lock_screen` | SAFE | |
 | `sleep_pc`, `restart_pc`, `shutdown_pc` | CONFIRM (destructive) | |
 | `run_powershell` | CONFIRM (always) | Plus shell guard (§5.2) |
-| `run_routine` | SAFE to start | Each step evaluated on its own tier |
+| `run_routine` | SAFE to start | Each step evaluated on its own tier; also started by a voice trigger phrase (instant command), same policy |
+| `convert_currency`, `get_market_price`, `network_info`, `find_ai_models` | SAFE | Read-only web lookups; ping host passed as a PowerShell parameter |
+| `generate_password` | SAFE | Password goes to the clipboard only; never returned to Claude, logged or stored |
+| `run_ai_model` | SAFE for text; CONFIRM when it sends a file or writes an image | Sends input to Hugging Face; output untrusted |
+| `organize_folder` | CONFIRM | Allowed roots only; moves, never overwrites |
 | `delegate_desktop_task` (computer use) | CONFIRM | Starts Computer-Control Mode |
 | MCP tools | CONFIRM by default | Per-server/per-tool overrides; read-only tools can be marked SAFE in Settings |
 | Web search (server tool) | SAFE | Results untrusted |
@@ -206,7 +210,7 @@ Rules:
 |---|---|---|---|
 | Typed/spoken text, conversation context, memories injected into prompts | Yes | Anthropic (Claude API) | Governed by Anthropic API data retention policy |
 | Screenshots (computer mode only) | Yes | Anthropic | Only during approved Computer-Control sessions; downscaled |
-| Microphone audio (after wake word/PTT only) | Yes | STT provider (Deepgram/OpenAI) | Never streamed while IDLE; wake word is on-device |
+| Microphone audio (after wake word/PTT, and the follow-up window right after a spoken reply) | Yes | STT provider (Deepgram/OpenAI) | Never streamed while IDLE; wake word is on-device |
 | Reply text | Yes | TTS provider (Edge/ElevenLabs) | SAPI fallback is fully local |
 | Wake-word audio | No | — | Porcupine runs on-device |
 | Vault, DB, logs | No | — | Local only; back up yourself |

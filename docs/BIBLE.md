@@ -79,11 +79,13 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 - **Voice out:** Microsoft Edge neural voices (online), with Windows SAPI as the offline fallback.
 
 **Conversation behaviour (ADR-012)**
-- Follow-ups need no wake word for a few seconds after each reply (`voice.followUpSeconds`, default 6; the window opens silently).
+- Follow-ups need no wake word (or hotkey, in press-to-talk) for a few seconds after each spoken reply (`voice.followUpSeconds`, default 6; the window opens silently).
+- Jarvis waits for a real pause before answering (`voice.endSilenceMs`, default 1000 ms; raise it if he cuts you off mid-sentence). Spoken replies actually answer in 1–3 natural sentences and may end with a short follow-up question; only long material (tables, code, links) goes to the screen.
 - Voice turns continue the same conversation for 15 minutes.
 - A wake word while Jarvis is still thinking does **not** throw the answer away; a new request replaces it only when you actually say something.
 - Jarvis ignores its own voice coming back through the mic, and asks again when it hears a one-word mishearing.
-- Barge-in: say the wake word or press the hotkey while Jarvis talks.
+- Barge-in: press the hotkey while Jarvis talks. The wake word is **ignored while he is speaking** unless `voice.bargeIn` is on, because without echo cancellation the mic hears his own voice and he used to cut himself off (turn it on with headphones).
+- **Instant commands** (idea from Priler/jarvis; `voice.quickCommands`, on by default): a routine's trigger phrase ("start work mode", forgiving a misheard letter) runs that routine at once with no model call, and "what time is it" / "what's the date" are answered on the spot, offline. Everything else goes to Claude.
 - Saying "stop" or "cancel" ends the current reply; "stop everything" is the kill switch; "go to sleep" pauses the wake word.
 
 **Dictation:**
@@ -124,6 +126,18 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 - **Weather:** "What's the weather?" uses your home town (Settings → Everyday) and Open-Meteo; no key needed. "Detect" can find your town from your IP address, and only when you press it.
 - **Meal log:** "I just had a masala dosa" logs it with estimated calories and macros. "How am I doing today?" shows totals against your target.
 - **Look at my screen:** "What's on my screen?" or "read this error" sends one screenshot to Claude after you confirm.
+
+### 3.5a Expert AI models (HuggingGPT, idea from microsoft/JARVIS)
+- Claude acts as the controller: it plans the job, picks an expert model from the Hugging Face Hub (`find_ai_models`, most-downloaded models served by HF Inference), runs it (`run_ai_model`) and explains the result. Multi-step jobs are chained ("transcribe this recording, then summarise it").
+- Tasks: image classification, object detection, image segmentation, speech-to-text, text classification, named entities, zero-shot labels, summarisation, translation, question answering, fill-mask, text-to-image (saved to a file you name).
+- Needs a free Hugging Face token (Settings → Everyday → AI models). Text tasks run directly; sending a file or generating an image asks first.
+
+### 3.5b Handy plugins (ideas from sukeesh/Jarvis)
+- **Money:** `convert_currency` (ECB rates via Frankfurter) and `get_market_price` (stocks via Yahoo Finance, e.g. `RELIANCE.NS`; crypto via CoinGecko). No keys.
+- **Network:** `network_info`: local and public IP, DNS lookup, ping, download speed test.
+- **Passwords:** `generate_password` puts a strong random password on the clipboard; Claude never sees it.
+- **Tidy a folder:** `organize_folder` sorts loose files into Images, Documents, Audio, Video, Archives, Installers and Code (asks first, never overwrites).
+- Jokes, games, maths, unit conversion, BMI and translation need no tool: Claude does them itself.
 
 ### 3.6 Web and research
 - **Web search:** Claude's own search (API connection), or Claude Code's search (subscription connection). Results count as untrusted.
@@ -338,6 +352,8 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | Wake word never reacts | Settings → Voice: check the engine is set up (key or downloaded model); set sensitivity to 0.5–0.6; check the right microphone; look in `%APPDATA%\jarvis\logs\jarvis.1.log` for "microphone read failed". |
 | Voice mishears words | Use Whisper **small.en** (or Deepgram); set the language; for Hindi or Telugu use multilingual small with that language. |
 | Jarvis answers its own voice | Lower the speaker volume or use headphones; echo rejection handles most cases. |
+| Jarvis stops talking by himself / cuts you off | Keep `voice.bargeIn` off with speakers (the wake word then can't interrupt him); raise `voice.endSilenceMs` to 1200–1500 if you pause while speaking. Prefer the Edge voice over Windows SAPI for natural speech. |
+| Always listening hears nothing after changing the Whisper model | Fixed in 1.4 (it kept using the disposed model: "Session already disposed" in the log). |
 | "Claude Code is not signed in" | Settings → Models & budget → Sign in with Claude, or run `claude auth login`. |
 | Local model unreachable | Start Ollama / LM Studio; check the address (`http://localhost:11434/v1`); pick an installed model. |
 | Model download failed | Check your connection, then Download again (files are verified; partial files are discarded). |
@@ -371,6 +387,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 017 | Telegram channel |
 | 018 | Reply copilot |
 | 019 | This Bible + generated reference |
+| 020 | Instant voice commands, HuggingGPT expert models, everyday plugins |
 
 ---
 
@@ -383,6 +400,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.1 | Claude subscription connection |
 | 1.2 | On-device voice (Whisper, openWakeWord); 1.2.1 fixed the wake word never hearing anything |
 | 1.3 | Features from isair/jarvis, OpenJarvis and jev-chat-jarvis (conversational voice, dictation, everyday tools, local model, skills, automations, research, Telegram, reply copilot) and this Bible |
+| 1.4 | Voice fixes (always-listening model bug, no self-interruption, longer end-of-speech pause, PTT follow-ups, conversational replies); ideas from microsoft/JARVIS (HuggingGPT), sukeesh/Jarvis (plugins) and Priler/jarvis (instant commands) |
 
 ---
 
@@ -393,6 +411,9 @@ JARVIS does not copy code from these projects; their **ideas** were studied and 
 - **isair/jarvis** (© Baris Sencan, non-commercial licence): transcript-first conversational listening, follow-up window, echo rejection, intent judge, dictation, weather / meals / screen tools, local-model support, fetch_web_page.
 - **OpenJarvis** (Stanford Hazy Research, Apache-2.0): skills, scheduled agents and morning digest, deep research, channels (Telegram), news feeds.
 - **Jev chat assistant / jev-chat-jarvis** (MIT; its NOTICE asks for credit): "Based on ideas from Jev Chat Assistant (https://github.com/jev-chat/jev-chat-jarvis)" for the reply copilot's analyse → stance → draft → check → fill flow and scoring.
+- **microsoft/JARVIS** (MIT): HuggingGPT's plan → select model → execute → respond loop over Hugging Face models.
+- **sukeesh/Jarvis** (MIT): everyday plugins (currency, stocks and crypto, network checks, password generator, file organiser).
+- **Priler/jarvis** (CC BY-NC-SA 4.0): phrase-to-action instant commands without a language model, matched forgivingly.
 - **Models:** the openWakeWord "hey jarvis" model is **CC BY-NC-SA 4.0 (non-commercial)**; the Whisper weights (OpenAI) are MIT, using onnx-community's ONNX conversions; Silero VAD is MIT.
 
 ---
