@@ -9,6 +9,7 @@ import type { KillSwitch } from '../security/kill-switch';
 import type { SettingsService } from '../settings/settings-service';
 import type { ConfirmationBroker, ConfirmRequestEvent } from '../tools/confirmation-broker';
 import { TranscriptBuffer, isEcho, isUnclear, mentionsName, type Intent } from './conversation';
+import type { QuickMatch } from './quick-commands';
 import type { ContinuousTranscriber, HeardSegment } from './local/continuous';
 import { Utterance } from './tts-pipeline';
 import {
@@ -49,6 +50,8 @@ export interface VoiceDeps {
   onDictation?(text: string): void;
   /** ADR-012 intent judge: is the latest ambient speech for Jarvis, and what does Sir want? */
   judge?(transcript: string, ctx: { followUp: boolean; lastReply: string }): Promise<Intent>;
+  /** Instant commands (routine triggers, time, date): answered without the model. */
+  quick?(text: string): QuickMatch | null;
   /** Overridable for tests. */
   timeouts?: {
     silenceMs?: number;
@@ -261,7 +264,16 @@ export function createVoiceController(d: VoiceDeps) {
   }
 
   // ── listening ───────────────────────────────────────────────────────────────────────────
+  /** Jarvis's voice is coming out of the speakers (or just stopped). */
+  function audible(): boolean {
+    const tail = d.timeouts?.echoSettleMs ?? ECHO_SETTLE_MS;
+    return d.state.get() === 'SPEAKING' || Date.now() - spokenEndedAt < tail;
+  }
+
   function onWake(): void {
+    // Without echo cancellation the mic hears Jarvis's own voice; that "wake" cut him off mid-reply.
+    if (audible() && !d.settings.get('voice.bargeIn'))
+      return log.info('wake word ignored while speaking');
     timings.wakeAt = Date.now();
     void startListening(false);
   }
@@ -312,7 +324,7 @@ export function createVoiceController(d: VoiceDeps) {
         sampleRate: 16000,
         language: d.settings.get('voice.stt.language'),
         signal: abort.signal,
-        ...(dictation ? { endSilenceMs: DICTATION_PAUSE_MS } : {}),
+        endSilenceMs: dictation ? DICTATION_PAUSE_MS : d.settings.get('voice.endSilenceMs'),
       });
       if (listening !== current) {
         await session.close();
@@ -459,6 +471,11 @@ export function createVoiceController(d: VoiceDeps) {
       stopSpeaking();
       return;
     }
+    const quick = d.settings.get('voice.quickCommands') ? (d.quick?.(text) ?? null) : null;
+    if (quick?.kind === 'say') {
+      say(quick.text);
+      return;
+    }
     // A new request replaces a reply that is still being worked on.
     if (d.orchestrator.isBusy()) d.orchestrator.cancel();
     const recent =
@@ -466,7 +483,14 @@ export function createVoiceController(d: VoiceDeps) {
         ? lastVoice.conversationId
         : undefined;
     const conversationId = d.activeConversation() ?? recent;
-    d.orchestrator.send({ text, source: 'voice', ...(conversationId ? { conversationId } : {}) });
+    d.orchestrator.send({
+      text,
+      source: 'voice',
+      ...(conversationId ? { conversationId } : {}),
+      ...(quick
+        ? { direct: { tool: 'run_routine', input: { name: quick.name }, ack: quick.ack } }
+        : {}),
+    });
   }
 
   /**
@@ -518,7 +542,8 @@ export function createVoiceController(d: VoiceDeps) {
       followUntil = Date.now() + (d.timeouts?.echoSettleMs ?? ECHO_SETTLE_MS) + seconds * 1000;
       return;
     }
-    if (mode() !== 'wake') return;
+    // Push-to-talk conversations continue too: the reply came from a press, so Sir can just answer.
+    if (mode() !== 'wake' && mode() !== 'ptt') return;
     setTimeout(() => {
       if (!listening && !speaking && voiceTurns.size === 0 && d.state.get() === 'IDLE')
         void startListening(false, true);

@@ -229,4 +229,46 @@ describe('dictation (ideas from isair/jarvis)', () => {
     expect(s.conversations.list(5)).toHaveLength(0); // dictation never becomes a chat turn
     v.voice.shutdown();
   });
+
+  it('ignores the wake word while Jarvis is talking (his own voice), unless barge-in is on', async () => {
+    const t = setup(
+      { rules: [{ match: 'story', steps: [{ text: '<spoken>Once upon a time, sir.</spoken>' }] }] },
+      ['tell me a story', 'stop'],
+      { followUp: 0 },
+    );
+    await t.v.start();
+    t.wake.trigger();
+    await until(() => t.userTurns().length === 1);
+    await idle(t.services);
+    const audio = t.events.find((e) => e.event === 'tts:audio')?.payload as { utteranceId: string };
+    t.v.voice.onPlayback(audio.utteranceId, 'started');
+    expect(t.services.state.get()).toBe('SPEAKING');
+    t.wake.trigger();
+    await new Promise((r) => setTimeout(r, 150));
+    expect(t.stt.sessions).toBe(1); // not cut off by hearing himself
+    t.services.settings.set('voice.bargeIn', true);
+    t.wake.trigger();
+    await until(() => t.stt.sessions === 2);
+    t.v.voice.shutdown();
+  });
+
+  it('push-to-talk replies open the follow-up window too, so it is a conversation', async () => {
+    const t = setup(
+      {
+        rules: [
+          { match: 'weather', steps: [{ text: '<spoken>Sunny, sir. Anything else?</spoken>' }] },
+          { match: 'tomorrow', steps: [{ text: '<spoken>Rain tomorrow, sir.</spoken>' }] },
+        ],
+      },
+      ["what's the weather", 'and tomorrow'],
+      { mode: 'ptt' },
+    );
+    await t.v.start();
+    t.v.voice.ptt();
+    await until(() => t.userTurns().length === 1);
+    await idle(t.services);
+    t.playAll();
+    await until(() => t.userTurns().length === 2);
+    t.v.voice.shutdown();
+  });
 });

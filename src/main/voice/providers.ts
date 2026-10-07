@@ -18,7 +18,7 @@ type Handler = (...args: never[]) => void;
 export function createDeepgramStt(getKey: () => string | undefined): SttProvider {
   return {
     id: 'deepgram',
-    async start({ language, signal }) {
+    async start({ language, signal, endSilenceMs = 1000 }) {
       const apiKey = getKey();
       if (!apiKey)
         throw new JarvisError(
@@ -34,8 +34,9 @@ export function createDeepgramStt(getKey: () => string | undefined): SttProvider
         sample_rate: 16000,
         channels: 1,
         interim_results: 'true',
-        endpointing: 300,
-        utterance_end_ms: 1000,
+        // A short endpoint split "what's the weather… in London" into two requests.
+        endpointing: endSilenceMs,
+        utterance_end_ms: Math.max(1000, endSilenceMs),
         vad_events: 'true',
         smart_format: 'true',
         punctuate: 'true',

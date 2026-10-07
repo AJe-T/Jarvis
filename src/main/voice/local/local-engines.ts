@@ -71,14 +71,20 @@ export function createLocalEngines(store: ModelStore, settings: SettingsService)
       onError(err: Error): void;
     }): Promise<ContinuousTranscriber> {
       if (!store.installed('silero-vad')) throw notReady('Whisper model');
-      const [ownVad, whisperModel] = await Promise.all([
+      const [ownVad] = await Promise.all([
         loadSileroVad(join(store.dir('silero-vad'), 'silero_vad.onnx')),
-        transcriber(),
+        transcriber(), // warm it now so the first phrase isn't slow
       ]);
       return createContinuousTranscriber({
         vad: ownVad,
-        transcriber: whisperModel,
+        // Looked up per phrase: switching the Whisper model disposes the old one, and holding on to
+        // it made every later phrase fail with "Session already disposed".
+        transcriber: {
+          transcribe: async (audio, language) => (await transcriber()).transcribe(audio, language),
+          release: async () => undefined,
+        },
         language: () => settings.get('voice.stt.language'),
+        endSilenceMs: () => settings.get('voice.endSilenceMs'),
         ...handlers,
       });
     },

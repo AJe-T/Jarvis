@@ -1,6 +1,6 @@
 import type { EventPayload } from '@shared/ipc-contract';
 import type { EventChannel } from '@shared/ipc-channels';
-import type { UiMessage } from '@shared/types';
+import type { Citation, UiMessage } from '@shared/types';
 import { JarvisError, errorMessage, isAbortError } from '../errors';
 import { newId, nowIso } from '../lib/util';
 import type { Logger } from '../logging/logger';
@@ -16,7 +16,7 @@ import { toSummary } from '../db/repos/conversations-repo';
 import { toUiToolCall, type ToolCallsRepo } from '../db/repos/tool-calls-repo';
 import type { BudgetGuard } from '../llm/budget-guard';
 import type { UsageLedger } from '../llm/usage-ledger';
-import type { LlmClient, MessageParam } from '../llm/types';
+import type { LlmClient, MessageParam, ToolUseBlock } from '../llm/types';
 import type { SettingsService } from '../settings/settings-service';
 import { runAgentLoop, textOfContent, type ToolRuntime, type TurnContext } from './agent-loop';
 import type { AssistantStateHub } from './assistant-state';
@@ -40,6 +40,15 @@ export interface SendRequest {
   attachments?: Attachment[] | undefined;
   /** Who asked: Sir ('chat', default) or an automation ('briefing', 'task', 'research'…). */
   purpose?: TurnPurpose | undefined;
+  /** Instant command: run this one tool (through the policy, as always) and skip the model. */
+  direct?: DirectAction | undefined;
+}
+
+export interface DirectAction {
+  tool: string;
+  input: Record<string, unknown>;
+  /** Spoken when the tool succeeds. */
+  ack: string;
 }
 
 export interface TurnInfo {
@@ -49,6 +58,7 @@ export interface TurnInfo {
   userText: string;
   isPrivate: boolean;
   purpose: TurnPurpose;
+  direct?: DirectAction | undefined;
 }
 
 export interface TurnEnd extends TurnInfo {
@@ -191,6 +201,73 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     });
   }
 
+  async function modelTurn(
+    info: TurnInfo,
+    ctx: TurnContext,
+    onText: (delta: string) => void,
+    toolUseIds: string[],
+  ): Promise<{ outcome: TurnEnd['outcome']; text: string; citations: Citation[] }> {
+    const system = await deps.context.system({
+      conversationId: info.conversationId,
+      mode: info.mode,
+      userText: info.userText,
+    });
+    return (deps.loop?.() ?? runAgentLoop)(
+      {
+        llm: deps.llm(),
+        tools: deps.tools(),
+        budget: deps.budget,
+        ledger: deps.ledger,
+        maxIterations: deps.settings.get('agent.maxIterations'),
+      },
+      ctx,
+      {
+        model: pickModel(deps.settings, { purpose: info.purpose, text: info.userText }),
+        system,
+        messages: deps.context.history(info.conversationId),
+        withCache: deps.context.withCacheOnLastBlock,
+      },
+      {
+        onText,
+        persist: (msgs) => persist(info.conversationId, msgs),
+        onStep: (msg) => {
+          for (const b of msg.content) if (b.type === 'tool_use') toolUseIds.push(b.id);
+        },
+      },
+    );
+  }
+
+  /** Instant command (idea from Priler/jarvis): one tool, no model call, result kept in the history as text. */
+  async function directTurn(
+    info: TurnInfo,
+    direct: DirectAction,
+    ctx: TurnContext,
+    onText: (delta: string) => void,
+    toolUseIds: string[],
+  ): Promise<{ outcome: TurnEnd['outcome']; text: string; citations: Citation[] }> {
+    const id = `toolu_direct_${newId()}`;
+    toolUseIds.push(id);
+    const res = await deps
+      .tools()
+      .execute(
+        { type: 'tool_use', id, name: direct.tool, input: direct.input } as ToolUseBlock,
+        ctx,
+      );
+    if (ctx.signal.aborted) return { outcome: 'aborted', text: '', citations: [] };
+    const detail = typeof res.content === 'string' ? res.content : textOfContent(res.content ?? []);
+    const spoken = res.is_error
+      ? "That didn't go to plan, sir. The details are on screen."
+      : direct.ack;
+    const text = `<spoken>${spoken}</spoken>
+
+${detail.trim()}`;
+    onText(text);
+    persist(info.conversationId, [
+      { role: 'assistant', content: [{ type: 'text', text }], textPlain: text, source: 'text' },
+    ]);
+    return { outcome: 'end_turn', text, citations: [] };
+  }
+
   async function runTurn(info: TurnInfo, controller: AbortController): Promise<void> {
     const signal = AbortSignal.any([controller.signal, deps.killSwitch.signal()]);
     const ctx: TurnContext = {
@@ -206,42 +283,18 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     let replyText = '';
     for (const l of startListeners) l(info);
     deps.state.set('THINKING');
-    try {
-      const system = await deps.context.system({
+    const onText = (delta: string): void => {
+      deps.emit('chat:delta', {
+        turnId: info.turnId,
         conversationId: info.conversationId,
-        mode: info.mode,
-        userText: info.userText,
+        textDelta: delta,
       });
-      const result = await (deps.loop?.() ?? runAgentLoop)(
-        {
-          llm: deps.llm(),
-          tools: deps.tools(),
-          budget: deps.budget,
-          ledger: deps.ledger,
-          maxIterations: deps.settings.get('agent.maxIterations'),
-        },
-        ctx,
-        {
-          model: pickModel(deps.settings, { purpose: info.purpose, text: info.userText }),
-          system,
-          messages: deps.context.history(info.conversationId),
-          withCache: deps.context.withCacheOnLastBlock,
-        },
-        {
-          onText: (delta) => {
-            deps.emit('chat:delta', {
-              turnId: info.turnId,
-              conversationId: info.conversationId,
-              textDelta: delta,
-            });
-            for (const l of deltaListeners) l(info, delta);
-          },
-          persist: (msgs) => persist(info.conversationId, msgs),
-          onStep: (msg) => {
-            for (const b of msg.content) if (b.type === 'tool_use') toolUseIds.push(b.id);
-          },
-        },
-      );
+      for (const l of deltaListeners) l(info, delta);
+    };
+    try {
+      const result = info.direct
+        ? await directTurn(info, info.direct, ctx, onText, toolUseIds)
+        : await modelTurn(info, ctx, onText, toolUseIds);
       outcome = result.outcome;
       replyText = result.text;
       const toolCalls = deps.toolCalls.byToolUseIds(toolUseIds).map(toUiToolCall);
@@ -346,6 +399,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         userText: text,
         isPrivate: conv.is_private === 1,
         purpose: req.purpose ?? 'chat',
+        ...(req.direct ? { direct: req.direct } : {}),
       };
       // Typed messages are shown optimistically by the renderer; spoken ones appear once recognised.
       if (req.source === 'voice') {

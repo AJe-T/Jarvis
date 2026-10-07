@@ -66,7 +66,7 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
           },
         ],
       },
-      ['what time is it'],
+      ['what time is it in Tokyo'],
     );
     await t.v.start();
     t.v.voice.ptt();
@@ -79,7 +79,7 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     const transcripts = t.events
       .filter((e) => e.event === 'voice:transcript')
       .map((e) => e.payload as { text: string; isFinal: boolean });
-    expect(transcripts.at(-1)).toEqual({ text: 'what time is it', isFinal: true });
+    expect(transcripts.at(-1)).toEqual({ text: 'what time is it in Tokyo', isFinal: true });
     const userMsg = t.events.find(
       (e) =>
         e.event === 'chat:message' &&

@@ -73,6 +73,20 @@ export function VoiceSection(): React.JSX.Element {
           step={1}
         />
         <SettingInput
+          k="voice.endSilenceMs"
+          label="Pause that ends your sentence (ms, 300–3000). Raise it if Jarvis cuts you off"
+          type="number"
+          step={100}
+        />
+        <SettingSwitch
+          k="voice.quickCommands"
+          label="Instant commands: routine trigger phrases, time and date are answered at once, offline"
+        />
+        <SettingSwitch
+          k="voice.bargeIn"
+          label="Wake word interrupts Jarvis while he talks (use with headphones; the hotkey always works)"
+        />
+        <SettingInput
           k="voice.wake.sensitivity"
           label="Wake word sensitivity (0–1, higher hears more but triggers falsely more often)"
           type="number"

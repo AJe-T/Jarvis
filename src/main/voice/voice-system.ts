@@ -15,6 +15,7 @@ import { INTENT_JUDGE_PROMPT, parseIntent, type Intent } from './conversation';
 import { createDictationRepo, finishDictation } from './dictation';
 import { createLocalEngines, type LocalEngines } from './local/local-engines';
 import { createModelStore, type ModelStore } from './local/model-store';
+import { matchQuickCommand, type RoutineTriggers } from './quick-commands';
 import type { SttProvider } from './types';
 import { createVoiceController, type VoiceFactories } from './voice-controller';
 
@@ -119,6 +120,12 @@ export function createVoiceSystem(
   });
   const local = createLocalEngines(models, s.settings);
   const dictations = createDictationRepo(s.db);
+  const routineTriggers = (): RoutineTriggers[] =>
+    (
+      s.db
+        .prepare('SELECT name, trigger_phrases_json FROM routines WHERE enabled = 1')
+        .all() as Array<{ name: string; trigger_phrases_json: string }>
+    ).map((r) => ({ name: r.name, triggers: JSON.parse(r.trigger_phrases_json) as string[] }));
   /** Types dictated words into the app in front (clipboard + Ctrl+V, clipboard restored). */
   async function typeDictation(raw: string): Promise<void> {
     const text = finishDictation(raw, {
@@ -143,6 +150,7 @@ export function createVoiceSystem(
     logger,
     factories: opts.factories ?? (s.isTest ? testFactories() : realFactories(s, local)),
     activeConversation: () => activeConversation ?? undefined,
+    quick: (text) => matchQuickCommand(text, routineTriggers()),
     onDictation: (text) =>
       void typeDictation(text).catch((err: unknown) => {
         logger.warn({ err: String(err) }, 'dictation paste failed');

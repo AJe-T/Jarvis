@@ -82,6 +82,13 @@ export const SETTINGS = {
   'voice.wake.sensitivity': { schema: z.number().min(0).max(1), default: 0.6 },
   /** ADR-012: seconds after a spoken reply during which Sir can follow up without the wake word (0 = off). */
   'voice.followUpSeconds': { schema: z.number().min(0).max(30), default: 6 },
+  /** Pause (ms) that ends Sir's turn. Too short cuts him off mid-sentence. */
+  'voice.endSilenceMs': { schema: z.number().int().min(300).max(3000), default: 1000 },
+  /** The wake word may interrupt Jarvis while he talks. Off by default: without echo cancellation the
+   * microphone hears Jarvis's own voice and he cuts himself off. The hotkey always interrupts. */
+  'voice.bargeIn': { schema: z.boolean(), default: false },
+  /** Priler/jarvis-style instant commands: routine trigger phrases, time and date answered offline. */
+  'voice.quickCommands': { schema: z.boolean(), default: true },
   'voice.sounds': { schema: z.boolean(), default: true },
   // Everyday tools (ideas from isair/jarvis).
   /** Home town for weather ("Hyderabad, India"); empty = ask. */

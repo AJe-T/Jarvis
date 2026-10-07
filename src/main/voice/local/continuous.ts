@@ -35,6 +35,8 @@ export function createContinuousTranscriber(deps: {
   vad: Vad;
   transcriber: Transcriber;
   language?(): string;
+  /** Pause that ends a phrase (Settings → Voice); defaults to END_SILENCE_MS. */
+  endSilenceMs?(): number;
   onSpeechStart?(): void;
   onSegment(seg: HeardSegment): void;
   onBacklog?(dropped: number): void;
@@ -106,7 +108,11 @@ export function createContinuousTranscriber(deps: {
     }
     speech.push(window);
     quietMs = p < END_PROB ? quietMs + WINDOW_MS : 0;
-    if (quietMs >= END_SILENCE_MS || speech.length * WINDOW_MS >= MAX_UTTERANCE_MS) cut();
+    if (
+      quietMs >= (deps.endSilenceMs?.() ?? END_SILENCE_MS) ||
+      speech.length * WINDOW_MS >= MAX_UTTERANCE_MS
+    )
+      cut();
   }
 
   return {
