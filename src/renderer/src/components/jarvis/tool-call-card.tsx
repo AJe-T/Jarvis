@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import type { UiToolCall } from '@shared/types';
 
 const TIER_CLASS = {
-  SAFE: 'border-night-600 text-ink-300',
+  SAFE: 'border-glass-border-strong text-ink-300',
   CONFIRM: 'border-lamp-400 text-lamp-400',
   BLOCKED: 'border-alarm-500 text-alarm-500',
 } as const;
@@ -71,10 +71,16 @@ export function ToolCallCard({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-md border border-night-600 bg-night-800/60 text-sm">
+    <div
+      className={clsx(
+        'glass-inset text-sm',
+        // §6.4: awaiting Sir gets a 2px amber bar.
+        call.status === 'awaiting' && 'shadow-[inset_2px_0_0_var(--lamp-400)]',
+      )}
+    >
       <button
         type="button"
-        className="flex min-h-8 w-full items-center gap-2 px-2.5 py-1.5 text-left"
+        className="flex min-h-10 w-full items-center gap-2 px-2.5 py-1.5 text-left"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
@@ -84,7 +90,7 @@ export function ToolCallCard({
         </span>
         {!compact && (
           <span
-            className={clsx('rounded-sm border px-1.5 text-xs font-medium', TIER_CLASS[call.tier])}
+            className={clsx('rounded-pill border px-2 text-xs font-medium', TIER_CLASS[call.tier])}
           >
             {call.tier}
           </span>
@@ -96,7 +102,7 @@ export function ToolCallCard({
         <p className="truncate px-2.5 pb-1.5 text-alarm-500">{call.error}</p>
       )}
       {open && (
-        <div className="space-y-2 border-t border-night-600 px-2.5 py-2 font-code text-xs text-ink-300">
+        <div className="space-y-2 rounded-b-md border-t border-glass-border bg-solid-inset px-2.5 py-2 font-code text-xs text-ink-300">
           <div>
             <div className="mb-1 font-body text-ink-500">{call.toolName} · input</div>
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all">

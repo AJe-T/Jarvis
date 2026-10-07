@@ -86,7 +86,7 @@ export function ChatMessage({ message }: { message: UiMessage }): React.JSX.Elem
   if (message.role === 'user')
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-md bg-night-800 px-4 py-2 whitespace-pre-wrap text-ink-100">
+        <div className="glass-inset max-w-[88%] rounded-lg rounded-br-[6px] px-4 py-2 whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
           {message.text}
         </div>
       </div>

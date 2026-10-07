@@ -9,10 +9,10 @@ export function SettingsView(): React.JSX.Element {
   const current = SETTINGS_SECTIONS.find((s) => s.id === section) ?? SETTINGS_SECTIONS[0];
   const Body = current?.Component;
   return (
-    <div className="flex min-w-0 flex-1 bg-night-900">
+    <div className="flex min-w-0 flex-1">
       <nav
         aria-label="Settings sections"
-        className="w-52 shrink-0 border-r border-night-600 px-2 py-4"
+        className="w-40 shrink-0 overflow-y-auto border-r border-glass-border px-2 py-4 md:w-52"
       >
         <h1 className="px-3 pb-3 font-display text-lg font-semibold text-ink-100">Settings</h1>
         <ul className="flex flex-col gap-0.5">
@@ -25,8 +25,8 @@ export function SettingsView(): React.JSX.Element {
                 className={clsx(
                   'w-full rounded-md px-3 py-1.5 text-left text-sm',
                   s.id === current?.id
-                    ? 'bg-night-700 text-ink-100'
-                    : 'text-ink-300 hover:bg-night-800',
+                    ? 'bg-glass-selected text-ink-100'
+                    : 'text-ink-300 hover:bg-glass-hover',
                 )}
               >
                 {s.label}
@@ -35,7 +35,7 @@ export function SettingsView(): React.JSX.Element {
           ))}
         </ul>
       </nav>
-      <div className="flex-1 overflow-y-auto px-8 py-2">
+      <div className="flex-1 overflow-y-auto px-3 py-2 md:px-6 lg:px-8">
         <div className="max-w-2xl">{Body && <Body />}</div>
       </div>
     </div>

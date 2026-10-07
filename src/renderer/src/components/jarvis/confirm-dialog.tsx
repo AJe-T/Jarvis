@@ -37,7 +37,7 @@ function Details({ req }: { req: ConfirmRequest }): React.JSX.Element | null {
           {open ? 'Hide' : 'Show'} the {lines.length === 1 ? 'path' : `${lines.length} items`}
         </button>
         {open && (
-          <pre className="mt-2 max-h-48 overflow-auto rounded-sm bg-night-900 p-2 font-code text-xs whitespace-pre-wrap text-ink-100">
+          <pre className="mt-2 max-h-48 overflow-auto rounded-sm bg-solid-inset p-2 font-code text-xs whitespace-pre-wrap text-ink-100">
             {req.details}
           </pre>
         )}
@@ -47,7 +47,7 @@ function Details({ req }: { req: ConfirmRequest }): React.JSX.Element | null {
   if (req.detailsKind === 'code') {
     return (
       <pre
-        className="max-h-64 overflow-auto rounded-sm border border-night-600 bg-night-900 py-2 font-code text-xs text-ink-100"
+        className="max-h-64 overflow-auto rounded-sm border border-glass-border bg-solid-inset py-2 font-code text-xs text-ink-100"
         aria-label="Details"
       >
         {lines.map((l, i) => (
@@ -104,7 +104,7 @@ function ConfirmDialogBody({ req }: { req: ConfirmRequest }): React.JSX.Element 
   return (
     <Dialog.Root open onOpenChange={(o) => !o && respond('deny', 'keyboard')}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-night-950/75" />
+        <Dialog.Overlay className="fixed inset-0 z-40 glass-scrim" />
         <Dialog.Content
           role="alertdialog"
           aria-describedby="confirm-summary"
@@ -114,8 +114,9 @@ function ConfirmDialogBody({ req }: { req: ConfirmRequest }): React.JSX.Element 
             (req.destructive ? cancelRef : approveRef).current?.focus();
           }}
           className={clsx(
-            'fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[min(34rem,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-md border bg-night-800 p-6 shadow-2xl',
-            req.destructive ? 'border-alarm-500' : 'border-lamp-400',
+            // §6.5: the most opaque glass in the app; destructive gets a red edge, confirm-tier an amber top hairline.
+            'glass-decision fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[min(30rem,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto p-6',
+            req.destructive ? 'border-alarm-500/50' : 'border-t-2 border-t-lamp-400',
           )}
         >
           <div className="flex items-start justify-between gap-3">
@@ -142,10 +143,10 @@ function ConfirmDialogBody({ req }: { req: ConfirmRequest }): React.JSX.Element 
 
           {req.taintedFrom && (
             <p
-              className="flex items-start gap-2 rounded-sm border border-lamp-400 bg-night-900 p-2 text-sm text-lamp-400"
+              className="flex items-start gap-2 rounded-sm border border-lamp-400/40 bg-lamp-tint p-2 text-sm text-ink-100"
               role="note"
             >
-              <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
+              <Info size={16} className="mt-0.5 shrink-0 text-lamp-400" aria-hidden />
               Suggested after reading {req.taintedFrom}. Check it carefully.
             </p>
           )}

@@ -45,7 +45,7 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
   }
 
   return (
-    <li className="rounded-md border border-night-600 bg-night-800">
+    <li className="rounded-md border border-glass-border bg-glass-inset">
       <div className="flex items-center gap-3 p-3">
         <span
           className={clsx('size-2.5 shrink-0 rounded-pill', STATUS[s.status].dot)}
@@ -54,7 +54,7 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="font-semibold text-ink-100">{s.name}</h2>
-            <span className="rounded-sm border border-night-600 px-1.5 text-xs text-ink-300">
+            <span className="rounded-sm border border-glass-border px-1.5 text-xs text-ink-300">
               {s.trustLevel}
             </span>
           </div>
@@ -93,7 +93,7 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
         </Button>
       </div>
       {s.tools.length > 0 && (
-        <div className="border-t border-night-600">
+        <div className="border-t border-glass-border">
           <button
             type="button"
             aria-expanded={open}
@@ -108,7 +108,7 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
               {s.tools.map((t) => (
                 <li
                   key={t.name}
-                  className="flex items-start gap-3 border-t border-night-700 py-2 first:border-t-0"
+                  className="flex items-start gap-3 border-t border-glass-border py-2 first:border-t-0"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="font-code text-sm text-ink-100">{t.name}</p>
@@ -119,9 +119,9 @@ function ServerCard({ s, onChange }: { s: McpServerView; onChange(): void }): Re
                     value={t.tier}
                     onChange={(e) => void setTier(t.name, e.target.value as Tier)}
                     className={clsx(
-                      'min-h-8 rounded-md border bg-night-900 px-2 text-xs',
+                      'min-h-8 rounded-md border bg-glass-inset px-2 text-xs',
                       t.tier === 'SAFE'
-                        ? 'border-night-600'
+                        ? 'border-glass-border'
                         : t.tier === 'CONFIRM'
                           ? 'border-lamp-400'
                           : 'border-alarm-500',
@@ -150,8 +150,8 @@ export function ConnectionsView(): React.JSX.Element {
   useEffect(load, [load, statusVersion]);
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col bg-night-900">
-      <header className="flex h-14 shrink-0 items-center border-b border-night-600 px-6">
+    <div className="flex min-w-0 flex-1 flex-col">
+      <header className="flex h-14 shrink-0 items-center border-b border-glass-border px-6">
         <h1 className="font-display text-lg font-semibold">Connections</h1>
         <Button variant="primary" className="ml-auto" onClick={() => setAdding(true)}>
           <Plus size={14} aria-hidden /> Add connection

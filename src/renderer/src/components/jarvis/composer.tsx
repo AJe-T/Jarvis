@@ -83,7 +83,7 @@ export function Composer(): React.JSX.Element {
           {attachments.map((a, i) => (
             <li
               key={`${a.name}-${i}`}
-              className="flex items-center gap-1 rounded-sm bg-night-800 px-2 py-1 text-sm text-ink-300"
+              className="flex items-center gap-1 rounded-sm bg-glass-inset px-2 py-1 text-sm text-ink-300"
             >
               {a.name}
               <button
@@ -98,7 +98,7 @@ export function Composer(): React.JSX.Element {
         </ul>
       )}
       <div
-        className="flex items-end gap-1 rounded-md border border-night-600 bg-night-800 p-2 focus-within:border-reactor-500"
+        className="glass-inset flex min-h-[52px] items-end gap-1 rounded-lg p-2"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
@@ -112,7 +112,7 @@ export function Composer(): React.JSX.Element {
           rows={1}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          className="max-h-48 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-base text-ink-100 placeholder:text-ink-500 focus:outline-none focus-visible:outline-none"
+          className="max-h-48 min-h-9 flex-1 resize-none short:max-h-24 bg-transparent px-2 py-1.5 text-base text-ink-100 placeholder:text-ink-500 focus:outline-none focus-visible:outline-none"
           style={{ fieldSizing: 'content' }}
         />
         <IconButton

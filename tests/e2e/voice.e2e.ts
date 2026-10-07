@@ -14,7 +14,7 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
     },
   ]);
   const { app } = await launchApp(
-    { JARVIS_FAKE_SCRIPT: script, JARVIS_FAKE_TRANSCRIPTS: 'what time is it' },
+    { JARVIS_FAKE_SCRIPT: script, JARVIS_FAKE_TRANSCRIPTS: 'what time is it in Tokyo' },
     dir,
   );
   const page = await app.firstWindow();
@@ -34,7 +34,7 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
 
   await page.getByRole('button', { name: 'Chat' }).click();
   await page.getByRole('button', { name: 'Talk to Jarvis' }).click();
-  await expect(page.getByText('what time is it')).toBeVisible();
+  await expect(page.getByText('what time is it in Tokyo')).toBeVisible();
   await expect(page.getByText("It's half past nine, sir. Details on screen.")).toBeVisible();
   // Playback of the (silent) synthesized audio finishes and the orb returns to idle.
   await expect(page.getByRole('img', { name: 'Jarvis is idle' }).first()).toBeVisible({

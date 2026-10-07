@@ -6,10 +6,10 @@ export function createMainWindow(opts: { startHidden?: boolean } = {}): BrowserW
   const win = new BrowserWindow({
     width: 1100,
     height: 760,
-    minWidth: 720,
+    minWidth: 480,
     minHeight: 520,
     show: false,
-    backgroundColor: '#060A12',
+    backgroundColor: '#04060E', // = --void-950; no white flash before first paint
     title: 'Jarvis',
     icon: join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,

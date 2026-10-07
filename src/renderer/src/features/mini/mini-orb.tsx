@@ -34,7 +34,7 @@ export function MiniOrb(): React.JSX.Element {
     >
       {caption && (
         <p
-          className="line-clamp-2 max-w-[200px] rounded-md border border-night-600 bg-night-900/95 px-3 py-2 text-sm text-ink-100 shadow-lg"
+          className="line-clamp-2 max-w-[200px] rounded-md border border-glass-border-strong bg-solid-float px-3 py-2 text-sm text-ink-100 shadow-float"
           aria-live="polite"
         >
           {caption}
@@ -45,7 +45,7 @@ export function MiniOrb(): React.JSX.Element {
         aria-label="Open Jarvis"
         title="Open Jarvis (drag the edge to move)"
         onClick={() => void call('app:setMiniMode', { on: false })}
-        className="rounded-pill bg-night-950/80 p-1"
+        className="rounded-pill border border-glass-border-strong bg-solid-float p-1 shadow-[inset_0_1px_0_var(--glass-highlight)]"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         <Orb state={state} level={level} size="md" />

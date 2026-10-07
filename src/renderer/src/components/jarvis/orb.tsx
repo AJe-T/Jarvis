@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import clsx from 'clsx';
 import type { AssistantState } from '@shared/types';
 import { useReducedMotion } from '../../lib/use-reduced-motion';
 
@@ -19,6 +20,45 @@ export interface OrbProps {
   state: AssistantState;
   level?: number;
   size: keyof typeof SIZES;
+  /** Light the backdrop from this orb (§6.1). Off for a hidden orb so the visible one owns the spill. */
+  spill?: boolean;
+}
+
+/** §6.1: the orb lights the backdrop with its state colour (tokens.css --spill-*). */
+const SPILL: Record<AssistantState, string> = {
+  IDLE: 'var(--spill-idle)',
+  LISTENING: 'var(--spill-active)',
+  THINKING: 'var(--spill-busy)',
+  ACTING: 'var(--spill-busy)',
+  AWAITING_CONFIRMATION: 'var(--spill-awaiting)',
+  SPEAKING: 'var(--spill-active)',
+  ERROR: 'var(--spill-error)',
+  SLEEP: 'transparent',
+};
+
+/** Publishes the state colour and the orb's on-screen centre to <html> for the reactor spill. */
+function useReactorSpill(
+  state: AssistantState,
+  on: boolean,
+): React.RefObject<HTMLDivElement | null> {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (on) document.documentElement.style.setProperty('--spill-color', SPILL[state]);
+  }, [state, on]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !on) return;
+    const place = (): void => {
+      const r = el.getBoundingClientRect();
+      const root = document.documentElement.style;
+      root.setProperty('--spill-x', `${r.left + r.width / 2}px`);
+      root.setProperty('--spill-y', `${r.top + r.height / 2}px`);
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [on]);
+  return ref;
 }
 
 function coreColor(state: AssistantState): string {
@@ -29,12 +69,13 @@ function coreColor(state: AssistantState): string {
 }
 
 /** Design-system.md §5.1 — the reactor orb, the app's one animated element. */
-export function Orb({ state, level = 0, size }: OrbProps): React.JSX.Element {
+export function Orb({ state, level = 0, size, spill = true }: OrbProps): React.JSX.Element {
   const reduced = useReducedMotion();
   const px = SIZES[size];
   const audioDriven = state === 'LISTENING' || state === 'SPEAKING';
   const scale = audioDriven && !reduced ? 0.9 + Math.min(1, level * 4) * 0.25 : 1;
   const [announced, setAnnounced] = useState(LABEL[state]);
+  const spillRef = useReactorSpill(state, spill);
 
   // Debounced live-region announcement so fast state flips don't spam screen readers.
   useEffect(() => {
@@ -45,7 +86,17 @@ export function Orb({ state, level = 0, size }: OrbProps): React.JSX.Element {
   const coreClass =
     state === 'IDLE' ? 'orb-breathe' : state === 'AWAITING_CONFIRMATION' ? 'orb-pulse' : '';
   return (
-    <div className={state === 'ERROR' ? 'orb-shake' : ''} style={{ width: px, height: px }}>
+    <div
+      ref={spillRef}
+      // md/lg sit in a glass lens: hairline ring + top highlight, no fill, no blur (§6.1).
+      className={clsx(
+        'shrink-0',
+        size !== 'sm' &&
+          'rounded-pill border border-glass-border-strong shadow-[inset_0_1px_0_var(--glass-highlight)]',
+        state === 'ERROR' && 'orb-shake',
+      )}
+      style={{ width: px, height: px }}
+    >
       <svg
         role="img"
         aria-label={`Jarvis is ${LABEL[state]}`}

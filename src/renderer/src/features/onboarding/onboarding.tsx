@@ -75,8 +75,11 @@ export function Onboarding(): React.JSX.Element {
     Boolean(anthropic?.set);
 
   return (
-    <main className="flex h-full flex-col items-center overflow-y-auto bg-night-900 px-6 py-10">
-      <ol className="mb-10 flex items-center gap-2" aria-label="Setup steps">
+    <main className="relative z-10 flex h-full flex-col items-center overflow-y-auto px-3 py-10 md:px-6">
+      <ol
+        className="mb-8 flex flex-wrap items-center justify-center gap-2"
+        aria-label="Setup steps"
+      >
         {STEPS.map((s, i) => (
           <li
             key={s}
@@ -90,7 +93,7 @@ export function Onboarding(): React.JSX.Element {
                   ? 'border-ok-400 text-ok-400'
                   : i === step
                     ? 'border-reactor-500 text-reactor-500'
-                    : 'border-night-600 text-ink-500',
+                    : 'border-glass-border text-ink-500',
               )}
             >
               {i < step ? <Check size={14} aria-hidden /> : i + 1}
@@ -98,12 +101,12 @@ export function Onboarding(): React.JSX.Element {
             <span className={clsx('text-sm', i === step ? 'text-ink-100' : 'text-ink-500')}>
               {s}
             </span>
-            {i < STEPS.length - 1 && <span className="mx-1 h-px w-6 bg-night-600" aria-hidden />}
+            {i < STEPS.length - 1 && <span className="mx-1 h-px w-6 bg-glass-border" aria-hidden />}
           </li>
         ))}
       </ol>
 
-      <section className="flex w-full max-w-xl flex-col gap-5">
+      <section className="glass-float flex w-full max-w-[560px] flex-col gap-5 p-6 md:p-8">
         {step === 0 && (
           <>
             <div className="flex justify-center">
@@ -258,7 +261,7 @@ export function Onboarding(): React.JSX.Element {
           <>
             <Heading>How I keep things safe</Heading>
             <dl className="grid gap-3 text-sm">
-              <div className="rounded-md border border-night-600 p-3">
+              <div className="rounded-md border border-glass-border p-3">
                 <dt className="font-semibold text-ink-100">Safe — runs automatically</dt>
                 <dd className="text-ink-300">
                   Opening apps and websites, volume, reading files in your folders, the time.
@@ -288,9 +291,11 @@ export function Onboarding(): React.JSX.Element {
                 ))}
               </ul>
             </div>
-            <p className="rounded-md bg-night-800 p-3 text-sm text-ink-100">
+            <p className="rounded-md bg-glass-inset p-3 text-sm text-ink-100">
               Press{' '}
-              <kbd className="rounded-sm border border-night-600 px-1.5 font-code">{killKey}</kbd>{' '}
+              <kbd className="rounded-sm border border-glass-border px-1.5 font-code">
+                {killKey}
+              </kbd>{' '}
               at any time to stop everything I&apos;m doing.
             </p>
           </>

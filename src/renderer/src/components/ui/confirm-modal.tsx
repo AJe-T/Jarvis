@@ -31,10 +31,10 @@ export function ConfirmModalHost(): React.JSX.Element | null {
   return (
     <Dialog.Root open onOpenChange={(o) => !o && close(false)}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-night-950/70" />
+        <Dialog.Overlay className="fixed inset-0 z-40 glass-scrim" />
         <Dialog.Content
           role="alertdialog"
-          className="fixed top-1/2 left-1/2 z-50 w-[min(28rem,90vw)] -translate-x-1/2 -translate-y-1/2 rounded-md border border-night-600 bg-night-800 p-5 shadow-2xl"
+          className="fixed top-1/2 left-1/2 z-50 w-[min(30rem,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 glass-decision p-5"
           onOpenAutoFocus={(e) => {
             if (ask.destructive) {
               e.preventDefault();

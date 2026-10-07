@@ -41,7 +41,10 @@ export function UsagePanel(): React.JSX.Element {
       </div>
 
       {summary && (
-        <section aria-label="Spend" className="rounded-md border border-night-600 bg-night-800 p-4">
+        <section
+          aria-label="Spend"
+          className="rounded-md border border-glass-border bg-glass-inset p-4"
+        >
           <p className="text-sm text-ink-300">
             {range === 'day' ? 'API spend today' : 'API spend this month'}
           </p>
@@ -53,7 +56,7 @@ export function UsagePanel(): React.JSX.Element {
           </p>
           {summary.budget > 0 && (
             <div
-              className="mt-3 h-2 rounded-pill bg-night-600"
+              className="mt-3 h-2 rounded-pill bg-glass-hover"
               role="meter"
               aria-valuenow={Math.round(pct)}
               aria-valuemin={0}
@@ -98,7 +101,7 @@ export function UsagePanel(): React.JSX.Element {
             </tr>
           )}
           {rows.map((r) => (
-            <tr key={r.key} className="border-t border-night-600">
+            <tr key={r.key} className="border-t border-glass-border">
               <td className="py-1.5 pr-3 text-ink-100">{r.key}</td>
               <td className="py-1.5 pr-3 text-ink-300">{r.calls}</td>
               <td className="py-1.5 pr-3 text-ink-300">{r.tokens.toLocaleString()}</td>
@@ -132,7 +135,7 @@ function Select<T extends string>(p: {
       <select
         value={p.value}
         onChange={(e) => p.onChange(e.target.value as T)}
-        className="min-h-8 rounded-md border border-night-600 bg-night-800 px-2 text-ink-100"
+        className="min-h-8 rounded-md border border-glass-border bg-glass-inset px-2 text-ink-100"
       >
         {(Object.keys(p.options) as T[]).map((k) => (
           <option key={k} value={k}>

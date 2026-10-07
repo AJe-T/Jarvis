@@ -30,7 +30,7 @@ export function MicCheck(): React.JSX.Element {
             id={id}
             value={deviceIndex}
             onChange={(e) => void saveSetting('voice.deviceIndex', Number(e.target.value))}
-            className="min-h-9 rounded-md border border-night-600 bg-night-800 px-2 text-base text-ink-100"
+            className="min-h-9 rounded-md border border-glass-border bg-glass-inset px-2 text-base text-ink-100"
           >
             <option value={-1}>System default</option>
             {(devices ?? []).map((d) => (
@@ -44,7 +44,7 @@ export function MicCheck(): React.JSX.Element {
       <div className="flex items-center gap-3">
         <Button onClick={() => void call('voice:mic', { action: 'meter' })}>Test microphone</Button>
         <div
-          className="h-2 flex-1 overflow-hidden rounded-pill bg-night-700"
+          className="h-2 flex-1 overflow-hidden rounded-pill bg-glass-selected"
           role="meter"
           aria-label="Microphone level"
           aria-valuemin={0}

@@ -200,6 +200,12 @@ Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem) in the
   - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent).
   - **Memory:** browse, search, forget, and the review queue.
   - **Connections**, **Reply copilot** and **Bible**.
+- **Look ("Glass Workshop at Night", [Design-system](Design-system.md)):**
+  - Frosted glass islands (rail, chat, activity, status bar) floating over a slow blue/violet aurora; the orb's state colour lights the backdrop.
+  - Fonts: Sora (headings), Geist (text), JetBrains Mono (code), bundled so they work offline.
+  - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px Activity opens as a sheet (Esc closes it).
+  - **Settings → General → Theme:** Match Windows (default), Dark, Light (frosted white glass over a pastel aurora).
+  - **Settings → General → Transparency:** Full glass (default), Auto, Reduced (no blur), Solid. Auto uses Solid when Windows "Transparency effects" is off, and Reduced on battery.
 - **Mini orb:** a small always-on-top orb (tray or chat header).
 - **Tray, start with Windows, start hidden.**
 - **Settings → Data & backups:**
@@ -315,6 +321,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 - `location.home`
 - `dictation.*`
 - `telegram.*`
+- `appearance.transparency`, `appearance.theme`
 
 ---
 
@@ -361,6 +368,8 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | Telegram silent | Settings → Telegram: token saved, channel on, Connect, pairing code sent from a private chat. |
 | Reply copilot won't paste | The chat window must still be open with the same title; otherwise use Copy. |
 | Database warning banner | Settings → Data & backups → Restore a backup. |
+| No aurora or blur, the app looks flat | Settings → General → Transparency must be Full glass (the default). With Auto, Windows "Transparency effects" off means Solid. |
+| Window lags while resizing | Set Transparency to Reduced (keeps the look, drops the blur). |
 
 ---
 
@@ -400,7 +409,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.1 | Claude subscription connection |
 | 1.2 | On-device voice (Whisper, openWakeWord); 1.2.1 fixed the wake word never hearing anything |
 | 1.3 | Features from isair/jarvis, OpenJarvis and jev-chat-jarvis (conversational voice, dictation, everyday tools, local model, skills, automations, research, Telegram, reply copilot) and this Bible |
-| 1.4 | Voice fixes (always-listening model bug, no self-interruption, longer end-of-speech pause, PTT follow-ups, conversational replies); ideas from microsoft/JARVIS (HuggingGPT), sukeesh/Jarvis (plugins) and Priler/jarvis (instant commands) |
+| 1.4 | Voice fixes (always-listening model bug, no self-interruption, longer end-of-speech pause, PTT follow-ups, conversational replies); ideas from microsoft/JARVIS (HuggingGPT), sukeesh/Jarvis (plugins) and Priler/jarvis (instant commands); glass theme v2 (aurora backdrop, glass islands, Sora/Geist fonts, transparency modes, responsive down to 480 px) |
 
 ---
 

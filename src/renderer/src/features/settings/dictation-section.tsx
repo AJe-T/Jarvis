@@ -43,7 +43,7 @@ export function DictationSection(): React.JSX.Element {
         <ul className="flex max-w-2xl flex-col gap-1">
           {history.length === 0 && <li className="text-sm text-ink-500">Nothing dictated yet.</li>}
           {history.map((h) => (
-            <li key={h.id} className="rounded-md border border-night-600 px-3 py-2 text-sm">
+            <li key={h.id} className="rounded-md border border-glass-border px-3 py-2 text-sm">
               <span className="block text-xs text-ink-500 tabular">
                 {new Date(h.ts).toLocaleString()} {h.target_app ? `· ${h.target_app}` : ''}
               </span>

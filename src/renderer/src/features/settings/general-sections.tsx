@@ -47,6 +47,25 @@ export function GeneralSection(): React.JSX.Element {
       />
       <SettingSwitch k="app.startWithWindows" label="Start Jarvis when Windows starts" />
       <SettingSwitch k="app.startHidden" label="Start hidden in the tray" />
+      <SettingSelect
+        k="appearance.theme"
+        label="Theme"
+        options={[
+          { value: 'system', label: 'Match Windows' },
+          { value: 'dark', label: 'Dark' },
+          { value: 'light', label: 'Light' },
+        ]}
+      />
+      <SettingSelect
+        k="appearance.transparency"
+        label="Transparency"
+        options={[
+          { value: 'auto', label: 'Auto' },
+          { value: 'full', label: 'Full glass' },
+          { value: 'reduced', label: 'Reduced (no blur)' },
+          { value: 'solid', label: 'Solid' },
+        ]}
+      />
     </Section>
   );
 }

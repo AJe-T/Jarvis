@@ -45,6 +45,9 @@ test('E3 + E4: destructive confirmation lists files, Cancel focused, Ctrl+Enter 
 
   // E4: the activity drawer shows both tool cards with their status.
   const drawer = page.getByRole('complementary', { name: 'Activity' });
+  // Below 1200px the drawer starts closed (Design-system.md §5.1).
+  if (!(await drawer.isVisible()))
+    await page.getByRole('button', { name: 'Show activity' }).click();
   await expect(drawer.getByText('Check the date and time')).toBeVisible();
   await expect(drawer.getByText('Move 3 items to the Recycle Bin')).toBeVisible();
   await expect(drawer.locator('text=/\\d+ ms/')).toHaveCount(2);

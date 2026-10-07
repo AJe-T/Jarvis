@@ -84,7 +84,7 @@ export function CopilotView(): React.JSX.Element {
   };
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-night-900 px-6 py-6">
+    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-6 py-6">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <header>
           <h1 className="font-display text-2xl font-semibold text-ink-100">Reply copilot</h1>
@@ -97,12 +97,15 @@ export function CopilotView(): React.JSX.Element {
         </header>
 
         {!capture ? (
-          <p className="rounded-md border border-night-600 p-4 text-sm text-ink-500">
+          <p className="rounded-md border border-glass-border p-4 text-sm text-ink-500">
             No chat captured yet. Press {hotkey} while the chat is on screen.
           </p>
         ) : (
           <>
-            <section aria-label="Conversation" className="rounded-md border border-night-600 p-4">
+            <section
+              aria-label="Conversation"
+              className="rounded-md border border-glass-border p-4"
+            >
               <div className="mb-2 flex items-center justify-between">
                 <p className="font-semibold text-ink-100">
                   {capture.chat.contact || 'Chat'}{' '}
@@ -121,8 +124,8 @@ export function CopilotView(): React.JSX.Element {
                     className={clsx(
                       'max-w-[80%] rounded-md px-3 py-1.5',
                       m.from === 'me'
-                        ? 'self-end bg-night-700 text-ink-100'
-                        : 'self-start bg-night-800 text-ink-300',
+                        ? 'self-end bg-glass-selected text-ink-100'
+                        : 'self-start bg-glass-inset text-ink-300',
                     )}
                   >
                     {m.text}
@@ -182,7 +185,7 @@ export function CopilotView(): React.JSX.Element {
                 <h2 className="font-display text-lg font-semibold text-ink-100">
                   2 · How do you want to respond?
                 </h2>
-                <div className="rounded-md border border-night-600 p-3 text-sm text-ink-300">
+                <div className="rounded-md border border-glass-border p-3 text-sm text-ink-300">
                   <p>
                     <b className="text-ink-100">They want:</b> {analysis.theyWant}
                   </p>
@@ -213,8 +216,8 @@ export function CopilotView(): React.JSX.Element {
                       className={clsx(
                         'rounded-md border p-3 text-left',
                         option === o.id
-                          ? 'border-reactor-500 bg-night-800'
-                          : 'border-night-600 hover:border-ink-500',
+                          ? 'border-reactor-500 bg-glass-inset'
+                          : 'border-glass-border hover:border-ink-500',
                       )}
                     >
                       <span className="block font-semibold text-ink-100">{o.label}</span>
@@ -261,7 +264,7 @@ export function CopilotView(): React.JSX.Element {
                         ? 'border-ok-400'
                         : d.state === 'blocked'
                           ? 'border-alarm-500'
-                          : 'border-night-600',
+                          : 'border-glass-border',
                     )}
                   >
                     <div className="mb-2 flex items-center gap-2 text-sm">
@@ -284,7 +287,7 @@ export function CopilotView(): React.JSX.Element {
                       rows={3}
                       value={edits[i] ?? d.text}
                       onChange={(e) => setEdits({ ...edits, [i]: e.target.value })}
-                      className="w-full rounded-md border border-night-600 bg-night-800 px-3 py-2 text-sm text-ink-100"
+                      className="w-full rounded-md border border-glass-border bg-glass-inset px-3 py-2 text-sm text-ink-100"
                     />
                     {d.problems.length > 0 && (
                       <ul className="mt-1 list-disc pl-5 text-xs text-ink-300">

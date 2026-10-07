@@ -40,7 +40,7 @@ export function EmptyState(): React.JSX.Element {
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6">
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-3 md:px-6">
       <Orb state={state} level={level} size="lg" />
       <h1 className="font-display text-xl font-semibold text-ink-100">{greeting()}</h1>
       <div className="flex flex-wrap justify-center gap-2">
@@ -49,7 +49,7 @@ export function EmptyState(): React.JSX.Element {
             key={c}
             type="button"
             onClick={() => void send(c)}
-            className="min-h-8 rounded-pill border border-night-600 px-4 text-sm text-ink-300 transition-colors duration-[120ms] hover:border-reactor-500 hover:text-ink-100"
+            className="glass-inset min-h-8 rounded-pill px-4 text-sm text-ink-300 transition-colors duration-[120ms] hover:text-ink-100"
           >
             {c.charAt(0).toUpperCase() + c.slice(1)}
           </button>

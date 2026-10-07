@@ -5,9 +5,9 @@ bundled third-party assets and separately-run components whose licences require 
 
 | Component | URL | Licence | Where used |
 |---|---|---|---|
-| Chakra Petch (via @fontsource/chakra-petch) | https://fonts.google.com/specimen/Chakra+Petch | SIL OFL 1.1 | Display font |
-| IBM Plex Sans (via @fontsource/ibm-plex-sans) | https://github.com/IBM/plex | SIL OFL 1.1 | Body font |
-| JetBrains Mono (via @fontsource/jetbrains-mono) | https://github.com/JetBrains/JetBrainsMono | SIL OFL 1.1 | Code font |
+| Sora (variable woff2, latin subset) | https://github.com/sora-xor/sora-font | SIL OFL 1.1 | Display font |
+| Geist (variable woff2, latin subset) | https://github.com/vercel/geist-font | SIL OFL 1.1 | Body font |
+| JetBrains Mono (variable woff2, latin subset) | https://github.com/JetBrains/JetBrainsMono | SIL OFL 1.1 | Code font |
 | Playwright MCP (@playwright/mcp, run as a separate process via npx) | https://github.com/microsoft/playwright-mcp | Apache-2.0 | Browser connector |
 | Notion MCP server (@notionhq/notion-mcp-server, optional, run via npx) | https://github.com/makenotion/notion-mcp-server | MIT | Notion connector |
 | MCP filesystem server (@modelcontextprotocol/server-filesystem, optional, run via npx) | https://github.com/modelcontextprotocol/servers | MIT | Filesystem connector |

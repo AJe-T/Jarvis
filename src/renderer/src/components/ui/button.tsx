@@ -6,9 +6,9 @@ type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-reactor-500 text-ink-on-reactor hover:bg-reactor-300 font-semibold',
-  secondary: 'bg-night-800 text-ink-100 border border-night-600 hover:bg-night-700',
+  secondary: 'bg-glass-inset text-ink-100 border border-glass-border hover:bg-glass-hover',
   danger: 'bg-alarm-500 text-ink-on-alarm hover:brightness-110 font-semibold',
-  ghost: 'text-ink-300 hover:text-ink-100 hover:bg-night-700',
+  ghost: 'text-ink-300 hover:text-ink-100 hover:bg-glass-hover',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -59,8 +59,8 @@ export function IconButton({
           className={clsx(
             'inline-flex size-9 items-center justify-center rounded-md transition-colors duration-[120ms] disabled:opacity-40',
             active
-              ? 'bg-night-700 text-reactor-500'
-              : 'text-ink-300 hover:bg-night-700 hover:text-ink-100',
+              ? 'bg-glass-selected text-reactor-500'
+              : 'text-ink-300 hover:bg-glass-hover hover:text-ink-100',
             className,
           )}
           {...rest}
@@ -72,7 +72,7 @@ export function IconButton({
         <Tooltip.Content
           side="right"
           sideOffset={6}
-          className="z-50 rounded-sm border border-night-600 bg-night-800 px-2 py-1 text-xs text-ink-100"
+          className="z-50 rounded-sm border border-glass-border-strong bg-solid-float px-2 py-1 text-xs text-ink-100"
         >
           {label}
           {hint && <span className="ml-2 text-ink-500">{hint}</span>}

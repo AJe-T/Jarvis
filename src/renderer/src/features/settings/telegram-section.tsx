@@ -39,7 +39,7 @@ export function TelegramSection(): React.JSX.Element {
       {status && (
         <div
           role="status"
-          className="max-w-xl rounded-md border border-night-600 p-3 text-sm text-ink-100"
+          className="max-w-xl rounded-md border border-glass-border p-3 text-sm text-ink-100"
         >
           {status.error ? (
             <p className="text-alarm-500">{status.error}</p>

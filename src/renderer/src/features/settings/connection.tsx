@@ -113,7 +113,7 @@ export function LocalModelCard(): React.JSX.Element {
   }, []);
   useEffect(() => void refresh(), [refresh]);
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-night-600 p-3">
+    <div className="flex flex-col gap-3 rounded-md border border-glass-border p-3">
       <SettingInput
         k="llm.local.baseUrl"
         label="Server address (OpenAI-compatible)"
@@ -124,7 +124,7 @@ export function LocalModelCard(): React.JSX.Element {
         <select
           value={model}
           onChange={(e) => void set('llm.local.model', e.target.value).then(() => setStatus(null))}
-          className="min-h-8 max-w-md rounded-md border border-night-600 bg-night-800 px-2 text-ink-100"
+          className="min-h-8 max-w-md rounded-md border border-glass-border bg-glass-inset px-2 text-ink-100"
         >
           <option value="">{models.length ? 'Choose a model…' : 'No models found'}</option>
           {[...new Set([...(model ? [model] : []), ...models])].map((m) => (
@@ -177,8 +177,8 @@ export function ConnectionPicker(): React.JSX.Element {
             className={clsx(
               'rounded-md border p-3 text-left transition-colors',
               provider === o.id
-                ? 'border-reactor-500 bg-night-800'
-                : 'border-night-600 hover:border-ink-500',
+                ? 'border-reactor-500 bg-glass-inset'
+                : 'border-glass-border hover:border-ink-500',
             )}
           >
             <span className="block font-semibold text-ink-100">{o.title}</span>

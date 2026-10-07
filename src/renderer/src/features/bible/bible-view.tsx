@@ -43,10 +43,10 @@ export function BibleView(): React.JSX.Element {
   const shown = q ? matches.map((m) => m.s) : [sections[active] ?? sections[0]].filter(Boolean);
 
   return (
-    <div className="flex min-w-0 flex-1 bg-night-900">
+    <div className="flex min-w-0 flex-1">
       <nav
         aria-label="Bible contents"
-        className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-night-600 px-3 py-4"
+        className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-glass-border px-3 py-4"
       >
         <h1 className="px-2 font-display text-lg font-semibold text-ink-100">JARVIS Bible</h1>
         <div role="tablist" className="flex gap-1">
@@ -59,7 +59,7 @@ export function BibleView(): React.JSX.Element {
               onClick={() => (setDoc(d), setActive(0), setQuery(''))}
               className={clsx(
                 'rounded-pill px-3 py-1 text-xs',
-                doc === d ? 'bg-night-700 text-ink-100' : 'text-ink-300 hover:text-ink-100',
+                doc === d ? 'bg-glass-selected text-ink-100' : 'text-ink-300 hover:text-ink-100',
               )}
             >
               {DOCS[d].label}
@@ -82,8 +82,8 @@ export function BibleView(): React.JSX.Element {
                 className={clsx(
                   'w-full rounded-md px-2 py-1 text-left text-sm',
                   !q && i === active
-                    ? 'bg-night-700 text-ink-100'
-                    : 'text-ink-300 hover:bg-night-800',
+                    ? 'bg-glass-selected text-ink-100'
+                    : 'text-ink-300 hover:bg-glass-hover',
                 )}
               >
                 {s.title}

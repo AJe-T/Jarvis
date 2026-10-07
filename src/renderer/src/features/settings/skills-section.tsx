@@ -73,7 +73,7 @@ export function SkillsSection(): React.JSX.Element {
           {skills.map((s) => (
             <li
               key={s.name}
-              className="flex items-start gap-3 rounded-md border border-night-600 p-3"
+              className="flex items-start gap-3 rounded-md border border-glass-border p-3"
             >
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-ink-100">{s.name}</p>
@@ -116,7 +116,7 @@ export function SkillsSection(): React.JSX.Element {
           ))}
         </ul>
         {preview && (
-          <div className="max-w-3xl rounded-md border border-night-600 bg-night-800 p-4">
+          <div className="max-w-3xl rounded-md border border-glass-border bg-glass-inset p-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-semibold text-ink-100">{preview.name} / SKILL.md</p>
               <Button variant="ghost" onClick={() => setPreview(null)}>

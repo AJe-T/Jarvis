@@ -30,7 +30,7 @@ export function TextInput({
   return (
     <input
       className={clsx(
-        'min-h-9 rounded-md border border-night-600 bg-night-800 px-3 text-base text-ink-100 placeholder:text-ink-500 focus:border-reactor-500 focus:outline-none',
+        'min-h-9 rounded-md border border-glass-border bg-glass-inset px-3 text-base text-ink-100 placeholder:text-ink-500 focus:border-glass-border-strong',
         className,
       )}
       {...rest}
@@ -57,9 +57,9 @@ export function Switch({
         id={id}
         checked={checked}
         onCheckedChange={onChange}
-        className="relative h-6 w-11 shrink-0 rounded-pill bg-night-600 transition-colors data-[state=checked]:bg-reactor-500"
+        className="relative h-6 w-11 shrink-0 rounded-pill border border-glass-border-strong bg-glass-inset transition-colors data-[state=checked]:border-reactor-500 data-[state=checked]:bg-reactor-500"
       >
-        <RadixSwitch.Thumb className="block size-5 translate-x-0.5 rounded-pill bg-ink-100 transition-transform data-[state=checked]:translate-x-[22px]" />
+        <RadixSwitch.Thumb className="block size-[18px] translate-x-0.5 rounded-pill bg-ink-100 transition-transform data-[state=checked]:translate-x-[22px] data-[state=checked]:bg-void-950" />
       </RadixSwitch.Root>
     </div>
   );
@@ -75,7 +75,7 @@ export function Section({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-4 border-b border-night-600 py-6 last:border-b-0">
+    <section className="glass-inset my-4 flex flex-col gap-4 rounded-lg p-4 md:p-5">
       <div>
         <h2 className="font-display text-lg font-semibold text-ink-100">{title}</h2>
         {description && <p className="mt-1 max-w-[60ch] text-sm text-ink-300">{description}</p>}

@@ -30,7 +30,8 @@ let nextToast = 1;
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'chat',
   settingsSection: 'brain',
-  activityOpen: true,
+  // §5.1: docked from lg (1200px); below that it is an overlay sheet, so start closed.
+  activityOpen: typeof window === 'undefined' ? true : window.innerWidth >= 1200,
   historyOpen: false,
   toasts: [],
   online: typeof navigator === 'undefined' ? true : navigator.onLine,

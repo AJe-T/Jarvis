@@ -34,12 +34,12 @@ export function Toasts(): React.JSX.Element {
             key={t.id}
             role={t.level === 'error' ? 'alert' : 'status'}
             className={clsx(
-              'pointer-events-auto flex items-start gap-2 rounded-md border bg-night-800 p-3 text-sm shadow-lg shadow-night-950/60',
+              'glass-float pointer-events-auto flex items-start gap-2 rounded-lg p-3 text-sm',
               t.level === 'error'
-                ? 'border-alarm-500'
+                ? 'shadow-[inset_3px_0_0_var(--alarm-500),var(--shadow-float)]'
                 : t.level === 'warn'
-                  ? 'border-lamp-400'
-                  : 'border-night-600',
+                  ? 'shadow-[inset_3px_0_0_var(--lamp-400),var(--shadow-float)]'
+                  : '',
             )}
           >
             <Icon

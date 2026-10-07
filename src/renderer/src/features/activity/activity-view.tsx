@@ -33,8 +33,8 @@ export function ActivityView(): React.JSX.Element {
   }, [load]);
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col bg-night-900">
-      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-night-600 px-6">
+    <div className="flex min-w-0 flex-1 flex-col">
+      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-glass-border px-6">
         <h1 className="font-display text-lg font-semibold">Activity</h1>
         <div role="tablist" className="flex gap-1">
           {(['actions', 'audit', 'usage'] as const).map((t) => (
@@ -46,7 +46,7 @@ export function ActivityView(): React.JSX.Element {
               onClick={() => setTab(t)}
               className={clsx(
                 'min-h-8 rounded-pill px-3 text-sm',
-                tab === t ? 'bg-night-700 text-ink-100' : 'text-ink-300 hover:text-ink-100',
+                tab === t ? 'bg-glass-selected text-ink-100' : 'text-ink-300 hover:text-ink-100',
               )}
             >
               {TAB_LABEL[t]}
@@ -131,7 +131,7 @@ export function ActivityView(): React.JSX.Element {
             </thead>
             <tbody>
               {audit.map((a) => (
-                <tr key={a.seq} className="border-t border-night-600 align-top">
+                <tr key={a.seq} className="border-t border-glass-border align-top">
                   <td className="py-1.5 pr-3 text-ink-500">{a.seq}</td>
                   <td className="py-1.5 pr-3 whitespace-nowrap text-ink-300">
                     {new Date(a.ts).toLocaleString()}

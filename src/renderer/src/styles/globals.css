@@ -1,24 +1,45 @@
 @import 'tailwindcss';
+@import './fonts.css';
 @import './tokens.css';
+/* In the components layer so a utility (bg-reactor-500, rounded-pill…) can still override a glass recipe. */
+@import './glass.css' layer(components);
 
-/* Design tokens → Tailwind utilities (bg-night-900, text-ink-300, ring-reactor-500, …). */
+/* §5.1: short windows (height < 600px) get a smaller orb, composer and status bar. */
+@custom-variant short (@media (max-height: 599px));
+
+/* Design tokens → Tailwind utilities (bg-glass-inset, text-ink-300, border-glass-border, …). §3.8 */
 @theme inline {
-  --color-night-950: var(--night-950);
-  --color-night-900: var(--night-900);
-  --color-night-800: var(--night-800);
-  --color-night-700: var(--night-700);
-  --color-night-600: var(--night-600);
+  --breakpoint-md: 760px;
+  --breakpoint-lg: 1200px;
+  --breakpoint-xl: 1600px;
+
+  --color-void-950: var(--void-950);
+  --color-glass-pane: var(--glass-pane);
+  --color-glass-float: var(--glass-float);
+  --color-glass-inset: var(--glass-inset);
+  --color-glass-hover: var(--glass-hover);
+  --color-glass-selected: var(--glass-selected);
+  --color-glass-border: var(--glass-border);
+  --color-glass-border-strong: var(--glass-border-strong);
+  --color-solid-float: var(--solid-float);
+  --color-solid-inset: var(--solid-inset);
   --color-reactor-500: var(--reactor-500);
   --color-reactor-300: var(--reactor-300);
   --color-reactor-glow: var(--reactor-glow);
   --color-lamp-400: var(--lamp-400);
+  --color-lamp-tint: var(--lamp-tint);
   --color-alarm-500: var(--alarm-500);
   --color-ok-400: var(--ok-400);
   --color-ink-100: var(--ink-100);
   --color-ink-300: var(--ink-300);
   --color-ink-500: var(--ink-500);
   --color-ink-on-reactor: var(--ink-on-reactor);
+  --color-ink-on-lamp: var(--ink-on-lamp);
   --color-ink-on-alarm: var(--ink-on-alarm);
+  --color-ink-on-ok: var(--ink-on-ok);
+
+  --shadow-pane: var(--shadow-pane);
+  --shadow-float: var(--shadow-float);
 
   --font-display: var(--font-display);
   --font-body: var(--font-body);
@@ -40,6 +61,8 @@
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
   --radius-pill: var(--radius-pill);
   --ease-standard: var(--ease-standard);
 }
@@ -50,9 +73,13 @@ body,
   height: 100%;
 }
 
+html {
+  color-scheme: dark; /* native <select> menus and scrollbars match the theme */
+}
+
 body {
   margin: 0;
-  background: var(--night-950);
+  background: var(--void-950);
   color: var(--ink-100);
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -67,12 +94,12 @@ body {
 }
 
 ::selection {
-  background: var(--night-600);
+  background: var(--glass-selected);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--night-600) transparent;
+  scrollbar-color: var(--glass-border-strong) transparent;
 }
 
 .tabular {
@@ -198,13 +225,13 @@ body {
 .md code {
   font-family: var(--font-code);
   font-size: 0.85em;
-  background: var(--night-800);
+  background: var(--solid-inset);
   border-radius: 4px;
   padding: 0.1em 0.35em;
 }
 .md pre {
-  background: var(--night-800);
-  border: 1px solid var(--night-600);
+  background: var(--solid-inset); /* §6.3: solid, for legibility */
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   overflow-x: auto;
@@ -219,7 +246,7 @@ body {
 }
 .md th,
 .md td {
-  border: 1px solid var(--night-600);
+  border: 1px solid var(--glass-border);
   padding: 0.25rem 0.6rem;
   text-align: left;
 }
@@ -231,7 +258,7 @@ body {
   margin: 1rem 0 0.5rem;
 }
 .md blockquote {
-  border-left: 3px solid var(--night-600);
+  border-left: 3px solid var(--glass-border-strong);
   padding-left: 0.75rem;
   color: var(--ink-300);
 }

@@ -26,7 +26,7 @@ export function Rail(): React.JSX.Element {
   return (
     <nav
       aria-label="Main"
-      className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-night-600 bg-night-950 py-3"
+      className="glass-pane flex w-[52px] shrink-0 flex-col items-center gap-1 overflow-y-auto py-3 md:w-16"
     >
       {ITEMS.map(({ view: v, label, Icon }) => (
         <IconButton

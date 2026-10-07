@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { AppBackdrop } from './components/jarvis/app-backdrop';
 import { Rail } from './components/jarvis/rail';
 import { StatusBar } from './components/jarvis/status-bar';
 import { ConfirmModalHost } from './components/ui/confirm-modal';
@@ -30,7 +31,7 @@ function DbBanner(): React.JSX.Element | null {
   return (
     <div
       role="alert"
-      className="flex items-center gap-3 bg-alarm-500 px-4 py-2 text-sm text-ink-on-alarm"
+      className="flex items-center gap-3 rounded-md bg-alarm-500 px-4 py-2 text-sm text-ink-on-alarm"
     >
       Jarvis's database failed its integrity check. Some history may be missing.
       <button type="button" className="underline" onClick={() => go('settings', 'data')}>
@@ -40,23 +41,44 @@ function DbBanner(): React.JSX.Element | null {
   );
 }
 
+/** §5.1: floating glass islands over the aurora; the gaps between them are the theme's signature. */
 function Shell(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const activityOpen = useUiStore((s) => s.activityOpen);
+  const toggleActivity = useUiStore((s) => s.toggleActivity);
   const Current = VIEWS[view];
+  const drawer = view === 'chat' && activityOpen;
+
+  // Escape closes the drawer while it is an overlay sheet (below lg).
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && !window.matchMedia('(min-width: 1200px)').matches) toggleActivity();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawer, toggleActivity]);
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative z-10 flex h-full flex-col gap-[var(--shell-gap)] p-[var(--shell-gap)]">
       <DbBanner />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 gap-[var(--shell-gap)]">
         <Rail />
-        <main className="flex min-w-0 flex-1">
+        <main className="glass-pane flex min-w-0 flex-1 overflow-hidden">
           {Current ? (
             <Current />
           ) : (
             <p className="m-auto text-ink-500">This area is not available yet.</p>
           )}
         </main>
-        {view === 'chat' && activityOpen && <ActivityDrawer />}
+        {drawer && (
+          // Below lg the drawer is an overlay sheet; the scrim closes it.
+          <div
+            className="glass-scrim fixed inset-0 z-20 lg:hidden"
+            onClick={toggleActivity}
+            aria-hidden
+          />
+        )}
+        {drawer && <ActivityDrawer />}
       </div>
       <StatusBar />
     </div>
@@ -76,6 +98,7 @@ export function App(): React.JSX.Element {
 
   return (
     <Tooltip.Provider>
+      <AppBackdrop />
       {!loaded ? null : onboarded ? <Shell /> : <Onboarding />}
       {APP_OVERLAYS.map((Overlay, i) => (
         <Overlay key={i} />

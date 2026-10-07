@@ -71,7 +71,7 @@ export function DataSection(): React.JSX.Element {
         {backups.map((b) => (
           <li
             key={b.file}
-            className="flex items-center justify-between gap-3 rounded-md border border-night-600 px-3 py-2 text-sm"
+            className="flex items-center justify-between gap-3 rounded-md border border-glass-border px-3 py-2 text-sm"
           >
             <span className="text-ink-100 tabular">{new Date(b.createdAt).toLocaleString()}</span>
             <Button variant="ghost" onClick={() => void restore(b.file)}>
@@ -102,8 +102,8 @@ export function AboutSection(): React.JSX.Element {
       </div>
       <p className="max-w-[60ch] text-xs text-ink-500">
         Built with Electron, React and the Claude API. Open-source licences are listed in
-        THIRD_PARTY_NOTICES.md next to the app. Fonts: Chakra Petch, IBM Plex Sans, JetBrains Mono
-        (SIL Open Font License).
+        THIRD_PARTY_NOTICES.md next to the app. Fonts: Sora, Geist, JetBrains Mono (SIL Open Font
+        License).
       </p>
     </Section>
   );

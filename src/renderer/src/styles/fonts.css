@@ -1,0 +1,19 @@
+/* Design-system.md §4 — bundled locally (OFL, licences in resources/fonts/); works offline. */
+@font-face {
+  font-family: 'Sora';
+  src: url('../assets/fonts/Sora-Variable.woff2') format('woff2');
+  font-weight: 100 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist';
+  src: url('../assets/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+  font-weight: 100 800;
+  font-display: swap;
+}

@@ -46,9 +46,9 @@ export function ChatView(): React.JSX.Element {
   }, [messages.length, live?.text, live?.toolCalls.length]);
 
   return (
-    <div className="flex min-w-0 flex-1">
+    <div className="relative flex min-w-0 flex-1">
       {historyOpen && <ConversationList onClose={() => setHistoryOpen(false)} />}
-      <div className="relative flex min-w-0 flex-1 flex-col bg-night-900">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 px-3">
           <IconButton
             label="Conversations"
@@ -65,8 +65,8 @@ export function ChatView(): React.JSX.Element {
             style={{ opacity: empty ? 0 : 1 }}
             aria-hidden={empty}
           >
-            <Orb state={state} level={level} size="sm" />
-            <span className="font-display text-sm font-semibold text-ink-300">
+            <Orb state={state} level={level} size="sm" spill={!empty} />
+            <span className="text-sm font-semibold text-ink-300">
               {state === 'ERROR' && detail ? detail : STATUS_LINE[state]}
             </span>
           </div>
@@ -85,7 +85,7 @@ export function ChatView(): React.JSX.Element {
         {empty ? (
           <EmptyState />
         ) : (
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-6">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 md:px-4 lg:px-6">
             <div
               className="mx-auto flex max-w-[72ch] flex-col gap-5 pt-4 pb-8"
               aria-live="polite"
@@ -105,7 +105,7 @@ export function ChatView(): React.JSX.Element {
           </div>
         )}
 
-        <div className="mx-auto w-full max-w-[calc(72ch+3rem)] shrink-0 px-6 pb-4">
+        <div className="mx-auto w-full max-w-[calc(72ch+3rem)] shrink-0 px-3 pb-3 md:px-4 lg:px-6 lg:pb-4">
           <Composer />
         </div>
       </div>
