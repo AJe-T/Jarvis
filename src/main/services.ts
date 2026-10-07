@@ -47,6 +47,7 @@ import { createNativeTools } from './tools/native/index';
 import type { OsAdapter } from './tools/native/os';
 import { createMealTools, createMealsRepo } from './tools/everyday/meals';
 import { createScreenTools } from './tools/everyday/screen';
+import { createWebPageTools } from './tools/everyday/web-page';
 import { createWeatherTools } from './tools/everyday/weather';
 import { createSkillStore } from './skills/skills';
 import { createToolRegistry } from './tools/registry';
@@ -213,6 +214,8 @@ export function createServices(opts: ServiceOptions) {
   const sdkLoop = createSdkLoop(claudeCode, {
     webSearchEnabled: () => settings.get('web.search.enabled'),
   });
+  /** The agent loop for the current connection (Claude Code runs its own loop for the subscription). */
+  const loopFor = (): typeof runAgentLoop => (subscription() ? sdkLoop : runAgentLoop);
 
   // ── safety layer (Security.md) ───────────────────────────────────────────────────────────
   const home = opts.home ?? homedir();
@@ -273,6 +276,7 @@ export function createServices(opts: ServiceOptions) {
     ...createWeatherTools({ settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) }),
     ...createMealTools({ repo: meals, settings }),
     ...createScreenTools(opts.os),
+    ...createWebPageTools(opts.fetch ? { fetch: opts.fetch } : {}),
   ])
     registry.register(tool);
   const tools = createToolExecutor({
@@ -326,7 +330,7 @@ export function createServices(opts: ServiceOptions) {
     context,
     llm: () => llm,
     tools: () => tools,
-    loop: () => (subscription() ? sdkLoop : runAgentLoop),
+    loop: loopFor,
     budget,
     ledger,
     settings,
@@ -374,6 +378,7 @@ export function createServices(opts: ServiceOptions) {
     skills,
     refreshSkills,
     fetch: opts.fetch,
+    loopFor,
     meals,
     pathGuard,
     policy,

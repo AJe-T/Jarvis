@@ -17,6 +17,7 @@ import { registerCoreHandlers } from './ipc/handlers/core';
 import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { createMemorySystem } from './memory/memory-system';
+import { createResearchTool } from './agent/research';
 import { createAutomation } from './automation/automation';
 import { registerAutomationHandlers } from './ipc/handlers/automation';
 import { registerSkillHandlers } from './ipc/handlers/skills';
@@ -280,6 +281,10 @@ async function boot(): Promise<void> {
     writeNote: (rel, md) => memory.vault.write(rel, md),
   });
   automation.ensureMorningBriefing();
+  // Deep research agent (ideas from OpenJarvis): cited reports, saved under Research/.
+  services.registry.register(
+    createResearchTool(services, { writeNote: (rel, md) => memory.vault.write(rel, md) }),
+  );
   registerAutomationHandlers(services, automation);
   if (!isTest) automation.start();
   app.on('will-quit', () => automation.stop());

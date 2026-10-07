@@ -48,10 +48,10 @@ describe('feeds', () => {
 describe('scheduled agents (ideas from OpenJarvis)', () => {
   function setup(rules: Parameters<typeof setupServices>[0], at = new Date()) {
     const t = setupServices(rules, {
-      fetch: (async () =>
+      fetch: async () =>
         new Response(
           '<rss><item><title>Big news</title><link>https://n.example/1</link></item></rss>',
-        )),
+        ),
     });
     const notes: Array<{ rel: string; md: string }> = [];
     let clock = at;
