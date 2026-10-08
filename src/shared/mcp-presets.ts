@@ -155,4 +155,27 @@ export const MCP_PRESETS: McpPreset[] = [
       enabled: true,
     },
   },
+  {
+    id: 'home-assistant',
+    label: 'Home Assistant (smart home)',
+    description:
+      'Control lights, plugs and sensors through Home Assistant\'s built-in MCP Server integration (Settings → Devices & services → Add "Model Context Protocol Server"). Edit the address if yours isn\'t homeassistant.local.',
+    needsSecret: {
+      name: 'homeassistant_token',
+      label: 'Home Assistant long-lived access token',
+      help: 'Home Assistant → your profile → Security → Long-lived access tokens → Create token',
+    },
+    server: {
+      name: 'home-assistant',
+      transport: 'http',
+      url: 'http://homeassistant.local:8123/api/mcp',
+      args: [],
+      envSecrets: {},
+      authSecret: 'homeassistant_token',
+      trustLevel: 'official',
+      defaultTier: 'CONFIRM',
+      toolOverrides: { GetLiveContext: 'SAFE' },
+      enabled: true,
+    },
+  },
 ];

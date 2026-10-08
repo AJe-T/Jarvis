@@ -10,6 +10,7 @@ import {
   UiToolCallSchema,
   VOICE_MODES,
 } from './types';
+import { PasswordEntryInput } from './passwords';
 
 const Ok = z.object({ ok: z.literal(true) });
 const Empty = z.object({}).strict();
@@ -166,6 +167,62 @@ const BreakdownRow = z.object({
   costUsd: z.number(),
   tokens: z.number(),
   calls: z.number(),
+});
+
+const SpaceNameInput = z.string().trim().min(1).max(80);
+const SpaceIcon = z.string().min(1).max(16);
+const RemoteStatus = z.object({
+  running: z.boolean(),
+  urls: z.array(z.string()),
+  port: z.number(),
+  pairingCode: z.string().nullable(),
+  pairingUrl: z.string().nullable(),
+  /** QR code (PNG data URL) of pairingUrl, made in main. */
+  pairingQr: z.string().nullable().optional(),
+  devices: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      createdAt: z.string(),
+      lastSeen: z.string().nullable(),
+    }),
+  ),
+  error: z.string().nullable(),
+});
+const WhatsAppStatus = z.object({
+  state: z.enum(['off', 'connecting', 'qr', 'open', 'error']),
+  /** QR code (PNG data URL) to scan in WhatsApp → Linked devices. */
+  qr: z.string().nullable(),
+  me: z.string().nullable(),
+  error: z.string().nullable(),
+});
+const PasswordId = z.string().regex(/^pw_[\w-]{4,40}$/);
+const MasterPassword = z.string().min(1).max(200);
+const PasswordSummary = z.object({
+  id: z.string(),
+  title: z.string(),
+  username: z.string(),
+  url: z.string(),
+  category: z.string(),
+  favorite: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  hasPassword: z.boolean(),
+  hasTotp: z.boolean(),
+  hasNotes: z.boolean(),
+});
+const PasswordEntry = z.object({
+  id: z.string(),
+  title: z.string(),
+  username: z.string(),
+  password: z.string(),
+  url: z.string(),
+  notes: z.string(),
+  category: z.string(),
+  totpSecret: z.string(),
+  favorite: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
 
 function contract<Req extends z.ZodType, Res extends z.ZodType>(request: Req, response: Res) {
@@ -329,6 +386,10 @@ export const INVOKE = {
     z.object({ ok: z.boolean(), error: z.string().optional() }),
   ),
   'voice:mic': contract(z.object({ action: z.enum(['start', 'stop', 'meter']) }), Ok),
+  /** Phone-keyboard dictation into the message box: words stream in as voice:compose events. */
+  'voice:compose': contract(z.object({ action: z.enum(['start', 'stop']) }), Ok),
+  /** One click: download Whisper base.en + the voice detector and switch speech to on-device. */
+  'voice:setupLocal': contract(Empty, Ok),
   'voice:devices': contract(Empty, z.array(z.object({ index: z.number(), name: z.string() }))),
   'app:killSwitch': contract(Empty, Ok),
   'app:info': contract(
@@ -410,6 +471,109 @@ export const INVOKE = {
     z.object({ which: z.enum(['userData', 'logs', 'vault', 'backups']) }),
     Ok,
   ),
+  // Spaces (Notion-style notebooks in the vault).
+  'spaces:list': contract(
+    Empty,
+    z.array(
+      z.object({
+        name: z.string(),
+        icon: z.string(),
+        pageCount: z.number(),
+        updatedAt: z.string().nullable(),
+      }),
+    ),
+  ),
+  'spaces:create': contract(z.object({ name: SpaceNameInput, icon: SpaceIcon }), Ok),
+  'spaces:update': contract(
+    z.object({
+      name: SpaceNameInput,
+      next: z.object({ name: SpaceNameInput.optional(), icon: SpaceIcon.optional() }),
+    }),
+    Ok,
+  ),
+  'spaces:delete': contract(z.object({ name: SpaceNameInput }), Ok),
+  'spaces:pages': contract(
+    z.object({ space: SpaceNameInput }),
+    z.array(
+      z.object({ name: z.string(), updatedAt: z.string(), size: z.number(), excerpt: z.string() }),
+    ),
+  ),
+  'spaces:read': contract(
+    z.object({ space: SpaceNameInput, page: SpaceNameInput }),
+    z.object({ markdown: z.string(), hash: z.string() }),
+  ),
+  'spaces:write': contract(
+    z.object({
+      space: SpaceNameInput,
+      page: SpaceNameInput,
+      markdown: z.string().max(1_000_000),
+      expectedHash: z.string().max(100).optional(),
+    }),
+    z.object({ markdown: z.string(), hash: z.string() }),
+  ),
+  'spaces:createPage': contract(
+    z.object({
+      space: SpaceNameInput,
+      title: SpaceNameInput,
+      template: z.enum(['blank', 'journal', 'learning', 'meeting', 'finance', 'project']),
+    }),
+    z.object({ name: z.string() }),
+  ),
+  'spaces:renamePage': contract(
+    z.object({ space: SpaceNameInput, page: SpaceNameInput, next: SpaceNameInput }),
+    Ok,
+  ),
+  'spaces:deletePage': contract(z.object({ space: SpaceNameInput, page: SpaceNameInput }), Ok),
+  'spaces:open': contract(z.object({ space: SpaceNameInput, page: SpaceNameInput.optional() }), Ok),
+  /** Brain view: every note as a dot, [[links]] and folders as connections. */
+  'memory:graph': contract(
+    Empty,
+    z.object({
+      nodes: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          group: z.string(),
+          size: z.number(),
+          updatedAt: z.string(),
+        }),
+      ),
+      links: z.array(
+        z.object({ source: z.string(), target: z.string(), kind: z.enum(['link', 'folder']) }),
+      ),
+    }),
+  ),
+  'remote:status': contract(Empty, RemoteStatus),
+  'remote:pair': contract(Empty, RemoteStatus),
+  'remote:revoke': contract(z.object({ id: z.string().regex(/^[0-9a-f]{12}$/) }), Ok),
+  'remote:restart': contract(Empty, RemoteStatus),
+  'whatsapp:status': contract(Empty, WhatsAppStatus),
+  'whatsapp:restart': contract(Empty, WhatsAppStatus),
+  'whatsapp:logout': contract(Empty, Ok),
+  // Password manager (Security.md §16.6): only the Passwords view uses these; no tool can.
+  'passwords:status': contract(
+    Empty,
+    z.object({ exists: z.boolean(), unlocked: z.boolean(), count: z.number() }),
+  ),
+  'passwords:setup': contract(z.object({ master: MasterPassword }), Ok),
+  'passwords:unlock': contract(z.object({ master: MasterPassword }), Ok),
+  'passwords:lock': contract(Empty, Ok),
+  'passwords:list': contract(Empty, z.array(PasswordSummary)),
+  'passwords:get': contract(z.object({ id: PasswordId }), PasswordEntry),
+  'passwords:save': contract(PasswordEntryInput, PasswordSummary),
+  'passwords:delete': contract(z.object({ id: PasswordId }), Ok),
+  'passwords:copy': contract(
+    z.object({ id: PasswordId, field: z.enum(['username', 'password', 'totp']) }),
+    z.object({ clearsInSeconds: z.number() }),
+  ),
+  'passwords:totp': contract(
+    z.object({ id: PasswordId }),
+    z.object({ code: z.string(), secondsLeft: z.number() }),
+  ),
+  'passwords:changeMaster': contract(
+    z.object({ current: MasterPassword, next: MasterPassword }),
+    Ok,
+  ),
 } satisfies Record<InvokeChannel, { request: z.ZodType; response: z.ZodType }>;
 
 export const EVENTS = {
@@ -444,6 +608,7 @@ export const EVENTS = {
   'voice:level': z.object({ rms: z.number() }),
   'music:level': z.object({ rms: z.number() }),
   'voice:transcript': z.object({ text: z.string(), isFinal: z.boolean() }),
+  'voice:compose': z.object({ text: z.string(), final: z.boolean() }),
   'tts:audio': z.object({
     utteranceId: z.string(),
     seq: z.number(),
@@ -484,13 +649,33 @@ export const EVENTS = {
   'conversation:updated': ConversationSummarySchema,
   'memory:changed': z.object({ vaultPaths: z.array(z.string()) }),
   'computer:active': z.object({ active: z.boolean() }),
+  'passwords:locked': z.object({}),
+  'remote:status': RemoteStatus,
+  'whatsapp:status': WhatsAppStatus,
+  'audio:decode': z.object({ id: z.string(), mime: z.string(), data: z.instanceof(Uint8Array) }),
   'nav:open': z.object({
-    view: z.enum(['chat', 'memory', 'activity', 'connections', 'settings', 'copilot', 'bible']),
+    view: z.enum([
+      'chat',
+      'memory',
+      'activity',
+      'connections',
+      'settings',
+      'copilot',
+      'bible',
+      'spaces',
+      'passwords',
+      'brain',
+    ]),
     section: z.string().optional(),
   }),
 } satisfies Record<EventChannel, z.ZodType>;
 
 export const SEND = {
+  'audio:decoded': z.object({
+    id: z.string().max(64),
+    samples: z.instanceof(Float32Array).optional(),
+    error: z.string().max(300).optional(),
+  }),
   'ui:activeConversation': z.object({ conversationId: z.string().max(64).nullable() }),
   'tts:playback': z.object({
     utteranceId: z.string(),

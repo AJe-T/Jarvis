@@ -105,6 +105,7 @@ export function MemoryView(): React.JSX.Element {
   const version = useMemoryStore((s) => s.version);
   const bump = useMemoryStore((s) => s.bump);
   const toast = useUiStore((s) => s.toast);
+  const go = useUiStore((s) => s.go);
 
   const load = useCallback(async (p: string) => {
     try {
@@ -181,7 +182,11 @@ export function MemoryView(): React.JSX.Element {
                 <li key={h.vaultPath}>
                   <button
                     type="button"
-                    onClick={() => setSelected(h.vaultPath)}
+                    onClick={() => {
+                      const sp = /^Spaces\/([^/]+)\/(.+)\.md$/.exec(h.vaultPath);
+                      if (sp) go('spaces', `${sp[1]}/${sp[2]}`);
+                      else setSelected(h.vaultPath);
+                    }}
                     className="w-full rounded-sm px-3 py-2 text-left transition-colors duration-[160ms] hover:bg-hover"
                   >
                     <span className="block text-sm text-ink-100">{h.title}</span>

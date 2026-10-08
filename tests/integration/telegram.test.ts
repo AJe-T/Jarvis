@@ -17,6 +17,16 @@ function fakeTelegram() {
   let id = 1;
   const fetch = (async (url: string, init?: RequestInit) => {
     const method = url.split('/').at(-1) ?? '';
+    if (url.includes('/file/bot')) return new Response(new Uint8Array([1, 2, 3]));
+    if (init?.body instanceof FormData) {
+      sent.push({
+        method,
+        body: { chat_id: init.body.get('chat_id'), voice: init.body.get('voice') },
+      });
+      return Response.json({ ok: true, result: {} });
+    }
+    if (method === 'getFile')
+      return Response.json({ ok: true, result: { file_path: 'voice/1.oga' } });
     const body = JSON.parse(init?.body as string) as Record<string, unknown>;
     if (method === 'getMe')
       return Response.json({ ok: true, result: { username: 'jarvis_test_bot' } });
@@ -123,5 +133,44 @@ describe('Telegram channel (ideas from OpenJarvis)', () => {
     expect(t.services.broker.respond(shown[0] ?? '', 'approve', 'remote')).toBe(false);
     expect(t.services.broker.respond(shown[0] ?? '', 'deny', 'remote')).toBe(true);
     expect((await pending).decision).toBe('deny');
+  });
+
+  it('understands voice notes and answers with a voice message', async () => {
+    const tg = fakeTelegram();
+    const t = setupServices({
+      rules: [
+        { match: 'weather', steps: [{ text: '<spoken>Sunny, sir.</spoken> Details below.' }] },
+      ],
+    });
+    const s = t.services;
+    s.secrets.set('telegram', '123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsawQ');
+    s.settings.set('telegram.enabled', true);
+    const spoken: string[] = [];
+    const ch = createTelegramChannel(s, {
+      fetch: tg.fetch,
+      pollTimeoutSec: 0,
+      voice: {
+        transcribeClip: async (data) => (data.length === 3 ? 'what is the weather' : ''),
+        speakMp3: async (text) => {
+          spoken.push(text);
+          return new Uint8Array([9]);
+        },
+      },
+    });
+    await ch.start();
+    tg.queue.push(tg.msg(5, ch.status().pairingCode ?? ''));
+    await until(() => ch.status().paired);
+    tg.queue.push({
+      message: {
+        message_id: 3,
+        chat: { id: 5, type: 'private' },
+        voice: { file_id: 'abc', duration: 3, mime_type: 'audio/ogg' },
+      },
+    });
+    await until(() => tg.sent.some((x) => x.method === 'sendVoice'));
+    expect(tg.sent.some((x) => x.body['text'] === '🎤 “what is the weather”')).toBe(true);
+    expect(spoken).toEqual(['Sunny, sir.']);
+    await idle(s);
+    ch.stop();
   });
 });

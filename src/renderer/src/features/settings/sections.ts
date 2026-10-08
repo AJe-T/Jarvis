@@ -3,7 +3,8 @@ import { AdvancedSection } from './advanced-section';
 import { DictationSection } from './dictation-section';
 import { SkillsSection } from './skills-section';
 import { AutomationsSection } from './automations-section';
-import { TelegramSection } from './telegram-section';
+import { PhoneSection } from './phone-section';
+import { PasswordsSection } from './passwords-section';
 import { AboutSection, DataSection } from './data-sections';
 import { BrainSection } from './brain-section';
 import { FilesSection } from './files-section';
@@ -31,7 +32,8 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   { id: 'memory', label: 'Memory', Component: MemorySection },
   { id: 'skills', label: 'Skills', Component: SkillsSection },
   { id: 'automations', label: 'Automations', Component: AutomationsSection },
-  { id: 'telegram', label: 'Telegram', Component: TelegramSection },
+  { id: 'telegram', label: 'Phone & chat apps', Component: PhoneSection },
+  { id: 'passwords', label: 'Passwords', Component: PasswordsSection },
   { id: 'voice', label: 'Voice', Component: VoiceSection },
   { id: 'dictation', label: 'Dictation', Component: DictationSection },
   { id: 'privacy', label: 'Privacy', Component: PrivacySection },

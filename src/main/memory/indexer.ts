@@ -54,7 +54,9 @@ export function createIndexer(deps: {
   ): void {
     const hash = sha256(content);
     deps.repos.vaultFiles.upsert(rel, hash, mtimeMs, writer);
-    if (!rel.startsWith('Memory/') || !rel.toLowerCase().endsWith('.md')) return;
+    // Memory notes and Sir's Spaces pages are searchable; logs and internals are not.
+    const searchable = rel.startsWith('Memory/') || rel.startsWith('Spaces/');
+    if (!searchable || !rel.toLowerCase().endsWith('.md')) return;
     const { frontmatter, body } = parseNote(content);
     const declared =
       typeof frontmatter['source'] === 'string'

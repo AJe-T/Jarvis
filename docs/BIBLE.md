@@ -48,6 +48,15 @@ JARVIS is a **voice-first personal assistant for Windows**, built as an Electron
 | `Ctrl+Alt+D` | Dictation: type what you say into any app (off until enabled) |
 | `Ctrl+Alt+R` | Reply copilot for the chat on screen |
 
+**New in 2.0 (one line each, details below):**
+- **Dictate into the message box** like a phone keyboard: tap the mic, words appear live, press Send (§3.2).
+- **Spaces:** Notion-style notebooks (Learning, Finance, …) in the sidebar (§3.13).
+- **Brain:** your whole vault as a living neural network you can explore (§3.3).
+- **Passwords:** an encrypted password manager the AI can never read (§3.14).
+- **Works inside any app** through Windows UI Automation, free and with any brain (§3.4).
+- **Phone remote:** chat, dictate or hold a hands-free voice call from your phone's browser (§3.15).
+- **WhatsApp:** talk to Jarvis in your own "Message yourself" chat (§3.16); **Telegram voice notes** (§3.9).
+
 ---
 
 ## 3. Everything Jarvis can do
@@ -69,7 +78,7 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 | Mode | How you start | Notes |
 |---|---|---|
 | Off | type only | |
-| Press to talk | mic button or `Ctrl+Alt+Space` | |
+| Press to talk | the **Talk** (waveform) button by the message box, or `Ctrl+Alt+Space` | Jarvis answers aloud |
 | Wake word | "Jarvis" (Picovoice) or "Hey Jarvis" (on-device openWakeWord) | Detection runs on this PC; audio leaves only while listening (and never with Whisper). |
 | **Always listening (on-device)** | say "Jarvis" anywhere: "…what do you think, Jarvis?" | Needs on-device Whisper. Everything is transcribed locally into a 2-minute memory-only buffer; a fast model judges whether you meant Jarvis and rewrites the request with context. |
 
@@ -88,7 +97,15 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 - **Instant commands** (idea from Priler/jarvis; `voice.quickCommands`, on by default): a routine's trigger phrase ("start work mode", forgiving a misheard letter) runs that routine at once with no model call, and "what time is it" / "what's the date" are answered on the spot, offline. Everything else goes to Claude.
 - Saying "stop" or "cancel" ends the current reply; "stop everything" is the kill switch; "go to sleep" pauses the wake word.
 
-**Dictation:**
+**Dictate a message (phone-keyboard style; works in every mode, even Voice off):**
+- Tap the **mic** in the message box and speak. Your words appear **live in the box** as you talk; pauses don't stop it.
+- Tap the mic again (or Esc) to stop, fix anything, then press **Send**. Nothing is sent by itself. It stops on its own after 20 s of silence.
+- Engines: Deepgram streams words instantly. On-device Whisper re-reads the phrase about every 0.7 s, so words show with a short lag (base.en is quickest); it is free and offline.
+- **No key? One click:** Settings → Voice → **Set up free on-device speech** downloads Whisper base.en + the voice detector (about 80 MB, once) and switches speech to on-device. If Deepgram is chosen but has no key, Jarvis uses on-device Whisper automatically when it is downloaded.
+- Why not Chrome's built-in speech? Electron (unlike Google Chrome) has no Google speech key, so `webkitSpeechRecognition` fails with a `network` error. The phone remote (§3.15) *does* use it, because there it runs in your phone's real browser.
+- A faster fully-offline streaming engine (sherpa-onnx, ~60–130 MB models) is a possible next step if Whisper's lag bothers you.
+
+**Dictation into other apps:**
 - Enable it in Settings → Dictation, then press `Ctrl+Alt+D` in any app.
 - Speak; pause about 1.5 s (or press the hotkey again) and the text is pasted at your cursor. Your clipboard is restored afterwards.
 - Filler words ("um", "uh") are removed. A custom dictionary fixes words it mishears (`avan tech => AvaanTech`), and a history is kept locally.
@@ -110,8 +127,21 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 - **Recall by date:** "What did we talk about yesterday?" or "last Monday" lists what was said that day (`search_conversations` with from/to dates; `/private` chats never appear).
 - **Learning:** after each turn a small model (the curator) proposes memory updates. Anything that looks like an instruction goes to a review queue (Memory view) instead of being saved.
 - **Your edits:** changes you make in Obsidian are picked up within seconds.
+- **Spaces pages are searchable too:** pages in `Spaces/` are indexed like memory notes, so "what did I write about Rust ownership?" finds your Learning page.
+
+**Brain view (sidebar → Brain):** the whole vault drawn as a neural network.
+- Every note is a glowing dot coloured by its folder; `[[wiki links]]` are the bright connections, and each note also hangs off a hub for its folder, so the vault forms one network shaped like two hemispheres. Small signals travel along the links (off with Windows "reduce motion").
+- Scroll to zoom, drag the background to move, drag a dot to pull it. Hover a dot to light up its neighbours; click it to read the note in a side panel, with **Open in Obsidian** or **Edit in Spaces**.
+- **Find a note** jumps to it; the legend lists each folder with a count (click to hide/show); "Show folders" hides the hub dots; the fit button frames everything.
+- It updates when the vault changes. Obsidian's own Graph view (Ctrl+G inside Obsidian) shows the same links; the ↗ button opens the vault there.
 
 ### 3.4 Your PC
+- **Inside any app, free (Windows UI Automation; ideas from microsoft/UFO and Windows-Use, no code copied):** Jarvis reads an app's accessibility tree, the same one screen readers use, so it can see and use buttons, menus, tabs, list items and text boxes by name — no screenshot, no vision model, no API key. Works with every brain, including local models.
+  - `list_ui_elements` (see the controls), `click_ui_element` (invoke/toggle/select/expand, or a real click as a last resort), `set_ui_text` (type into a field), `read_window_text` (read a document, chat or dialog), `press_keys` ("ctrl+s", "alt+tab", "f5"), `type_text` (paste into the focused field).
+  - Try: "Open Settings and go to Bluetooth & devices", "In Notepad, type my shopping list", "What does that error dialog say?", "Press Ctrl+S in Word".
+  - Safety: buttons whose label means send, pay, delete, submit or agree ask first (destructive ones need a click); submitting typed text asks first; password fields are refused; `Win+R` and `Ctrl+Alt+Del` are blocked and `Alt+F4` asks. Admin (elevated) windows can't be driven by a normal app — that's Windows' own protection.
+  - Limits: games and custom-drawn apps expose no controls; for those Jarvis falls back to screenshot computer control (API connection).
+  - Each call takes about 1–2 s (a PowerShell UI Automation query).
 - **Apps and windows:** open and close apps, list open windows, lock, sleep, shut down or restart (asks first).
 - **Media and settings:** media keys, volume, brightness, battery and system info.
 - **Files** (only inside the allowed folders):
@@ -183,6 +213,7 @@ Talk to Jarvis from your phone.
 - `/stop` stops everything.
 - Briefings can be forwarded to your phone.
 - Replies pass through Telegram's servers.
+- **Voice notes:** hold the mic in Telegram and talk. Jarvis downloads the note, transcribes it (Deepgram if you have a key, otherwise on-device Whisper — the Jarvis window decodes the Opus audio, nothing extra is installed), shows "🎤 what he heard", answers in text **and** sends back a voice message in his own voice (Settings → Phone & chat apps → Telegram voice notes). Notes up to 5 minutes.
 
 ### 3.10 Reply copilot (desktop take on jev-chat-jarvis)
 Open a chat (WhatsApp, Telegram, Slack…) and press `Ctrl+Alt+R`, or say "help me reply".
@@ -197,7 +228,46 @@ Open a chat (WhatsApp, Telegram, Slack…) and press `Ctrl+Alt+R`, or say "help 
 6. **Paste into chat** puts it in the message box of the same chat. **You press Send; Jarvis never does.**
 
 ### 3.11 Connections (MCP)
-Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem) in the Connections view. Their tools appear as `mcp__server__tool`, go through the same policy, and their output is untrusted.
+Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem, Chrome DevTools, YouTube transcripts, and **Home Assistant** for lights, plugs and sensors through its built-in "Model Context Protocol Server" integration) in the Connections view. Their tools appear as `mcp__server__tool`, go through the same policy, and their output is untrusted.
+
+### 3.13 Spaces (Notion-style notebooks)
+Sidebar → **Spaces**. Each space (Learning, Finance, Fitness, Ideas…) is a notebook of pages. Your spaces are listed under "Spaces" in the sidebar, with **+ New space** (pick a name and an icon).
+- **Dashboard:** every space as a card with its page count, plus **Recently edited** pages across all spaces.
+- **Pages:** **New page** offers templates — Blank, Learning note, Journal entry (titled with today's date), Meeting notes, Expense log (a table), Project plan.
+- **Editor:** big title (rename by editing it), a formatting bar (headings, bold, italic, lists, to-dos, quote, code, table, `[[link]]`, divider), **Write / Preview**, and Enter continues lists like Notion. It **saves by itself** about a second after you stop typing (Ctrl+S saves now; switching pages saves first).
+- **Ask Jarvis about this page** (sparkle button) opens a new chat starting "Using my "Learning / Rust" page…". Jarvis can also use Spaces himself with the `spaces` tool: "add this to my Finance space under October", "what did I note in Learning about closures?". He can add and create, never delete or overwrite.
+- **Where it lives:** `Spaces/<space>/<page>.md` in your Obsidian vault — plain Markdown you can open in Obsidian, shown in the Brain graph, and searchable by Jarvis's memory. Deleting a page or space moves it to the vault's `.trash`.
+- Secrets typed into pages (passwords, card numbers) are masked when saved, like everything in the vault. Keep them in **Passwords** instead.
+
+### 3.14 Passwords (encrypted, never shared with the AI)
+Sidebar → **Passwords**.
+- **First time:** create a master password (8+ characters; a strength bar helps). It is never stored; **if you forget it, the vault can't be opened** (that's what makes it safe).
+- **Entries:** name, username, password, website, category (Login, Bank, Card, Email, Social, Work, Wi-Fi, Other), notes, favourite, and an optional **two-factor secret** — Jarvis then shows the live 6-digit code with a countdown, like an authenticator app.
+- **Generator:** makes a strong random password (length 8–64, symbols on/off) from the system's secure random source.
+- **Copy:** copying a password or code puts it on the clipboard and **wipes it after 20 s** (only if you haven't copied something else since). Passwords stay hidden until you press the eye.
+- **Locks itself:** after 5 idle minutes (Settings → Passwords), when Windows locks or sleeps, on the kill switch, or with the lock button. Wrong master passwords slow down after three tries.
+- **How it's protected:** a key is derived from the master password with scrypt (N=2^17) and the vault file (`%APPDATA%\Jarvis\passwords.vault`) is encrypted with AES-256-GCM, which also detects tampering. Only the Passwords view's own channels reach it: no tool, AI model, memory note, log, Telegram, WhatsApp or phone remote can read it, and file tools are denied that path. Audit entries say "unlocked/saved" but never which entry.
+- Back it up by copying `passwords.vault`; it opens on any PC with the master password.
+
+### 3.15 Phone remote (call Jarvis from your phone — free, no app)
+Settings → **Phone & chat apps** → **Phone remote**.
+1. Turn it on. Jarvis starts a small **HTTPS** web app on your home network (port 8765) and shows its address.
+2. Press **Pair a phone** and scan the QR code with the phone's camera (or open the address and type the 6-digit code; valid 10 minutes, once).
+3. The first time, the phone warns the certificate is self-signed (Windows made it for this PC): tap **Advanced → Proceed**.
+4. On the phone: type; tap the mic to **dictate with live words** (the phone's own speech recognition: Chrome on Android, Safari on iPhone); or tap the phone icon for a **hands-free call** — you talk, Jarvis answers aloud through the phone, then listens again until you hang up.
+- Approvals show as cards on the phone; **destructive ones can only be approved at the PC**. "stop" stops everything.
+- Each paired phone gets its own random token (only its hash is kept, encrypted); remove phones in Settings.
+- **Away from home (free):** install **Tailscale** on the PC and the phone, run `tailscale serve --bg 8765` on the PC, and open the `https://<pc>.<tailnet>.ts.net` address — a real certificate, no warning.
+- Real phone-network calls (dialling a number) aren't free anywhere (Twilio etc. are paid), so they are not built in.
+
+### 3.16 WhatsApp (your own account)
+Settings → **Phone & chat apps** → **WhatsApp**.
+1. Turn it on and scan the QR code in WhatsApp → Settings → **Linked devices** → Link a device (like WhatsApp Web).
+2. In WhatsApp open your own **"Message yourself"** chat and write **"Jarvis, …"** (e.g. "Jarvis, remind me at 6 to call mom"). Messages without the wake word stay normal notes. Change the word in Settings, or clear it to make every self-message a command.
+3. Jarvis replies in the same chat. Confirmations: reply **yes** or **no**; destructive actions only at the PC. "Jarvis stop" stops everything.
+- Jarvis can send a WhatsApp message for you (`send_whatsapp`, to a number with country code) — **always after you approve the exact text**.
+- Messages in any other chat are never read as commands.
+- ⚠ Built on the free **Baileys** library (MIT), not WhatsApp's paid business API. WhatsApp may restrict accounts that use unofficial clients; consider a spare number. **Unlink** logs this PC out and deletes the session keys (`%APPDATA%\Jarvis\whatsapp-auth`).
 
 ### 3.12 Interface
 - **Chat:**
@@ -208,7 +278,7 @@ Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem) in the
   - **Settings → Advanced → Logs:** the newest log lines (secrets removed), warnings-only filter, and Open logs folder.
   - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent).
   - **Memory:** browse, search, forget, and the review queue.
-  - **Connections**, **Reply copilot** and **Bible**.
+  - **Spaces** (§3.13), **Brain** (§3.3), **Passwords** (§3.14), **Connections**, **Reply copilot** and **Bible**.
 - **Look ("Geist", modelled on Vercel, [Design-system](Design-system.md)):**
   - Near-white sidebar with labels (icons only on narrow windows), white page, thin `#EBEBEB` hairlines, no gaps; cards carry a faint stacked shadow.
   - Solid black ink for the main button (white in dark), one blue for focus, links and Jarvis; status as soft pill tags (amber = needs you, red = blocked, green = done). A blurred blue-violet-pink-amber mesh sits behind the orb on the empty chat, and nowhere else.
@@ -333,6 +403,8 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 - `dictation.*`
 - `telegram.*`, `appearance.theme`
 - `memory.semanticSearch`
+- `remote.enabled` / `remote.port` (phone remote), `whatsapp.*` (WhatsApp channel and its wake word)
+- `passwords.autoLockMinutes` / `passwords.clipboardSeconds`
 
 ---
 
@@ -379,6 +451,14 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | Telegram silent | Settings → Telegram: token saved, channel on, Connect, pairing code sent from a private chat. |
 | Reply copilot won't paste | The chat window must still be open with the same title; otherwise use Copy. |
 | Database warning banner | Settings → Data & backups → Restore a backup. |
+| The mic in the message box says speech needs setup | Settings → Voice → **Set up free on-device speech** (one-time ~80 MB download), or add a Deepgram key. |
+| Dictated words appear slowly | On-device Whisper re-reads the phrase about every 0.7 s; choose **base.en** (fastest) or Deepgram (instant). |
+| "Jarvis can't interact with that app" | Ask him to use the app's controls: "list the buttons in Spotify". Elevated (admin) windows and games expose nothing to UI Automation; screenshot control needs the API connection. |
+| Phone remote won't open on the phone | PC and phone on the same Wi-Fi; allow Jarvis through Windows Firewall when asked (Private networks); use the address shown in Settings; accept the self-signed certificate once. |
+| Phone mic button does nothing | Live dictation needs Chrome (Android) or Safari (iPhone) and the https address; otherwise use the keyboard's own mic. |
+| WhatsApp shows "logged this PC out" | WhatsApp unlinked the device (or you did on the phone). Turn WhatsApp off and on, and scan the new QR code. |
+| WhatsApp ignores my message | Write it in your own "Message yourself" chat and start with the wake word ("Jarvis, …"). |
+| Forgot the Passwords master password | It can't be recovered (that's the protection). Rename `%APPDATA%\Jarvis\passwords.vault` to start a new, empty vault. |
 
 ---
 
@@ -407,6 +487,11 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 019 | This Bible + generated reference |
 | 020 | Instant voice commands, HuggingGPT expert models, everyday plugins |
 | 021 | The rest of isair/jarvis: semantic memory, date recall, offline OCR, world time, rewind, local tool routing, logs |
+| 022 | Phone-keyboard dictation in the composer; Whisper live partials + continuous sessions instead of a new streaming engine |
+| 023 | Spaces as Markdown in the vault (not a database), indexed with memory |
+| 024 | Password vault walled off from Services (scrypt + AES-256-GCM, own IPC only) |
+| 025 | UI Automation tools before screenshot computer use |
+| 026 | Phone remote over self-signed HTTPS on the LAN, phone does speech; WhatsApp via Baileys self-chat |
 
 ---
 
@@ -426,6 +511,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.8 | "Workspace" redesign modelled on Notion: warm canvas and sidebar, purple primary, link blue, pastel tags and suggestion cards, labelled sidebar |
 | 1.9 | "Geist" redesign modelled on Vercel: ink-on-white, solid-ink primary, one blue, brand mesh behind the empty-state hero, Geist + Geist Mono, stacked shadows, pill tags |
 | 1.10 | Teal energy-core orb that follows voice, mic and music playing on the PC (loopback meter in its own sandboxed session) |
+| 2.0 | Phone-keyboard dictation into the message box (live words, one-click free on-device speech); Spaces (Notion-style notebooks); Brain graph of the vault; encrypted Passwords the AI can't read; Windows UI Automation tools; phone remote with hands-free calls; WhatsApp self-chat; Telegram voice notes and voice replies; Home Assistant preset |
 
 ---
 
@@ -440,6 +526,9 @@ JARVIS does not copy code from these projects; their **ideas** were studied and 
 - **microsoft/JARVIS** (MIT): HuggingGPT's plan → select model → execute → respond loop over Hugging Face models.
 - **sukeesh/Jarvis** (MIT): everyday plugins (currency, stocks and crypto, network checks, password generator, file organiser).
 - **Priler/jarvis** (CC BY-NC-SA 4.0): phrase-to-action instant commands without a language model, matched forgivingly.
+- **microsoft/UFO** (MIT) and **Windows-Use** (MIT): the idea of driving Windows apps through their UI Automation tree before falling back to screenshots.
+- **Obsidian** graph view and **Notion**: the ideas behind the Brain view and Spaces.
+- **Libraries added in 2.0:** Baileys (MIT, WhatsApp linked device) and qrcode (MIT).
 - **Models:** the openWakeWord "hey jarvis" model is **CC BY-NC-SA 4.0 (non-commercial)**; the Whisper weights (OpenAI) are MIT, using onnx-community's ONNX conversions; Silero VAD is MIT.
 
 ---

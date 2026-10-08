@@ -3,6 +3,7 @@ import { JarvisError } from '../../errors';
 import type { MemorySystem } from '../../memory/memory-system';
 import { normalizeRel } from '../../memory/vault-service';
 import { stringifyNote } from '../../memory/frontmatter';
+import { buildGraph } from '../../memory/graph';
 import { nowIso } from '../../lib/util';
 import type { Services } from '../../services';
 import { handle } from '../handle';
@@ -44,9 +45,15 @@ export async function writeQuickFacts(
 
 export function registerMemoryHandlers(s: Services, m: MemorySystem): void {
   handle('memory:list', async (req) => m.vault.list(memoryRel(req.dir)));
-  handle('memory:read', async (req) => ({
-    markdown: (await m.vault.read(memoryRel(req.vaultPath))).raw,
-  }));
+  // Reading any note is fine (the Brain graph opens Spaces pages and logs too); the vault guard
+  // still refuses paths that escape the vault.
+  handle('memory:read', async (req) => {
+    const rel = normalizeRel(req.vaultPath);
+    if (!rel.toLowerCase().endsWith('.md'))
+      throw new JarvisError('INVALID', 'not a note', 'Only Markdown notes can be opened here.');
+    return { markdown: (await m.vault.read(rel)).raw };
+  });
+  handle('memory:graph', () => buildGraph(m.vault));
   handle('memory:search', (req) => m.retriever.searchMemories(req.query, 20));
   handle('memory:delete', async (req) => {
     const rel = memoryRel(req.vaultPath);

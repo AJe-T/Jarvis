@@ -58,6 +58,7 @@ export interface VoiceDeps {
     maxListenMs?: number;
     echoSettleMs?: number;
     dictationQuietMs?: number;
+    composeIdleMs?: number;
   };
 }
 
@@ -69,6 +70,9 @@ const MAX_EARLY_FRAMES = 250; // ≥ 8 s at 512 samples per frame
 /** Dictation lets Sir pause to think mid-sentence. */
 const DICTATION_PAUSE_MS = 1500;
 const DICTATION_MAX_MS = 120_000;
+/** Composing a message stops by itself after this long without new words (or Sir taps the mic). */
+const COMPOSE_IDLE_MS = 20_000;
+const COMPOSE_MAX_MS = 5 * 60_000;
 /** Voice turns within this long continue the same conversation (ADR-012). */
 const CONVERSATION_GAP_MS = 15 * 60_000;
 /** Wait for the room to stop echoing Jarvis's voice before opening the follow-up window. */
@@ -105,8 +109,18 @@ export function createVoiceController(d: VoiceDeps) {
     early: Int16Array[];
     /** Opened by itself after a spoken reply: no chime, gives up quietly. */
     followUp: boolean;
-    /** Dictation: collect everything said until a pause or the hotkey, then type it (no turn). */
-    dictation?: { parts: string[]; quiet?: ReturnType<typeof setTimeout> };
+    /**
+     * Dictation: collect everything said, then hand it over (no turn). 'app' types it into the app in
+     * front after a pause or the hotkey; 'composer' streams it into Jarvis's message box, phone-keyboard
+     * style, until Sir taps the mic again (he reads it, then presses Send).
+     */
+    dictation?: {
+      parts: string[];
+      /** The phrase still being spoken (kept if Sir stops before its final transcript). */
+      partial?: string;
+      target: 'app' | 'composer';
+      quiet?: ReturnType<typeof setTimeout>;
+    };
   } | null = null;
   /** ADR-012 conversational state. */
   let lastVoice: { conversationId: string; at: number } | null = null;
@@ -285,7 +299,7 @@ export function createVoiceController(d: VoiceDeps) {
   async function startListening(
     isRetry: boolean,
     followUp = false,
-    dictation = false,
+    dictation: 'app' | 'composer' | null = null,
   ): Promise<void> {
     if (listening) return;
     stopSpeaking();
@@ -299,25 +313,42 @@ export function createVoiceController(d: VoiceDeps) {
       retried: isRetry,
       early: [],
       followUp,
-      ...(dictation ? { dictation: { parts: [] } } : {}),
+      ...(dictation ? { dictation: { parts: [], target: dictation } } : {}),
     };
-    d.state.set('LISTENING', followUp ? 'follow-up' : dictation ? 'dictation' : undefined);
+    const detail = followUp
+      ? 'follow-up'
+      : dictation === 'composer'
+        ? 'compose'
+        : dictation
+          ? 'dictation'
+          : undefined;
+    d.state.set('LISTENING', detail);
     if (timings.wakeAt)
       log.info({ wakeToListeningMs: Date.now() - timings.wakeAt }, 'latency: wake → listening');
     timings.wakeAt = undefined;
-    d.emit('voice:transcript', { text: '', isFinal: false });
+    if (dictation === 'composer') d.emit('voice:compose', { text: '', final: false });
+    else d.emit('voice:transcript', { text: '', isFinal: false });
     ensureRecorder();
     const current = listening;
     const followUpMs = d.settings.get('voice.followUpSeconds') * 1000;
+    const composing = dictation === 'composer';
     current.silence = setTimeout(
       () => {
         if (!current.heard) cancelListening();
       },
-      followUp ? followUpMs : (d.timeouts?.silenceMs ?? SILENCE_TIMEOUT_MS),
+      composing
+        ? (d.timeouts?.composeIdleMs ?? COMPOSE_IDLE_MS)
+        : followUp
+          ? followUpMs
+          : (d.timeouts?.silenceMs ?? SILENCE_TIMEOUT_MS),
     );
     current.max = setTimeout(
       () => (current.dictation ? finishDictation(current) : cancelListening()),
-      dictation ? DICTATION_MAX_MS : (d.timeouts?.maxListenMs ?? MAX_LISTEN_MS),
+      composing
+        ? COMPOSE_MAX_MS
+        : dictation
+          ? DICTATION_MAX_MS
+          : (d.timeouts?.maxListenMs ?? MAX_LISTEN_MS),
     );
     try {
       const session = await d.factories.stt.start({
@@ -325,6 +356,7 @@ export function createVoiceController(d: VoiceDeps) {
         language: d.settings.get('voice.stt.language'),
         signal: abort.signal,
         endSilenceMs: dictation ? DICTATION_PAUSE_MS : d.settings.get('voice.endSilenceMs'),
+        ...(dictation ? { continuous: true, livePartials: true } : {}),
       });
       if (listening !== current) {
         await session.close();
@@ -335,14 +367,16 @@ export function createVoiceController(d: VoiceDeps) {
       session.on('partial', (text) => {
         if (text) current.heard = true;
         timings.eosAt = Date.now();
-        d.emit('voice:transcript', { text, isFinal: false });
-        if (current.dictation) dictationPause(current);
+        if (current.dictation) {
+          emitDictation(current, text);
+          dictationPause(current);
+        } else d.emit('voice:transcript', { text, isFinal: false });
       });
       session.on('final', (text) => {
         if (!current.dictation) return void onFinal(current, text);
         if (text.trim()) current.dictation.parts.push(text.trim());
         current.heard = true;
-        d.emit('voice:transcript', { text: current.dictation.parts.join(' '), isFinal: false });
+        emitDictation(current, '');
         dictationPause(current);
       });
       session.on('utteranceEnd', () => {
@@ -375,18 +409,39 @@ export function createVoiceController(d: VoiceDeps) {
     }
   }
 
-  /** Dictation ends after a pause with nothing new, or when the hotkey is pressed again. */
+  /** Everything dictated so far plus the phrase still being spoken. */
+  function emitDictation(l: NonNullable<typeof listening>, partial: string): void {
+    if (!l.dictation) return;
+    l.dictation.partial = partial.trim();
+    const text = [...l.dictation.parts, l.dictation.partial].filter(Boolean).join(' ');
+    if (l.dictation.target === 'composer') d.emit('voice:compose', { text, final: false });
+    else d.emit('voice:transcript', { text, isFinal: false });
+  }
+
+  /**
+   * Dictation into an app ends after a pause with nothing new, or when the hotkey is pressed again.
+   * Composing a message ends only when Sir taps the mic (or after a long quiet spell).
+   */
   function dictationPause(l: NonNullable<typeof listening>): void {
     if (!l.dictation) return;
     clearTimeout(l.dictation.quiet);
-    l.dictation.quiet = setTimeout(() => finishDictation(l), d.timeouts?.dictationQuietMs ?? 1200);
+    const ms =
+      l.dictation.target === 'composer'
+        ? (d.timeouts?.composeIdleMs ?? COMPOSE_IDLE_MS)
+        : (d.timeouts?.dictationQuietMs ?? 1200);
+    l.dictation.quiet = setTimeout(() => finishDictation(l), ms);
   }
 
   function finishDictation(l: NonNullable<typeof listening>): void {
     if (listening !== l || !l.dictation) return;
     clearTimeout(l.dictation.quiet);
-    const text = l.dictation.parts.join(' ').trim();
+    const text = [...l.dictation.parts, l.dictation.partial ?? ''].join(' ').trim();
     endListening();
+    if (l.dictation.target === 'composer') {
+      d.emit('voice:compose', { text, final: true });
+      settleAfterListening();
+      return;
+    }
     d.emit('voice:transcript', { text, isFinal: true });
     settleAfterListening();
     if (text) d.onDictation?.(text);
@@ -405,6 +460,8 @@ export function createVoiceController(d: VoiceDeps) {
 
   function cancelListening(): void {
     if (!listening) return;
+    // Stopping a message being composed keeps the words already in the box.
+    if (listening.dictation?.target === 'composer') return finishDictation(listening);
     endListening();
     d.emit('voice:transcript', { text: '', isFinal: true });
     settleAfterListening();
@@ -620,7 +677,21 @@ export function createVoiceController(d: VoiceDeps) {
     dictate(): void {
       if (listening?.dictation) return finishDictation(listening);
       if (listening) cancelListening();
-      void startListening(false, false, true);
+      void startListening(false, false, 'app');
+    },
+
+    /**
+     * The mic in Jarvis's message box: words appear live in the box as Sir speaks, nothing is sent
+     * until he presses Send. Tap again to stop. Works in every voice mode, including "off".
+     */
+    compose(action: 'start' | 'stop'): void {
+      if (action === 'stop') {
+        if (listening?.dictation?.target === 'composer') finishDictation(listening);
+        return;
+      }
+      if (listening?.dictation?.target === 'composer') return;
+      if (listening) cancelListening();
+      void startListening(false, false, 'composer');
     },
 
     /** PRD F4.1 press-to-talk toggle; also barge-in while Jarvis is speaking. */

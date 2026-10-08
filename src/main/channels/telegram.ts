@@ -24,6 +24,9 @@ interface Update {
     chat: { id: number; type: string };
     from?: { first_name?: string };
     text?: string;
+    caption?: string;
+    voice?: { file_id: string; duration?: number; mime_type?: string };
+    audio?: { file_id: string; duration?: number; mime_type?: string };
   };
   callback_query?: {
     id: string;
@@ -58,9 +61,17 @@ export function chunkMessage(text: string, max = MAX_MESSAGE): string[] {
   return out;
 }
 
+/** Voice-note support, provided by the voice system (absent in some tests). */
+export interface TelegramVoice {
+  transcribeClip(data: Uint8Array, mime: string): Promise<string | null>;
+  speakMp3(text: string): Promise<Uint8Array>;
+}
+
+const MAX_VOICE_SECONDS = 300;
+
 export function createTelegramChannel(
   s: Services,
-  deps: { fetch?: typeof fetch; pollTimeoutSec?: number } = {},
+  deps: { fetch?: typeof fetch; pollTimeoutSec?: number; voice?: TelegramVoice } = {},
 ) {
   const f = deps.fetch ?? fetch;
   const log = logger.child({ module: 'telegram' });
@@ -71,6 +82,8 @@ export function createTelegramChannel(
   let lastError: string | null = null;
   /** Turns started from Telegram → the chat to answer. */
   const turns = new Map<string, number>();
+  /** Turns that came from a voice note: answered with a voice message too. */
+  const voiceTurns = new Set<string>();
   let conversation: { id: string; at: number } | null = null;
   const statusListeners = new Set<() => void>();
   const changed = (): void => statusListeners.forEach((l) => l());
@@ -109,8 +122,58 @@ export function createTelegramChannel(
       await api('sendMessage', { chat_id: chat, text: part, ...extra });
   };
 
+  /** Downloads a voice note (≤ 20 MB, Bot API limit) and turns it into text. */
+  async function hear(
+    chat: number,
+    clip: NonNullable<NonNullable<Update['message']>['voice']>,
+  ): Promise<string | null> {
+    if (!deps.voice) return null;
+    if ((clip.duration ?? 0) > MAX_VOICE_SECONDS) {
+      await send(chat, 'That voice note is too long for me, sir. Keep it under 5 minutes.');
+      return null;
+    }
+    void api('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => undefined);
+    const file = await api<{ file_path?: string }>('getFile', { file_id: clip.file_id });
+    if (!file.file_path) throw new Error('Telegram did not return the file.');
+    const res = await f(`${API}/file/bot${token() ?? ''}/${file.file_path}`, {
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) throw new Error(`Telegram file download: HTTP ${res.status}`);
+    const data = new Uint8Array(await res.arrayBuffer());
+    const heard = await deps.voice.transcribeClip(data, clip.mime_type ?? 'audio/ogg');
+    if (heard === null) {
+      await send(
+        chat,
+        'To understand voice notes, set up speech on the PC first: Settings → Voice → "Set up free on-device speech" (or add a Deepgram key).',
+      );
+      return null;
+    }
+    if (!heard.trim()) {
+      await send(chat, "I couldn't make out any words in that, sir.");
+      return null;
+    }
+    await send(chat, `🎤 “${heard.trim()}”`);
+    return heard.trim();
+  }
+
+  /** Sends a spoken reply as a Telegram voice message (MP3 is accepted by sendVoice). */
+  async function sendVoiceReply(chat: number, text: string): Promise<void> {
+    if (!deps.voice || !text.trim()) return;
+    const mp3 = await deps.voice.speakMp3(text.slice(0, 1200));
+    const form = new FormData();
+    form.append('chat_id', String(chat));
+    form.append('voice', new Blob([Buffer.from(mp3)], { type: 'audio/mpeg' }), 'jarvis.mp3');
+    const res = await f(`${API}/bot${token() ?? ''}/sendVoice`, {
+      method: 'POST',
+      body: form,
+      signal: AbortSignal.timeout(60_000),
+    });
+    const json = (await res.json()) as { ok: boolean; description?: string };
+    if (!json.ok) throw new Error(`Telegram: ${json.description ?? res.status}`);
+  }
+
   async function onMessage(m: NonNullable<Update['message']>): Promise<void> {
-    const text = (m.text ?? '').trim();
+    let text = (m.text ?? '').trim();
     const paired = chatId();
     if (paired === null) {
       if (
@@ -130,7 +193,20 @@ export function createTelegramChannel(
       s.audit.append('system', 'telegram.rejected', {});
       return;
     }
-    if (!text) return void send(paired, 'I can only read text messages for now, sir.');
+    const clip = m.voice ?? m.audio;
+    let fromVoice = false;
+    if (!text && clip) {
+      const heard = await hear(paired, clip).catch(async (err: unknown) => {
+        log.warn({ err: redact(errorMessage(err)) }, 'telegram voice note failed');
+        await send(paired, "I couldn't process that voice note, sir. Details are in the app log.");
+        return null;
+      });
+      if (!heard) return;
+      text = heard;
+      fromVoice = true;
+    }
+    if (!text) text = (m.caption ?? '').trim();
+    if (!text) return void send(paired, 'I can read text and voice notes, sir.');
     if (/^\/stop\b/i.test(text)) {
       s.killSwitch.trigger('telegram');
       return void send(paired, 'Stopped everything, sir.');
@@ -146,6 +222,7 @@ export function createTelegramChannel(
     });
     conversation = { id: conversationId, at: Date.now() };
     turns.set(turnId, paired);
+    if (fromVoice) voiceTurns.add(turnId);
     void api('sendChatAction', { chat_id: paired, action: 'typing' }).catch(() => undefined);
   }
 
@@ -196,6 +273,15 @@ export function createTelegramChannel(
       await send(chat, text).catch((err: unknown) =>
         log.warn({ err: redact(errorMessage(err)) }, 'telegram reply failed'),
       );
+      const wasVoice = voiceTurns.delete(t.turnId);
+      if (wasVoice && t.outcome !== 'error' && s.settings.get('telegram.voiceReplies')) {
+        const spoken = [...t.replyText.matchAll(/<spoken>([\s\S]*?)<\/spoken>/g)]
+          .map((x) => x[1])
+          .join(' ');
+        await sendVoiceReply(chat, spoken || reply).catch((err: unknown) =>
+          log.warn({ err: redact(errorMessage(err)) }, 'telegram voice reply failed'),
+        );
+      }
       return;
     }
     // Briefings and scheduled tasks can be forwarded to the phone.

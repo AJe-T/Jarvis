@@ -150,6 +150,35 @@ describe('Whisper speech-to-text session', () => {
     expect(events).toEqual(['start', 'end']);
   });
 
+  it('keeps listening in continuous mode and shows words while Sir is still talking', async () => {
+    let clock = 0;
+    const stt = createWhisperStt({
+      vad: async () =>
+        scriptedVad([...rep(30, 0.9), ...rep(25, 0.05), ...rep(20, 0.9), ...rep(25, 0)]),
+      transcriber: async () => ({
+        transcribe: async (audio) => `heard ${Math.round(audio.length / 512)}`,
+        release: async () => undefined,
+      }),
+      now: () => (clock += 100),
+    });
+    const s = await stt.start({
+      sampleRate: 16000,
+      language: 'en',
+      signal: new AbortController().signal,
+      continuous: true,
+      livePartials: true,
+    });
+    const events: string[] = [];
+    s.on('partial', () => events.push('partial'));
+    s.on('final', () => events.push('final'));
+    const frame = new Int16Array(1280).fill(16384);
+    for (let i = 0; i < 45; i++) s.write(frame);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(events.filter((e) => e === 'final')).toHaveLength(2);
+    expect(events.indexOf('partial')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('partial')).toBeLessThan(events.indexOf('final'));
+  });
+
   it('drops classic Whisper hallucinations on very short audio', () => {
     expect(cleanTranscript(' Thank you. ', 0.8)).toBe('');
     expect(cleanTranscript('[BLANK_AUDIO]', 1)).toBe('');

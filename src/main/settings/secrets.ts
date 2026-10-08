@@ -22,6 +22,9 @@ export interface SecretStore {
  * Security.md §8: secrets live encrypted in %APPDATA%/Jarvis/secrets.bin and never leave main.
  * `devFallback` (dev builds only) lets ANTHROPIC_API_KEY from .env stand in for an unset key.
  */
+/** Secrets Jarvis creates for itself; Settings never shows any of their characters. */
+const INTERNAL = /^(remote_|whatsapp_)/;
+
 export function createSecretStore(
   file: string,
   enc: Encryptor,
@@ -81,7 +84,8 @@ export function createSecretStore(
       const out: Record<string, { set: boolean; last4?: string }> = {};
       for (const name of new Set([...Object.keys(secrets), ...Object.keys(devFallback)])) {
         const v = secrets[name] ?? devFallback[name];
-        if (v) out[name] = { set: true, last4: v.slice(-4) };
+        // Internal secrets (phone remote certificate, device list, WhatsApp keys) show no characters.
+        if (v) out[name] = INTERNAL.test(name) ? { set: true } : { set: true, last4: v.slice(-4) };
       }
       return out;
     },

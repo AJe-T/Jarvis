@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Mic, Paperclip, Send, Square, X } from 'lucide-react';
+import { AudioLines, Mic, Paperclip, Send, Square, X } from 'lucide-react';
 import clsx from 'clsx';
-import { call } from '../../lib/api';
+import { call, cleanError } from '../../lib/api';
 import { useAssistantStore } from '../../stores/assistant-store';
 import { useChatStore, type Attachment } from '../../stores/chat-store';
 import { useSetting } from '../../stores/settings-store';
@@ -37,6 +37,7 @@ export function Composer(): React.JSX.Element {
     if (d !== null) setText(d);
   }, [draft, takeDraft]);
   const state = useAssistantStore((s) => s.state);
+  const detail = useAssistantStore((s) => s.detail);
   const transcript = useAssistantStore((s) => s.transcript);
   const voiceMode = useSetting('voice.mode');
   const pttKey = useSetting('hotkeys.ptt') ?? 'Ctrl+Alt+Space';
@@ -44,10 +45,45 @@ export function Composer(): React.JSX.Element {
   const toast = useUiStore((s) => s.toast);
   const busy = live !== null;
   const listening = state === 'LISTENING';
+  const composing = listening && detail === 'compose';
+  /** Text that was in the box when the mic was tapped; spoken words are added after it. */
+  const composeBase = useRef<string | null>(null);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+
+  // Phone-keyboard dictation: words stream into the box while Sir speaks; nothing is sent by itself.
+  useEffect(
+    () =>
+      window.jarvis.on('voice:compose', (p) => {
+        if (composeBase.current === null) return; // Sent or cleared meanwhile: ignore late words.
+        const base = composeBase.current;
+        setText(p.text ? `${base}${base && !/\s$/.test(base) ? ' ' : ''}${p.text}` : base);
+        if (p.final) {
+          composeBase.current = null;
+          boxRef.current?.focus();
+        }
+      }),
+    [],
+  );
+
+  function toggleCompose(): void {
+    if (composing) {
+      void call('voice:compose', { action: 'stop' });
+      return;
+    }
+    composeBase.current = text;
+    call('voice:compose', { action: 'start' }).catch((err: unknown) => {
+      composeBase.current = null;
+      toast({ level: 'error', message: cleanError(err), action: 'settings:voice' });
+    });
+  }
 
   async function submit(): Promise<void> {
     const t = text.trim();
     if (!t || busy) return;
+    if (composeBase.current !== null) {
+      composeBase.current = null;
+      void call('voice:compose', { action: 'stop' });
+    }
     if (!online) {
       toast({
         level: 'warn',
@@ -114,25 +150,43 @@ export function Composer(): React.JSX.Element {
         }}
       >
         <textarea
+          ref={boxRef}
           aria-label="Message Jarvis"
-          placeholder={listening && transcript ? transcript.text : 'Message Jarvis…'}
+          placeholder={
+            composing
+              ? 'Listening… speak and your words appear here'
+              : listening && transcript
+                ? transcript.text
+                : 'Message Jarvis…'
+          }
           value={text}
           rows={1}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          className="max-h-48 min-h-9 flex-1 resize-none bg-transparent px-2.5 py-1.5 text-base text-ink-100 focus:outline-none focus-visible:outline-none short:max-h-24"
+          className="max-h-48 min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2.5 py-1.5 text-base text-ink-100 focus:outline-none focus-visible:outline-none short:max-h-24"
           style={{ fieldSizing: 'content' }}
         />
         <IconButton
-          label={listening ? 'Stop listening' : 'Talk to Jarvis'}
-          hint={pttKey}
-          active={listening}
+          label={composing ? 'Stop dictating' : 'Dictate a message'}
+          hint="Words appear as you speak"
+          active={composing}
           // §6.2: while recording the mic turns blue and a ring breathes out of it.
-          className={clsx('relative', listening && 'mic-live text-accent-300!')}
-          disabled={voiceMode === 'off' || voiceMode === undefined}
-          onClick={() => void call('voice:mic', { action: listening ? 'stop' : 'start' })}
+          className={clsx('relative', composing && 'mic-live text-accent-300!')}
+          onClick={toggleCompose}
         >
           <Mic size={18} strokeWidth={1.75} aria-hidden />
+        </IconButton>
+        <IconButton
+          label={listening && !composing ? 'Stop listening' : 'Talk to Jarvis'}
+          hint={`Spoken reply · ${pttKey}`}
+          active={listening && !composing}
+          className={clsx('relative', listening && !composing && 'mic-live text-accent-300!')}
+          disabled={voiceMode === 'off' || voiceMode === undefined}
+          onClick={() =>
+            void call('voice:mic', { action: listening && !composing ? 'stop' : 'start' })
+          }
+        >
+          <AudioLines size={18} strokeWidth={1.75} aria-hidden />
         </IconButton>
         <IconButton label="Attach image or PDF" onClick={() => fileRef.current?.click()}>
           <Paperclip size={18} strokeWidth={1.75} aria-hidden />
@@ -163,10 +217,17 @@ export function Composer(): React.JSX.Element {
           </IconButton>
         )}
       </div>
-      {voiceMode === 'wake' && (
+      {composing && (
+        <p className="mt-1.5 text-xs text-accent-300" role="status">
+          Listening — tap the mic to stop, then press Send.
+        </p>
+      )}
+      {!composing && voiceMode === 'wake' && (
         <p className="mt-1.5 text-xs text-ink-500">Say &lsquo;Jarvis&rsquo; or press {pttKey}</p>
       )}
-      {voiceMode === 'ptt' && <p className="mt-1.5 text-xs text-ink-500">Press {pttKey} to talk</p>}
+      {!composing && voiceMode === 'ptt' && (
+        <p className="mt-1.5 text-xs text-ink-500">Press {pttKey} to talk</p>
+      )}
     </div>
   );
 }

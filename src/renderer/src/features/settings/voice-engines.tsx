@@ -150,6 +150,7 @@ export function VoiceEngines(): React.JSX.Element {
   const stt = useSetting('voice.stt.provider') ?? 'deepgram';
   const whisperModel = useSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
   const set = useSettingsStore((s) => s.set);
+  const toast = useUiStore((s) => s.toast);
   return (
     <>
       <Section
@@ -179,6 +180,29 @@ export function VoiceEngines(): React.JSX.Element {
         )}
       </Section>
       <Section title="Speech to text">
+        {!(
+          models.status?.['silero-vad']?.installed && models.status['whisper-base.en']?.installed
+        ) && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent-edge bg-selected px-3 py-3">
+            <span className="text-sm text-ink-300">
+              <span className="block font-semibold text-ink-100">
+                No key? Use free on-device speech
+              </span>
+              One click downloads Whisper base.en (about 80 MB, once). Private, offline, and words
+              appear as you speak when you dictate.
+            </span>
+            <Button
+              variant="primary"
+              onClick={() =>
+                void call('voice:setupLocal', {})
+                  .then(models.refresh)
+                  .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
+              }
+            >
+              Set up free on-device speech
+            </Button>
+          </div>
+        )}
         <Choice
           k="voice.stt.provider"
           label="Speech-to-text engine"
@@ -191,7 +215,7 @@ export function VoiceEngines(): React.JSX.Element {
             {
               value: 'whisper',
               title: 'Whisper (on this PC)',
-              body: 'Private and offline. Transcribes when you stop talking, so replies start a little later.',
+              body: 'Free, private and offline. Dictation shows words as you speak; commands are read when you stop talking.',
             },
           ]}
         />

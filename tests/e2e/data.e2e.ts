@@ -41,7 +41,7 @@ test('Phase 7: manual backup, usage tab, mini orb round-trip', async () => {
   await page.getByRole('tab', { name: 'Usage' }).click();
   await expect(page.getByText('API spend this month')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Chat' }).click();
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
   const miniOpened = app.waitForEvent('window');
   const main = await app.browserWindow(page);
   await page.getByRole('button', { name: 'Mini orb' }).click();

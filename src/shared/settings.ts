@@ -150,6 +150,25 @@ export const SETTINGS = {
   /** The orb moves to music and other sound playing on this PC (levels only, never recorded). */
   'appearance.orbMusic': { schema: z.boolean(), default: true },
   'onboarding.complete': { schema: z.boolean(), default: false },
+  /** Phone remote: a small HTTPS web app on the home network (off until Sir turns it on). */
+  'remote.enabled': { schema: z.boolean(), default: false },
+  'remote.port': { schema: z.number().int().min(1024).max(65535), default: 8765 },
+  /** WhatsApp (Baileys, linked device): Sir messages himself ("Message yourself") to talk to Jarvis. */
+  'whatsapp.enabled': { schema: z.boolean(), default: false },
+  'whatsapp.forwardAutomations': { schema: z.boolean(), default: false },
+  /** Messages to yourself must start with this word to reach Jarvis ("" = every message). */
+  'whatsapp.prefix': { schema: z.string().max(20), default: 'Jarvis' },
+  /** Telegram voice notes: reply with a spoken voice message as well as text. */
+  'telegram.voiceReplies': { schema: z.boolean(), default: true },
+  /** Spaces (Notion-style notebooks in <vault>/Spaces): icon per space name. */
+  'spaces.icons': {
+    schema: z.record(z.string().max(80), z.string().max(16)),
+    default: {} as Record<string, string>,
+  },
+  /** Password manager: lock after this many idle minutes (0 = only when Sir locks it or Windows locks). */
+  'passwords.autoLockMinutes': { schema: z.number().int().min(0).max(240), default: 5 },
+  /** Copied passwords are wiped from the clipboard after this many seconds. */
+  'passwords.clipboardSeconds': { schema: z.number().int().min(5).max(300), default: 20 },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

@@ -86,6 +86,12 @@ export function createLocalEngines(
 
   return {
     stt,
+    /** One clip (a voice note) through the warm Whisper model. */
+    transcribe: async (audio: Float32Array, language: string): Promise<string> =>
+      (await transcriber()).transcribe(audio, language),
+    /** On-device speech is usable: the voice detector and the chosen Whisper model are downloaded. */
+    ready: (): boolean =>
+      store.installed('silero-vad') && store.installed(settings.get('voice.stt.whisperModel')),
     async wake(sensitivity: number): Promise<WakeWord> {
       if (!store.installed('openwakeword-hey-jarvis'))
         throw notReady('"Hey Jarvis" wake-word model');

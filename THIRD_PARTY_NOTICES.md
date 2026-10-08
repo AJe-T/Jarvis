@@ -18,6 +18,8 @@ bundled third-party assets and separately-run components whose licences require 
 | @huggingface/transformers 4.3.1 | https://github.com/huggingface/transformers.js | Apache-2.0 | Runs Whisper |
 | onnxruntime-node 1.30.0 | https://github.com/microsoft/onnxruntime | MIT | Runs the voice models |
 | Picovoice Porcupine built-in keyword "Jarvis" | https://github.com/Picovoice/porcupine | Apache-2.0 | Wake word |
+| Baileys 7.0.0-rc14 (npm `baileys`) | https://github.com/WhiskeySockets/Baileys | MIT | WhatsApp channel (linked device) |
+| qrcode 1.5.4 | https://github.com/soldair/node-qrcode | MIT | Pairing QR codes (phone remote, WhatsApp) |
 
 npm dependencies keep their own licence files inside `node_modules`; all production
 dependencies are MIT / Apache-2.0 / BSD / ISC / OFL (checked at Phase 0, see docs/TRD.md §4).
@@ -26,5 +28,6 @@ dependencies are MIT / Apache-2.0 / BSD / ISC / OFL (checked at Phase 0, see doc
 
 - **isair/jarvis** — © 2025 Baris Sencan, "Jarvis AI Assistant License" (non-commercial; derivatives under the same terms). JARVIS studied its specs (transcript-first listening, intent judge, hot window, echo detection, dictation, everyday tools, local-model support) and wrote its own implementation. Because the ideas came from a non-commercial project, treat this app as personal / non-commercial.
 - **open-jarvis/OpenJarvis** — Apache-2.0. Ideas: skills catalogue (agentskills.io format), morning digest and scheduled agents, deep research, channels (Telegram), news feeds.
+- **microsoft/UFO** — MIT, and **Jeomon/Windows-Use** — MIT. Idea: drive Windows apps through their UI Automation tree before falling back to screenshots.
 - **jev-chat/jev-chat-jarvis** — MIT, © 2026 Finderchangchang and the jev-chat contributors. Its NOTICE asks for credit: *Based on ideas from Jev Chat Assistant (https://github.com/jev-chat/jev-chat-jarvis)* — the reply copilot's analyse → stance → draft → check → fill flow and its scoring rule.
 

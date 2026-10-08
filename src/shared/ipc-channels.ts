@@ -31,6 +31,8 @@ export const INVOKE_CHANNELS = [
   'mcp:restart',
   'voice:setMode',
   'voice:mic',
+  'voice:compose',
+  'voice:setupLocal',
   'voice:devices',
   'app:killSwitch',
   'app:info',
@@ -79,6 +81,36 @@ export const INVOKE_CHANNELS = [
   'onboarding:complete',
   'computer:calibrate',
   'app:openFolder',
+  'passwords:status',
+  'passwords:setup',
+  'passwords:unlock',
+  'passwords:lock',
+  'passwords:list',
+  'passwords:get',
+  'passwords:save',
+  'passwords:delete',
+  'passwords:copy',
+  'passwords:totp',
+  'passwords:changeMaster',
+  'spaces:list',
+  'spaces:create',
+  'spaces:update',
+  'spaces:delete',
+  'spaces:pages',
+  'spaces:read',
+  'spaces:write',
+  'spaces:createPage',
+  'spaces:renamePage',
+  'spaces:deletePage',
+  'spaces:open',
+  'memory:graph',
+  'remote:status',
+  'remote:pair',
+  'remote:revoke',
+  'remote:restart',
+  'whatsapp:status',
+  'whatsapp:restart',
+  'whatsapp:logout',
 ] as const;
 export type InvokeChannel = (typeof INVOKE_CHANNELS)[number];
 
@@ -92,6 +124,7 @@ export const EVENT_CHANNELS = [
   'voice:level',
   'music:level',
   'voice:transcript',
+  'voice:compose',
   'tts:audio',
   'tts:stop',
   'usage:update',
@@ -106,9 +139,13 @@ export const EVENT_CHANNELS = [
   'memory:changed',
   'computer:active',
   'nav:open',
+  'passwords:locked',
+  'remote:status',
+  'whatsapp:status',
+  'audio:decode',
 ] as const;
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
 
 /** Renderer → main fire-and-forget messages (high-frequency, no response). */
-export const SEND_CHANNELS = ['tts:playback', 'ui:activeConversation'] as const;
+export const SEND_CHANNELS = ['tts:playback', 'ui:activeConversation', 'audio:decoded'] as const;
 export type SendChannel = (typeof SEND_CHANNELS)[number];

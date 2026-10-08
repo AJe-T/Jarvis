@@ -95,6 +95,13 @@ Trust boundaries: Renderer ↔ Main (IPC), Main ↔ child processes (MCP/PowerSh
 | `delegate_desktop_task` (computer use) | CONFIRM | Starts Computer-Control Mode |
 | MCP tools | CONFIRM by default | Per-server/per-tool overrides; read-only tools can be marked SAFE in Settings |
 | Web search (server tool) | SAFE | Results untrusted |
+| `list_ui_elements`, `read_window_text` | SAFE (untrusted output) | Windows UI Automation; Jarvis's own windows are excluded; password fields are never read |
+| `click_ui_element` | SAFE; CONFIRM when the label or AutomationId means send/pay/delete/submit/agree/install… (destructive for delete/remove/reset…) | If fuzzy matching lands on a risky control the call was not approved for, the script refuses and asks for the exact name |
+| `set_ui_text` | SAFE; CONFIRM with `submit` | Content guard; refuses password fields (UIA `IsPassword`) |
+| `press_keys` | SAFE; CONFIRM for any Win chord, Enter, Alt+F4, Ctrl+W, Shift+Del; BLOCKED for Win+R/X/L, Ctrl+Alt+Del, Ctrl+Shift+Esc | Judged on the set of keys, so order can't bypass it; without `window`, refuses when Jarvis or a password box is in front |
+| `type_text` | SAFE | Content guard; refuses when Jarvis or a password box is focused; never presses Enter |
+| `spaces` | SAFE | Vault `Spaces/` only; append/create, never delete or overwrite |
+| `send_whatsapp` | CONFIRM (destructive) | Approve at the PC only (never by voice, phone or chat reply); content guard |
 
 ### 4.2 Always BLOCKED (any tool, any source)
 
@@ -322,3 +329,15 @@ Decisions taken while building the policy layer; the code is the reference (`src
 - Clicks are refused when the target lies on a visible Jarvis window (main window or the Stop pill); the full-screen red border is click-through and excluded. Jarvis minimises its main window for the session and restores it afterwards.
 - Every member action is recorded in `tool_calls` (`toolset_name = 'computer'`); blocked ones are also written to the audit log (`desktop.blocked`). Typed text is not stored in the activity log.
 - Password-field detection via UI Automation (`IsPassword`) is still P1; until then the content guard blocks typing anything that looks like a password, OTP, card number or key.
+
+### 16.6 Features added in v2.0 (ADR-022…026)
+
+| Surface | Control |
+|---|---|
+| Password manager | `passwords.vault` = scrypt (N=2^17, r=8, p=1, 16-byte salt) → AES-256-GCM (fresh 12-byte IV per write, tag verified). Master password never stored; key zeroed on lock. KDF parameters read from the file are capped (N ≤ 2^20, r ≤ 16, p ≤ 4). The vault object is created inside `ipc/handlers/passwords.ts` and is **not** in `Services`, so no tool, context provider, curator, channel or MCP server can reach it; the path guard denies the file. Auto-lock on idle, Windows lock/suspend and the kill switch; wrong-password back-off after 3 tries. Copies use the Windows "exclude from clipboard history / cloud / monitors" formats and are wiped after N seconds. Audit records the event only, never the entry. UI Automation tools refuse Jarvis's own windows, so revealed passwords can't be read through the accessibility tree. |
+| Spaces | Plain Markdown under `Spaces/` via the vault service (path guard, realpath check, redaction on write). Indexed for memory search like `Memory/`. `memory:read` accepts any `.md` inside the vault (the vault resolver still rejects escapes). |
+| Composer dictation | Audio stays in main (ADR-007); words stream to the renderer as `voice:compose` text. Nothing is sent without Sir pressing Send. |
+| Phone remote | Off by default. HTTPS only (self-signed certificate made by Windows `New-SelfSignedCertificate`, PFX passphrase in the encrypted secrets). Pairing: one-time 6-digit code, 10 minutes, constant-time compare, burned after 5 wrong guesses, 8 tries / 10 min per address. Each phone gets a 32-byte random token; only its SHA-256 is stored (encrypted secrets). 120 requests/min per address, 64 KB bodies, header/request timeouts. Page: strict CSP with a per-response nonce, `textContent` only. Turns run through the normal orchestrator; approvals recorded `user_remote`, **destructive ones refused** (broker rule). Known limit: a self-signed certificate can't stop a LAN attacker who gets Sir to accept *their* certificate; for travel use Tailscale's real certificate. Tokens don't expire; remove phones in Settings. |
+| WhatsApp | Off by default; warning shown (unofficial client). Only the linked account's own self-chat (phone-number or LID id) is read, and only messages starting with the wake word; Jarvis's own sends are ignored by id and by text. Confirmations: an exact "yes"/"no" within 2 minutes; destructive ones only at the PC. Session keys are Baileys' plain JSON files in `%APPDATA%\Jarvis\whatsapp-auth` (denied to tools; anyone with disk access to that folder could reuse the session; **Unlink** deletes them). |
+| Telegram voice notes | Only from the paired chat; ≤ 5 minutes; audio decoded in the renderer (Chromium) and transcribed on-device, or sent to Deepgram when that is the configured engine. |
+| UI Automation | PowerShell scripts receive parameters as JSON in an environment variable, never in script text (§5.2). Elevated windows are out of reach (UIPI). |

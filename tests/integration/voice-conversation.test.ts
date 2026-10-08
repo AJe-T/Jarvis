@@ -271,4 +271,21 @@ describe('dictation (ideas from isair/jarvis)', () => {
     await until(() => t.userTurns().length === 2);
     t.v.voice.shutdown();
   });
+
+  it('composing streams words to the message box and never starts a turn', async () => {
+    const t = setup({ rules: [] }, ['buy milk on the way home'], { mode: 'ptt' });
+    await t.v.start();
+    t.v.voice.compose('start');
+    const composed = (): Array<{ text: string; final: boolean }> =>
+      t.events
+        .filter((e) => e.event === 'voice:compose')
+        .map((e) => e.payload as { text: string; final: boolean });
+    await until(() => composed().some((c) => c.text === 'buy milk on the way home'));
+    expect(t.services.state.get()).toBe('LISTENING');
+    t.v.voice.compose('stop');
+    expect(composed().at(-1)).toEqual({ text: 'buy milk on the way home', final: true });
+    expect(t.userTurns()).toHaveLength(0);
+    expect(t.services.state.get()).toBe('IDLE');
+    t.v.voice.shutdown();
+  });
 });

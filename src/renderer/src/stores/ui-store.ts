@@ -1,7 +1,16 @@
 import { create } from 'zustand';
 
 export type View =
-  'chat' | 'memory' | 'activity' | 'connections' | 'settings' | 'copilot' | 'bible';
+  | 'chat'
+  | 'memory'
+  | 'brain'
+  | 'spaces'
+  | 'passwords'
+  | 'activity'
+  | 'connections'
+  | 'settings'
+  | 'copilot'
+  | 'bible';
 
 export interface Toast {
   id: number;
@@ -13,6 +22,8 @@ export interface Toast {
 interface UiState {
   view: View;
   settingsSection: string;
+  /** Spaces view target: "Space" or "Space/Page"; null = the Spaces dashboard. */
+  spaceTarget: string | null;
   activityOpen: boolean;
   historyOpen: boolean;
   toasts: Toast[];
@@ -30,12 +41,18 @@ let nextToast = 1;
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'chat',
   settingsSection: 'brain',
+  spaceTarget: null,
   // §5.1: docked from lg (1200px); below that it is an overlay sheet, so start closed.
   activityOpen: typeof window === 'undefined' ? true : window.innerWidth >= 1200,
   historyOpen: false,
   toasts: [],
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
-  go: (view, section) => set({ view, ...(section ? { settingsSection: section } : {}) }),
+  go: (view, section) =>
+    set(
+      view === 'spaces'
+        ? { view, spaceTarget: section ?? null }
+        : { view, ...(section ? { settingsSection: section } : {}) },
+    ),
   toggleActivity: () => set({ activityOpen: !get().activityOpen }),
   setHistoryOpen: (historyOpen) => set({ historyOpen }),
   toast(t) {

@@ -16,6 +16,10 @@ export interface SttProvider {
     signal: AbortSignal;
     /** Pause that ends an utterance (dictation allows longer pauses). */
     endSilenceMs?: number;
+    /** Keep listening after an utterance ends (dictation, composing a message). */
+    continuous?: boolean;
+    /** Show words while Sir is still speaking (on-device Whisper re-reads the phrase so far). */
+    livePartials?: boolean;
   }): Promise<SttSession>;
 }
 

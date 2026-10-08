@@ -24,6 +24,9 @@ JARVIS uses **two stores**:
 | Backups | `%APPDATA%\Jarvis\backups\jarvis-YYYYMMDD-HHmm.db` |
 | Secrets | `%APPDATA%\Jarvis\secrets.bin` (safeStorage-encrypted JSON) |
 | MCP config | `%APPDATA%\Jarvis\mcp.json` |
+| Password vault | `%APPDATA%\Jarvis\passwords.vault` (JSON: scrypt params + salt, AES-256-GCM iv/tag/data; ADR-024) |
+| Phone remote certificate | `%APPDATA%\Jarvisemote\cert.pfx` (passphrase and paired-device token hashes in `secrets.bin` as `remote_cert`, `remote_devices`) |
+| WhatsApp session | `%APPDATA%\Jarvis\whatsapp-auth\` (Baileys multi-file auth state; deleted by Unlink) |
 | Logs | `%APPDATA%\Jarvis\logs\` |
 | Vault (default) | `%USERPROFILE%\Documents\JarvisBrain\` (configurable in onboarding) |
 
@@ -341,6 +344,9 @@ JarvisBrain/
 │        └─ 2026-10-06.md             # daily log, appended per exchange
 ├─ Routines/
 │  └─ Work Mode.md
+├─ Spaces/                            # Sir's Notion-style notebooks (ADR-023)
+│  └─ Finance/
+│     └─ October budget.md            # a page; frontmatter `created`, body Markdown
 ├─ Tasks/
 │  └─ Reminders.md                    # human-readable mirror of reminders table
 ├─ Inbox/                             # Sir drops notes here for Jarvis to process (P1)
@@ -349,7 +355,7 @@ JarvisBrain/
    └─ .jarvis-lock                    # write-lock sentinel during atomic writes
 ```
 
-Only `Memory/` is exposed to the Claude memory tool. `Conversations/`, `Routines/`, `Tasks/` are written by app code.
+Only `Memory/` is exposed to the Claude memory tool; `Spaces/` is reachable through the `spaces` tool (append/create only) and both are indexed for search. `Conversations/`, `Routines/`, `Tasks/` are written by app code.
 
 ### 8.2 Memory note format
 

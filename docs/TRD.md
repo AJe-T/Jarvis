@@ -238,3 +238,18 @@ Sir asked for every isair/jarvis capability JARVIS lacked. Already present from 
 
 ### ADR-019: The Bible and a generated reference
 **Decision:** `docs/BIBLE.md` is the single human guide to the whole project, shown in-app (Bible view with search and contents). Facts that drift (tools, tiers, settings, IPC channels, migrations) live in `docs/REFERENCE.md`, generated from the code by `npm run docs:reference`; a unit test fails when it is stale.
+
+### ADR-022: Phone-keyboard dictation in the composer (v2.0)
+Sir: "the voice one is not working properly… like Android: tap the mic, words appear in the box in real time, then I send." Causes: the composer mic started a full voice turn (auto-sent on a pause, needed a voice mode and a configured engine), Whisper showed nothing until the end, and Whisper dictation stopped after one phrase. **Decision:** the composer mic runs a `composer` dictation session: continuous STT, live partials streamed as `voice:compose`, ends only on the mic/Esc/Send or 20 s of silence. Whisper gets `continuous` and `livePartials` (re-read the phrase so far every ≥0.7 s, one Whisper job at a time, final waits). One-click "free on-device speech" (base.en + Silero) and automatic fallback to Whisper when Deepgram has no key. A separate Talk button keeps spoken conversations. **Rejected:** `webkitSpeechRecognition` (no Google key in Electron → `network` error); sherpa-onnx streaming (better latency, but a new native addon + 60–130 MB models — a candidate for later). **Consequences:** Whisper partials lag ~1 s and cost CPU while dictating.
+
+### ADR-023: Spaces in the vault
+**Decision:** Notion-style notebooks are folders `Spaces/<space>/` of Markdown pages in the Obsidian vault, with icons in a setting. Templates, autosave, Write/Preview, `spaces` tool (append/create only). Indexed with memory so Jarvis can use them. **Rejected:** a database of blocks (not portable, invisible to Obsidian). **Consequences:** no rich blocks or databases; tables and to-dos are Markdown.
+
+### ADR-024: A password vault the AI can't reach
+**Decision:** a separate encrypted file with its own IPC, created in the handler (not in `Services`). See Security.md §16.6. **Rejected:** Windows Credential Manager (shared with every app, BLOCKED by policy), DPAPI-only (no master password, unlocks with the Windows session). **Consequences:** a forgotten master password loses the vault.
+
+### ADR-025: UI Automation before screenshots
+Sir: "it says I can't interact with this app". Screenshot computer use needs the Anthropic API connection and is slow. **Decision:** six tools on Windows UI Automation through PowerShell (ideas from microsoft/UFO and Windows-Use; no code copied): list controls, click/invoke, set text, read text, press keys, type. The prompt tells Claude to try them before saying no. **Consequences:** ~1–2 s per call; apps without accessibility (games, canvas) still need screenshots.
+
+### ADR-026: Phone remote and WhatsApp
+**Decision:** (1) an HTTPS web app on the LAN with a self-signed certificate made by Windows; the phone's own browser does speech recognition and speech output, so live dictation and hands-free "calls" are free; pairing by QR / one-time code. (2) WhatsApp via Baileys (MIT, ESM-only, loaded with `import()`) as a linked device; commands only from the self-chat with a wake word. (3) Telegram voice notes (decode in the renderer, transcribe on-device or Deepgram) with voice replies. **Rejected:** Twilio/PSTN calls (paid), whatsapp-web.js (bundles Chrome), WhatsApp Business API (paid, business accounts). **Consequences:** WhatsApp may restrict unofficial clients; the LAN certificate warning; Tailscale recommended for away-from-home.

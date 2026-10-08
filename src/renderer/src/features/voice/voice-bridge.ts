@@ -6,11 +6,36 @@ import { useAssistantStore } from '../../stores/assistant-store';
 import { useChatStore } from '../../stores/chat-store';
 import { useSettingsStore } from '../../stores/settings-store';
 
+async function decodeTo16k(data: Uint8Array): Promise<Float32Array<ArrayBuffer>> {
+  const ctx = new AudioContext();
+  try {
+    const copy = data.slice().buffer;
+    const decoded = await ctx.decodeAudioData(copy);
+    const frames = Math.ceil(decoded.duration * 16000);
+    const off = new OfflineAudioContext(1, Math.max(frames, 1), 16000);
+    const src = off.createBufferSource();
+    src.buffer = decoded;
+    src.connect(off.destination);
+    src.start();
+    return new Float32Array((await off.startRendering()).getChannelData(0));
+  } finally {
+    void ctx.close();
+  }
+}
+
 /** Renderer half of the voice pipeline: playback, chimes, Esc-to-cancel, and which chat voice turns go to. */
 export function installVoiceBridge(): void {
   registerBridge((on) => [
     on('tts:audio', (p) => audioPlayer.enqueue(p)),
     on('tts:stop', () => audioPlayer.stop()),
+    // Main asks for compressed audio (voice notes) as 16 kHz mono samples for on-device Whisper.
+    on('audio:decode', (p) => {
+      void decodeTo16k(p.data)
+        .then((samples) => window.jarvis.send['audio:decoded']({ id: p.id, samples }))
+        .catch((err: unknown) =>
+          window.jarvis.send['audio:decoded']({ id: p.id, error: String(err).slice(0, 200) }),
+        );
+    }),
   ]);
 
   let previous: AssistantState = useAssistantStore.getState().state;

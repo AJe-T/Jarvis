@@ -16,6 +16,9 @@ import { addEventTarget, emit } from './ipc/emit';
 import { registerCoreHandlers } from './ipc/handlers/core';
 import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
+import { registerPasswordHandlers } from './ipc/handlers/passwords';
+import { registerSpacesHandlers } from './ipc/handlers/spaces';
+import { createSpaces, createSpacesTool } from './spaces/spaces';
 import { createMemorySystem } from './memory/memory-system';
 import { createResearchTool } from './agent/research';
 import { createAutomation } from './automation/automation';
@@ -23,6 +26,10 @@ import { createTelegramChannel } from './channels/telegram';
 import { copilotTool, createCopilot } from './copilot/copilot';
 import { registerCopilotHandlers } from './ipc/handlers/copilot';
 import { registerTelegramHandlers } from './ipc/handlers/telegram';
+import { registerRemoteHandlers } from './ipc/handlers/remote';
+import { createPhoneRemote } from './channels/phone-remote';
+import { createWhatsAppChannel } from './channels/whatsapp';
+import { registerWhatsAppHandlers } from './ipc/handlers/whatsapp';
 import { registerAutomationHandlers } from './ipc/handlers/automation';
 import { registerSkillHandlers } from './ipc/handlers/skills';
 import { registerVoiceHandlers } from './ipc/handlers/voice';
@@ -253,7 +260,16 @@ async function boot(): Promise<void> {
     },
   });
   registerSafetyHandlers(services);
+  registerPasswordHandlers(services);
   registerMemoryHandlers(services, memory);
+  // Spaces (Notion-style notebooks) live in the vault so memory search and the Brain graph see them.
+  const spaces = createSpaces({
+    vault: memory.vault,
+    settings: services.settings,
+    onChanged: (paths) => emit('memory:changed', { vaultPaths: paths }),
+  });
+  registerSpacesHandlers(spaces, { show: showMainWindow });
+  services.registry.register(createSpacesTool(spaces));
   registerVoiceHandlers(
     services,
     voice.voice,
@@ -300,10 +316,22 @@ async function boot(): Promise<void> {
   registerAutomationHandlers(services, automation);
   if (!isTest) automation.start();
   // Telegram channel (ideas from OpenJarvis): only when Sir turned it on and gave a bot token.
-  const telegram = createTelegramChannel(services);
+  const telegram = createTelegramChannel(services, {
+    voice: { transcribeClip: voice.transcribeClip, speakMp3: voice.speakMp3 },
+  });
   registerTelegramHandlers(services, telegram);
   if (!isTest) void telegram.start();
   app.on('will-quit', () => telegram.stop());
+  // Phone remote: HTTPS web app on the home network (dictation and hands-free calls from the phone).
+  const remote = createPhoneRemote(services);
+  registerRemoteHandlers(services, remote);
+  if (!isTest) void remote.start();
+  app.on('will-quit', () => remote.stop());
+  // WhatsApp (linked device): Sir messages himself "Jarvis, …" from his phone.
+  const whatsapp = createWhatsAppChannel(services);
+  registerWhatsAppHandlers(services, whatsapp);
+  if (!isTest) void whatsapp.start();
+  app.on('will-quit', () => whatsapp.stop());
   // Reply copilot (idea from jev-chat-jarvis): hotkey reads the chat in front, then opens the panel.
   const copilot = createCopilot(services);
   registerCopilotHandlers(copilot);

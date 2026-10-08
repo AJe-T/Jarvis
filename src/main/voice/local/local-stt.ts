@@ -26,18 +26,42 @@ export function toWindows(
 
 type Handler = (...args: never[]) => void;
 
+/** Gap between live re-reads of the phrase so far (each waits for the previous one to finish). */
+export const PARTIAL_EVERY_MS = 700;
+
+function joinWindows(windows: Float32Array[]): Float32Array {
+  const audio = new Float32Array(windows.reduce((a, w) => a + w.length, 0));
+  let at = 0;
+  for (const w of windows) {
+    audio.set(w, at);
+    at += w.length;
+  }
+  return audio;
+}
+
 /**
  * Whisper isn't streaming, so the session listens with Silero VAD and transcribes once Sir stops
- * talking: speechStarted → (≥700 ms quiet) → final + utteranceEnd. One utterance per session, as the
- * voice controller closes the session after the final transcript.
+ * talking: speechStarted → (≥700 ms quiet) → final + utteranceEnd. By default one utterance per
+ * session, as the voice controller closes the session after the final transcript. `continuous` keeps
+ * going for dictation; `livePartials` re-reads the phrase so far while Sir speaks, so words appear as
+ * he says them (like a phone keyboard). Whisper runs one job at a time: a live re-read is skipped while
+ * another is running, and the final waits for it.
  */
 export function createWhisperStt(deps: {
   vad(): Promise<Vad>;
   transcriber(): Promise<Transcriber>;
+  now?(): number;
 }): SttProvider {
+  const now = deps.now ?? Date.now;
   return {
     id: 'whisper',
-    async start({ signal, language, endSilenceMs = END_SILENCE_MS }) {
+    async start({
+      signal,
+      language,
+      endSilenceMs = END_SILENCE_MS,
+      continuous = false,
+      livePartials = false,
+    }) {
       // Load (or reuse) both models up front so the first words aren't lost while they load.
       const [vad, transcriber] = await Promise.all([deps.vad(), deps.transcriber()]);
       vad.reset();
@@ -47,24 +71,46 @@ export function createWhisperStt(deps: {
       };
       let pending: Float32Array = new Float32Array(0);
       const preRoll: Float32Array[] = [];
-      const speech: Float32Array[] = [];
+      let speech: Float32Array[] = [];
       let inSpeech = false;
       let quietMs = 0;
       let done = false;
       let chain = Promise.resolve();
+      /** Bumped per utterance so a late live re-read never overwrites a newer phrase. */
+      let utterance = 0;
+      let busy: Promise<unknown> | null = null;
+      let lastPartialAt = 0;
+
+      function livePartial(): void {
+        if (!livePartials || busy || now() - lastPartialAt < PARTIAL_EVERY_MS) return;
+        if (speech.length * WINDOW_MS < 500) return; // too short to read reliably
+        const which = utterance;
+        lastPartialAt = now();
+        busy = transcriber
+          .transcribe(joinWindows(speech), language)
+          .then((text) => {
+            if (!signal.aborted && !done && which === utterance && text) fire('partial', text);
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            busy = null;
+            lastPartialAt = now();
+          });
+      }
 
       async function finish(): Promise<void> {
-        done = true;
-        const audio = new Float32Array(speech.reduce((a, w) => a + w.length, 0));
-        let at = 0;
-        for (const w of speech) {
-          audio.set(w, at);
-          at += w.length;
-        }
+        const audio = joinWindows(speech);
+        utterance++;
+        speech = [];
+        inSpeech = false;
+        quietMs = 0;
+        if (!continuous) done = true;
+        if (busy) await busy;
         const text = await transcriber.transcribe(audio, language);
         if (signal.aborted) return;
         if (text) fire('final', text);
         fire('utteranceEnd');
+        if (continuous) vad.reset();
       }
 
       async function step(window: Float32Array): Promise<void> {
@@ -76,12 +122,14 @@ export function createWhisperStt(deps: {
           if (p < START_PROB) return;
           inSpeech = true;
           speech.push(...preRoll);
+          preRoll.length = 0;
           fire('speechStarted');
           return;
         }
         speech.push(window);
         quietMs = p < END_PROB ? quietMs + WINDOW_MS : 0;
         if (quietMs >= endSilenceMs || speech.length * WINDOW_MS >= MAX_SPEECH_MS) await finish();
+        else livePartial();
       }
 
       const session: SttSession = {

@@ -18,14 +18,26 @@ import { createModelStore, type ModelStore } from './local/model-store';
 import { matchQuickCommand, type RoutineTriggers } from './quick-commands';
 import type { SttProvider } from './types';
 import { createVoiceController, type VoiceFactories } from './voice-controller';
+import { decodeAudio } from './audio-decode';
 
 /** ADR-011: wake word and speech-to-text engines are chosen separately in Settings → Voice. */
 export function realFactories(s: Services, local: LocalEngines): VoiceFactories {
   const deepgram = createDeepgramStt(() => s.secrets.get('deepgram'));
   const stt: SttProvider = {
     id: 'selected',
-    start: (o) =>
-      (s.settings.get('voice.stt.provider') === 'whisper' ? local.stt : deepgram).start(o),
+    start: async (o) => {
+      // Deepgram chosen but no key: fall back to free on-device Whisper when it is downloaded.
+      const whisper =
+        s.settings.get('voice.stt.provider') === 'whisper' ||
+        (!s.secrets.get('deepgram') && local.ready());
+      if (!whisper && !s.secrets.get('deepgram'))
+        throw new JarvisError(
+          'INVALID',
+          'no speech engine',
+          'Speech needs a one-time setup: Settings → Voice → "Set up free on-device speech" (about 80 MB, works offline), or add a Deepgram key.',
+        );
+      return (whisper ? local.stt : deepgram).start(o);
+    },
   };
   return {
     recorder: (deviceIndex, frameLength) => createPvRecorder(deviceIndex, frameLength),
@@ -108,6 +120,7 @@ export function createVoiceSystem(
       maxListenMs?: number;
       echoSettleMs?: number;
       dictationQuietMs?: number;
+      composeIdleMs?: number;
     };
     /** Tests: a scripted intent judge. */
     judge?: (transcript: string, ctx: { followUp: boolean; lastReply: string }) => Promise<Intent>;
@@ -189,9 +202,50 @@ export function createVoiceSystem(
       void voice.applyMode();
     if (key === 'voice.stt.provider' || key === 'voice.stt.whisperModel') local.preload();
   });
+  const edge = createEdgeTts();
   return {
     voice,
     dictations,
+    /**
+     * A recorded clip (Telegram voice note) → text. Deepgram reads OGG directly when there's a key;
+     * otherwise on-device Whisper (the renderer decodes the audio first). Null if neither is set up.
+     */
+    async transcribeClip(data: Uint8Array, mime: string): Promise<string | null> {
+      const key = s.secrets.get('deepgram');
+      const useWhisper = s.settings.get('voice.stt.provider') === 'whisper' || !key;
+      if (useWhisper) {
+        if (!local.ready()) return null;
+        const samples = await decodeAudio(data, mime);
+        return local.transcribe(
+          samples.slice(0, 16000 * 120),
+          s.settings.get('voice.stt.language'),
+        );
+      }
+      const lang = s.settings.get('voice.stt.language');
+      const url = `https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language=${encodeURIComponent(lang === 'auto' ? 'multi' : lang)}`;
+      const res = await (s.fetch ?? fetch)(url, {
+        method: 'POST',
+        headers: { authorization: `Token ${key}`, 'content-type': mime },
+        body: Buffer.from(data),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) throw new Error(`Deepgram: HTTP ${res.status}`);
+      const j = (await res.json()) as {
+        results?: { channels?: Array<{ alternatives?: Array<{ transcript?: string }> }> };
+      };
+      return j.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? '';
+    },
+    /** Text → MP3 in Jarvis's voice (Edge), for voice replies on Telegram. */
+    async speakMp3(text: string): Promise<Uint8Array> {
+      const parts: Uint8Array[] = [];
+      for await (const c of edge.synthesize(text, {
+        voice: s.settings.get('voice.tts.voice'),
+        rate: s.settings.get('voice.tts.rate'),
+        signal: AbortSignal.timeout(60_000),
+      }))
+        parts.push(c.data);
+      return Buffer.concat(parts);
+    },
     local: {
       models,
       /** A model was downloaded: warm Whisper and (re)start the wake word if it was waiting for it. */

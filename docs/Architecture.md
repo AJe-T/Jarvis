@@ -314,10 +314,17 @@ jarvis/
 | `agent/research.ts` | Deep research | Nested loop with reading-only tools (ADR-016) |
 | `channels/telegram.ts` | Telegram | Long-poll, pairing, button confirmations as `remote` (ADR-017) |
 | `copilot/copilot.ts` | Reply copilot | Vision read → analyse → draft → check → focus+paste (ADR-018) |
+| `voice/voice-controller.ts` (`compose`), `voice/local/local-stt.ts` | Composer dictation | `voice:compose` stream; Whisper continuous + live partials (ADR-022) |
+| `spaces/spaces.ts`, `memory/graph.ts` | Spaces + Brain graph | Vault folders as notebooks; graph of notes, wiki links and folder hubs (ADR-023) |
+| `passwords/password-vault.ts`, `ipc/handlers/passwords.ts` | Password manager | Created in the handler, deliberately not in `Services` (ADR-024) |
+| `tools/native/ui-automation.ts` | UI Automation tools | PowerShell + System.Windows.Automation; Jarvis's windows excluded (ADR-025) |
+| `channels/phone-remote.ts`, `channels/phone-page.ts` | Phone remote | `node:https` server, pairing, SSE, served page (ADR-026) |
+| `channels/whatsapp.ts` | WhatsApp | Baileys linked device, self-chat commands, `send_whatsapp` (ADR-026) |
+| `voice/audio-decode.ts` | Voice-note decoding | Main → renderer `audio:decode`, OfflineAudioContext → 16 kHz samples back |
 
 **Loop selection:** `services.loopFor()` returns `sdkLoop` for the subscription and `runAgentLoop` otherwise; the orchestrator, the research agent and automations all use it. **Turn purposes** (`chat`, `briefing`, `task`, `research`, `copilot`, `intent`, …) flow into the usage ledger.
 
-**Confirmation channels:** click/keyboard (anything), voice and Telegram (`remote`) (non-destructive only), enforced in `ConfirmationBroker.respond`.
+**Confirmation channels:** click/keyboard (anything), voice, Telegram, WhatsApp and the phone remote (`remote`) (non-destructive only), enforced in `ConfirmationBroker.respond`.
 
 ## 11. Extension Points (design for P2)
 

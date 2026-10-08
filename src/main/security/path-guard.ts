@@ -138,6 +138,9 @@ export function defaultDeniedPaths(home: string, userData: string): string[] {
       'backups',
       'browser-profile',
       'mcp.json',
+      'passwords.vault',
+      'whatsapp-auth',
+      'remote',
     ].map((f) => win.join(userData, f)),
   ];
 }

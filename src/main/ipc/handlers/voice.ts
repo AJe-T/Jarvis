@@ -31,6 +31,32 @@ export function registerVoiceHandlers(
     voice.mic(req.action);
     return { ok: true };
   });
+  handle('voice:compose', (req) => {
+    voice.compose(req.action);
+    return { ok: true };
+  });
+  handle('voice:setupLocal', () => {
+    s.audit.append('user', 'voice.setupLocal', {});
+    void (async () => {
+      for (const id of ['silero-vad', 'whisper-base.en'] as const)
+        if (!models.installed(id)) await models.download(id);
+      s.settings.set('voice.stt.whisperModel', 'whisper-base.en');
+      s.settings.set('voice.stt.provider', 'whisper');
+      local.changed();
+      s.emit('notify', {
+        level: 'info',
+        message: 'On-device speech is ready. Tap the mic and talk.',
+      });
+    })().catch((err: unknown) => {
+      logger.warn({ err: String(err) }, 'local speech setup failed');
+      s.emit('notify', {
+        level: 'error',
+        message: 'The speech model download failed. Check the internet connection and try again.',
+        action: 'settings:voice',
+      });
+    });
+    return { ok: true };
+  });
   handle('voice:devices', () => {
     if (ui.isTest) return [{ index: 0, name: 'Test microphone' }];
     return listAudioDevices().map((name, index) => ({ index, name }));

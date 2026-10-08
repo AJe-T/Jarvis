@@ -5,6 +5,9 @@ import { ActivityView } from './features/activity/activity-view';
 import { ConnectionsView } from './features/connections/connections-view';
 import { CopilotView } from './features/copilot/copilot-view';
 import { MemoryView } from './features/memory/memory-view';
+import { BrainView } from './features/brain/brain-view';
+import { PasswordsView } from './features/passwords/passwords-view';
+import { SpacesView } from './features/spaces/spaces-view';
 import { installVoiceBridge } from './features/voice/voice-bridge';
 import { registerBridge } from './lib/ipc-bridge';
 import { useConfirmStore } from './stores/confirm-store';
@@ -19,6 +22,9 @@ export const EXTRA_VIEWS: Partial<Record<View, ComponentType>> = {
   connections: ConnectionsView,
   copilot: CopilotView,
   bible: BibleView,
+  spaces: SpacesView,
+  brain: BrainView,
+  passwords: PasswordsView,
 };
 export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog];
 

@@ -173,7 +173,7 @@ Priority key: **P0** = must ship in v1 · **P1** = fast follow · **P2** = futur
 
 ## 8b. Features added after v1.0
 
-All are implemented; details and how-tos in [BIBLE.md](BIBLE.md) §3, decisions in [TRD](TRD.md) ADR-010…019.
+All are implemented; details and how-tos in [BIBLE.md](BIBLE.md) §3, decisions in [TRD](TRD.md) ADR-010…026.
 
 | Area | Requirement | Priority |
 |---|---|---|
@@ -188,6 +188,13 @@ All are implemented; details and how-tos in [BIBLE.md](BIBLE.md) §3, decisions 
 | F15 Telegram | Paired phone chat, button confirmations (non-destructive only), forwarding of briefings | P2 |
 | F16 Reply copilot | Read a chat on screen, analyse, stance, two checked drafts, paste (never send) | P2 |
 | F17 Bible | One complete guide in docs and in the app; generated reference kept in sync by a test | P1 |
+| F18 Spaces | Notion-style notebooks (Learning, Finance, …) in the sidebar: pages from templates, autosaving Markdown editor, stored in the vault and searchable by Jarvis | P1 |
+| F19 Brain graph | The vault drawn as an interactive neural network (links + folders), click a dot to read the note | P2 |
+| F20 Phone remote | HTTPS web app on the LAN: type, live dictation and hands-free voice calls from the phone browser; QR pairing | P1 |
+| F21 WhatsApp | Commands from Sir's own self-chat (wake word), approvals by yes/no, `send_whatsapp` with PC approval | P2 |
+| F22 Passwords | Encrypted password manager (master password, TOTP, generator, auto-lock) unreachable by the AI | P1 |
+| F23 Composer dictation | Tap the mic: words stream into the message box live; nothing sent until Send; one-click free on-device speech | P0 |
+| F24 UI Automation | List/click/type/read controls in any Windows app without screenshots or API keys | P0 |
 
 ## 9. Success Metrics
 

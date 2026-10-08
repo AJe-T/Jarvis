@@ -8,6 +8,7 @@ import { createMiscTools } from './misc';
 import type { OsAdapter } from './os';
 import { createShellTool } from './shell';
 import { createSystemTools } from './system';
+import { createUiAutomationTools } from './ui-automation';
 
 export interface NativeToolDeps {
   os: OsAdapter;
@@ -23,6 +24,7 @@ export function createNativeTools(d: NativeToolDeps): Tool[] {
   return [
     ...createSystemTools(d.os),
     ...createAppTools(d.os, d.appIndex),
+    ...createUiAutomationTools(d.os),
     ...createFileTools({
       os: d.os,
       guard: d.guard,

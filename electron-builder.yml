@@ -24,6 +24,8 @@ asarUnpack:
   - node_modules/onnxruntime-node/**
   - node_modules/sharp/**
   - node_modules/@img/**
+  # Baileys (WhatsApp) loads its WebAssembly bridge from disk.
+  - node_modules/whatsapp-rust-bridge/**
 extraResources:
   - from: resources/
     to: resources/

@@ -102,8 +102,7 @@ export function AboutSection(): React.JSX.Element {
       </div>
       <p className="max-w-[60ch] text-xs text-ink-500">
         Built with Electron, React and the Claude API. Open-source licences are listed in
-        THIRD_PARTY_NOTICES.md next to the app. Fonts: Geist, Geist Mono (SIL Open Font
-        License).
+        THIRD_PARTY_NOTICES.md next to the app. Fonts: Geist, Geist Mono (SIL Open Font License).
       </p>
     </Section>
   );

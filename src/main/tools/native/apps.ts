@@ -12,7 +12,7 @@ import {
   PS_WINDOW_ACTION,
 } from './ps-scripts';
 
-interface WindowInfo {
+export interface WindowInfo {
   Id: number;
   ProcessName: string;
   MainWindowTitle: string;
@@ -44,11 +44,11 @@ const CRITICAL = new Set([
 
 const APPID_RE = /^[\w.!{}\-\\ ]{1,300}$/;
 
-async function windows(osa: OsAdapter, signal: AbortSignal): Promise<WindowInfo[]> {
+export async function windows(osa: OsAdapter, signal: AbortSignal): Promise<WindowInfo[]> {
   return asArray(await osa.psJson<WindowInfo[] | WindowInfo>(PS_LIST_WINDOWS, { signal }));
 }
 
-function matchWindow(list: WindowInfo[], query: string): WindowInfo | undefined {
+export function matchWindow(list: WindowInfo[], query: string): WindowInfo | undefined {
   const q = query.toLowerCase();
   const direct = list.find(
     (w) => w.ProcessName.toLowerCase() === q || w.MainWindowTitle.toLowerCase() === q,
