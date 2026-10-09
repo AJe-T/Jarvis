@@ -48,6 +48,11 @@ JARVIS is a **voice-first personal assistant for Windows**, built as an Electron
 | `Ctrl+Alt+D` | Dictation: type what you say into any app (off until enabled) |
 | `Ctrl+Alt+R` | Reply copilot for the chat on screen |
 
+**New in 2.4:**
+- **Tasks** (§3.17) and **Calendar** (§3.18): full to-do lists and a calendar Jarvis can run for you ("add dentist Friday 4 to 5", "what's on today?").
+- **Brain** in six views: Neural, 3D orbs, Clusters, Constellations, Mind map, Treemap (§3.3).
+- **Mini orb** you can drag along the screen edges, tuck into the edge or hide, so it never blocks a button (§3.12).
+
 **New in 2.0 (one line each, details below):**
 - **Dictate into the message box** like a phone keyboard: tap the mic, words appear live, press Send (§3.2).
 - **Spaces:** Notion-style notebooks (Learning, Finance, …) in the sidebar (§3.13).
@@ -129,8 +134,14 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 - **Your edits:** changes you make in Obsidian are picked up within seconds.
 - **Spaces pages are searchable too:** pages in `Spaces/` are indexed like memory notes, so "what did I write about Rust ownership?" finds your Learning page.
 
-**Brain view (sidebar → Brain):** the whole vault drawn as a neural network.
-- Every note is a glowing dot coloured by its folder; `[[wiki links]]` are the bright connections, and each note also hangs off a hub for its folder, so the vault forms one network shaped like two hemispheres. Small signals travel along the links (off with Windows "reduce motion").
+**Brain view (sidebar → Brain):** the whole vault drawn six ways; pick one in the switcher at the top (Jarvis remembers your choice). Clicking a note in any of them opens it in the side panel.
+- **Neural** (default) — the living network described below.
+- **3D orbs** — every note a glossy glass orb in a slowly turning star field, folders as clusters on a big sphere. Drag to spin, scroll to fly in, pause or turn with the buttons at the bottom.
+- **Clusters** — each folder a soft coloured island ("Learning · 5") with its notes inside and links drawn between islands, like an Obsidian canvas.
+- **Constellations** — each folder an orange star with its notes around it, like Obsidian's local graph.
+- **Mind map** — folders as branches growing from "Vault", notes as underlined leaves; click a folder's dot to fold or open it (big vaults start folded); Expand all / Fold all.
+- **Treemap** — the vault as nested boxes sized by number of notes (or by size); click a folder to step inside, the breadcrumb steps back out.
+- In the **Neural** view every note is a glowing dot coloured by its folder; `[[wiki links]]` are the bright connections, and each note also hangs off a hub for its folder, so the vault forms one network shaped like two hemispheres. Small signals travel along the links (off with Windows "reduce motion").
 - Scroll to zoom, drag the background to move, drag a dot to pull it. Hover a dot to light up its neighbours; click it to read the note in a side panel, with **Open in Obsidian** or **Edit in Spaces**.
 - **Find a note** jumps to it; the legend lists each folder with a count (click to hide/show); "Show folders" hides the hub dots; the fit button frames everything.
 - It updates when the vault changes. Obsidian's own Graph view (Ctrl+G inside Obsidian) shows the same links; the ↗ button opens the vault there.
@@ -283,6 +294,30 @@ Settings → **Phone & chat apps** → **WhatsApp**.
 - Messages in any other chat are never read as commands.
 - ⚠ Built on the free **Baileys** library (MIT), not WhatsApp's paid business API. WhatsApp may restrict accounts that use unofficial clients; consider a spare number. **Unlink** logs this PC out and deletes the session keys (`%APPDATA%\Jarvis\whatsapp-auth`).
 
+### 3.17 Tasks (to-do lists, like Todoist and TickTick)
+Sidebar → **Tasks**.
+- **Smart lists:** **Inbox** (tasks without a list), **Today** (overdue first, then today), **Upcoming** (grouped by day), **Starred**, **All tasks**, **Completed** (grouped by the day you finished them, with *Clear completed*). Your own **lists** (+ beside "Lists"; double-click to rename, click the dot to change colour, bin to delete — its tasks move to the Inbox) and every **#tag** in use appear below.
+- **Quick add** (press **N**): type naturally and the chips underneath show what Jarvis understood — *"Call mom tomorrow 6pm #family !1 every week"*. It understands today / tonight / tomorrow / weekdays ("next friday", "by mon"), "in 3 days", "in 30 min", dates like "12 oct" or "12/10" (day first), "on the 15th", times ("6pm", "17:30", "noon", "1-2pm"), lengths ("for 45 min"), repeats ("every day", "every weekday", "every 2 weeks", "every mon and thu", "monthly"), priority (**!1**–**!4** or p1–p4) and **#list-or-tag** (a list when one has that name, otherwise a tag).
+- **A task** (click it): title, **To do / Doing / Done**, list, priority P1–P4 (the colour of the tick circle), due date and time, **reminder** (a Windows notification and Jarvis says it; a timed task reminds at its time unless you change it), **repeat** (every day/weekday/week/2 weeks/month/year or custom: every N days/weeks/months/years, on chosen weekdays, ending never / on a date / after N times), tags, star, **subtasks** with a progress bar, and Markdown notes. **Focus 25 min** starts the pomodoro beside the orb and marks the task Doing; **Time-block it** puts it on the calendar.
+- **Ticking a repeating task** logs it as done and moves it to its next date, with its subtasks unticked for the next round. Ticking any other task ticks its open subtasks. **Clear completed** keeps a done task that still has an open subtask.
+- **Layouts** (top right): **List**, **Board** (To do / Doing / Done columns — drag cards between them) and **Priority matrix** (Eisenhower: do now, schedule, quick wins, later; important = P1/P2 or starred, urgent = due by tomorrow). **Sort:** smart order, due date, priority, A–Z, newest, or **My order** (drag rows).
+- **Stats strip:** done today, this week, your **streak** (days in a row with something done) and how many are overdue.
+- **Jarvis has full control** with the `tasks` tool: "add buy milk to my tasks for tomorrow", "what's on my list today?", "mark the electricity bill done", "move the report to Friday, high priority", "make a Groceries list". Deleting a task asks you first.
+- Stored in Jarvis's local database (`todos`, `todo_lists`; migration 010), included in the daily backups.
+
+### 3.18 Calendar
+Sidebar → **Calendar**.
+- **Views:** **Day**, **Week** (default), **Month**, **Schedule** (the next 60 days that have something on) and **Year** (twelve small months; busier days glow). Keys: **D W M A Y** switch, **T** today, **← →** (or J K) move, **N** new event.
+- **Create:** drag across empty time in Day/Week (or click for an hour), double-click the all-day row, click a day in Month, **New event**, or **quick add** ("Lunch with Sam fri 1-2pm", "Mom's birthday 14 oct", "Gym every mon and thu 7am"; add **#Work** to pick a calendar).
+- **Change:** drag an event to another time or day (Month: drag a chip to another day), drag its bottom edge to change the length, or click it for the editor: title, calendar, all-day, start and end, location, **repeat** (same choices as tasks), **reminders** (at start, 5/10/15/30 min, 1–2 h, 1 day before — several at once; 10 min by default) and notes. **Ctrl+Enter** saves.
+- **Repeating events:** in the editor choose **This event** or **All events**; dragging one occurrence moves only that one. Delete offers **This one / This & following / All**.
+- **Calendars:** Personal and Work to start; add more with +, click the square to change colour, the eye to hide one, double-click to rename, ⤓ to export it, bin to delete. **Show tasks with due dates** puts your tasks on the calendar (click one to open it in Tasks).
+- **Next up** card, a red **now line**, a small month to jump around, and **Search**.
+- **Import / export .ics:** bring in a calendar exported from Google, Outlook or Apple (events, repeats, deleted dates and alarms; it becomes a new calendar), or save yours as an .ics file. Times with a time zone are read as local time. Repeat rules Jarvis cannot follow exactly (hourly, "second Tuesday of the month") are left out and counted in the message, never guessed.
+- **Reminders** arrive as a Windows notification, an in-app toast and Jarvis saying it — also while the window is hidden. Ones missed in the last 15 minutes (PC asleep, app closed) still arrive; none ever repeats.
+- **Jarvis has full control** with the `calendar` tool: "what's on my calendar tomorrow?", "add dentist Friday 4 to 5", "move standup to 10:30", "when am I free on Monday for an hour?", "cancel the gym on Thursday". Deleting asks you first. Event text from imported files is treated as outside content (§5).
+- Stored in the local database (`calendars`, `events`; migration 010), included in the daily backups.
+
 ### 3.12 Interface
 - **Core (the home screen):** Jarvis's orb is the screen. It sits in the middle of a HUD with corner readouts (clock, uplink and model, microphone mode, today's spend), a status line under it (`[ READY ]`, `[ THINKING… ]`…), and his words appear under the orb as captions while he replies. Before a conversation there's a greeting and three suggestions.
   - **Talk to the orb:** with the chat closed there is no message box: **click the orb** (or press the push-to-talk key) to speak; click again to stop. If voice is off, clicking the orb opens the chat. **Start typing anywhere** and the chat opens with your letters already in the box.
@@ -294,10 +329,10 @@ Settings → **Phone & chat apps** → **WhatsApp**.
   - **AI usage & billing** — spend against your daily and monthly budgets, by model, purpose or day.
   - **System status** — connection, model, voice mode, today's and this month's spend (with budget bars), connections ready, spaces and pages.
   - **List** (tasks, agendas, anything with items and ticks), **Stats** (labelled numbers with optional bars) and **Note** (formatted text) — Jarvis fills these with whatever you asked for.
-  - The **panel button** in the Core header opens Pomodoro, Status and Usage by hand. Jarvis uses the `show_panel` / `hide_panel` tools (safe: display only). Tasks and calendar will get their own panel kinds when those features arrive; until then Jarvis can show them as a List.
-- **The orb follows you:** on every other screen (Spaces, Settings, Connections…) a small live orb floats in the bottom-right corner, moving with Jarvis's state and voice, with his words beside it while he replies. Click it to return to Core. The sidebar's logo is a live orb too, and the **Mini orb** floats on the Windows desktop over other apps.
+  - The **panel button** in the Core header opens Pomodoro, Status and Usage by hand. Jarvis uses the `show_panel` / `hide_panel` tools (safe: display only). Jarvis shows tasks and agendas as a List panel; the full views are Tasks (§3.17) and Calendar (§3.18).
+- **The orb follows you:** on every other screen (Spaces, Settings, Connections…) a small live orb floats in a corner, moving with Jarvis's state and voice, with his words beside it while he replies. Click it to return to Core. If it covers something, **drag it to another corner**, or hover it and press the small arrow to **tuck it into the edge** as a slim glowing tab (click the tab to bring it back). Jarvis remembers where you put it. The sidebar's logo is a live orb too, and the **Mini orb** floats on the Windows desktop over other apps.
 - **Views:**
-  - **Sidebar:** **// workspace** — Core, Spaces (with its page tree), Brain, Memory, Passwords; **// tools** — **Automations**, **Skills**, Connections, Reply copilot; Settings at the bottom. **Hide it** with the arrow next to the JARVIS logo or **Ctrl+B**; a slim strip with one button brings it back. Jarvis also hides it himself while he shows a panel.
+  - **Sidebar:** **// workspace** — Core, Spaces (with its page tree), **Tasks**, **Calendar**, Brain, Memory, Passwords; **// tools** — **Automations**, **Skills**, Connections, Reply copilot; Settings at the bottom. **Hide it** with the arrow next to the JARVIS logo or **Ctrl+B**; a slim strip with one button brings it back. Jarvis also hides it himself while he shows a panel.
   - **Settings → Advanced → Logs:** the newest log lines (secrets removed), warnings-only filter, and Open logs folder.
   - **Settings → Activity & usage:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent). Core's header still opens the live Activity drawer for the current turn.
   - **Settings → Bible (help):** this guide, searchable, plus the generated reference.
@@ -313,7 +348,11 @@ Settings → **Phone & chat apps** → **WhatsApp**.
   - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px the sidebar shows icons only and the log and Activity open as sheets (Esc closes Activity). The window opens at up to 1400 × 880, never larger than the screen.
   - **Settings → General → Theme:** Match Windows (default), Light ("daylight HUD": pale steel with the same neon), Dark (Neon Grid, the home look).
   - **Settings → General → Accent colour:** ten ready neons (Cyan, Arc blue, Violet, Magenta, Red, Orange, Gold, Lime, Green, Silver) or **Custom**: **All colours** opens the Windows colour dialog (the full palette and its custom mixer), or type a **Hex** value like `#FF2A3D`. **The whole theme follows it**: backgrounds, panels, input and card borders, lines, grey text, shadows and the grid take the accent's hue (same darkness, so a red accent gives a deep red-black app), and buttons, glow, links and the orb use the colour itself. Text shades are adjusted automatically so they stay readable in both themes. It previews as you pick and is kept when you press **Save changes**.
-- **Mini orb:** a small always-on-top orb (tray or chat header).
+- **Mini orb:** a small always-on-top orb on the Windows desktop (tray → Mini orb, or the chat header). The window is only as big as the orb, so everything around it stays clickable.
+  - **Click** it to open Jarvis. **Drag** it anywhere: when you let go it snaps to the nearer side edge of that screen (any monitor).
+  - **Tuck it away** (like the Xbox Game Bar ball): push it past the screen edge, hover it and press the small arrow, or right-click → *Tuck into the edge*. It becomes a slim glowing handle on the edge that pulses while Jarvis listens or speaks; click the handle to bring the orb back, or drag it up and down the edge.
+  - **Right-click** for: Open Jarvis, Tuck / Bring out, Move to the other edge, **Hide the orb** (the tray icon brings it back).
+  - It fades a little when idle and comes back when you hover it or Jarvis speaks; his words show beside it while he replies. Its spot is remembered (`mini.dock` setting).
 - **Tray, start with Windows, start hidden.**
 - **Settings → Data & backups:**
   - Daily backups (7 kept), back up now, restore on restart.
@@ -406,7 +445,7 @@ Settings → **Phone & chat apps** → **WhatsApp**.
 
 | What | Where |
 |---|---|
-| Database (history, tool calls, usage, reminders, meals, dictations, automations, settings) | `%APPDATA%\jarvis\jarvis.db` (SQLite with FTS5; schema in [Database](Database.md), migrations in [REFERENCE.md](REFERENCE.md)) |
+| Database (history, tool calls, usage, reminders, tasks, calendar, meals, dictations, automations, settings) | `%APPDATA%\jarvis\jarvis.db` (SQLite with FTS5; schema in [Database](Database.md), migrations in [REFERENCE.md](REFERENCE.md)) |
 | Backups (daily, 7 kept) | `%APPDATA%\jarvis\backups\` |
 | Secrets (encrypted) | `%APPDATA%\jarvis\secrets.bin` |
 | Logs (redacted) | `%APPDATA%\jarvis\logs\` |
@@ -539,6 +578,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.8 | "Workspace" redesign modelled on Notion: warm canvas and sidebar, purple primary, link blue, pastel tags and suggestion cards, labelled sidebar |
 | 1.9 | "Geist" redesign modelled on Vercel: ink-on-white, solid-ink primary, one blue, brand mesh behind the empty-state hero, Geist + Geist Mono, stacked shadows, pill tags |
 | 1.10 | Teal energy-core orb that follows voice, mic and music playing on the PC (loopback meter in its own sandboxed session) |
+| 2.4 | **Tasks** (smart lists, lists, tags, natural-language quick add, priorities, reminders, repeats, subtasks, list / board / priority-matrix layouts, stats and streak, focus timer) and **Calendar** (day/week/month/schedule/year, colour calendars, drag to create/move/resize, repeating events, reminders, tasks on the calendar, free-time finder, .ics import/export), both fully controllable by Jarvis (`tasks`, `calendar` tools); the **Brain** gains 3D orbs, Clusters, Constellations, Mind map and Treemap views; the **mini orb** shrinks to its own size, docks to any screen edge, tucks away as a handle or hides, and the in-app corner orb can be moved or tucked |
 | 2.3 | The accent tints the whole theme (backgrounds, borders, lines, grey text, shadows); 18 orb styles with live previews; Core is orb-only: click the orb to talk or start typing to open the chat, and the message box lives in the conversation log |
 | 2.2 | Accent colour picker (ten neons, Windows colour dialog, hex) with automatic contrast; Settings changes wait for a Save bar (restart offered for big ones); Automations and Skills moved to the sidebar, Activity and Bible into Settings; sidebar hides (Ctrl+B, and by itself while Jarvis shows a panel); **panels beside the orb** (`show_panel`: pomodoro, usage & billing, system status, lists, stats, notes); particle-sphere orb with liquid ripples, orbiting shells, sparks and a glyph ring |
 | 2.1 | "Neon Grid" cyberpunk redesign: orb-first **Core** home screen with HUD readouts and captions, conversation as a side log, a floating live orb on every screen, sci-fi reactor orb; Spaces as Notion-style galleries with covers and page icons and a foldable sidebar tree; Connections catalogue grows to 24 vetted servers (Zapier and Apify hubs, search, docs, dev, productivity) plus an in-app **MCP Registry** browser |

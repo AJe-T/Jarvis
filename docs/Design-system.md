@@ -226,8 +226,14 @@ also 48px.
 
 ### 5.4 Mini mode and Computer-Control overlay
 
-Mini: the same orb on a small disc in a transparent always-on-top window over other apps; click
-opens Jarvis, drag moves it. Overlay: 4px `alarm-fill` border and a solid pill with Stop; never
+Mini: the same orb (72px "dock" size) on a small disc in a transparent always-on-top window that
+is exactly 88×88, so nothing around it blocks clicks; the window widens inward only while a caption
+shows. Click opens Jarvis; drag (main follows the cursor) and on release it snaps to the nearer side
+edge with a 12px margin. Pushed past the edge, the chevron on hover, or right-click → Tuck turns it
+into a 14px handle flush with the edge (accent border, rounded on the inner side, glow follows the
+voice level, pulses while active). Right-click opens a native menu (it can draw outside the tiny
+window). Idle and unhovered for 4s it fades to 60%. Geometry is pure and tested
+(`windows/mini-dock.ts`); the spot is the main-only `mini.dock` setting. Overlay: 4px `alarm-fill` border and a solid pill with Stop; never
 translucent.
 
 ### 5.5 Spaces (`features/spaces/`)
@@ -248,8 +254,28 @@ translucent.
 On every view except Core, a 72px live orb sits 20px from the bottom-right of the canvas on a void
 disc with a slowly turning dashed ring (`.orb-dock`). It follows state and level like the Core orb,
 shows the reply's last words in a popover beside it while Jarvis speaks, and returns to Core on
-click (`aria-label="Open Jarvis core"`). Only the Core orb announces state to screen readers
+click (`aria-label="Open Jarvis core"`). Drag it (6px slop, so a click stays a click) and it lands
+in the nearest of the four corners; the hover chevron tucks it into a 14px edge tab. Corner and
+tuck are per-PC conveniences in `localStorage` (`jarvis.orbDock`). Only the Core orb announces state to screen readers
 (`announce`), so copies never repeat it.
+
+### 5.7 Tasks, Calendar and Brain views
+
+- **Tasks** (`features/tasks/`): a 224px list column (smart lists, lists with colour dots, tags),
+  then the standard header (search, sort, List / Board / Matrix), a stats strip, the quick-add box
+  (accent focus ring, parsed chips below in `accent-tint`) and the content. The tick circle's ring
+  is the priority colour (P1 alarm, P2 lamp, P3 accent, P4 line). Due text: overdue alarm, today
+  ok-green, next two days lamp. The editor is a 352–416px right panel; fields save as they change.
+- **Calendar** (`features/calendar/`): a 240px side column (New event, Next up card, small month
+  with busy dots, calendars), the header with the view switch, then Today / ‹ › / the range title /
+  quick add. Week and Day: 48px per hour, half-hour hairlines, events as tinted blocks with a 3px
+  calendar-colour edge, overlaps side by side, a red now line; drags snap to 15 minutes and show a
+  dashed accent ghost. Month: six Monday-first weeks, three chips per day then "+N more".
+- **Brain** (`features/brain/`): a pill switcher of six views at the top centre over the dark
+  canvas (which stays dark in both themes). Canvas views (Neural, 3D orbs) redraw from refs every
+  frame; SVG views (Clusters, Constellations, Mind map) pan and zoom by writing the transform
+  straight to a `<g>`; Treemap is absolutely placed boxes. Reduced motion stops the 3D spin, the
+  twinkle and the signals.
 
 ---
 

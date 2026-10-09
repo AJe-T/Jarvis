@@ -113,6 +113,23 @@ export const INVOKE_CHANNELS = [
   'whatsapp:status',
   'whatsapp:restart',
   'whatsapp:logout',
+  'planner:state',
+  'todos:save',
+  'todos:delete',
+  'todos:clearCompleted',
+  'todos:saveList',
+  'todos:deleteList',
+  'calendar:save',
+  'calendar:delete',
+  'calendar:saveCalendar',
+  'calendar:deleteCalendar',
+  'calendar:importIcs',
+  'calendar:exportIcs',
+  'mini:dragStart',
+  'mini:dragEnd',
+  'mini:tuck',
+  'mini:menu',
+  'mini:caption',
 ] as const;
 export type InvokeChannel = (typeof INVOKE_CHANNELS)[number];
 
@@ -146,6 +163,8 @@ export const EVENT_CHANNELS = [
   'remote:status',
   'whatsapp:status',
   'audio:decode',
+  'planner:changed',
+  'mini:layout',
 ] as const;
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
 

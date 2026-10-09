@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   Brain,
+  CalendarDays,
   ChevronRight,
   FileText,
   KeyRound,
   LayoutGrid,
+  ListChecks,
   MessagesSquare,
   Network,
   Orbit,
@@ -31,6 +33,8 @@ type Item = { view: View; label: string; Icon: typeof Brain };
 const WORKSPACE: Item[] = [
   { view: 'chat', label: 'Core', Icon: Orbit },
   { view: 'spaces', label: 'Spaces', Icon: LayoutGrid },
+  { view: 'tasks', label: 'Tasks', Icon: ListChecks },
+  { view: 'calendar', label: 'Calendar', Icon: CalendarDays },
   { view: 'brain', label: 'Brain', Icon: Network },
   { view: 'memory', label: 'Memory', Icon: Brain },
   { view: 'passwords', label: 'Passwords', Icon: KeyRound },

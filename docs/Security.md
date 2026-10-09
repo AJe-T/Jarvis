@@ -101,6 +101,8 @@ Trust boundaries: Renderer ↔ Main (IPC), Main ↔ child processes (MCP/PowerSh
 | `press_keys` | SAFE; CONFIRM for any Win chord, Enter, Alt+F4, Ctrl+W, Shift+Del; BLOCKED for Win+R/X/L, Ctrl+Alt+Del, Ctrl+Shift+Esc | Judged on the set of keys, so order can't bypass it; without `window`, refuses when Jarvis or a password box is in front |
 | `type_text` | SAFE | Content guard; refuses when Jarvis or a password box is focused; never presses Enter |
 | `spaces` | SAFE | Vault `Spaces/` only; append/create, never delete or overwrite |
+| `tasks` | SAFE; CONFIRM (destructive) for `delete` | Sir's own to-do list in the local database; nothing leaves the PC |
+| `calendar` | SAFE (untrusted output); CONFIRM (destructive) for `delete` | Local database; event text may come from an imported .ics file, so results are wrapped as outside content |
 | `send_whatsapp` | CONFIRM (destructive) | Approve at the PC only (never by voice, phone or chat reply); content guard |
 
 ### 4.2 Always BLOCKED (any tool, any source)

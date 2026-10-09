@@ -12,6 +12,19 @@ import {
 } from './types';
 import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
+import {
+  CalendarId,
+  CalendarSchema,
+  EventId,
+  EventPatchSchema,
+  EventSchema,
+  ListId,
+  LocalDate,
+  TodoId,
+  TodoListSchema,
+  TodoPatchSchema,
+  TodoSchema,
+} from './planner';
 
 const Ok = z.object({ ok: z.literal(true) });
 const Empty = z.object({}).strict();
@@ -581,6 +594,69 @@ export const INVOKE = {
   'whatsapp:status': contract(Empty, WhatsAppStatus),
   'whatsapp:restart': contract(Empty, WhatsAppStatus),
   'whatsapp:logout': contract(Empty, Ok),
+  // Tasks and Calendar (PRD F25/F26): the views load everything at once and refresh on planner:changed.
+  'planner:state': contract(
+    Empty,
+    z.object({
+      lists: z.array(TodoListSchema),
+      todos: z.array(TodoSchema),
+      calendars: z.array(CalendarSchema),
+      events: z.array(EventSchema),
+    }),
+  ),
+  'todos:save': contract(TodoPatchSchema, TodoSchema),
+  'todos:delete': contract(z.object({ id: TodoId }), Ok),
+  'todos:clearCompleted': contract(Empty, z.object({ count: z.number() })),
+  'todos:saveList': contract(
+    z.object({
+      id: ListId.optional(),
+      name: z.string().trim().min(1).max(60),
+      color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .optional(),
+      icon: z.string().max(16).optional(),
+    }),
+    TodoListSchema,
+  ),
+  'todos:deleteList': contract(z.object({ id: ListId }), Ok),
+  'calendar:save': contract(EventPatchSchema, EventSchema),
+  'calendar:delete': contract(
+    z.object({
+      id: EventId,
+      date: LocalDate.optional(),
+      scope: z.enum(['one', 'following', 'all']).optional(),
+    }),
+    Ok,
+  ),
+  'calendar:saveCalendar': contract(
+    z.object({
+      id: CalendarId.optional(),
+      name: z.string().trim().min(1).max(60).optional(),
+      color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .optional(),
+      visible: z.boolean().optional(),
+    }),
+    CalendarSchema,
+  ),
+  'calendar:deleteCalendar': contract(z.object({ id: CalendarId }), Ok),
+  /** Opens a file picker in main; null when Sir cancels. */
+  'calendar:importIcs': contract(
+    Empty,
+    z.object({ name: z.string(), count: z.number(), skipped: z.number() }).nullable(),
+  ),
+  'calendar:exportIcs': contract(
+    z.object({ calendarId: CalendarId.optional() }),
+    z.object({ path: z.string().nullable() }),
+  ),
+  // Mini orb (Design-system.md §4.3): drag, snap to a screen edge, tuck away, caption bubble.
+  'mini:dragStart': contract(Empty, Ok),
+  'mini:dragEnd': contract(Empty, z.object({ moved: z.boolean() })),
+  'mini:tuck': contract(z.object({ tucked: z.boolean() }), Ok),
+  'mini:menu': contract(Empty, Ok),
+  'mini:caption': contract(z.object({ open: z.boolean() }), Ok),
   // Password manager (Security.md §16.6): only the Passwords view uses these; no tool can.
   'passwords:status': contract(
     Empty,
@@ -686,6 +762,8 @@ export const EVENTS = {
   'audio:decode': z.object({ id: z.string(), mime: z.string(), data: z.instanceof(Uint8Array) }),
   /** Core stage: Jarvis shows a panel beside the orb (null = close it). */
   'stage:panel': z.object({ panel: StagePanelSchema.nullable() }),
+  'planner:changed': z.object({}),
+  'mini:layout': z.object({ side: z.enum(['left', 'right']), tucked: z.boolean() }),
   'nav:open': z.object({
     view: z.enum([
       'chat',
@@ -698,6 +776,8 @@ export const EVENTS = {
       'spaces',
       'passwords',
       'brain',
+      'tasks',
+      'calendar',
     ]),
     section: z.string().optional(),
   }),

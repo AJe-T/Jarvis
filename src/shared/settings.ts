@@ -157,6 +157,18 @@ export const SETTINGS = {
   },
   /** The orb moves to music and other sound playing on this PC (levels only, never recorded). */
   'appearance.orbMusic': { schema: z.boolean(), default: true },
+  /** Where the mini orb sits: the screen edge it is docked to and whether it is tucked away. */
+  'mini.dock': {
+    schema: z
+      .object({
+        px: z.number(),
+        y: z.number(),
+        side: z.enum(['left', 'right']),
+        tucked: z.boolean(),
+      })
+      .nullable(),
+    default: null as { px: number; y: number; side: 'left' | 'right'; tucked: boolean } | null,
+  },
   'onboarding.complete': { schema: z.boolean(), default: false },
   /** Phone remote: a small HTTPS web app on the home network (off until Sir turns it on). */
   'remote.enabled': { schema: z.boolean(), default: false },
@@ -186,7 +198,7 @@ export const SettingKeySchema = z.enum(SETTING_KEYS as [SettingKey, ...SettingKe
 
 /** Settings whose change must itself be confirmed by Sir in the UI (Security.md §5 step 4). */
 /** Set only by main-process flows (e.g. Telegram pairing), never directly from the renderer. */
-export const MAIN_ONLY_SETTINGS: readonly SettingKey[] = ['telegram.chatId'];
+export const MAIN_ONLY_SETTINGS: readonly SettingKey[] = ['telegram.chatId', 'mini.dock'];
 
 /** Applied live, but a restart gives these a clean start (the Save bar offers one). */
 export const RESTART_SETTINGS: readonly SettingKey[] = [

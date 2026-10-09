@@ -18,6 +18,7 @@ import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { registerPasswordHandlers } from './ipc/handlers/passwords';
 import { registerSpacesHandlers } from './ipc/handlers/spaces';
+import { registerPlannerHandlers } from './ipc/handlers/planner';
 import { createSpaces, createSpacesTool } from './spaces/spaces';
 import { createStageTools } from './stage/stage-tools';
 import { createMemorySystem } from './memory/memory-system';
@@ -41,7 +42,7 @@ import { createComputerSystem } from './tools/computer/computer-system';
 import { createElectronScreen } from './tools/computer/electron-screen';
 import { createFakeDriver, createFakeScreen, createNutDriver } from './tools/computer/drivers';
 import { createComputerOverlay } from './windows/overlay-window';
-import { createMiniWindow } from './windows/mini-window';
+import { createMiniOrb, type MiniOrb } from './windows/mini-window';
 import { applyRetention, registerDataHandlers } from './ipc/handlers/data';
 import { handle } from './ipc/handle';
 import { JarvisError, errorMessage } from './errors';
@@ -61,19 +62,22 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 
-let miniWindow: BrowserWindow | null = null;
+let miniOrb: MiniOrb | null = null;
 
 /** Design-system.md §4.3 mini orb: hides the main window and shows a small always-on-top orb (or back). */
 function setMiniMode(on: boolean): void {
   if (on) {
-    if (!miniWindow || miniWindow.isDestroyed()) {
-      miniWindow = createMiniWindow();
-      addEventTarget(miniWindow);
-      miniWindow.once('ready-to-show', () => miniWindow?.showInactive());
-    } else miniWindow.showInactive();
+    const win = miniOrb?.window();
+    if (!win || win.isDestroyed()) {
+      const created = miniOrb?.create();
+      if (created) {
+        addEventTarget(created);
+        created.once('ready-to-show', () => created.showInactive());
+      }
+    } else win.showInactive();
     mainWindow?.hide();
   } else {
-    miniWindow?.hide();
+    miniOrb?.window()?.hide();
     showMainWindow();
   }
 }
@@ -367,10 +371,39 @@ async function boot(): Promise<void> {
   app.on('will-quit', () => automation.stop());
   applyRetention(services);
   setInterval(() => applyRetention(services), 6 * 3600_000).unref();
+  // Mini orb: drag along the screen edges, tuck into the edge, or hide (Design-system.md §4.3).
+  miniOrb = createMiniOrb({
+    load: () => services.settings.get('mini.dock'),
+    save: (dock) => services.settings.set('mini.dock', dock),
+    open: () => setMiniMode(false),
+    hide: () => miniOrb?.window()?.hide(),
+  });
   handle('app:setMiniMode', (req) => {
     setMiniMode(req.on);
     return { ok: true };
   });
+  handle('mini:dragStart', () => {
+    miniOrb?.dragStart();
+    return { ok: true };
+  });
+  handle('mini:dragEnd', () => miniOrb?.dragEnd() ?? { moved: false });
+  handle('mini:tuck', (req) => {
+    miniOrb?.tuck(req.tucked);
+    return { ok: true };
+  });
+  handle('mini:menu', () => {
+    miniOrb?.menu();
+    return { ok: true };
+  });
+  handle('mini:caption', (req) => {
+    miniOrb?.caption(req.open);
+    return { ok: true };
+  });
+  // Tasks and Calendar (PRD F25/F26): views, Jarvis's tools and reminders share one planner.
+  registerPlannerHandlers(services.planner);
+  services.navListeners.add(() => setMiniMode(false));
+  if (!isTest) services.planner.start();
+  app.on('will-quit', () => services.planner.stop());
   if (services.settings.get('onboarding.complete')) {
     void mcp.manager.start();
     startMemory();

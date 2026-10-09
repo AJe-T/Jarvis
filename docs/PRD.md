@@ -195,6 +195,10 @@ All are implemented; details and how-tos in [BIBLE.md](BIBLE.md) §3, decisions 
 | F22 Passwords | Encrypted password manager (master password, TOTP, generator, auto-lock) unreachable by the AI | P1 |
 | F23 Composer dictation | Tap the mic: words stream into the message box live; nothing sent until Send; one-click free on-device speech | P0 |
 | F24 UI Automation | List/click/type/read controls in any Windows app without screenshots or API keys | P0 |
+| F25 Tasks | To-do lists like Todoist/TickTick: Inbox, Today, Upcoming, Starred, lists, tags; natural-language quick add ("call mom tomorrow 6pm #home !1 every week"); priorities, due date and time, reminders, repeats, subtasks, notes; list / Kanban board / Eisenhower matrix; drag to reorder; stats and streak; focus timer; time-block onto the calendar; Jarvis can add, list, complete, edit and (with approval) delete | P1 |
+| F26 Calendar | Day / week / month / schedule / year views; colour-coded calendars; drag to create, move and resize; repeating events (change or delete one, following or all); reminders before events; tasks with due dates on the calendar; natural-language quick add; free-time finder; .ics import and export; Jarvis can read the agenda, add, move and (with approval) delete events | P1 |
+| F19b Brain views | Six ways to see the vault: Neural, 3D orbs, Clusters, Constellations, Mind map, Treemap | P2 |
+| F27 Mini orb docking | The desktop mini orb is only as big as the orb; drag it along the screen edges, tuck it into the edge as a slim handle (Game Bar style), or hide it; the spot is remembered | P1 |
 
 ## 9. Success Metrics
 

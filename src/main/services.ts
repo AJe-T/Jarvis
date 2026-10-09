@@ -53,6 +53,8 @@ import { createWebPageTools } from './tools/everyday/web-page';
 import { createWeatherTools } from './tools/everyday/weather';
 import { createSkillStore } from './skills/skills';
 import { createToolRegistry } from './tools/registry';
+import { createPlanner } from './planner/planner';
+import { createPlannerTools } from './planner/planner-tools';
 
 export interface ServiceOptions {
   userData: string;
@@ -250,19 +252,31 @@ export function createServices(opts: ServiceOptions) {
     onChange: () => {
       for (const l of remindersChangedListeners) l();
     },
-    onFire: (r, missed) => {
-      opts.os.notify(missed ? 'Missed reminder' : 'Reminder', r.text);
-      opts.emit('notify', {
-        level: 'info',
-        message: `${missed ? 'Missed reminder' : 'Reminder'}: ${r.text}`,
-      });
-      for (const l of reminderListeners) l(r.text, missed);
-    },
+    onFire: (r, missed) => deliverReminder(missed ? 'Missed reminder' : 'Reminder', r.text, missed),
+  });
+  /** One path for every reminder: Windows notification, in-app toast, and Jarvis says it. */
+  function deliverReminder(title: string, text: string, missed = false): void {
+    opts.os.notify(title, text);
+    opts.emit('notify', { level: 'info', message: `${title}: ${text}` });
+    for (const l of reminderListeners) l(text, missed);
+  }
+  // Tasks and Calendar (PRD F25/F26): Jarvis can read and change both; reminders use the path above.
+  const navListeners = new Set<(view: 'tasks' | 'calendar') => void>();
+  const planner = createPlanner({
+    db,
+    logger,
+    deliver: (title, text) => deliverReminder(title, text),
+    onChange: () => opts.emit('planner:changed', {}),
   });
   const appIndex = createAppIndex(opts.os, opts.startMenuDirs ?? defaultStartMenuDirs());
   const registry = createToolRegistry({
     webSearchEnabled: () => settings.get('web.search.enabled'),
   });
+  for (const tool of createPlannerTools(planner, (view) => {
+    opts.emit('nav:open', { view });
+    for (const l of navListeners) l(view);
+  }))
+    registry.register(tool);
   for (const tool of createNativeTools({
     os: opts.os,
     appIndex,
@@ -404,6 +418,8 @@ export function createServices(opts: ServiceOptions) {
     reminderListeners,
     remindersChangedListeners,
     confirmShowListeners,
+    planner,
+    navListeners,
     context,
     orchestrator,
     slots,

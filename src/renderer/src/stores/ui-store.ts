@@ -4,6 +4,8 @@ export type View =
   | 'chat'
   | 'memory'
   | 'brain'
+  | 'tasks'
+  | 'calendar'
   | 'spaces'
   | 'passwords'
   | 'activity'

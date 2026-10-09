@@ -2,12 +2,13 @@
 
 > Generated from the code by `npm run docs:reference` (tests/unit/reference.test.ts fails when this file is stale). Do not edit by hand. The narrative guide is [BIBLE.md](BIBLE.md).
 
-## Tools (73)
+## Tools (75)
 
 Every tool goes through the executor: Zod input check → policy tier (SAFE runs, CONFIRM asks Sir, BLOCKED never runs) → guards → audit and activity log. MCP tools from connected servers are added at runtime and are not listed here.
 
 | Tool | Tier | What it does |
 |---|---|---|
+| `calendar` | depends on input (destructive, untrusted output) | Sir's calendar (Calendar view). action=agenda (from, to as YYYY-MM-DD; default today; includes tasks due); add (text in natural language like 'dentist friday 4-5pm', or title + start/end as YYYY-MM-DDTHH:MM, allDay, location, calendar, recurrence, reminders in minutes before); update (id or query + fields); delete (id or query; for a repeating event give date and scope one\|following\|all); free_slots (date, minutes: free gaps between 09:00 and 18:00); calendars; open (shows the Calendar view). |
 | `cancel_reminder` | SAFE | Cancel an upcoming reminder or timer by id (get ids from list_reminders). |
 | `cancel_scheduled_task` | CONFIRM (destructive) | Delete a scheduled task by id (from list_scheduled_tasks). |
 | `click_ui_element` | depends on input (destructive, external) | Click (invoke, toggle, select or expand) a control in an app window by its visible label, e.g. window "Settings", name "Bluetooth & devices". Get labels from list_ui_elements. Buttons that send, pay, delete or agree ask sir first. |
@@ -77,12 +78,13 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `show_notification` | SAFE | Show a Windows notification with a short title and message. |
 | `shutdown_pc` | CONFIRM (destructive) | Shut down Windows in 10 seconds. Requires confirmation. Unsaved work in other apps may be lost. |
 | `sleep_pc` | CONFIRM (destructive) | Put the PC to sleep. Requires confirmation. |
+| `tasks` | depends on input (destructive) | Sir's to-do list (Tasks view). action=list (filter: today [default, includes overdue] \| overdue \| upcoming \| inbox \| starred \| done \| all; optional list, query); add (text in natural language like 'pay rent every month on the 1st #home !1', or title + fields); update / complete / reopen / delete (id, or query words from the title); lists; create_list (list); open (shows the Tasks view). Priority 1 = urgent … 4 = none. Dates YYYY-MM-DD, times HH:MM, local. |
 | `type_text` | SAFE (external) | Type text into whatever has keyboard focus (after focus_window or click_ui_element), like pasting. Does not press Enter. Never for passwords, one-time codes or card numbers. |
 | `use_skill` | SAFE | Load the full instructions of an installed skill (listed in your context under Skills) before doing a task it covers. Returns the instructions and the files it includes. |
 | `write_clipboard` | SAFE | Put text on the clipboard so sir can paste it. |
 | `write_text_file` | CONFIRM (destructive) | Create a text file, or overwrite one when overwrite is true, in the allowed folders. Requires confirmation. Max 1 MB. |
 
-## Settings (71)
+## Settings (72)
 
 Stored in the local database; changed in Settings. Secrets are separate (below).
 
@@ -149,6 +151,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `appearance.accent` | string | `#00e5ff` |  |
 | `appearance.orbStyle` | `particles` / `reactor` / `fluid` / `cloud` / `liquid` / `sun` / `plasma` / `equalizer` / `sonar` / `scope` / `globe` / `gyroscope` / `atom` / `ring` / `mandala` / `blackhole` / `galaxy` / `rain` | `particles` |  |
 | `appearance.orbMusic` | boolean | `true` |  |
+| `mini.dock` | object | `null` | main-process only |
 | `onboarding.complete` | boolean | `false` |  |
 | `remote.enabled` | boolean | `false` |  |
 | `remote.port` | integer | `8765` |  |
@@ -166,8 +169,8 @@ Encrypted with Windows DPAPI (Electron safeStorage); the renderer only ever sees
 
 ## IPC channels
 
-- **Invoke** (renderer → main, request/response, Zod-validated both ways, 111): `chat:send`, `chat:cancel`, `chat:rewind`, `logs:tail`, `conversations:list`, `conversations:get`, `conversations:delete`, `confirm:respond`, `settings:getAll`, `settings:set`, `secrets:set`, `secrets:delete`, `secrets:status`, `secrets:test`, `memory:list`, `memory:read`, `memory:search`, `memory:delete`, `memory:openInObsidian`, `memory:reviewList`, `memory:reviewResolve`, `memory:rebuildIndex`, `mcp:list`, `mcp:add`, `mcp:update`, `mcp:remove`, `mcp:restart`, `mcp:registrySearch`, `voice:setMode`, `voice:mic`, `voice:compose`, `voice:setupLocal`, `voice:devices`, `app:killSwitch`, `app:relaunch`, `app:info`, `app:openExternal`, `app:pickFolder`, `app:setMiniMode`, `usage:summary`, `usage:breakdown`, `llm:claudeCodeStatus`, `llm:localModels`, `llm:localTest`, `location:detect`, `telegram:status`, `telegram:restart`, `copilot:capture`, `copilot:analyse`, `copilot:draft`, `copilot:fill`, `telegram:unpair`, `tasks:list`, `tasks:save`, `tasks:delete`, `tasks:runNow`, `skills:list`, `skills:read`, `skills:installFolder`, `skills:installGitHub`, `skills:remove`, `skills:setEnabled`, `dictation:history`, `dictation:clear`, `models:status`, `models:download`, `models:cancel`, `models:delete`, `llm:claudeCodeLogin`, `audit:list`, `audit:verify`, `audit:export`, `activity:list`, `routines:list`, `reminders:list`, `db:backups`, `db:backupNow`, `db:restore`, `onboarding:complete`, `computer:calibrate`, `app:openFolder`, `passwords:status`, `passwords:setup`, `passwords:unlock`, `passwords:lock`, `passwords:list`, `passwords:get`, `passwords:save`, `passwords:delete`, `passwords:copy`, `passwords:totp`, `passwords:changeMaster`, `spaces:list`, `spaces:create`, `spaces:update`, `spaces:delete`, `spaces:pages`, `spaces:read`, `spaces:write`, `spaces:createPage`, `spaces:renamePage`, `spaces:deletePage`, `spaces:open`, `memory:graph`, `remote:status`, `remote:pair`, `remote:revoke`, `remote:restart`, `whatsapp:status`, `whatsapp:restart`, `whatsapp:logout`
-- **Events** (main → renderer, 29): `assistant:state`, `chat:delta`, `chat:message`, `tool:update`, `confirm:request`, `confirm:resolved`, `voice:level`, `music:level`, `voice:transcript`, `voice:compose`, `tts:audio`, `tts:stop`, `usage:update`, `models:progress`, `dictation:done`, `tasks:changed`, `copilot:captured`, `telegram:status`, `mcp:status`, `notify`, `conversation:updated`, `memory:changed`, `computer:active`, `nav:open`, `stage:panel`, `passwords:locked`, `remote:status`, `whatsapp:status`, `audio:decode`
+- **Invoke** (renderer → main, request/response, Zod-validated both ways, 128): `chat:send`, `chat:cancel`, `chat:rewind`, `logs:tail`, `conversations:list`, `conversations:get`, `conversations:delete`, `confirm:respond`, `settings:getAll`, `settings:set`, `secrets:set`, `secrets:delete`, `secrets:status`, `secrets:test`, `memory:list`, `memory:read`, `memory:search`, `memory:delete`, `memory:openInObsidian`, `memory:reviewList`, `memory:reviewResolve`, `memory:rebuildIndex`, `mcp:list`, `mcp:add`, `mcp:update`, `mcp:remove`, `mcp:restart`, `mcp:registrySearch`, `voice:setMode`, `voice:mic`, `voice:compose`, `voice:setupLocal`, `voice:devices`, `app:killSwitch`, `app:relaunch`, `app:info`, `app:openExternal`, `app:pickFolder`, `app:setMiniMode`, `usage:summary`, `usage:breakdown`, `llm:claudeCodeStatus`, `llm:localModels`, `llm:localTest`, `location:detect`, `telegram:status`, `telegram:restart`, `copilot:capture`, `copilot:analyse`, `copilot:draft`, `copilot:fill`, `telegram:unpair`, `tasks:list`, `tasks:save`, `tasks:delete`, `tasks:runNow`, `skills:list`, `skills:read`, `skills:installFolder`, `skills:installGitHub`, `skills:remove`, `skills:setEnabled`, `dictation:history`, `dictation:clear`, `models:status`, `models:download`, `models:cancel`, `models:delete`, `llm:claudeCodeLogin`, `audit:list`, `audit:verify`, `audit:export`, `activity:list`, `routines:list`, `reminders:list`, `db:backups`, `db:backupNow`, `db:restore`, `onboarding:complete`, `computer:calibrate`, `app:openFolder`, `passwords:status`, `passwords:setup`, `passwords:unlock`, `passwords:lock`, `passwords:list`, `passwords:get`, `passwords:save`, `passwords:delete`, `passwords:copy`, `passwords:totp`, `passwords:changeMaster`, `spaces:list`, `spaces:create`, `spaces:update`, `spaces:delete`, `spaces:pages`, `spaces:read`, `spaces:write`, `spaces:createPage`, `spaces:renamePage`, `spaces:deletePage`, `spaces:open`, `memory:graph`, `remote:status`, `remote:pair`, `remote:revoke`, `remote:restart`, `whatsapp:status`, `whatsapp:restart`, `whatsapp:logout`, `planner:state`, `todos:save`, `todos:delete`, `todos:clearCompleted`, `todos:saveList`, `todos:deleteList`, `calendar:save`, `calendar:delete`, `calendar:saveCalendar`, `calendar:deleteCalendar`, `calendar:importIcs`, `calendar:exportIcs`, `mini:dragStart`, `mini:dragEnd`, `mini:tuck`, `mini:menu`, `mini:caption`
+- **Events** (main → renderer, 31): `assistant:state`, `chat:delta`, `chat:message`, `tool:update`, `confirm:request`, `confirm:resolved`, `voice:level`, `music:level`, `voice:transcript`, `voice:compose`, `tts:audio`, `tts:stop`, `usage:update`, `models:progress`, `dictation:done`, `tasks:changed`, `copilot:captured`, `telegram:status`, `mcp:status`, `notify`, `conversation:updated`, `memory:changed`, `computer:active`, `nav:open`, `stage:panel`, `passwords:locked`, `remote:status`, `whatsapp:status`, `audio:decode`, `planner:changed`, `mini:layout`
 - **Send** (renderer → main, fire-and-forget): `tts:playback`, `ui:activeConversation`, `audio:decoded`
 
 ## Database migrations
@@ -183,3 +186,4 @@ Encrypted with Windows DPAPI (Electron safeStorage); the renderer only ever sees
 | `007_scheduled_tasks.sql` | Scheduled agents (ideas from OpenJarvis): morning briefing, recurring tasks, proactive check-ins. |
 | `008_remote_decisions.sql` | Telegram channel (ideas from OpenJarvis): approvals sent from Sir's paired phone are recorded as |
 | `009_embeddings.sql` | Semantic memory search (idea from isair/jarvis): on-device MiniLM vectors for memory notes and |
+| `010_planner.sql` | Tasks and Calendar (PRD F25/F26). Dates and times are local wall-clock text ("2026-10-09T17:30"). |
