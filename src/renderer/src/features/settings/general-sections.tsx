@@ -4,6 +4,7 @@ import { call, cleanError } from '../../lib/api';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { AccentPicker } from './accent-picker';
+import { OrbStylePicker } from './orb-style-picker';
 import { SecretField } from './secret-field';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
 
@@ -58,6 +59,7 @@ export function GeneralSection(): React.JSX.Element {
         ]}
       />
       <AccentPicker />
+      <OrbStylePicker />
       <SettingSwitch
         k="appearance.orbMusic"
         label="The orb moves to music playing on this PC (only the loudness is read; nothing is recorded)"

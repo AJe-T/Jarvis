@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TIERS, VOICE_MODES } from './types';
+import { DEFAULT_ORB_STYLE, ORB_STYLE_IDS } from './orb-styles';
 
 export const PriceSchema = z.object({
   inPerMTok: z.number().nonnegative(),
@@ -149,6 +150,11 @@ export const SETTINGS = {
   },
   /** One accent colour the whole neon theme follows (Design-system.md §3.6); cyan is the default. */
   'appearance.accent': { schema: z.string().regex(/^#[0-9a-fA-F]{6}$/), default: '#00e5ff' },
+  /** How the orb is drawn (Design-system.md §6.1; list in shared/orb-styles.ts). */
+  'appearance.orbStyle': {
+    schema: z.enum(ORB_STYLE_IDS),
+    default: DEFAULT_ORB_STYLE,
+  },
   /** The orb moves to music and other sound playing on this PC (levels only, never recorded). */
   'appearance.orbMusic': { schema: z.boolean(), default: true },
   'onboarding.complete': { schema: z.boolean(), default: false },

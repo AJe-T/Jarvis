@@ -24,11 +24,6 @@ export const HEX_RE = /^#[0-9a-f]{6}$/i;
 type Rgb = [number, number, number];
 type Theme = 'dark' | 'light';
 
-/** Surfaces text can sit on (tokens.css), including the hover tints, per theme. */
-const SURFACES: Record<Theme, string[]> = {
-  dark: ['#05070b', '#070a10', '#0c1119', '#111824', '#16202c'],
-  light: ['#e6ebf1', '#f2f5f8', '#fbfcfd', '#e9eef3', '#dfe6ec'],
-};
 const DARK_INK = '#001318';
 
 export function hexToRgb(hex: string): Rgb {
@@ -112,23 +107,94 @@ export function inkOn(fill: string): string {
   return contrast(DARK_INK, fill) >= contrast('#ffffff', fill) ? DARK_INK : '#ffffff';
 }
 
-/** CSS custom properties for one accent in one theme (empty for the default: tokens.css wins). */
+/** tokens.css neutrals per theme; an accent re-tints them to its own hue (same lightness). */
+const NEUTRALS: Record<Theme, Record<string, string>> = {
+  dark: {
+    '--bg-app': '#05070b',
+    '--bg-main': '#070a10',
+    '--surface-1': '#0c1119',
+    '--surface-2': '#111824',
+    '--line-subtle': '#111a26',
+    '--line': '#1b2a3a',
+    '--line-strong': '#2b4459',
+    '--neutral-tint': '#121c28',
+    '--void': '#04060b',
+    '--ink-100': '#e4f7ff',
+    '--ink-300': '#9db4c7',
+    '--ink-500': '#7d93a8',
+  },
+  light: {
+    '--bg-app': '#e6ebf1',
+    '--bg-main': '#f2f5f8',
+    '--surface-1': '#fbfcfd',
+    '--surface-2': '#e9eef3',
+    '--line-subtle': '#dde4ea',
+    '--line': '#cdd7e0',
+    '--line-strong': '#9fb0bf',
+    '--neutral-tint': '#e1e8ee',
+    '--void': '#0a1220',
+    '--ink-100': '#071019',
+    '--ink-300': '#33475a',
+    '--ink-500': '#4a5d70',
+  },
+};
+
+/** Same lightness, the accent's hue; greyish accents (silver) give near-grey neutrals. */
+function retint(neutral: string, hue: number, sat: number): string {
+  const [, s, l] = rgbToHsl(hexToRgb(neutral));
+  return rgbToHex(hslToRgb(hue, Math.min(1, s * Math.max(0.15, Math.min(1, sat))), l));
+}
+
+/** Every surface text can sit on: the four surfaces, the selected row, the neutral tag, and hover over each. */
+export function textSurfaces(vars: Record<string, string>, hoverBase: string): string[] {
+  const base = ['--bg-app', '--bg-main', '--surface-1', '--surface-2'].map(
+    (k) => vars[k] ?? '#000000',
+  );
+  return [
+    ...base,
+    ...base.map((bg) => mix(hoverBase, bg, 0.07)),
+    vars['--selected'] ?? '#000000',
+    vars['--neutral-tint'] ?? '#000000',
+  ];
+}
+
+/**
+ * CSS custom properties for one accent in one theme (empty for the default: tokens.css wins).
+ * Surfaces, lines and ink take the accent's hue; every text role is then fitted to 4.5:1 on every
+ * surface and icons to 3:1, the rules `npm run check:contrast` holds the default theme to.
+ */
 export function accentVars(hex: string, theme: Theme): Record<string, string> {
   if (!HEX_RE.test(hex) || hex.toLowerCase() === DEFAULT_ACCENT) return {};
   const c = hex.toLowerCase();
   const dark = theme === 'dark';
-  const bgs = SURFACES[theme];
-  const selected = dark ? mix(c, '#05070b', 0.13) : mix(c, '#e6ebf1', 0.14);
-  const surfaces = [...bgs, selected];
-  const fill = fitContrast(c, [dark ? '#070a10' : '#f2f5f8'], 1.6, theme);
-  const hover = dark ? mix('#ffffff', fill, 0.35) : mix('#000000', fill, 0.1);
+  const [hue, sat] = rgbToHsl(hexToRgb(c));
+  const n: Record<string, string> = Object.fromEntries(
+    Object.entries(NEUTRALS[theme]).map(([k, v]) => [k, retint(v, hue, sat)]),
+  );
+  const app = n['--bg-app'] ?? '#000000';
+  const main = n['--bg-main'] ?? '#000000';
+  n['--selected'] = mix(c, app, dark ? 0.13 : 0.14);
+  const fill = fitContrast(c, [main], 1.6, theme);
+  const strong0 = fitContrast(c, [app, main], 3, theme);
+  const hoverBase = dark ? c : strong0;
+  const surfaces = textSurfaces(n, hoverBase);
+  const ink100 = fitContrast(n['--ink-100'] ?? '#ffffff', surfaces, 7, theme);
+  const ink300 = fitContrast(n['--ink-300'] ?? '#ffffff', surfaces, 4.5, theme);
+  const ink500 = fitContrast(n['--ink-500'] ?? '#ffffff', surfaces, 4.5, theme);
   const strong = fitContrast(c, surfaces, 3, theme); // icons, focus edges, the orb on light
   const text = fitContrast(c, surfaces, 4.5, theme); // links and accent text
-  const tint = dark ? mix(c, '#0c1119', 0.2) : mix(c, '#ffffff', 0.22);
+  const hover = dark ? mix('#ffffff', fill, 0.35) : mix('#000000', fill, 0.1);
+  const tint = mix(c, dark ? (n['--surface-1'] ?? '#000000') : '#ffffff', dark ? 0.2 : 0.22);
   // A second neon that sits well with any hue: violet, or magenta when the accent is violet-ish.
-  const hueGap = Math.abs(((hueOf(c) - 255 + 540) % 360) - 180);
+  const hueGap = Math.abs(((hue - 255 + 540) % 360) - 180);
   const alt = hueGap < 40 ? (dark ? '#ff2bd6' : '#d1009f') : dark ? '#7a5cff' : '#5b3df0';
+  const shade = dark ? '#000000' : (n['--ink-100'] ?? '#000000');
   return {
+    ...n,
+    '--ink-100': ink100,
+    '--ink-300': ink300,
+    '--ink-500': ink500,
+    '--icon-rest': ink500,
     '--accent-600': fill,
     '--accent-700': hover,
     '--accent-500': strong,
@@ -138,14 +204,21 @@ export function accentVars(hex: string, theme: Theme): Record<string, string> {
     '--accent-edge': rgba(strong, 0.45),
     '--accent-glow': rgba(c, dark ? 0.28 : 0.22),
     '--ink-on-accent': inkOn(fill),
-    '--selected': selected,
-    '--hover': rgba(dark ? c : strong, 0.07),
-    '--press': rgba(dark ? c : strong, 0.12),
-    '--grid-line': rgba(dark ? c : strong, dark ? 0.045 : 0.06),
+    '--hover': rgba(hoverBase, 0.07),
+    '--press': rgba(hoverBase, 0.12),
+    '--grid-line': rgba(hoverBase, dark ? 0.045 : 0.06),
     '--neon-cyan': dark ? c : strong,
     '--orb-1': dark ? c : strong,
     '--orb-2': mix(c, '#000000', 0.12),
     '--orb-3': alt,
-    ...(dark ? { '--ink-strong': c, '--on-strong': inkOn(c) } : {}),
+    '--shadow-sm': dark
+      ? `0 0 0 1px ${rgba(c, 0.03)}, 0 2px 8px rgba(0, 0, 0, 0.5)`
+      : `0 1px 2px ${rgba(shade, 0.06)}`,
+    '--shadow-pop': dark
+      ? `0 0 0 1px ${rgba(c, 0.28)}, 0 0 32px -8px ${rgba(c, 0.35)}, 0 24px 48px -12px rgba(0, 0, 0, 0.85)`
+      : `0 0 0 1px ${rgba(strong, 0.25)}, 0 8px 16px -4px ${rgba(shade, 0.08)}, 0 24px 32px -8px ${rgba(shade, 0.12)}`,
+    ...(dark
+      ? { '--ink-strong': c, '--on-strong': inkOn(c) }
+      : { '--ink-strong': ink100, '--on-strong': n['--surface-1'] ?? '#ffffff' }),
   };
 }

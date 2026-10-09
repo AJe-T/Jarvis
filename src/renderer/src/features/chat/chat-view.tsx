@@ -80,8 +80,54 @@ function Readouts({ compact }: { compact: boolean }): React.JSX.Element {
 }
 
 /** The Core stage (§5.2): Jarvis's orb is the screen; replies appear under it as captions. */
-function Stage({ steps, empty }: { steps: OrbStep[]; empty: boolean }): React.JSX.Element {
+/**
+ * §5.2: with the log closed the orb is the whole interface: click it (or the push-to-talk key) to
+ * speak; start typing anywhere and the log opens with your words in its box.
+ */
+function TalkOrb({
+  steps,
+  big,
+  onChat,
+}: {
+  steps: OrbStep[];
+  big: boolean;
+  onChat(): void;
+}): React.JSX.Element {
+  const state = useAssistantStore((s) => s.state);
+  const detail = useAssistantStore((s) => s.detail);
+  const voiceMode = useSetting('voice.mode');
+  const listening = state === 'LISTENING' && detail !== 'compose';
+  const voiceOff = voiceMode === 'off' || voiceMode === undefined;
+  return (
+    <button
+      type="button"
+      aria-label={voiceOff ? 'Open the chat' : listening ? 'Stop listening' : 'Speak to Jarvis'}
+      title={
+        voiceOff ? 'Voice is off: type instead' : listening ? 'Stop listening' : 'Click to talk'
+      }
+      onClick={() =>
+        voiceOff ? onChat() : void call('voice:mic', { action: listening ? 'stop' : 'start' })
+      }
+      className="rounded-pill transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
+    >
+      <LiveOrb size={big ? 'xl' : 'lg'} steps={steps} />
+    </button>
+  );
+}
+
+function Stage({
+  steps,
+  empty,
+  logOpen,
+  onChat,
+}: {
+  steps: OrbStep[];
+  empty: boolean;
+  logOpen: boolean;
+  onChat(): void;
+}): React.JSX.Element {
   const live = useChatStore((s) => s.live);
+  const pttKey = useSetting('hotkeys.ptt') ?? 'Ctrl+Alt+Space';
   const state = useAssistantStore((s) => s.state);
   const detail = useAssistantStore((s) => s.detail);
   const roomy = useMedia('(min-height: 760px)');
@@ -103,7 +149,7 @@ function Stage({ steps, empty }: { steps: OrbStep[]; empty: boolean }): React.JS
             panel && 'scale-[0.8]',
           )}
         >
-          <LiveOrb size={roomy ? 'xl' : 'lg'} steps={steps} />
+          <TalkOrb steps={steps} big={roomy} onChat={onChat} />
           <p
             aria-hidden
             className={clsx(
@@ -117,6 +163,12 @@ function Stage({ steps, empty }: { steps: OrbStep[]; empty: boolean }): React.JS
           >
             {`[ ${state === 'ERROR' && detail ? detail : STATUS_LINE[state]} ]`}
           </p>
+          {!logOpen && !panel && (
+            <p className="mt-1 text-center text-xs text-ink-500">
+              Click the orb or press <kbd className="font-code text-ink-300">{pttKey}</kbd> to talk
+              · start typing to chat
+            </p>
+          )}
         </div>
         {caption ? (
           <p
@@ -243,6 +295,10 @@ function CommsLog({ onClose }: { onClose(): void }): React.JSX.Element {
           )}
         </div>
       </div>
+      {/* §5.2: typing lives with the conversation; the stage is the orb's. */}
+      <div className="shrink-0 border-t border-line-subtle p-3">
+        <Composer />
+      </div>
     </aside>
   );
 }
@@ -267,6 +323,20 @@ export function ChatView(): React.JSX.Element {
   useEffect(() => {
     if (!empty) setLogOpen(true);
   }, [empty]);
+  // Orb only: start typing anywhere and the log opens with that letter in the box.
+  useEffect(() => {
+    if (logOpen) return;
+    const onKey = (e: KeyboardEvent): void => {
+      const el = e.target as HTMLElement | null;
+      const typing = el?.closest('input, textarea, select, [contenteditable="true"]');
+      if (typing || e.ctrlKey || e.altKey || e.metaKey || e.key.length !== 1) return;
+      e.preventDefault();
+      useChatStore.setState({ draft: e.key });
+      setLogOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [logOpen]);
   const steps = (live?.toolCalls ?? []).map((c): OrbStep =>
     c.status === 'success'
       ? 'done'
@@ -314,10 +384,7 @@ export function ChatView(): React.JSX.Element {
             <PanelRight size={18} strokeWidth={1.75} aria-hidden />
           </IconButton>
         </header>
-        <Stage steps={steps} empty={empty} />
-        <div className="mx-auto w-full max-w-2xl shrink-0 box-content px-4 pb-4 md:px-6">
-          <Composer />
-        </div>
+        <Stage steps={steps} empty={empty} logOpen={logOpen} onChat={() => setLogOpen(true)} />
       </section>
       {logOpen && <CommsLog onClose={() => setLogOpen(false)} />}
     </div>

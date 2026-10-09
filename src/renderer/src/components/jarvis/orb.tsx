@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import type { AssistantState } from '@shared/types';
+import { DEFAULT_ORB_STYLE, type OrbStyleId } from '@shared/orb-styles';
 import { useReducedMotion } from '../../lib/use-reduced-motion';
 import { createOrbPainter, type OrbFrame, type OrbStep } from './orb-painter';
 import { selectOrbLevel, useAssistantStore } from '../../stores/assistant-store';
+import { useDraftSetting } from '../../stores/settings-store';
 
 export type { OrbStep } from './orb-painter';
 
@@ -29,12 +31,17 @@ export interface OrbProps {
   steps?: readonly OrbStep[];
   /** Announce state changes to screen readers. Only one orb on screen should (the others are copies). */
   announce?: boolean;
+  /** Settings → General → Orb style. */
+  orbStyle?: OrbStyleId;
+  /** Style previews: feed a made-up level so the orb shows how it moves. */
+  demo?: boolean;
+  /** Draw one still frame (previews that aren't hovered or selected). */
+  paused?: boolean;
 }
 
 /**
- * Design-system.md §6.1 — Jarvis's reactor core: a plasma sphere in a bright ring, a ring of bars
- * that jumps with the level, and a HUD of rotating arcs, ticks and a radar sweep. Drawn on a
- * canvas every frame; under reduced motion it is drawn once per change and does not move.
+ * Design-system.md §6.1 — Jarvis's orb, in the style Sir picked (orb-styles/). Drawn on a canvas
+ * every frame; under reduced motion it is drawn once per change and does not move.
  */
 export function Orb({
   state,
@@ -42,8 +49,11 @@ export function Orb({
   size,
   steps = [],
   announce = true,
+  orbStyle = DEFAULT_ORB_STYLE,
+  demo = false,
+  paused = false,
 }: OrbProps): React.JSX.Element {
-  const reduced = useReducedMotion();
+  const reduced = useReducedMotion() || paused;
   const px = SIZES[size];
   const canvas = useRef<HTMLCanvasElement>(null);
   const frame = useRef<OrbFrame>({ state, level, steps });
@@ -57,7 +67,10 @@ export function Orb({
   }, [state]);
 
   // Reduced motion repaints on each state change; the animated loop reads the latest props itself.
-  const stillKey = reduced ? `${state}:${steps.join(',')}` : '';
+  // Still frames repaint when the state, the steps or the colours change.
+  const accent = useDraftSetting('appearance.accent');
+  const theme = useDraftSetting('appearance.theme');
+  const stillKey = reduced ? `${state}:${steps.join(',')}:${accent}:${theme}` : '';
   useEffect(() => {
     const el = canvas.current;
     const ctx = el?.getContext('2d');
@@ -66,7 +79,7 @@ export function Orb({
     el.width = Math.round(px * dpr);
     el.height = Math.round(px * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const draw = createOrbPainter(ctx, px);
+    const draw = createOrbPainter(ctx, px, orbStyle, demo);
     if (reduced) {
       draw(frame.current, 0, true);
       return;
@@ -76,7 +89,7 @@ export function Orb({
       raf = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(raf);
-  }, [px, reduced, stillKey]);
+  }, [px, reduced, stillKey, orbStyle, demo]);
 
   return (
     <div
@@ -104,5 +117,6 @@ export function Orb({
 export function LiveOrb(props: Omit<OrbProps, 'state' | 'level'>): React.JSX.Element {
   const state = useAssistantStore((s) => s.state);
   const level = useAssistantStore(selectOrbLevel);
-  return <Orb state={state} level={level} {...props} />;
+  const orbStyle = useDraftSetting('appearance.orbStyle') ?? DEFAULT_ORB_STYLE;
+  return <Orb state={state} level={level} orbStyle={orbStyle} {...props} />;
 }

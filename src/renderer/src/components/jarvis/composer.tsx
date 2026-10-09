@@ -34,7 +34,14 @@ export function Composer(): React.JSX.Element {
   // Rewind → edit puts the old message back here.
   useEffect(() => {
     const d = draft === null ? null : takeDraft();
-    if (d !== null) setText(d);
+    if (d === null) return;
+    setText(d);
+    // Typed-to-open and rewind both expect to keep typing: caret at the end of the box.
+    requestAnimationFrame(() => {
+      const box = boxRef.current;
+      box?.focus();
+      box?.setSelectionRange(d.length, d.length);
+    });
   }, [draft, takeDraft]);
   const state = useAssistantStore((s) => s.state);
   const detail = useAssistantStore((s) => s.detail);

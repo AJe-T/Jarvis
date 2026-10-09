@@ -82,7 +82,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `write_clipboard` | SAFE | Put text on the clipboard so sir can paste it. |
 | `write_text_file` | CONFIRM (destructive) | Create a text file, or overwrite one when overwrite is true, in the allowed folders. Requires confirmation. Max 1 MB. |
 
-## Settings (70)
+## Settings (71)
 
 Stored in the local database; changed in Settings. Secrets are separate (below).
 
@@ -147,6 +147,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `memory.semanticSearch` | boolean | `true` |  |
 | `appearance.theme` | `system` / `dark` / `light` | `system` |  |
 | `appearance.accent` | string | `#00e5ff` |  |
+| `appearance.orbStyle` | `particles` / `reactor` / `fluid` / `cloud` / `liquid` / `sun` / `plasma` / `equalizer` / `sonar` / `scope` / `globe` / `gyroscope` / `atom` / `ring` / `mandala` / `blackhole` / `galaxy` / `rain` | `particles` |  |
 | `appearance.orbMusic` | boolean | `true` |  |
 | `onboarding.complete` | boolean | `false` |  |
 | `remote.enabled` | boolean | `false` |  |

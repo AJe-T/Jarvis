@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AssistantState } from '@shared/types';
+import { DEFAULT_ORB_STYLE, ORB_STYLES, type OrbStyleId } from '@shared/orb-styles';
 import { Orb } from '../../components/jarvis/orb';
 import { applyTheme } from '../../components/jarvis/theme-sync';
 import { call } from '../../lib/api';
@@ -10,6 +11,7 @@ export function MiniOrb(): React.JSX.Element {
   const [mic, setMic] = useState(0);
   const [music, setMusic] = useState(0);
   const [caption, setCaption] = useState('');
+  const [orbStyle, setOrbStyle] = useState<OrbStyleId>(DEFAULT_ORB_STYLE);
 
   // The mini window has no settings store: read the theme and accent once when it opens.
   useEffect(() => {
@@ -19,6 +21,8 @@ export function MiniOrb(): React.JSX.Element {
       const theme = choice === 'light' || choice === 'dark' ? choice : light ? 'light' : 'dark';
       const accent = v['appearance.accent'];
       applyTheme(theme, typeof accent === 'string' ? accent : '');
+      const style = ORB_STYLES.find((s) => s.id === v['appearance.orbStyle']);
+      if (style) setOrbStyle(style.id);
     });
   }, []);
 
@@ -63,7 +67,12 @@ export function MiniOrb(): React.JSX.Element {
         className="rounded-pill border border-line-strong bg-surface-1 p-1.5 shadow-pop"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <Orb state={state} level={state === 'LISTENING' ? mic : music} size="md" />
+        <Orb
+          state={state}
+          level={state === 'LISTENING' ? mic : music}
+          size="md"
+          orbStyle={orbStyle}
+        />
       </button>
     </div>
   );

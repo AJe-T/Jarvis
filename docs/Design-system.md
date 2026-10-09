@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | v7.1 — Neon Grid (cyberpunk HUD), any accent |
+| Status | v7.2 — Neon Grid (cyberpunk HUD), any accent, 18 orb styles |
 | Last updated | 2026-10-09 |
 | Theme | **Neon Grid** dark (signature) and **Daylight HUD** light |
 | Stack | Electron · React · TypeScript · Tailwind v4 · CSS transitions · Canvas 2D (orb) |
@@ -85,7 +85,12 @@ The corner brackets are background layers (`--frame` colour, 12px), so a utility
 
 Cyan (`#00E5FF`) lives in tokens.css. Any other accent is applied by `ThemeSync` as inline
 custom properties on `<html>` (they beat the theme selectors), derived per theme by
-`accentVars(hex, theme)`: fill (`accent-600`, lightness nudged to ≥ 1.6:1 against the canvas so a
+`accentVars(hex, theme)`. **Neutrals follow the accent:** every tokens.css neutral (`bg-app`,
+`bg-main`, `surface-1/2`, `line-subtle`, `line`, `line-strong`, `neutral-tint`, `void`, `ink-100/300/500`,
+`icon-rest`) keeps its lightness and saturation but takes the accent's hue (saturation scaled down
+for greyish accents), so a red accent gives a red-black app. The ink roles are then fitted to
+4.5:1 (ink-100 7:1) on every surface, its hover tint, the selected row and the neutral tag. Shadows
+(`shadow-sm`, `shadow-pop`) are rebuilt from the accent. Then: fill (`accent-600`, lightness nudged to ≥ 1.6:1 against the canvas so a
 near-black or near-white pick still reads as a button), hover, `accent-500` (icons, focus, ≥ 3:1 on
 every surface), `accent-300` (text, ≥ 4.5:1), tint and tag ink (≥ 4.5:1), edge/glow, `selected`,
 `hover`/`press`, grid line, `neon-cyan`, and the orb (`orb-1`/`orb-2`; `orb-3` is violet, or
@@ -192,6 +197,14 @@ It lists finished messages (Sir: magenta right edge; Jarvis: cyan left edge) and
 runs, its tool cards and a three-dot "replying" mark. The reply text itself streams only under the
 orb, so it is never on screen twice.
 
+### 5.2b Talking on Core
+
+The stage has no message box: the composer sits at the bottom of the comms log. With the log closed
+the orb (`TalkOrb`) is a button: **Speak to Jarvis** / **Stop listening** (`voice:mic`), or **Open the
+chat** when voice is off; a hint under the status line names the push-to-talk key. Any printable key
+pressed outside a field opens the log with that character as the composer draft, focused with the
+caret at the end (rewind uses the same path).
+
 ### 5.2a Panels beside the orb (`features/stage/`, `shared/stage.ts`)
 
 `show_panel` (main tool, SAFE, display only) or the header's panel menu sets `useStageStore.panel`;
@@ -242,9 +255,20 @@ click (`aria-label="Open Jarvis core"`). Only the Core orb announces state to sc
 
 ## 6. Components
 
-### 6.1 Orb (`components/jarvis/orb.tsx`, `orb-painter.ts`)
+### 6.1 Orb (`components/jarvis/orb.tsx`, `orb-painter.ts`, `orb-kit.ts`, `orb-styles/`)
 
-A living particle sphere (after Sir's references: dotted plasma spheres, wavy particle shells, a
+**Styles** (`appearance.orbStyle`, list in `shared/orb-styles.ts`, painters in `orb-styles/`):
+`particles` (default, below), `reactor` (the v2.1 arc reactor), `fluid`, `cloud`, `liquid`, `sun`,
+`plasma` (`fluid.ts`), `equalizer`, `sonar`, `scope`, `globe`, `gyroscope`, `atom`, `ring`
+(`instruments.ts`), `mandala`, `blackhole`, `galaxy`, `rain` (`cosmic.ts`). Shared HUD pieces (halo,
+ticks, segmented arcs, glyph ring, markers, sparks, bucketed dot styles) live in `parts.ts`. The
+base painter owns the level smoothing, spin, palette, sleep dimming and error jitter, and calls
+`style.draw(env)`; styles that don't show tool progress get a segmented ring at 0.95R while ACTING.
+Picker: Settings → General → Orb style, a grid of `md` live previews (`demo` level; only the chosen
+and hovered cards animate, the rest are still frames that repaint on accent or theme changes).
+`LiveOrb` previews the draft; the mini window reads the saved style once.
+
+**Particle core.** A living particle sphere (after Sir's references: dotted plasma spheres, wavy particle shells, a
 spell-circle of sparks), drawn on a canvas every frame, back to front:
 
 1. **Halo** — radial glow from the state colour into the second neon.
@@ -402,6 +426,7 @@ name the action ("Move to Recycle Bin", not "OK"); errors say what to do next. T
 
 | Version | Change |
 |---|---|
+| v7.2 Whole-theme accent | Accent re-tints every neutral; 18 orb styles with a live picker; composer moved into the comms log, orb-only Core with click-to-talk and type-to-chat. |
 | v7.1 Any accent | Accent picker with derived, contrast-checked tokens; panels beside the orb (§5.2a); hideable sidebar with Automations and Skills, Activity and Bible moved to Settings; Save bar; particle-sphere orb (liquid ripple, shells, sparks, glyph ring). |
 | v7.0 Neon Grid | Cyberpunk HUD redesign: void canvas with grid and scanlines, HUD corner brackets, neon cyan primary with clipped corners, magenta / yellow second neons, Geist Mono HUD voice, 2–6px corners. Orb-first **Core** (340px reactor orb, corner readouts, captions; conversation moved to a side comms log), live orb dock on every screen, reactor orb (plasma filaments, segmented arcs, counter-ring, sweep, markers, breathing, error glitch). Spaces as Notion galleries with generated covers and page icons; foldable sidebar tree. Connections catalogue tabs and MCP Registry browser. |
 | v6.1 Energy core | Orb redrawn after Sir's reference: teal canvas orb (dotted sphere, bar ring, wavy rings, glow) that follows Jarvis's voice, Sir's mic, or music on the PC; hero orb 168px. |

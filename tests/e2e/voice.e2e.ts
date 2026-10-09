@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { fakeScript, onboard } from './helpers';
+import { fakeScript, onboard, openChat } from './helpers';
 import { launchApp } from './launch';
 
 test('voice turn: mic button → transcript → spoken reply plays → back to idle', async () => {
@@ -35,7 +35,8 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
   await expect(page.getByText('Voice: press to talk')).toBeVisible();
 
   await page.getByRole('button', { name: 'Core', exact: true }).click();
-  await page.getByRole('button', { name: 'Talk to Jarvis' }).click();
+  // Orb only on Core: the orb itself is the talk button.
+  await page.getByRole('button', { name: 'Speak to Jarvis' }).click();
   await expect(page.getByText('what time is it in Tokyo')).toBeVisible();
   await expect(page.getByText("It's half past nine, sir. Details on screen.")).toBeVisible();
   // Playback of the (silent) synthesized audio finishes and the orb returns to idle.
@@ -56,6 +57,7 @@ test('dictate a message: words stream into the box, nothing is sent until Send',
   );
   const page = await app.firstWindow();
   await onboard(page);
+  await openChat(page);
   const box = page.getByLabel('Message Jarvis');
   await page.getByRole('button', { name: 'Dictate a message' }).click();
   await expect(box).toHaveValue('remind me to call mom');
