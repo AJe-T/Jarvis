@@ -228,13 +228,27 @@ Open a chat (WhatsApp, Telegram, Slack…) and press `Ctrl+Alt+R`, or say "help 
 6. **Paste into chat** puts it in the message box of the same chat. **You press Send; Jarvis never does.**
 
 ### 3.11 Connections (MCP)
-Add MCP servers (presets: Playwright browser, GitHub, Notion, filesystem, Chrome DevTools, YouTube transcripts, and **Home Assistant** for lights, plugs and sensors through its built-in "Model Context Protocol Server" integration) in the Connections view. Their tools appear as `mcp__server__tool`, go through the same policy, and their output is untrusted.
+Sidebar → **Connections** → **Add connection**. Three tabs:
+- **Catalogue** — vetted, version-pinned servers grouped by category, with a filter box and "needs key / no key / hosted" tags:
+  - **App hubs (one connection, many apps):** **Zapier** (9,000+ apps: Gmail, Sheets, Slack, Calendar… you choose the actions at mcp.zapier.com) and **Apify** (thousands of ready-made scrapers).
+  - **Browser & files:** Playwright browser, Chrome DevTools, scoped Filesystem.
+  - **Web search:** Brave Search, Tavily, Exa, Firecrawl, Perplexity.
+  - **Docs & knowledge:** Context7 (library docs), Microsoft Learn, DeepWiki (no keys needed), Hugging Face.
+  - **Developer:** GitHub, Linear, Sentry, MongoDB (started read-only).
+  - **Productivity:** Notion, Todoist, HubSpot, Stripe (use a restricted key).
+  - **Home & media:** Home Assistant (lights, plugs, sensors via its "Model Context Protocol Server" integration), YouTube transcripts.
+- **MCP Registry** — search the official public registry (registry.modelcontextprotocol.io, thousands of servers) inside Jarvis and add one in two clicks. Jarvis only lists servers it can run safely as-is (an npm package, or an HTTPS address with at most a Bearer token); Python/Docker ones are counted and can be added as Custom. Registry servers are added as **community** trust, every tool asks first, they get their own keys (they can never reuse your GitHub, Notion, Zapier… keys), npm ones carry a "runs on this PC" warning, and **View source code** opens the repository so you can check it.
+- **Custom** — any stdio command or HTTPS URL.
+
+Keys go in the form before **Connect** (stored encrypted like every secret, passed only to that server). Tools appear as `mcp__server__tool`, go through the same policy, and their output is untrusted.
 
 ### 3.13 Spaces (Notion-style notebooks)
-Sidebar → **Spaces**. Each space (Learning, Finance, Fitness, Ideas…) is a notebook of pages. Your spaces are listed under "Spaces" in the sidebar, with **+ New space** (pick a name and an icon).
-- **Dashboard:** every space as a card with its page count, plus **Recently edited** pages across all spaces.
-- **Pages:** **New page** offers templates — Blank, Learning note, Journal entry (titled with today's date), Meeting notes, Expense log (a table), Project plan.
-- **Editor:** big title (rename by editing it), a formatting bar (headings, bold, italic, lists, to-dos, quote, code, table, `[[link]]`, divider), **Write / Preview**, and Enter continues lists like Notion. It **saves by itself** about a second after you stop typing (Ctrl+S saves now; switching pages saves first).
+Sidebar → **Spaces**. Each space (Learning, Finance, Fitness, Ideas…) is a notebook of pages.
+- **Sidebar tree (accordion):** your spaces sit under "Spaces"; the arrow beside **Spaces** folds the whole list away, and the arrow beside each space shows or hides its pages (like Notion's page tree). Click a page to open it. Jarvis remembers what you folded; opening a page unfolds its space. **+ New space** picks a name and an icon. (The tree shows on windows 1200 px and wider; narrower windows show space icons only.)
+- **Spaces home:** every space as a gallery card with a cover and its icon, plus **Recently edited** pages across all spaces.
+- **A space:** a cover banner, the space's icon and name, then its pages as a **Gallery** (cards with a cover, the page icon and title, like a Notion gallery database) or a **List**; switch with the tabs and Jarvis remembers your choice. **Search** filters, **New page** offers templates (Blank, Learning note, Journal entry titled with today's date, Meeting notes, Expense log table, Project plan), and the last card **+ New page** makes a blank page.
+- **Page icon and cover:** click the icon square to pick an emoji; hover the cover and press **Change cover** to pick one of eight built-in covers (Grid, Synthwave, Matrix, Circuit, Aurora, Hazard, Plasma, Chrome). They are saved in the page's frontmatter (`icon:`, `cover:`), so Obsidian keeps them. Covers are generated art, so no image is ever downloaded.
+- **Editor:** a breadcrumb back to the space, big title (rename by editing it), a formatting bar (headings, bold, italic, lists, to-dos, quote, code, table, `[[link]]`, divider), **Write / Preview**, and Enter continues lists like Notion. It **saves by itself** about a second after you stop typing (Ctrl+S saves now; leaving the page saves first).
 - **Ask Jarvis about this page** (sparkle button) opens a new chat starting "Using my "Learning / Rust" page…". Jarvis can also use Spaces himself with the `spaces` tool: "add this to my Finance space under October", "what did I note in Learning about closures?". He can add and create, never delete or overwrite.
 - **Where it lives:** `Spaces/<space>/<page>.md` in your Obsidian vault — plain Markdown you can open in Obsidian, shown in the Brain graph, and searchable by Jarvis's memory. Deleting a page or space moves it to the vault's `.trash`.
 - Secrets typed into pages (passwords, card numbers) are masked when saved, like everything in the vault. Keep them in **Passwords** instead.
@@ -270,23 +284,24 @@ Settings → **Phone & chat apps** → **WhatsApp**.
 - ⚠ Built on the free **Baileys** library (MIT), not WhatsApp's paid business API. WhatsApp may restrict accounts that use unofficial clients; consider a spare number. **Unlink** logs this PC out and deletes the session keys (`%APPDATA%\Jarvis\whatsapp-auth`).
 
 ### 3.12 Interface
-- **Chat:**
-  - Streaming replies with tool cards and citations.
+- **Core (the home screen):** Jarvis's orb is the screen. It sits in the middle of a HUD with corner readouts (clock, uplink and model, microphone mode, today's spend), a status line under it (`[ READY ]`, `[ THINKING… ]`…), and his words appear under the orb as captions while he replies. Before a conversation there's a greeting and three suggestions; the message box sits at the bottom.
+  - **Comms log:** the conversation is secondary: a log beside the orb (an overlay sheet below 1200 px) that opens when a conversation starts; the speech-bubble button in the header shows or hides it. Tool cards and citations work as before.
   - Conversation history; `/private` conversations are not logged to the vault.
-  - **Rewind** (idea from isair/jarvis): hover one of your messages. **Edit from here** removes it and everything after and puts it back in the box; **Regenerate from here** asks again. Attachments are not re-sent; the vault's daily log keeps the original.
+  - **Rewind** (idea from isair/jarvis): hover one of your messages in the log. **Edit from here** removes it and everything after and puts it back in the box; **Regenerate from here** asks again. Attachments are not re-sent; the vault's daily log keeps the original.
+- **The orb follows you:** on every other screen (Spaces, Settings, Connections…) a small live orb floats in the bottom-right corner, moving with Jarvis's state and voice, with his words beside it while he replies. Click it to return to Core. The sidebar's logo is a live orb too, and the **Mini orb** floats on the Windows desktop over other apps.
 - **Views:**
   - **Settings → Advanced → Logs:** the newest log lines (secrets removed), warnings-only filter, and Open logs folder.
-  - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent).
+  - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent). On Core the Activity panel starts closed (header button opens it).
   - **Memory:** browse, search, forget, and the review queue.
-  - **Spaces** (§3.13), **Brain** (§3.3), **Passwords** (§3.14), **Connections**, **Reply copilot** and **Bible**.
-- **Look ("Geist", modelled on Vercel, [Design-system](Design-system.md)):**
-  - Near-white sidebar with labels (icons only on narrow windows), white page, thin `#EBEBEB` hairlines, no gaps; cards carry a faint stacked shadow.
-  - Solid black ink for the main button (white in dark), one blue for focus, links and Jarvis; status as soft pill tags (amber = needs you, red = blocked, green = done). A blurred blue-violet-pink-amber mesh sits behind the orb on the empty chat, and nowhere else.
-  - Every screen has the same 48 px header and the same centred column, so things line up across the app.
-  - The orb is a teal energy core (dotted sphere, ring of bars, wavy rings). It moves with Jarvis's voice when he speaks, your voice when he listens, and music playing on the PC the rest of the time (Settings → General → "The orb moves to music", on by default; only the loudness is read, nothing is recorded). It sweeps while thinking, splits into one segment per tool while acting, turns amber when it needs you and red on errors.
-  - Font: Geist everywhere, tight tracking on headings; Geist Mono for code and paths. Bundled, works offline.
-  - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px Activity opens as a sheet (Esc closes it).
-  - **Settings → General → Theme:** Match Windows (default), Light, Dark (near-black, Vercel-style).
+  - **Spaces** (§3.13), **Brain** (§3.3), **Passwords** (§3.14), **Connections** (§3.11), **Reply copilot** and **Bible**.
+- **Look ("Neon Grid", cyberpunk HUD, [Design-system](Design-system.md)):**
+  - Near-black void with a faint blueprint grid and CRT scanlines; hard 4 px corners; panels carry HUD corner brackets; hairline borders with neon glow on what's active or floating.
+  - Neon cyan is the main button (clipped corners, dark text), focus and Jarvis; magenta and hazard-yellow are the second and third neon. Status tags are square chips (yellow = needs you, red = blocked, green = done).
+  - Headings, labels, buttons and numbers speak in **Geist Mono** (HUD style, `// SECTION` labels); reading text stays in Geist. Bundled, works offline.
+  - The sidebar groups **// workspace** and **// systems**; the active row has a glowing neon bar.
+  - **The orb is a reactor core:** a plasma sphere with swirling filaments and a dotted shell, a bright ring, a ring of level bars, and a HUD of rotating segmented arcs, a magenta counter-ring, a tick ring, a radar sweep and yellow markers. It breathes at rest, moves with Jarvis's voice when he speaks, your voice when he listens, and music playing on the PC the rest of the time (Settings → General → "The orb moves to music"; only the loudness is read). It spins faster while listening, sweeps while thinking, splits its bars into one segment per tool while acting, turns yellow when it needs you, and glitches red on errors. Reduced motion draws it still.
+  - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px the sidebar shows icons only and the log and Activity open as sheets (Esc closes Activity). The window opens at up to 1400 × 880, never larger than the screen.
+  - **Settings → General → Theme:** Match Windows (default), Light ("daylight HUD": pale steel with the same neon), Dark (Neon Grid, the home look).
 - **Mini orb:** a small always-on-top orb (tray or chat header).
 - **Tray, start with Windows, start hidden.**
 - **Settings → Data & backups:**
@@ -511,6 +526,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.8 | "Workspace" redesign modelled on Notion: warm canvas and sidebar, purple primary, link blue, pastel tags and suggestion cards, labelled sidebar |
 | 1.9 | "Geist" redesign modelled on Vercel: ink-on-white, solid-ink primary, one blue, brand mesh behind the empty-state hero, Geist + Geist Mono, stacked shadows, pill tags |
 | 1.10 | Teal energy-core orb that follows voice, mic and music playing on the PC (loopback meter in its own sandboxed session) |
+| 2.1 | "Neon Grid" cyberpunk redesign: orb-first **Core** home screen with HUD readouts and captions, conversation as a side log, a floating live orb on every screen, sci-fi reactor orb; Spaces as Notion-style galleries with covers and page icons and a foldable sidebar tree; Connections catalogue grows to 24 vetted servers (Zapier and Apify hubs, search, docs, dev, productivity) plus an in-app **MCP Registry** browser |
 | 2.0 | Phone-keyboard dictation into the message box (live words, one-click free on-device speech); Spaces (Notion-style notebooks); Brain graph of the vault; encrypted Passwords the AI can't read; Windows UI Automation tools; phone remote with hands-free calls; WhatsApp self-chat; Telegram voice notes and voice replies; Home Assistant preset |
 
 ---

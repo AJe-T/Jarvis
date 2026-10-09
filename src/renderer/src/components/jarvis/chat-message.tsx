@@ -112,13 +112,13 @@ export function ChatMessage({
             </IconButton>
           </div>
         )}
-        <div className="max-w-[85%] rounded-xl rounded-br-sm bg-surface-2 px-4 py-2.5 whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
+        <div className="max-w-[85%] rounded-md border border-line border-r-2 border-r-neon-magenta bg-surface-2 px-4 py-2.5 whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
           {message.text}
         </div>
       </div>
     );
   return (
-    <article className="text-ink-100" aria-label="Jarvis">
+    <article className="border-l-2 border-accent-500 pl-3 text-ink-100" aria-label="Jarvis">
       {message.toolCalls && message.toolCalls.length > 0 && <ToolCards calls={message.toolCalls} />}
       {message.text && <Markdown text={message.text} />}
       {message.interrupted && <span className="text-sm text-ink-500"> (interrupted)</span>}

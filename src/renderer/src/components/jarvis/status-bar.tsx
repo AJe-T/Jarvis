@@ -29,7 +29,7 @@ export function StatusBar(): React.JSX.Element {
   const ratio = budget > 0 ? day / budget : 0;
   return (
     <footer
-      className="flex h-7 shrink-0 items-center gap-3 overflow-hidden border-t border-line bg-app px-4 text-xs whitespace-nowrap text-ink-500"
+      className="flex h-7 shrink-0 items-center gap-3 overflow-hidden border-t border-line bg-app px-4 font-code text-[11px] tracking-wide whitespace-nowrap text-ink-500"
       aria-label="Status"
     >
       <span>
@@ -60,7 +60,10 @@ export function StatusBar(): React.JSX.Element {
       )}
       <span className="ml-auto flex items-center gap-1.5">
         <span
-          className={clsx('size-2 rounded-pill', online ? 'bg-ok-400' : 'bg-alarm-fill')}
+          className={clsx(
+            'size-2 rounded-pill',
+            online ? 'dot-breathe bg-ok-400 shadow-[0_0_6px_var(--ok-400)]' : 'bg-alarm-fill',
+          )}
           aria-hidden
         />
         {online ? 'Online' : 'Offline'}

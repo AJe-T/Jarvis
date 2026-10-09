@@ -29,6 +29,7 @@ export const INVOKE_CHANNELS = [
   'mcp:update',
   'mcp:remove',
   'mcp:restart',
+  'mcp:registrySearch',
   'voice:setMode',
   'voice:mic',
   'voice:compose',

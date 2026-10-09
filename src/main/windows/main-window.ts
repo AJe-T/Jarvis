@@ -1,16 +1,18 @@
 import { join } from 'node:path';
-import { BrowserWindow, app, nativeTheme } from 'electron';
+import { BrowserWindow, app, nativeTheme, screen } from 'electron';
 import { HARDENED_WEB_PREFERENCES, hardenWindow } from './hardening';
 
 export function createMainWindow(opts: { startHidden?: boolean } = {}): BrowserWindow {
+  // Wide enough for the labelled sidebar, the Core orb and its conversation log, never past the screen.
+  const area = screen.getPrimaryDisplay().workAreaSize;
   const win = new BrowserWindow({
-    width: 1100,
-    height: 760,
+    width: Math.min(1400, Math.round(area.width * 0.9)),
+    height: Math.min(880, Math.round(area.height * 0.9)),
     minWidth: 480,
     minHeight: 520,
     show: false,
     // = --bg-main for the Windows theme, so there is no flash before first paint.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0A0A0A' : '#FFFFFF',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#070A10' : '#F2F5F8',
     title: 'Jarvis',
     icon: join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,

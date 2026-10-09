@@ -1,90 +1,98 @@
-/* Design-system.md §3 ("Geist", after Vercel) — the only place raw colour values live.
-   Ink on near-white: black ink carries the main action, one blue carries focus, links and
-   Jarvis, and the develop / preview / ship mesh gradient is the only decoration (hero only).
-   Dark is the polarity flip: near-black canvas, white ink as the main action. */
+/* Design-system.md §3 ("Neon Grid", cyberpunk HUD) — the only place raw colour values live.
+   Dark is the home theme: a near-black void, cyan neon carries the main action, focus and Jarvis,
+   magenta and hazard-yellow are the second and third neon. Light is "daylight HUD": pale steel with
+   the same neon fill. Every pair is checked by `npm run check:contrast`. */
 
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
 
   /* Surfaces */
-  --bg-app: #fafafa; /* sidebar, status bar */
-  --bg-main: #ffffff; /* canvas */
-  --surface-1: #ffffff; /* cards (hairline + stacked shadow) */
-  --surface-2: #f5f5f5; /* inputs' rest, code, Sir's message, segmented tracks */
-  --hover: rgba(0, 0, 0, 0.05);
-  --press: rgba(0, 0, 0, 0.08);
-  --selected: #ebebeb;
+  --bg-app: #e6ebf1; /* sidebar, status bar */
+  --bg-main: #f2f5f8; /* canvas */
+  --surface-1: #fbfcfd; /* cards, panels */
+  --surface-2: #e9eef3; /* inputs' rest, code, Sir's message, segmented tracks */
+  --hover: rgba(0, 120, 140, 0.07);
+  --press: rgba(0, 120, 140, 0.12);
+  --selected: #d6e6ee;
 
   /* Hairlines */
-  --line-subtle: #f2f2f2;
-  --line: #ebebeb;
-  --line-strong: #c9c9c9;
+  --line-subtle: #dde4ea;
+  --line: #cdd7e0;
+  --line-strong: #9fb0bf;
 
   /* Text */
-  --ink-100: #171717;
-  --ink-300: #4d4d4d;
-  --ink-500: #666666;
-  --icon-rest: #666666;
-  --ink-strong: #171717; /* active pill tabs, brand mark, selection */
-  --on-strong: #ffffff;
+  --ink-100: #071019;
+  --ink-300: #33475a;
+  --ink-500: #4a5d70;
+  --icon-rest: #4a5d70;
+  --ink-strong: #071019; /* brand mark, selection */
+  --on-strong: #e4f7ff;
 
-  /* Primary: black ink (main action); blue (focus, links, Jarvis) */
-  --accent-600: #171717; /* button fill */
-  --accent-700: #383838; /* hover / pressed */
-  --accent-500: #0070f3; /* focus ring, orb, caret */
-  --accent-300: #005bc0; /* links and accent text */
-  --accent-tint: #d3e5ff;
-  --accent-edge: rgba(0, 112, 243, 0.35);
-  --accent-glow: rgba(0, 112, 243, 0.2);
-  --ink-on-accent: #ffffff;
-  --accent-tag-ink: #004ea8;
+  /* Primary: neon cyan fill with dark ink; deep cyan for focus, links and Jarvis */
+  --accent-600: #00d2e6; /* button fill */
+  --accent-700: #00b8cc; /* hover / pressed */
+  --accent-500: #00808f; /* focus ring, caret */
+  --accent-300: #006470; /* links and accent text */
+  --accent-tint: #c9f4f9;
+  --accent-edge: rgba(0, 128, 143, 0.45);
+  --accent-glow: rgba(0, 170, 190, 0.22);
+  --ink-on-accent: #001318;
+  --accent-tag-ink: #005561;
+
+  /* Second and third neon (decoration, covers, the orb's outer rings) */
+  --neon-cyan: #00c2d6;
+  --neon-magenta: #d1009f;
+  --neon-yellow: #d9b800;
+  --neon-violet: #6a3dff;
+  --neon-green: #00b86b;
+  --neon-orange: #ff6a00;
+  --void: #0a1220;
 
   /* Status */
-  --alarm-500: #c50000;
-  --alarm-fill: #c50000;
-  --alarm-tint: #f7d4d6;
-  --alarm-tag-ink: #a80000;
-  --lamp-400: #964c00;
-  --lamp-tint: #ffefcf;
-  --lamp-tag-ink: #8a4300;
-  --ok-400: #236c33;
-  --ok-tint: #d9f5e0;
-  --neutral-tint: #f2f2f2;
+  --alarm-500: #b0002a;
+  --alarm-fill: #b0002a;
+  --alarm-tint: #f9d3db;
+  --alarm-tag-ink: #99001f;
+  --lamp-400: #665000;
+  --lamp-tint: #fbf3b0;
+  --lamp-tag-ink: #5c4500;
+  --ok-400: #0b6334;
+  --ok-tint: #d2f5e3;
+  --neutral-tint: #e1e8ee;
   --ink-on-alarm: #ffffff;
 
-  /* Brand mesh (develop → preview → ship), empty-state hero only */
-  --mesh-1: #007cf0;
-  --mesh-2: #00dfd8;
-  --mesh-3: #7928ca;
-  --mesh-4: #ff0080;
-  --mesh-5: #ff4d4d;
-  --mesh-6: #f9cb28;
-  --mesh-opacity: 0.22;
+  /* Atmosphere: the faint grid on the canvas and the CRT scanlines over everything */
+  --grid-line: rgba(0, 100, 120, 0.06);
+  --scanline: rgba(0, 20, 30, 0.025);
+  --mesh-opacity: 0.18;
 
-  /* Orb (§6.1, after Sir's reference): teal energy core */
-  --orb-1: #12b5a8; /* rings, bars, glow */
-  --orb-2: #06403c; /* core shadow */
-  --orb-hi: #e9fffd; /* core highlight, mesh dots */
+  /* Orb (§6.1): plasma core, cyan rings, magenta and yellow HUD accents */
+  --orb-1: #00a9bd; /* rings, bars, glow */
+  --orb-2: #002a33; /* core shadow */
+  --orb-hi: #ffffff; /* core highlight, mesh dots */
+  --orb-3: #d1009f; /* second ring, sweep tail */
+  --orb-4: #c9a800; /* markers */
 
-  /* Elevation (§2): stacked small offsets, never one heavy drop */
-  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.02), 0 2px 2px rgba(0, 0, 0, 0.04);
+  /* Elevation: hairline + soft neon bloom on things that float */
+  --shadow-sm: 0 1px 2px rgba(7, 16, 25, 0.06);
   --shadow-pop:
-    0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.02),
-    0 8px 16px -4px rgba(0, 0, 0, 0.04), 0 24px 32px -8px rgba(0, 0, 0, 0.06);
-  --scrim: rgba(0, 0, 0, 0.4);
+    0 0 0 1px rgba(0, 128, 143, 0.25), 0 8px 16px -4px rgba(7, 16, 25, 0.08),
+    0 24px 32px -8px rgba(7, 16, 25, 0.12);
+  --glow: 0 0 0 1px var(--accent-edge), 0 0 18px -4px var(--accent-glow);
+  --scrim: rgba(5, 10, 18, 0.45);
 
-  /* Type: Geist for everything, Geist Mono for code and technical labels */
+  /* Type: Geist for reading, Geist Mono for the HUD (headings, labels, buttons, numbers) */
   --font-body: 'Geist', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
-  --font-display: var(--font-body);
+  --font-display: 'Geist Mono', 'Cascadia Mono', Consolas, monospace;
   --font-code: 'Geist Mono', 'Cascadia Mono', Consolas, monospace;
 
-  /* Shape (6px controls, 8px cards, 12px dialogs) */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  /* Shape: hard edges (2–6px) */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
   --radius-pill: 9999px;
 
   /* Motion */
@@ -93,51 +101,62 @@
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Dark: Settings → General → Theme. Vercel dark: near-black canvas, white ink primary. */
+/* Dark ("Neon Grid"): Settings → General → Theme. */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-app: #0a0a0a;
-  --bg-main: #0a0a0a;
-  --surface-1: #111111;
-  --surface-2: #1a1a1a;
-  --hover: rgba(255, 255, 255, 0.06);
-  --press: rgba(255, 255, 255, 0.1);
-  --selected: #232323;
-  --line-subtle: #1a1a1a;
-  --line: #2e2e2e;
-  --line-strong: #454545;
-  --ink-100: #ededed;
-  --ink-300: #a1a1a1;
-  --ink-500: #8f8f8f;
-  --icon-rest: #8f8f8f;
-  --ink-strong: #ededed;
-  --on-strong: #0a0a0a;
-  --accent-600: #ededed;
-  --accent-700: #cccccc;
-  --accent-500: #52a8ff;
-  --accent-300: #52a8ff;
-  --accent-tint: #0d2847;
-  --accent-edge: rgba(82, 168, 255, 0.4);
-  --accent-glow: rgba(82, 168, 255, 0.24);
-  --ink-on-accent: #0a0a0a;
-  --accent-tag-ink: #8cc4ff;
-  --alarm-500: #ff6166;
-  --alarm-fill: #c50000;
-  --alarm-tint: #3c1618;
-  --alarm-tag-ink: #ff9592;
-  --lamp-400: #f5a623;
-  --lamp-tint: #33240d;
-  --lamp-tag-ink: #ffc96b;
-  --ok-400: #62c073;
-  --ok-tint: #0f2e18;
-  --neutral-tint: #1f1f1f;
-  --mesh-opacity: 0.3;
-  --orb-1: #2ee6d4;
-  --orb-2: #031c1a;
-  --orb-hi: #effffd;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --bg-app: #05070b;
+  --bg-main: #070a10;
+  --surface-1: #0c1119;
+  --surface-2: #111824;
+  --hover: rgba(0, 240, 255, 0.07);
+  --press: rgba(0, 240, 255, 0.12);
+  --selected: #0f2230;
+  --line-subtle: #111a26;
+  --line: #1b2a3a;
+  --line-strong: #2b4459;
+  --ink-100: #e4f7ff;
+  --ink-300: #9db4c7;
+  --ink-500: #7d93a8;
+  --icon-rest: #7d93a8;
+  --ink-strong: #00f0ff;
+  --on-strong: #001318;
+  --accent-600: #00e5ff;
+  --accent-700: #6af4ff;
+  --accent-500: #00e5ff;
+  --accent-300: #4fe6ff;
+  --accent-tint: #00313a;
+  --accent-edge: rgba(0, 229, 255, 0.45);
+  --accent-glow: rgba(0, 229, 255, 0.28);
+  --ink-on-accent: #001318;
+  --accent-tag-ink: #7ff1ff;
+  --neon-cyan: #00f0ff;
+  --neon-magenta: #ff2bd6;
+  --neon-yellow: #fcee0a;
+  --neon-violet: #7a5cff;
+  --neon-green: #39ff9f;
+  --neon-orange: #ff7a1a;
+  --void: #04060b;
+  --alarm-500: #ff4d6d;
+  --alarm-fill: #d1103a;
+  --alarm-tint: #3a0d18;
+  --alarm-tag-ink: #ff8fa3;
+  --lamp-400: #fcee0a;
+  --lamp-tint: #2e2b05;
+  --lamp-tag-ink: #fff27a;
+  --ok-400: #39ff9f;
+  --ok-tint: #08291a;
+  --neutral-tint: #121c28;
+  --grid-line: rgba(0, 229, 255, 0.045);
+  --scanline: rgba(255, 255, 255, 0.018);
+  --mesh-opacity: 0.32;
+  --orb-1: #00f0ff;
+  --orb-2: #00141c;
+  --orb-hi: #eafdff;
+  --orb-3: #ff2bd6;
+  --orb-4: #fcee0a;
+  --shadow-sm: 0 0 0 1px rgba(0, 229, 255, 0.03), 0 2px 8px rgba(0, 0, 0, 0.5);
   --shadow-pop:
-    0 0 0 1px rgba(255, 255, 255, 0.1), 0 8px 16px -4px rgba(0, 0, 0, 0.4),
-    0 24px 32px -8px rgba(0, 0, 0, 0.5);
-  --scrim: rgba(0, 0, 0, 0.6);
+    0 0 0 1px rgba(0, 229, 255, 0.28), 0 0 32px -8px rgba(0, 229, 255, 0.35),
+    0 24px 48px -12px rgba(0, 0, 0, 0.85);
+  --scrim: rgba(0, 0, 0, 0.65);
 }

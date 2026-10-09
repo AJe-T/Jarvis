@@ -32,7 +32,7 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
   await page.getByLabel(/Press to talk/).check();
   await expect(page.getByText('Voice: press to talk')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.getByRole('button', { name: 'Core', exact: true }).click();
   await page.getByRole('button', { name: 'Talk to Jarvis' }).click();
   await expect(page.getByText('what time is it in Tokyo')).toBeVisible();
   await expect(page.getByText("It's half past nine, sir. Details on screen.")).toBeVisible();

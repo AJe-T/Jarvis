@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { ThemeSync } from './components/jarvis/theme-sync';
+import { OrbDock } from './components/jarvis/orb-dock';
 import { Rail } from './components/jarvis/rail';
 import { StatusBar } from './components/jarvis/status-bar';
 import { ConfirmModalHost } from './components/ui/confirm-modal';
@@ -41,7 +42,7 @@ function DbBanner(): React.JSX.Element | null {
   );
 }
 
-/** §5.1: Vercel-style shell: a near-white sidebar, a white canvas, hairline dividers, no gaps. */
+/** §5.1: HUD shell: sidebar, gridded canvas, status bar; scanlines over it all and the orb on every screen. */
 function Shell(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const activityOpen = useUiStore((s) => s.activityOpen);
@@ -59,11 +60,11 @@ function Shell(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawer, toggleActivity]);
   return (
-    <div className="flex h-full flex-col bg-app">
+    <div className="scanlines flex h-full flex-col bg-app">
       <DbBanner />
       <div className="flex min-h-0 flex-1">
         <Rail />
-        <main className="panel flex min-w-0 flex-1 overflow-hidden">
+        <main className="panel relative flex min-w-0 flex-1 overflow-hidden">
           {Current ? (
             // §8: views fade in; nothing slides.
             <div key={view} className="view-enter flex min-w-0 flex-1">
@@ -72,6 +73,7 @@ function Shell(): React.JSX.Element {
           ) : (
             <p className="m-auto text-ink-500">This area is not available yet.</p>
           )}
+          <OrbDock />
         </main>
         {drawer && (
           // Below lg the drawer is an overlay sheet; the scrim closes it.

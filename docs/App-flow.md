@@ -154,8 +154,11 @@ Watcher detects change → re-index → next turn uses updated facts. If Jarvis 
 
 ## 8. Connections (MCP) Flow
 
-1. Connections → "Add connection" → choose from presets (Playwright, GitHub, Notion, Filesystem) or "Custom".
-2. Form: name, command/URL, args, secrets (stored encrypted), trust level.
+1. Connections → "Add connection" → three tabs:
+   - **Catalogue:** vetted presets filtered by category (App hubs, Browser & files, Web search, Docs & knowledge, Developer, Productivity, Home & media) or text.
+   - **MCP Registry:** search the official registry (debounced); results Jarvis can run as-is, **Load more**, and a count of the ones that need Python/Docker. **Add** opens the same form, with an editable name and a **View source code** link.
+   - **Custom:** name, command/URL, args, trust level.
+2. Form: the keys the server needs (each a secret field, stored encrypted), the exact command or URL, **Connect** (disabled until every key is saved and the name is free).
 3. "Test" → spawn/connect → list tools → show tools with default tier CONFIRM; Sir can mark read-only tools SAFE.
 4. Save → server enabled → tools available from the next turn.
 5. Failures show the server's stderr tail (redacted) and a "Retry" button.

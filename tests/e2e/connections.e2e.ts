@@ -13,7 +13,12 @@ test('E6: add a custom MCP server; it connects and lists its tools', async () =>
 
   await page.getByRole('button', { name: 'Connections' }).click();
   await page.getByRole('button', { name: 'Add connection' }).click();
-  await page.getByRole('button', { name: /Custom server/ }).click();
+  // The catalogue groups vetted servers; app hubs like Zapier come first.
+  await expect(page.getByRole('button', { name: /Zapier \(9,000\+ apps\)/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Web search', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Brave Search/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Zapier/ })).toBeHidden();
+  await page.getByRole('tab', { name: 'Custom' }).click();
   await page.getByLabel('Name (lowercase, used in tool names)').fill('fake');
   await page.getByLabel('Command', { exact: true }).fill('node');
   await page.getByLabel('Arguments').fill(`"${resolve('tests/fixtures/fake-mcp-server.mjs')}"`);

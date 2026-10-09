@@ -21,6 +21,16 @@ test('Spaces: create a space and a page; it saves by itself and shows in the Bra
   await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible({
     timeout: 5000,
   });
+  // Sidebar accordion (labels show from 1200px): the page sits under its space; the tree folds away.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1400, 900));
+  await expect(page.getByRole('button', { name: 'Page: Expense log' })).toBeVisible();
+  await page.getByRole('button', { name: 'Collapse spaces' }).click();
+  await expect(page.getByRole('button', { name: 'Space: Finance' })).toBeHidden();
+  await page.getByRole('button', { name: 'Expand spaces' }).click();
+  await page.getByRole('button', { name: 'Hide pages in Finance' }).click();
+  await expect(page.getByRole('button', { name: 'Page: Expense log' })).toBeHidden();
+  await page.getByRole('button', { name: 'Space: Finance' }).click();
+  await expect(page.getByRole('heading', { name: 'Finance' })).toBeVisible();
   await page.getByRole('button', { name: 'Brain', exact: true }).click();
   await expect(page.getByRole('img', { name: /Brain graph: \d+ notes/ })).toBeVisible();
   await expect(page.getByText('Spaces/Finance')).toBeVisible();

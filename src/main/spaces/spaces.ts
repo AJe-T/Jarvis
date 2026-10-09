@@ -32,7 +32,14 @@ export interface PageInfo {
   updatedAt: string;
   size: number;
   excerpt: string;
+  /** From the page's frontmatter (`icon:` an emoji, `cover:` a built-in cover id); Sir sets both in the editor. */
+  icon?: string;
+  cover?: string;
 }
+
+const COVER_RE = /^[a-z][a-z-]{1,23}$/;
+const str = (v: unknown, ok: (s: string) => boolean): string | undefined =>
+  typeof v === 'string' && ok(v) ? v : undefined;
 
 /** The page title is its file name (shown above the editor), so templates start below it. */
 const TEMPLATES = {
@@ -129,8 +136,11 @@ export function createSpaces(deps: {
       if (e.isDir || !e.name.toLowerCase().endsWith('.md')) continue;
       const abs = vault.resolve(e.path);
       const [raw, st] = await Promise.all([readFile(abs, 'utf8'), stat(abs)]);
-      const body = parseNote(raw)
-        .body.replace(/^#.*$/m, '')
+      const note = parseNote(raw);
+      const icon = str(note.frontmatter['icon'], (v) => v.length > 0 && v.length <= 16);
+      const cover = str(note.frontmatter['cover'], (v) => COVER_RE.test(v));
+      const body = note.body
+        .replace(/^#.*$/m, '')
         .replace(/[#*_>`|-]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
@@ -139,6 +149,8 @@ export function createSpaces(deps: {
         updatedAt: st.mtime.toISOString(),
         size: st.size,
         excerpt: body.slice(0, 140),
+        ...(icon ? { icon } : {}),
+        ...(cover ? { cover } : {}),
       });
     }
     return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));

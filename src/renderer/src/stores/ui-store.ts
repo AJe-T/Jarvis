@@ -42,8 +42,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   view: 'chat',
   settingsSection: 'brain',
   spaceTarget: null,
-  // §5.1: docked from lg (1200px); below that it is an overlay sheet, so start closed.
-  activityOpen: typeof window === 'undefined' ? true : window.innerWidth >= 1200,
+  // §5.1: the conversation log owns the right edge of Core now, so activity starts closed.
+  activityOpen: false,
   historyOpen: false,
   toasts: [],
   online: typeof navigator === 'undefined' ? true : navigator.onLine,

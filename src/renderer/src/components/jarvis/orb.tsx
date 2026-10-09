@@ -7,7 +7,7 @@ import { selectOrbLevel, useAssistantStore } from '../../stores/assistant-store'
 
 export type { OrbStep } from './orb-painter';
 
-const SIZES = { sm: 32, md: 88, lg: 168 } as const;
+const SIZES = { sm: 32, dock: 72, md: 88, lg: 168, xl: 340 } as const;
 
 const LABEL: Record<AssistantState, string> = {
   IDLE: 'idle',
@@ -27,14 +27,22 @@ export interface OrbProps {
   size: keyof typeof SIZES;
   /** Tool calls of the running turn; drawn as segments of the bar ring while ACTING. */
   steps?: readonly OrbStep[];
+  /** Announce state changes to screen readers. Only one orb on screen should (the others are copies). */
+  announce?: boolean;
 }
 
 /**
- * Design-system.md §6.1 — Jarvis's energy core (after Sir's reference): a dotted sphere in a
- * bright ring, a ring of bars that jumps with the level, and wavy outer rings. Drawn on a canvas
- * every frame; under reduced motion it is drawn once per change and does not move.
+ * Design-system.md §6.1 — Jarvis's reactor core: a plasma sphere in a bright ring, a ring of bars
+ * that jumps with the level, and a HUD of rotating arcs, ticks and a radar sweep. Drawn on a
+ * canvas every frame; under reduced motion it is drawn once per change and does not move.
  */
-export function Orb({ state, level = 0, size, steps = [] }: OrbProps): React.JSX.Element {
+export function Orb({
+  state,
+  level = 0,
+  size,
+  steps = [],
+  announce = true,
+}: OrbProps): React.JSX.Element {
   const reduced = useReducedMotion();
   const px = SIZES[size];
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -83,9 +91,11 @@ export function Orb({ state, level = 0, size, steps = [] }: OrbProps): React.JSX
         data-motion={reduced ? 'off' : 'on'}
         style={{ width: px, height: px }}
       />
-      <span className="sr-only" aria-live="polite">
-        Jarvis is {announced}
-      </span>
+      {announce && (
+        <span className="sr-only" aria-live="polite">
+          Jarvis is {announced}
+        </span>
+      )}
     </div>
   );
 }

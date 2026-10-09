@@ -47,6 +47,18 @@ const McpServerView = McpServerInput.extend({
 });
 export type McpServerView = z.infer<typeof McpServerView>;
 
+/** An MCP Registry server Jarvis can install as-is (main/mcp/registry.ts). */
+const RegistryEntry = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  version: z.string(),
+  repository: z.string().optional(),
+  kind: z.enum(['npm', 'remote']),
+  secrets: z.array(z.object({ name: SecretNameSchema, label: z.string(), help: z.string() })),
+  server: McpServerInput,
+});
+
 const MemoryEntry = z.object({
   path: z.string(),
   name: z.string(),
@@ -381,6 +393,15 @@ export const INVOKE = {
   'mcp:update': contract(z.object({ id: Id, patch: McpServerInput.partial() }), Ok),
   'mcp:remove': contract(z.object({ id: Id }), Ok),
   'mcp:restart': contract(z.object({ id: Id }), Ok),
+  'mcp:registrySearch': contract(
+    z.object({ query: z.string().trim().max(80), cursor: z.string().max(300).optional() }),
+    z.object({
+      entries: z.array(RegistryEntry),
+      /** Servers on this page Jarvis can't run as-is (Python, Docker, custom headers…). */
+      skipped: z.number(),
+      nextCursor: z.string().optional(),
+    }),
+  ),
   'voice:setMode': contract(
     z.object({ mode: z.enum(VOICE_MODES) }),
     z.object({ ok: z.boolean(), error: z.string().optional() }),
@@ -495,7 +516,14 @@ export const INVOKE = {
   'spaces:pages': contract(
     z.object({ space: SpaceNameInput }),
     z.array(
-      z.object({ name: z.string(), updatedAt: z.string(), size: z.number(), excerpt: z.string() }),
+      z.object({
+        name: z.string(),
+        updatedAt: z.string(),
+        size: z.number(),
+        excerpt: z.string(),
+        icon: z.string().optional(),
+        cover: z.string().optional(),
+      }),
     ),
   ),
   'spaces:read': contract(

@@ -11,7 +11,13 @@ export function PageHeader({
 }): React.JSX.Element {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line-subtle px-4 md:px-6">
-      <h1 className="truncate text-ui font-semibold text-ink-100">{title}</h1>
+      <span
+        aria-hidden
+        className="h-4 w-0.5 shrink-0 bg-accent-500 shadow-[0_0_8px_var(--accent-glow)]"
+      />
+      <h1 className="truncate font-code text-[13px] font-semibold tracking-[0.14em] text-ink-100 uppercase">
+        {title}
+      </h1>
       {children && <div className="ml-auto flex items-center gap-2">{children}</div>}
     </header>
   );

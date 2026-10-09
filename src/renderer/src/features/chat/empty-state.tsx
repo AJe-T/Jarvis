@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { LiveOrb } from '../../components/jarvis/orb';
 import { call } from '../../lib/api';
 import { useChatStore } from '../../stores/chat-store';
 
@@ -15,7 +14,7 @@ const FALLBACK_CHIPS = [
   'What can you do?',
 ];
 
-/** Design-system.md §5.2: brand mesh behind the orb, one line, three suggestion cards from routines. */
+/** Design-system.md §5.2: under the Core orb before a conversation: one line, three suggestions from routines. */
 export function EmptyState(): React.JSX.Element {
   const send = useChatStore((s) => s.send);
   const [chips, setChips] = useState<string[]>(FALLBACK_CHIPS);
@@ -37,23 +36,22 @@ export function EmptyState(): React.JSX.Element {
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6">
-      <div className="mesh flex w-full max-w-3xl flex-col items-center gap-5">
-        <LiveOrb size="lg" />
-        <h1 className="text-center text-hero font-semibold text-ink-100">{greeting()}</h1>
-        {/* suggestions as an even grid of left-aligned cards */}
-        <div className="mt-3 grid w-full gap-2 md:grid-cols-3">
-          {chips.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => void send(c)}
-              className="card min-h-20 px-5 py-4 text-left text-ui font-medium text-ink-100 transition-colors duration-[120ms] hover:bg-surface-2"
-            >
-              {c.charAt(0).toUpperCase() + c.slice(1)}
-            </button>
-          ))}
-        </div>
+    <div className="flex w-full max-w-3xl flex-col items-center gap-4">
+      <h1 className="text-center text-xl font-semibold text-ink-100 md:text-2xl">{greeting()}</h1>
+      <div className="grid w-full gap-2 md:grid-cols-3">
+        {chips.map((c, i) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => void send(c)}
+            className="card group min-h-16 px-4 py-3 text-left text-ui text-ink-100 transition-colors duration-[120ms] hover:border-accent-edge hover:bg-surface-2"
+          >
+            <span aria-hidden className="hud-label mb-1 block group-hover:text-accent-300!">
+              {`cmd.0${i + 1}`}
+            </span>
+            {c.charAt(0).toUpperCase() + c.slice(1)}
+          </button>
+        ))}
       </div>
     </div>
   );
