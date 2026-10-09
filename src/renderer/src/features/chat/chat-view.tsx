@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { History, MessageSquareText, Minimize2, PanelRight, Plus, X } from 'lucide-react';
+import {
+  History,
+  LayoutPanelLeft,
+  MessageSquareText,
+  Minimize2,
+  PanelRight,
+  Plus,
+  X,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { LiveOrb, type OrbStep } from '../../components/jarvis/orb';
 import { ChatMessage, ToolCards } from '../../components/jarvis/chat-message';
@@ -9,7 +17,9 @@ import { call } from '../../lib/api';
 import { useAssistantStore } from '../../stores/assistant-store';
 import { useChatStore } from '../../stores/chat-store';
 import { useSetting, useSettingsStore } from '../../stores/settings-store';
+import { useStageStore } from '../../stores/stage-store';
 import { useUiStore } from '../../stores/ui-store';
+import { StagePanelFrame } from '../stage/stage-panel';
 import { ConversationList } from './conversation-list';
 import { captionOf, STATUS_LINE } from './caption';
 import { EmptyState } from './empty-state';
@@ -26,7 +36,7 @@ function useMedia(query: string): boolean {
 }
 
 /** Corner readouts around the orb: clock, model, voice, spend. Decorative (the status bar carries the same). */
-function Readouts(): React.JSX.Element {
+function Readouts({ compact }: { compact: boolean }): React.JSX.Element {
   const [now, setNow] = useState(() => new Date());
   const lastModel = useSettingsStore((s) => s.lastModel);
   const defaultModel = useSetting('models.default');
@@ -50,7 +60,7 @@ function Readouts(): React.JSX.Element {
           {now.toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short' })}
         </span>
       </div>
-      <div className={clsx(cell, 'top-0 right-0 items-end')}>
+      <div className={clsx(cell, 'top-0 right-0 items-end', compact && 'hidden!')}>
         <span className="hud-label">uplink</span>
         <span className={online ? 'text-ok-400' : 'text-alarm-500'}>
           {online ? '■ link stable' : '■ link lost'}
@@ -61,7 +71,7 @@ function Readouts(): React.JSX.Element {
         <span className="hud-label">audio.in</span>
         <span className="text-ink-300">{voice ?? 'off'}</span>
       </div>
-      <div className={clsx(cell, 'right-0 bottom-0 items-end')}>
+      <div className={clsx(cell, 'right-0 bottom-0 items-end', compact && 'hidden!')}>
         <span className="hud-label">spend.today</span>
         <span className="text-ink-300 tabular">${day.toFixed(2)}</span>
       </div>
@@ -76,36 +86,95 @@ function Stage({ steps, empty }: { steps: OrbStep[]; empty: boolean }): React.JS
   const detail = useAssistantStore((s) => s.detail);
   const roomy = useMedia('(min-height: 760px)');
   const caption = live?.text ? captionOf(live.text) : '';
+  const panel = useStageStore((s) => s.panel);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-4 py-6">
-      <Readouts />
-      <div className="mesh flex flex-col items-center">
-        <LiveOrb size={roomy ? 'xl' : 'lg'} steps={steps} />
-        <p
-          aria-hidden
+    <div className="relative flex min-h-0 flex-1 overflow-hidden">
+      <Readouts compact={panel !== null} />
+      <div
+        className={clsx(
+          'flex min-h-0 flex-col items-center justify-center gap-4 overflow-y-auto px-4 py-6 transition-[width] duration-500 ease-(--ease-standard)',
+          panel ? 'w-2/5 max-md:hidden' : 'w-full',
+        )}
+      >
+        <div
           className={clsx(
-            'hud-label mt-2 text-xs!',
-            state === 'ERROR'
-              ? 'text-alarm-500!'
-              : state === 'AWAITING_CONFIRMATION'
-                ? 'text-lamp-400!'
-                : 'text-accent-300!',
+            'mesh flex flex-col items-center transition-transform duration-500 ease-(--ease-standard)',
+            panel && 'scale-[0.8]',
           )}
         >
-          {`[ ${state === 'ERROR' && detail ? detail : STATUS_LINE[state]} ]`}
-        </p>
+          <LiveOrb size={roomy ? 'xl' : 'lg'} steps={steps} />
+          <p
+            aria-hidden
+            className={clsx(
+              'hud-label mt-2 text-xs!',
+              state === 'ERROR'
+                ? 'text-alarm-500!'
+                : state === 'AWAITING_CONFIRMATION'
+                  ? 'text-lamp-400!'
+                  : 'text-accent-300!',
+            )}
+          >
+            {`[ ${state === 'ERROR' && detail ? detail : STATUS_LINE[state]} ]`}
+          </p>
+        </div>
+        {caption ? (
+          <p
+            aria-hidden
+            className="min-h-14 max-w-2xl text-center text-lg leading-relaxed text-ink-100"
+          >
+            {caption}
+            <span className="stream-caret" />
+          </p>
+        ) : (
+          empty && !panel && <EmptyState />
+        )}
       </div>
-      {caption ? (
-        <p
-          aria-hidden
-          className="min-h-14 max-w-2xl text-center text-lg leading-relaxed text-ink-100"
-        >
-          {caption}
-          <span className="stream-caret" />
-        </p>
-      ) : (
-        empty && <EmptyState />
+      {panel && (
+        // §5.2a: Jarvis moves aside; what Sir asked for fills the right of the stage.
+        <div className="flex min-h-0 w-3/5 items-center py-6 pr-6 max-md:w-full max-md:pl-4">
+          <StagePanelFrame panel={panel} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Opens a panel by hand (Jarvis opens the same ones with show_panel). */
+function PanelMenu(): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const show = useStageStore((s) => s.show);
+  const items = [
+    {
+      label: 'Pomodoro timer',
+      run: () => show({ kind: 'pomodoro', minutes: 25, breakMinutes: 5 }),
+    },
+    { label: 'System status', run: () => show({ kind: 'status' }) },
+    { label: 'AI usage & billing', run: () => show({ kind: 'usage' }) },
+  ];
+  return (
+    <div className="relative">
+      <IconButton label="Show a panel" active={open} onClick={() => setOpen(!open)}>
+        <LayoutPanelLeft size={18} strokeWidth={1.75} aria-hidden />
+      </IconButton>
+      {open && (
+        <ul role="menu" aria-label="Panels" className="popover absolute right-0 z-30 mt-1 w-52 p-1">
+          {items.map((i) => (
+            <li key={i.label}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  i.run();
+                }}
+                className="w-full rounded-sm px-2.5 py-1.5 text-left font-code text-xs text-ink-100 hover:bg-hover"
+              >
+                {i.label}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -188,7 +257,12 @@ export function ChatView(): React.JSX.Element {
   const activityOpen = useUiStore((s) => s.activityOpen);
   const toggleActivity = useUiStore((s) => s.toggleActivity);
   const empty = messages.length === 0 && !live;
+  const panel = useStageStore((s) => s.panel);
   const [logOpen, setLogOpen] = useState(!empty);
+  // A panel needs the room: the log steps aside (the header button brings it back).
+  useEffect(() => {
+    if (panel) setLogOpen(false);
+  }, [panel]);
   // A conversation starting (or being opened from history) brings the log out.
   useEffect(() => {
     if (!empty) setLogOpen(true);
@@ -221,6 +295,7 @@ export function ChatView(): React.JSX.Element {
           <p aria-hidden className="hud-label mx-auto truncate">
             {`// core · ${STATUS_LINE[state]}`}
           </p>
+          <PanelMenu />
           <IconButton label="Mini orb" onClick={() => void call('app:setMiniMode', { on: true })}>
             <Minimize2 size={18} strokeWidth={1.75} aria-hidden />
           </IconButton>

@@ -147,6 +147,8 @@ export const SETTINGS = {
     schema: z.enum(['system', 'dark', 'light']),
     default: 'system' as 'system' | 'dark' | 'light',
   },
+  /** One accent colour the whole neon theme follows (Design-system.md §3.6); cyan is the default. */
+  'appearance.accent': { schema: z.string().regex(/^#[0-9a-fA-F]{6}$/), default: '#00e5ff' },
   /** The orb moves to music and other sound playing on this PC (levels only, never recorded). */
   'appearance.orbMusic': { schema: z.boolean(), default: true },
   'onboarding.complete': { schema: z.boolean(), default: false },
@@ -179,6 +181,13 @@ export const SettingKeySchema = z.enum(SETTING_KEYS as [SettingKey, ...SettingKe
 /** Settings whose change must itself be confirmed by Sir in the UI (Security.md §5 step 4). */
 /** Set only by main-process flows (e.g. Telegram pairing), never directly from the renderer. */
 export const MAIN_ONLY_SETTINGS: readonly SettingKey[] = ['telegram.chatId'];
+
+/** Applied live, but a restart gives these a clean start (the Save bar offers one). */
+export const RESTART_SETTINGS: readonly SettingKey[] = [
+  'llm.provider',
+  'vault.path',
+  'memory.semanticSearch',
+];
 
 export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   'policy.overrides',

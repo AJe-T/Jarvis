@@ -2,14 +2,23 @@ import { useEffect, useState } from 'react';
 import type { SettingKey, SettingValue } from '@shared/settings';
 import { Field, Switch, TextInput } from '../../components/ui/field';
 import { cleanError } from '../../lib/api';
-import { useSetting, useSettingsStore } from '../../stores/settings-store';
+import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 
 function asText(v: unknown): string {
   return typeof v === 'string' || typeof v === 'number' ? String(v) : '';
 }
 
-async function save<K extends SettingKey>(key: K, value: SettingValue<K>): Promise<boolean> {
+/** Settings controls stage their edit; the Save bar writes it (Design-system.md §6.9). */
+function save<K extends SettingKey>(key: K, value: SettingValue<K>): Promise<boolean> {
+  return useSettingsStore
+    .getState()
+    .stage(key, value)
+    .then(() => true);
+}
+
+/** Saves immediately: for changes Sir already confirmed in a dialog (folders, permissions, vault). */
+async function saveNow<K extends SettingKey>(key: K, value: SettingValue<K>): Promise<boolean> {
   try {
     await useSettingsStore.getState().set(key, value);
     return true;
@@ -33,7 +42,7 @@ export function SettingInput<K extends SettingKey>({
   type?: 'text' | 'number';
   step?: number;
 }): React.JSX.Element {
-  const value = useSetting(k);
+  const value = useDraftSetting(k);
   const [draft, setDraft] = useState(asText(value));
   useEffect(() => setDraft(asText(value)), [value]);
   const commit = (): void => {
@@ -66,7 +75,7 @@ export function SettingSwitch({
   k: Extract<SettingKey, `${string}`>;
   label: string;
 }): React.JSX.Element {
-  const value = useSetting(k) as boolean | undefined;
+  const value = useDraftSetting(k) as boolean | undefined;
   return (
     <Switch
       label={label}
@@ -85,7 +94,7 @@ export function SettingSelect<K extends SettingKey>({
   label: string;
   options: Array<{ value: string; label: string }>;
 }): React.JSX.Element {
-  const value = useSetting(k);
+  const value = useDraftSetting(k);
   return (
     <Field label={label}>
       {(id) => (
@@ -106,7 +115,7 @@ export function SettingSelect<K extends SettingKey>({
   );
 }
 
-export { save as saveSetting };
+export { saveNow as saveSetting };
 
 /** Multi-line text setting that saves on blur. */
 export function SettingTextArea<K extends SettingKey>({
@@ -120,7 +129,7 @@ export function SettingTextArea<K extends SettingKey>({
   hint?: string;
   rows?: number;
 }): React.JSX.Element {
-  const value = useSetting(k);
+  const value = useDraftSetting(k);
   const [draft, setDraft] = useState(asText(value));
   useEffect(() => setDraft(asText(value)), [value]);
   return (

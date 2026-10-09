@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | v7.0 — Neon Grid (cyberpunk HUD) |
+| Status | v7.1 — Neon Grid (cyberpunk HUD), any accent |
 | Last updated | 2026-10-09 |
 | Theme | **Neon Grid** dark (signature) and **Daylight HUD** light |
 | Stack | Electron · React · TypeScript · Tailwind v4 · CSS transitions · Canvas 2D (orb) |
@@ -81,6 +81,21 @@ The corner brackets are background layers (`--frame` colour, 12px), so a utility
 | `neon-yellow` | `#FCEE0A` | `#D9B800` | Covers, HUD markers |
 | `neon-violet`, `neon-green`, `neon-orange`, `void` | `#7A5CFF`, `#39FF9F`, `#FF7A1A`, `#04060B` | darker equivalents | Covers only |
 
+### 3.6 Accent colour (`lib/accent.ts`, `appearance.accent`)
+
+Cyan (`#00E5FF`) lives in tokens.css. Any other accent is applied by `ThemeSync` as inline
+custom properties on `<html>` (they beat the theme selectors), derived per theme by
+`accentVars(hex, theme)`: fill (`accent-600`, lightness nudged to ≥ 1.6:1 against the canvas so a
+near-black or near-white pick still reads as a button), hover, `accent-500` (icons, focus, ≥ 3:1 on
+every surface), `accent-300` (text, ≥ 4.5:1), tint and tag ink (≥ 4.5:1), edge/glow, `selected`,
+`hover`/`press`, grid line, `neon-cyan`, and the orb (`orb-1`/`orb-2`; `orb-3` is violet, or
+magenta when the accent is itself violet). Ink on the fill is dark or white, whichever reads
+better. `accent.test.ts` checks every preset plus pure blue, yellow, grey, black and white in both
+themes. Presets: Cyan, Arc blue `#3D8BFF`, Violet `#8B5CFF`, Magenta `#FF2BD6`, Red `#FF2A3D`,
+Orange `#FF7A1A`, Gold `#FFC400`, Lime `#B6FF2E`, Green `#2BFF88`, Silver `#C8D6E5`. Custom = the
+native `<input type="color">` (the Windows colour dialog) plus a hex field. The mini-orb window
+reads theme and accent once when it opens.
+
 ### 3.3 Status tags
 
 | Meaning | Tag fill / ink (dark) | Tag fill / ink (light) | Text colour |
@@ -146,10 +161,14 @@ Tabular figures for numbers. Uppercase only on mono labels and page titles, neve
 ```
 
 - **Sidebar** (`bg-app`, hairline right edge): a live `sm` orb + glitching **JARVIS** wordmark
-  (decorative, `aria-hidden` copies), `// workspace` (Core, Spaces tree, Brain, Memory,
-  Passwords), `// systems` (Activity, Connections, Reply copilot, Bible), Settings pinned to the
-  bottom. Labels (256px) from 1200px, icons only (56px, tooltips) below. Active row =
-  `.rail-active`.
+  (decorative, `aria-hidden` copies) and a **Hide sidebar** button, `// workspace` (Core, Spaces
+  tree, Brain, Memory, Passwords), `// tools` (Automations, Skills, Connections, Reply copilot),
+  Settings pinned to the bottom. Labels (256px) from 1200px, icons only (56px, tooltips) below.
+  Active row = `.rail-active`. Activity and Bible are Settings sections (`go('activity')` and
+  `go('bible')` redirect there).
+- **Hidden sidebar:** Ctrl+B or the button collapses it to a 44px strip with **Show sidebar**
+  (`railHidden`, remembered in `localStorage`). While a Core panel is up Jarvis hides it himself
+  (`railAuto`) and gives it back when the panel closes, unless Sir toggled it meanwhile.
 - **Spaces tree:** a chevron beside **Spaces** folds the whole list; a chevron beside each space
   folds its pages (`aria-expanded`). State persists in `localStorage` (`jarvis.rail.spaces`);
   opening a page unfolds its space. Pages are indented behind a hairline guide.
@@ -172,6 +191,18 @@ bottom, max 672px.
 It lists finished messages (Sir: magenta right edge; Jarvis: cyan left edge) and, while a turn
 runs, its tool cards and a three-dot "replying" mark. The reply text itself streams only under the
 orb, so it is never on screen twice.
+
+### 5.2a Panels beside the orb (`features/stage/`, `shared/stage.ts`)
+
+`show_panel` (main tool, SAFE, display only) or the header's panel menu sets `useStageStore.panel`;
+`stage:panel` carries it to the renderer. Core then animates: the orb column shrinks to 40% and
+scales to 0.8 (500ms, `--ease-standard`), the right readouts hide, the comms log and the sidebar
+step aside, and the panel (`.hud-frame`, `.stage-in`: slide + clip reveal, 420ms) fills the right
+60%. Header: a glowing square, `// TITLE`, **Close panel**. Below 760px wide the panel takes the
+stage alone. Kinds: `pomodoro` (SVG ring countdown in `accent-500`, break in `ok-400`, Start/Pause,
++5 min, Reset; `pomodoro.ts` holds the tested maths), `usage` (the Usage panel), `status` (stat
+tiles with budget meters), `list`, `stats`, `note` (Markdown). A new feature adds a kind to
+`StagePanelSchema` and a case to `Body`.
 
 ### 5.3 Page structure (`components/ui/page.tsx`)
 
@@ -213,19 +244,25 @@ click (`aria-label="Open Jarvis core"`). Only the Core orb announces state to sc
 
 ### 6.1 Orb (`components/jarvis/orb.tsx`, `orb-painter.ts`)
 
-A reactor core, drawn on a canvas every frame, back to front:
+A living particle sphere (after Sir's references: dotted plasma spheres, wavy particle shells, a
+spell-circle of sparks), drawn on a canvas every frame, back to front:
 
-1. **Halo** — radial glow in the state colour.
-2. **HUD** (64px and up) — a tick ring (every tenth tick long) turning slowly backwards; a radar
-   **sweep** with a magenta-to-cyan tail (conic gradient); six **segmented arcs** turning forwards;
-   a dashed **magenta counter-ring**; four **yellow markers** pointing inward; three bright nodes
-   riding the rings.
-3. **Bar ring** — 90 level bars (28 below 48px).
-4. **Core** — a bright ring with bloom, a thin outer ring, and a sphere: highlight → state colour →
-   `--orb-2`, filled with five swirling **plasma filaments** (additive blend, cyan-white and
-   magenta), a turning **dotted shell** and a hot centre.
+1. **Halo** — radial glow from the state colour into the second neon.
+2. **HUD** (64px and up) — a tick ring turning backwards, six **segmented arcs**, a turning
+   **glyph ring** of small marks in the second neon, and four yellow **markers**.
+3. **Shells** — 1–3 wavy rings of particles, each on its own slow axis, rippling more with energy.
+4. **Sphere** — 150–1,500 Fibonacci points, rotated in 3D, each pushed in and out by a smooth
+   noise field (`wobble`) whose strength follows energy, so the surface moves like liquid; dot size
+   and brightness by depth; colour from `--orb-1` on one side to `--orb-3` on the other.
+5. **Core** — a hot white-to-accent nucleus and four swirling dotted filaments.
+6. **Level ring** — dots that jump outward with the level (one to three per spoke).
+7. **Sparks** (64px and up) — thrown off the surface while speaking (by level) or thinking; they
+   curl like embers and fade (pool of 90).
 
-Colours `--orb-1` (main), `--orb-2` (deep), `--orb-hi`, `--orb-3` (magenta), `--orb-4` (yellow).
+Additive blending on dark themes, normal painting on light. Fill styles are cached in colour × alpha
+buckets, so a 340px orb paints ~2,000 dots a frame without allocating strings. Colours `--orb-1`
+(main, from the accent), `--orb-2`, `--orb-hi`, `--orb-3` (second neon), `--orb-4` (sparks and
+markers).
 
 **What it follows** (`selectOrbLevel`): Jarvis's voice while `SPEAKING`, Sir's mic while
 `LISTENING`, otherwise music and other sound playing on the PC (Settings → General, on by default;
@@ -237,7 +274,7 @@ Security.md §7). Level drives one `energy` value with a fast attack and slow re
 | `IDLE` | Slow spin, breathing; bars move with music if any is playing |
 | `LISTENING` | Spins faster; bars, rings and filaments follow the mic |
 | `THINKING` | A bright sweep runs round the bar ring; fastest spin |
-| `ACTING` | The bar ring splits into one segment per tool call: cyan done, pulsing running, grey pending, red failed |
+| `ACTING` | The level ring splits into one segment per tool call: accent done, pulsing running, grey pending, red failed |
 | `AWAITING_CONFIRMATION` | Yellow |
 | `SPEAKING` | Bars, rings and filaments follow Jarvis's voice |
 | `ERROR` | Red; the counter-ring turns red and the orb jitters sideways (glitch) |
@@ -297,6 +334,17 @@ Registry / Custom** tabs. Catalogue: filter box, category chips, two-column pres
 globe icon, version and kind tags, **Add**, **Load more**, and the count of servers that need
 Python/Docker.
 
+### 6.9a Save bar (`features/settings/save-bar.tsx`)
+
+Settings controls **stage** edits (`useSettingsStore.stage`); controls read `useDraftSetting` so
+they show the draft, while the rest of the app reads the saved value (`useSetting`), except theme
+and accent, which preview the draft live. With drafts present a floating `.popover` bar sits at the
+bottom of Settings, Automations and Skills: a breathing yellow dot, "N unsaved changes", Discard,
+**Save changes** (Ctrl+S). Saving writes each key; failures stay as drafts with an error toast. If
+a saved key is in `RESTART_SETTINGS` (`llm.provider`, `vault.path`, `memory.semanticSearch`) a
+confirm offers **Restart now** (`app:relaunch`, audited). Secret fields keep their own Save, and
+changes confirmed in a dialog (folders, tool permissions, vault) still save at once.
+
 ### 6.10 Covers
 
 Eight generated covers in `surfaces.css`, all from neon tokens and `color-mix()`: `grid`,
@@ -354,6 +402,7 @@ name the action ("Move to Recycle Bin", not "OK"); errors say what to do next. T
 
 | Version | Change |
 |---|---|
+| v7.1 Any accent | Accent picker with derived, contrast-checked tokens; panels beside the orb (§5.2a); hideable sidebar with Automations and Skills, Activity and Bible moved to Settings; Save bar; particle-sphere orb (liquid ripple, shells, sparks, glyph ring). |
 | v7.0 Neon Grid | Cyberpunk HUD redesign: void canvas with grid and scanlines, HUD corner brackets, neon cyan primary with clipped corners, magenta / yellow second neons, Geist Mono HUD voice, 2–6px corners. Orb-first **Core** (340px reactor orb, corner readouts, captions; conversation moved to a side comms log), live orb dock on every screen, reactor orb (plasma filaments, segmented arcs, counter-ring, sweep, markers, breathing, error glitch). Spaces as Notion galleries with generated covers and page icons; foldable sidebar tree. Connections catalogue tabs and MCP Registry browser. |
 | v6.1 Energy core | Orb redrawn after Sir's reference: teal canvas orb (dotted sphere, bar ring, wavy rings, glow) that follows Jarvis's voice, Sir's mic, or music on the PC; hero orb 168px. |
 | v6.0 Geist | Vercel-style: ink on near-white, `#EBEBEB` hairlines, solid-ink primary, one blue, develop / preview / ship mesh behind the empty-state hero, Geist + Geist Mono, stacked small shadows, pill tags. |

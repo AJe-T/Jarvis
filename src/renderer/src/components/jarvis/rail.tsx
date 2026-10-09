@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  Activity,
-  BookOpen,
   Brain,
   ChevronRight,
   FileText,
@@ -10,9 +8,13 @@ import {
   MessagesSquare,
   Network,
   Orbit,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plug,
   Plus,
+  Puzzle,
   Settings,
+  Workflow,
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { Res } from '@shared/ipc-contract';
@@ -34,10 +36,10 @@ const WORKSPACE: Item[] = [
   { view: 'passwords', label: 'Passwords', Icon: KeyRound },
 ];
 const SYSTEMS: Item[] = [
-  { view: 'activity', label: 'Activity', Icon: Activity },
+  { view: 'automations', label: 'Automations', Icon: Workflow },
+  { view: 'skills', label: 'Skills', Icon: Puzzle },
   { view: 'connections', label: 'Connections', Icon: Plug },
   { view: 'copilot', label: 'Reply copilot', Icon: MessagesSquare },
-  { view: 'bible', label: 'Bible', Icon: BookOpen },
 ];
 const SETTINGS: Item = { view: 'settings', label: 'Settings', Icon: Settings };
 
@@ -291,10 +293,41 @@ function GroupLabel({ children }: { children: string }): React.JSX.Element {
   );
 }
 
-/** §6.2: Sidebar. Icons with labels from 1200px; icons only (with tooltips) below. */
+/** Shown in place of the sidebar while it is hidden: one button brings it back. */
+function RailStub(): React.JSX.Element {
+  const toggleRail = useUiStore((s) => s.toggleRail);
+  return (
+    <div className="flex w-11 shrink-0 flex-col items-center gap-2 border-r border-line bg-app py-2">
+      <button
+        type="button"
+        aria-label="Show sidebar"
+        title="Show sidebar (Ctrl+B)"
+        onClick={toggleRail}
+        className="flex size-8 items-center justify-center rounded-sm text-icon-rest hover:bg-hover hover:text-ink-100"
+      >
+        <PanelLeftOpen size={18} strokeWidth={1.75} aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+/** §6.2: Sidebar. Icons with labels from 1200px; icons only (with tooltips) below; Ctrl+B hides it. */
 export function Rail(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const go = useUiStore((s) => s.go);
+  const hidden = useUiStore((s) => s.railHidden);
+  const toggleRail = useUiStore((s) => s.toggleRail);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleRail();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleRail]);
+  if (hidden) return <RailStub />;
   const item = ({ view: v, label, Icon }: Item): React.JSX.Element => (
     <button
       key={v}
@@ -314,30 +347,41 @@ export function Rail(): React.JSX.Element {
       aria-label="Main"
       className="flex w-14 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line bg-app px-2 py-2 lg:w-64"
     >
-      <button
-        type="button"
-        onClick={() => go('chat')}
-        aria-label="Jarvis home"
-        className="mb-1 flex items-center justify-center gap-2 rounded-sm py-1 hover:bg-hover lg:justify-start lg:px-1"
-      >
-        <LiveOrb size="sm" announce={false} />
-        <span className="hidden flex-col items-start lg:flex" aria-hidden>
-          <span
-            className="glitch font-code text-sm font-semibold tracking-[0.3em] text-ink-100"
-            data-text="JARVIS"
-          >
-            JARVIS
+      <div className="mb-1 flex items-center">
+        <button
+          type="button"
+          onClick={() => go('chat')}
+          aria-label="Jarvis home"
+          className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-sm py-1 hover:bg-hover lg:justify-start lg:px-1"
+        >
+          <LiveOrb size="sm" announce={false} />
+          <span className="hidden flex-col items-start lg:flex" aria-hidden>
+            <span
+              className="glitch font-code text-sm font-semibold tracking-[0.3em] text-ink-100"
+              data-text="JARVIS"
+            >
+              JARVIS
+            </span>
+            <span className="hud-label text-[9px]! text-accent-300!">neural core · online</span>
           </span>
-          <span className="hud-label text-[9px]! text-accent-300!">neural core · online</span>
-        </span>
-      </button>
+        </button>
+        <button
+          type="button"
+          aria-label="Hide sidebar"
+          title="Hide sidebar (Ctrl+B)"
+          onClick={toggleRail}
+          className="hidden size-7 shrink-0 items-center justify-center rounded-sm text-icon-rest hover:bg-hover hover:text-ink-100 lg:flex"
+        >
+          <PanelLeftClose size={16} strokeWidth={1.75} aria-hidden />
+        </button>
+      </div>
       <GroupLabel>workspace</GroupLabel>
       {WORKSPACE.map((i) => (
         <div key={i.view} className="contents">
           {i.view === 'spaces' ? <SpacesSection /> : item(i)}
         </div>
       ))}
-      <GroupLabel>systems</GroupLabel>
+      <GroupLabel>tools</GroupLabel>
       {SYSTEMS.map(item)}
       <div className="mt-auto pt-2">{item(SETTINGS)}</div>
     </nav>

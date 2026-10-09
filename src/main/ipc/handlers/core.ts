@@ -210,6 +210,15 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
     await shell.openExternal(req.url);
     return { ok: true };
   });
+  handle('app:relaunch', () => {
+    s.audit.append('user', 'app.relaunch', {});
+    // Let the reply reach the renderer, then restart through the normal quit path (before-quit cleanup).
+    setTimeout(() => {
+      app.relaunch();
+      app.quit();
+    }, 200);
+    return { ok: true };
+  });
   handle('app:killSwitch', () => {
     s.killSwitch.trigger('ui');
     return { ok: true };

@@ -5,7 +5,7 @@ import type { SettingKey, SettingValue } from '@shared/settings';
 import { Button } from '../../components/ui/button';
 import { Section } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
-import { useSetting, useSettingsStore } from '../../stores/settings-store';
+import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { SecretField } from './secret-field';
 
@@ -117,8 +117,8 @@ function Choice<K extends SettingKey>(p: {
   label: string;
   options: Array<{ value: SettingValue<K>; title: string; body: string }>;
 }): React.JSX.Element {
-  const value = useSetting(p.k);
-  const set = useSettingsStore((s) => s.set);
+  const value = useDraftSetting(p.k);
+  const set = useSettingsStore((s) => s.stage);
   return (
     <div role="radiogroup" aria-label={p.label} className="grid gap-2 sm:grid-cols-2">
       {p.options.map((o) => (
@@ -146,10 +146,10 @@ function Choice<K extends SettingKey>(p: {
 /** ADR-011: pick cloud or on-device engines for the wake word and for speech-to-text, independently. */
 export function VoiceEngines(): React.JSX.Element {
   const models = useModels();
-  const wake = useSetting('voice.wake.provider') ?? 'picovoice';
-  const stt = useSetting('voice.stt.provider') ?? 'deepgram';
-  const whisperModel = useSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
-  const set = useSettingsStore((s) => s.set);
+  const wake = useDraftSetting('voice.wake.provider') ?? 'picovoice';
+  const stt = useDraftSetting('voice.stt.provider') ?? 'deepgram';
+  const whisperModel = useDraftSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
+  const set = useSettingsStore((s) => s.stage);
   const toast = useUiStore((s) => s.toast);
   return (
     <>

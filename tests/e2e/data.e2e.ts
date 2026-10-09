@@ -37,7 +37,9 @@ test('Phase 7: manual backup, usage tab, mini orb round-trip', async () => {
   await expect(page.getByRole('button', { name: /^Tools \(\d+\)$/ })).toBeVisible();
   await page.getByRole('button', { name: 'Reply copilot' }).click();
   await expect(page.getByText(/No chat captured yet/)).toBeVisible();
-  await page.getByRole('button', { name: 'Activity' }).click();
+  // Activity lives in Settings now.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Activity & usage' }).click();
   await page.getByRole('tab', { name: 'Usage' }).click();
   await expect(page.getByText('API spend this month')).toBeVisible();
 

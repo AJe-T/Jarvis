@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button';
 import { confirmAction } from '../../components/ui/confirm-modal';
 import { Section } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
-import { useSetting } from '../../stores/settings-store';
+import { useDraftSetting } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { SettingInput, SettingSwitch } from './settings-controls';
 import { TelegramSection } from './telegram-section';
@@ -17,7 +17,7 @@ const box = 'max-w-xl rounded-md border border-line p-3 text-sm text-ink-100';
 /** Phone remote: a web app on the home network with live dictation and hands-free calls. */
 function PhoneRemote(): React.JSX.Element {
   const [st, setSt] = useState<Remote | null>(null);
-  const enabled = useSetting('remote.enabled');
+  const enabled = useDraftSetting('remote.enabled');
   const toast = useUiStore((s) => s.toast);
   useEffect(() => {
     void call('remote:status', {}).then(setSt);
@@ -119,8 +119,8 @@ function PhoneRemote(): React.JSX.Element {
 /** WhatsApp through Baileys as a linked device: Sir messages himself "Jarvis, …". */
 function WhatsAppSection(): React.JSX.Element {
   const [st, setSt] = useState<WhatsApp | null>(null);
-  const enabled = useSetting('whatsapp.enabled');
-  const prefix = useSetting('whatsapp.prefix') ?? 'Jarvis';
+  const enabled = useDraftSetting('whatsapp.enabled');
+  const prefix = useDraftSetting('whatsapp.prefix') ?? 'Jarvis';
   useEffect(() => {
     void call('whatsapp:status', {}).then(setSt);
     return window.jarvis.on('whatsapp:status', setSt);

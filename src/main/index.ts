@@ -19,6 +19,7 @@ import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { registerPasswordHandlers } from './ipc/handlers/passwords';
 import { registerSpacesHandlers } from './ipc/handlers/spaces';
 import { createSpaces, createSpacesTool } from './spaces/spaces';
+import { createStageTools } from './stage/stage-tools';
 import { createMemorySystem } from './memory/memory-system';
 import { createResearchTool } from './agent/research';
 import { createAutomation } from './automation/automation';
@@ -270,6 +271,8 @@ async function boot(): Promise<void> {
   });
   registerSpacesHandlers(spaces, { show: showMainWindow });
   services.registry.register(createSpacesTool(spaces));
+  for (const tool of createStageTools((panel) => emit('stage:panel', { panel })))
+    services.registry.register(tool);
   registerVoiceHandlers(
     services,
     voice.voice,

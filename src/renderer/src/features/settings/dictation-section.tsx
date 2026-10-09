@@ -3,12 +3,12 @@ import type { Res } from '@shared/ipc-contract';
 import { Button } from '../../components/ui/button';
 import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
-import { useSetting } from '../../stores/settings-store';
+import { useDraftSetting } from '../../stores/settings-store';
 import { SettingInput, SettingSwitch, SettingTextArea } from './settings-controls';
 
 /** Dictation (ideas from isair/jarvis): speak, and Jarvis types it into the app in front. */
 export function DictationSection(): React.JSX.Element {
-  const hotkey = useSetting('hotkeys.dictation') ?? 'Ctrl+Alt+D';
+  const hotkey = useDraftSetting('hotkeys.dictation') ?? 'Ctrl+Alt+D';
   const [history, setHistory] = useState<Res<'dictation:history'>>([]);
   const load = useCallback(() => void call('dictation:history', {}).then(setHistory), []);
   useEffect(() => {

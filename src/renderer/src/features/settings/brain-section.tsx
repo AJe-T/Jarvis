@@ -1,13 +1,13 @@
 import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
-import { useSetting, useSettingsStore } from '../../stores/settings-store';
+import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { ConnectionPicker } from './connection';
 import { SettingInput, SettingSwitch } from './settings-controls';
 
 export function BrainSection(): React.JSX.Element {
   const day = useSettingsStore((s) => s.dayCostUsd);
   const month = useSettingsStore((s) => s.monthCostUsd);
-  const subscription = useSetting('llm.provider') === 'subscription';
+  const subscription = useDraftSetting('llm.provider') === 'subscription';
   return (
     <>
       <Section

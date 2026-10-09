@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { VoiceMode } from '@shared/types';
 import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
-import { useSetting, useSettingsStore } from '../../stores/settings-store';
+import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { MicCheck } from '../onboarding/mic-check';
 import { VoiceEngines } from './voice-engines';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
@@ -27,7 +27,7 @@ const MODES: Array<{ value: VoiceMode; label: string; hint: string }> = [
 ];
 
 export function VoiceSection(): React.JSX.Element {
-  const mode = useSetting('voice.mode') ?? 'off';
+  const mode = useDraftSetting('voice.mode') ?? 'off';
   const [error, setError] = useState<string | null>(null);
 
   async function setMode(m: VoiceMode): Promise<void> {

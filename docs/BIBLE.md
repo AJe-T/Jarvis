@@ -2,7 +2,7 @@
 
 Everything about this project in one place: what Jarvis is, everything it can do and how to use it, how it is built, how it keeps you safe, where your data lives, how to develop and release it, how to fix problems, why things are the way they are, and where the ideas came from.
 
-- **You can read this inside the app:** the **Bible** button in the left rail (search box + contents).
+- **You can read this inside the app:** Settings → **Bible (help)** (search box + contents).
 - **Exact lists** (every tool and its safety tier, every setting and default, every IPC channel, every database migration) are generated from the code into [REFERENCE.md](REFERENCE.md). This guide links there instead of copying them, so it can't go out of date.
 - **Deeper specs** for builders: [PRD](PRD.md) · [TRD + decisions](TRD.md) · [Architecture](Architecture.md) · [API guide](API-Guide.md) · [Database](Database.md) · [Security](Security.md) · [App flow](App-flow.md) · [Design system](Design-system.md) · [Testing](Testing.md) · [Implementation log](Implementation.md) · [Code style](Code-style.md) · [Agent rules](Agents.md).
 
@@ -180,11 +180,11 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 - **Web search:** Claude's own search (API connection), or Claude Code's search (subscription connection). Results count as untrusted.
 - **Read a page:** `fetch_web_page` reads public pages only, at most 2 MB, re-checking every redirect.
 - **Deep research** (ideas from OpenJarvis): "Research X" runs a separate reading-only agent. It plans sub-questions, searches, reads sources and returns a **cited report**, saved to `Research/`.
-- **News feeds:** RSS/Atom headlines from your feeds (Settings → Automations → News feeds); the defaults are Hacker News and BBC World.
+- **News feeds:** RSS/Atom headlines from your feeds (Sidebar → Automations → News feeds); the defaults are Hacker News and BBC World.
 
 ### 3.7 Skills (ideas from OpenJarvis / agentskills.io)
 A skill is a folder with `SKILL.md` that teaches Jarvis how to do a kind of task.
-- **Install:** Settings → Skills, from a folder or a public GitHub folder link. Only text files are kept.
+- **Install:** Sidebar → **Skills**, from a folder or a public GitHub folder link. Only text files are kept.
 - **Use:** Jarvis sees each skill's name and description and loads the full instructions with `use_skill` when a task matches.
 - **Safety:** skills never run code. Every action still asks you as usual. Review, turn off or remove skills in Settings.
 
@@ -288,10 +288,18 @@ Settings → **Phone & chat apps** → **WhatsApp**.
   - **Comms log:** the conversation is secondary: a log beside the orb (an overlay sheet below 1200 px) that opens when a conversation starts; the speech-bubble button in the header shows or hides it. Tool cards and citations work as before.
   - Conversation history; `/private` conversations are not logged to the vault.
   - **Rewind** (idea from isair/jarvis): hover one of your messages in the log. **Edit from here** removes it and everything after and puts it back in the box; **Regenerate from here** asks again. Attachments are not re-sent; the vault's daily log keeps the original.
+- **Panels beside the orb:** ask Jarvis to show something ("show my pending tasks", "start a 25-minute pomodoro", "show the dashboard", "how much have I spent on AI this month?") and he moves to the left of the stage while the panel slides in on the right; the sidebar and the conversation log step aside to make room and come back when you close it (✕). Kinds today:
+  - **Pomodoro** — a focus timer with a ring (start/pause, +5 min, reset); a toast tells you when focus or the break ends.
+  - **AI usage & billing** — spend against your daily and monthly budgets, by model, purpose or day.
+  - **System status** — connection, model, voice mode, today's and this month's spend (with budget bars), connections ready, spaces and pages.
+  - **List** (tasks, agendas, anything with items and ticks), **Stats** (labelled numbers with optional bars) and **Note** (formatted text) — Jarvis fills these with whatever you asked for.
+  - The **panel button** in the Core header opens Pomodoro, Status and Usage by hand. Jarvis uses the `show_panel` / `hide_panel` tools (safe: display only). Tasks and calendar will get their own panel kinds when those features arrive; until then Jarvis can show them as a List.
 - **The orb follows you:** on every other screen (Spaces, Settings, Connections…) a small live orb floats in the bottom-right corner, moving with Jarvis's state and voice, with his words beside it while he replies. Click it to return to Core. The sidebar's logo is a live orb too, and the **Mini orb** floats on the Windows desktop over other apps.
 - **Views:**
+  - **Sidebar:** **// workspace** — Core, Spaces (with its page tree), Brain, Memory, Passwords; **// tools** — **Automations**, **Skills**, Connections, Reply copilot; Settings at the bottom. **Hide it** with the arrow next to the JARVIS logo or **Ctrl+B**; a slim strip with one button brings it back. Jarvis also hides it himself while he shows a panel.
   - **Settings → Advanced → Logs:** the newest log lines (secrets removed), warnings-only filter, and Open logs folder.
-  - **Activity:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent). On Core the Activity panel starts closed (header button opens it).
+  - **Settings → Activity & usage:** every action, the tamper-evident audit log, and **Usage** (spend by model/purpose/day; subscription cost is shown as API-equivalent). Core's header still opens the live Activity drawer for the current turn.
+  - **Settings → Bible (help):** this guide, searchable, plus the generated reference.
   - **Memory:** browse, search, forget, and the review queue.
   - **Spaces** (§3.13), **Brain** (§3.3), **Passwords** (§3.14), **Connections** (§3.11), **Reply copilot** and **Bible**.
 - **Look ("Neon Grid", cyberpunk HUD, [Design-system](Design-system.md)):**
@@ -299,9 +307,10 @@ Settings → **Phone & chat apps** → **WhatsApp**.
   - Neon cyan is the main button (clipped corners, dark text), focus and Jarvis; magenta and hazard-yellow are the second and third neon. Status tags are square chips (yellow = needs you, red = blocked, green = done).
   - Headings, labels, buttons and numbers speak in **Geist Mono** (HUD style, `// SECTION` labels); reading text stays in Geist. Bundled, works offline.
   - The sidebar groups **// workspace** and **// systems**; the active row has a glowing neon bar.
-  - **The orb is a reactor core:** a plasma sphere with swirling filaments and a dotted shell, a bright ring, a ring of level bars, and a HUD of rotating segmented arcs, a magenta counter-ring, a tick ring, a radar sweep and yellow markers. It breathes at rest, moves with Jarvis's voice when he speaks, your voice when he listens, and music playing on the PC the rest of the time (Settings → General → "The orb moves to music"; only the loudness is read). It spins faster while listening, sweeps while thinking, splits its bars into one segment per tool while acting, turns yellow when it needs you, and glitches red on errors. Reduced motion draws it still.
+  - **The orb is a living particle sphere:** about 1,500 glowing dots that ripple like liquid with the sound, shading from your accent colour to violet, with a hot core of swirling filaments, wavy particle shells orbiting it, a ring of level dots, sparks thrown off when Jarvis speaks or thinks, and a HUD of turning arcs, a glyph ring (spell-circle style), ticks and markers. It breathes at rest, moves with Jarvis's voice when he speaks, your voice when he listens, and music playing on the PC the rest of the time (Settings → General → "The orb moves to music"; only the loudness is read). It spins faster while listening, sweeps while thinking, splits its dot ring into one segment per tool while acting, turns yellow when it needs you, and glitches red on errors. Reduced motion draws it still.
   - Responsive from 480 px wide (Windows Snap half-screen); below 1200 px the sidebar shows icons only and the log and Activity open as sheets (Esc closes Activity). The window opens at up to 1400 × 880, never larger than the screen.
   - **Settings → General → Theme:** Match Windows (default), Light ("daylight HUD": pale steel with the same neon), Dark (Neon Grid, the home look).
+  - **Settings → General → Accent colour:** ten ready neons (Cyan, Arc blue, Violet, Magenta, Red, Orange, Gold, Lime, Green, Silver) or **Custom**: **All colours** opens the Windows colour dialog (the full palette and its custom mixer), or type a **Hex** value like `#FF2A3D`. Buttons, glow, links, the grid and the orb follow it; text shades are adjusted automatically so they stay readable in both themes. It previews as you pick and is kept when you press **Save changes**.
 - **Mini orb:** a small always-on-top orb (tray or chat header).
 - **Tray, start with Windows, start hidden.**
 - **Settings → Data & backups:**
@@ -407,6 +416,8 @@ Settings → **Phone & chat apps** → **WhatsApp**.
 ---
 
 ## 7. Settings
+**Changes wait for Save.** Editing anything in Settings (and in Automations or Skills) shows a bar at the bottom: "N unsaved changes · **Discard** · **Save changes**" (Ctrl+S saves too). Colours and the theme preview straight away and go back if you discard. Saving a change to the connection (`llm.provider`), the vault folder or meaning-based memory search asks **"Restart Jarvis now?"** — those apply live, but a restart gives them a clean start; choose Later to keep working. Keys (secret fields) still save with their own Save button, and changes you confirm in a dialog (allowed folders, tool permissions, vault folder) save as soon as you confirm.
+
 Every setting, its type and default is listed in [REFERENCE.md → Settings](REFERENCE.md#settings). The ones that most change how Jarvis feels:
 - `voice.mode` and `voice.followUpSeconds`
 - `voice.wake.sensitivity` (0.5–0.6 is a good start)
@@ -416,7 +427,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 - `budget.*`
 - `location.home`
 - `dictation.*`
-- `telegram.*`, `appearance.theme`
+- `telegram.*`, `appearance.theme`, `appearance.accent`
 - `memory.semanticSearch`
 - `remote.enabled` / `remote.port` (phone remote), `whatsapp.*` (WhatsApp channel and its wake word)
 - `passwords.autoLockMinutes` / `passwords.clipboardSeconds`
@@ -526,6 +537,7 @@ Every setting, its type and default is listed in [REFERENCE.md → Settings](REF
 | 1.8 | "Workspace" redesign modelled on Notion: warm canvas and sidebar, purple primary, link blue, pastel tags and suggestion cards, labelled sidebar |
 | 1.9 | "Geist" redesign modelled on Vercel: ink-on-white, solid-ink primary, one blue, brand mesh behind the empty-state hero, Geist + Geist Mono, stacked shadows, pill tags |
 | 1.10 | Teal energy-core orb that follows voice, mic and music playing on the PC (loopback meter in its own sandboxed session) |
+| 2.2 | Accent colour picker (ten neons, Windows colour dialog, hex) with automatic contrast; Settings changes wait for a Save bar (restart offered for big ones); Automations and Skills moved to the sidebar, Activity and Bible into Settings; sidebar hides (Ctrl+B, and by itself while Jarvis shows a panel); **panels beside the orb** (`show_panel`: pomodoro, usage & billing, system status, lists, stats, notes); particle-sphere orb with liquid ripples, orbiting shells, sparks and a glyph ring |
 | 2.1 | "Neon Grid" cyberpunk redesign: orb-first **Core** home screen with HUD readouts and captions, conversation as a side log, a floating live orb on every screen, sci-fi reactor orb; Spaces as Notion-style galleries with covers and page icons and a foldable sidebar tree; Connections catalogue grows to 24 vetted servers (Zapier and Apify hubs, search, docs, dev, productivity) plus an in-app **MCP Registry** browser |
 | 2.0 | Phone-keyboard dictation into the message box (live words, one-click free on-device speech); Spaces (Notion-style notebooks); Brain graph of the vault; encrypted Passwords the AI can't read; Windows UI Automation tools; phone remote with hands-free calls; WhatsApp self-chat; Telegram voice notes and voice replies; Home Assistant preset |
 

@@ -30,6 +30,8 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
   await page.getByRole('radio', { name: /Deepgram \(cloud\)/ }).click();
   await page.getByRole('radio', { name: /^Picovoice: “Jarvis”/ }).click();
   await page.getByLabel(/Press to talk/).check();
+  // The engine radios above were only drafts and are back on the saved values: nothing to save.
+  await expect(page.getByRole('button', { name: 'Save changes' })).toBeHidden();
   await expect(page.getByText('Voice: press to talk')).toBeVisible();
 
   await page.getByRole('button', { name: 'Core', exact: true }).click();

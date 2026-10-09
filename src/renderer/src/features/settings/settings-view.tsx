@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import { useUiStore } from '../../stores/ui-store';
 import { PageBody, PageHeader } from '../../components/ui/page';
+import { SaveBar } from './save-bar';
 import { SETTINGS_SECTIONS } from './sections';
 
 /** Design-system.md §5.6: grouped settings forms. */
@@ -16,7 +17,9 @@ export function SettingsView(): React.JSX.Element {
         className="flex w-44 shrink-0 flex-col overflow-hidden border-r border-line-subtle md:w-56"
       >
         <div className="flex h-12 shrink-0 items-center border-b border-line-subtle px-4">
-          <h1 className="text-ui font-semibold text-ink-100">Settings</h1>
+          <h1 className="font-code text-[13px] font-semibold tracking-[0.14em] text-ink-100 uppercase">
+            Settings
+          </h1>
         </div>
         <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-3">
           {SETTINGS_SECTIONS.map((s) => (
@@ -39,10 +42,19 @@ export function SettingsView(): React.JSX.Element {
         </ul>
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">
-        <PageHeader title={current?.label ?? 'Settings'} />
-        <PageBody key={current?.id} className="fade-in">
-          {Body && <Body />}
-        </PageBody>
+        {current?.full ? (
+          <div key={current.id} className="fade-in flex min-h-0 min-w-0 flex-1">
+            {Body && <Body />}
+          </div>
+        ) : (
+          <>
+            <PageHeader title={current?.label ?? 'Settings'} />
+            <PageBody key={current?.id} className="fade-in">
+              {Body && <Body />}
+            </PageBody>
+          </>
+        )}
+        <SaveBar />
       </div>
     </div>
   );

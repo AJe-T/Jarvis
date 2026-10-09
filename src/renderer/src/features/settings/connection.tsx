@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import type { Res } from '@shared/ipc-contract';
 import { Button } from '../../components/ui/button';
 import { call, cleanError } from '../../lib/api';
-import { useSetting, useSettingsStore } from '../../stores/settings-store';
+import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { SecretField } from './secret-field';
 import { SettingInput } from './settings-controls';
@@ -109,8 +109,8 @@ export function ClaudeCodeCard(): React.JSX.Element {
 
 /** ADR-013: pick the server and model; lists what the server has installed. */
 export function LocalModelCard(): React.JSX.Element {
-  const model = useSetting('llm.local.model') ?? '';
-  const set = useSettingsStore((s) => s.set);
+  const model = useDraftSetting('llm.local.model') ?? '';
+  const set = useSettingsStore((s) => s.stage);
   const [models, setModels] = useState<string[]>([]);
   const [status, setStatus] = useState<{ ok: boolean; error?: string | undefined } | null>(null);
   const refresh = useCallback(async () => {
@@ -165,8 +165,8 @@ export function LocalModelCard(): React.JSX.Element {
 
 /** ADR-010: one connection at a time, chosen here. */
 export function ConnectionPicker(): React.JSX.Element {
-  const provider = useSetting('llm.provider') ?? 'api';
-  const setSetting = useSettingsStore((s) => s.set);
+  const provider = useDraftSetting('llm.provider') ?? 'api';
+  const setSetting = useSettingsStore((s) => s.stage);
   return (
     <div className="flex flex-col gap-4">
       <div

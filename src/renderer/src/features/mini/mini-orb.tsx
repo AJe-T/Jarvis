@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AssistantState } from '@shared/types';
 import { Orb } from '../../components/jarvis/orb';
+import { applyTheme } from '../../components/jarvis/theme-sync';
 import { call } from '../../lib/api';
 
 /** Design-system.md §4.3 mini mode: orb only, drag to move, click to expand, caption while replying. */
@@ -9,6 +10,17 @@ export function MiniOrb(): React.JSX.Element {
   const [mic, setMic] = useState(0);
   const [music, setMusic] = useState(0);
   const [caption, setCaption] = useState('');
+
+  // The mini window has no settings store: read the theme and accent once when it opens.
+  useEffect(() => {
+    void call('settings:getAll', {}).then((v) => {
+      const choice = v['appearance.theme'];
+      const light = window.matchMedia('(prefers-color-scheme: light)').matches;
+      const theme = choice === 'light' || choice === 'dark' ? choice : light ? 'light' : 'dark';
+      const accent = v['appearance.accent'];
+      applyTheme(theme, typeof accent === 'string' ? accent : '');
+    });
+  }, []);
 
   useEffect(() => {
     const on = window.jarvis.on;

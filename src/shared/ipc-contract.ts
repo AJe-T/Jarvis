@@ -11,6 +11,7 @@ import {
   VOICE_MODES,
 } from './types';
 import { PasswordEntryInput } from './passwords';
+import { StagePanelSchema } from './stage';
 
 const Ok = z.object({ ok: z.literal(true) });
 const Empty = z.object({}).strict();
@@ -413,6 +414,8 @@ export const INVOKE = {
   'voice:setupLocal': contract(Empty, Ok),
   'voice:devices': contract(Empty, z.array(z.object({ index: z.number(), name: z.string() }))),
   'app:killSwitch': contract(Empty, Ok),
+  /** Settings Save bar: restart to apply big changes cleanly (audited). */
+  'app:relaunch': contract(Empty, Ok),
   'app:info': contract(
     Empty,
     z.object({
@@ -681,6 +684,8 @@ export const EVENTS = {
   'remote:status': RemoteStatus,
   'whatsapp:status': WhatsAppStatus,
   'audio:decode': z.object({ id: z.string(), mime: z.string(), data: z.instanceof(Uint8Array) }),
+  /** Core stage: Jarvis shows a panel beside the orb (null = close it). */
+  'stage:panel': z.object({ panel: StagePanelSchema.nullable() }),
   'nav:open': z.object({
     view: z.enum([
       'chat',

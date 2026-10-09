@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/button';
 import { call, cleanError } from '../../lib/api';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
+import { AccentPicker } from './accent-picker';
 import { SecretField } from './secret-field';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
 
@@ -56,6 +57,7 @@ export function GeneralSection(): React.JSX.Element {
           { value: 'light', label: 'Light' },
         ]}
       />
+      <AccentPicker />
       <SettingSwitch
         k="appearance.orbMusic"
         label="The orb moves to music playing on this PC (only the loudness is read; nothing is recorded)"
@@ -66,7 +68,7 @@ export function GeneralSection(): React.JSX.Element {
 
 /** Everyday tools: weather location, units, nutrition target. */
 export function EverydaySection(): React.JSX.Element {
-  const set = useSettingsStore((s) => s.set);
+  const set = useSettingsStore((s) => s.stage);
   const toast = useUiStore((s) => s.toast);
   return (
     <>
