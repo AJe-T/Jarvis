@@ -78,6 +78,8 @@ export function UsagePanel(): React.JSX.Element {
         </section>
       )}
 
+      {summary?.plan && <PlanGauges plan={summary.plan} />}
+
       <table className="w-full text-left text-sm tabular">
         <thead className="text-ink-500">
           <tr>
@@ -117,6 +119,57 @@ export function UsagePanel(): React.JSX.Element {
         </tbody>
       </table>
     </div>
+  );
+}
+
+type Plan = NonNullable<Res<'usage:summary'>['plan']>;
+
+const resetLabel = (ms: number | null): string =>
+  ms === null
+    ? ''
+    : `resets ${new Date(ms).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
+
+/** Claude plan windows as Claude Code last reported them (idea from ethanplusai/jarvis's Usage tab). */
+function PlanGauges({ plan }: { plan: Plan }): React.JSX.Element {
+  const windows = [
+    { label: '5-hour window', w: plan.fiveHour },
+    { label: 'This week', w: plan.sevenDay },
+  ].filter((x) => x.w !== null);
+  return (
+    <section aria-label="Claude plan usage" className="card p-5">
+      <p className="text-sm text-ink-300">Claude plan usage</p>
+      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+        {windows.map(({ label, w }) => {
+          const pct = Math.round(w?.usedPercent ?? 0);
+          return (
+            <div key={label}>
+              <p className="flex items-baseline justify-between text-sm">
+                <span className="text-ink-100">{label}</span>
+                <span className="text-xl font-semibold text-ink-100 tabular">{pct}%</span>
+              </p>
+              <div
+                className="mt-2 h-2 rounded-pill bg-hover"
+                role="meter"
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${label} used`}
+              >
+                <div
+                  className={`h-2 rounded-pill ${pct >= 90 ? 'bg-alarm-fill' : pct >= 70 ? 'bg-lamp-400' : 'bg-accent-300'}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-ink-500 tabular">{resetLabel(w?.resetsAt ?? null)}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs text-ink-500">
+        As Claude Code reported at {new Date(plan.updatedAt).toLocaleTimeString()}. Updates after
+        each reply through the subscription.
+      </p>
+    </section>
   );
 }
 

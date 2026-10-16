@@ -15,7 +15,8 @@ interface Part {
 export function splitSections(md: string): Part[] {
   const parts: Part[] = [];
   let current: Part = { title: 'Introduction', body: '' };
-  for (const line of md.split('\n')) {
+  // Windows line endings ("\r\n") would leave "\r" on every heading and hide all sections.
+  for (const line of md.split(/\r?\n/)) {
     const h = /^## (.+)$/.exec(line);
     if (h?.[1]) {
       if (current.body.trim()) parts.push(current);
@@ -101,7 +102,10 @@ export function BibleView(): React.JSX.Element {
         </div>
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">
-        <PageHeader title={q ? `Search: ${query}` : (shown[0]?.title ?? DOCS[doc].label)} />
+        <PageHeader
+          title={q ? `Search: ${query}` : (shown[0]?.title ?? DOCS[doc].label)}
+          help="settings.bible"
+        />
         <PageBody>
           <article className="bible flex flex-col gap-8 text-sm text-ink-300">
             {shown.map((s) => (

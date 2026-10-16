@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { LOCAL_STT_MODELS } from '@shared/speech-engines';
 import { JarvisError } from '../../errors';
 import type { SettingsService } from '../../settings/settings-service';
 import type { SttProvider, WakeWord } from '../types';
@@ -11,7 +12,19 @@ import { createWhisperStt } from './local-stt';
 import type { ModelId, ModelStore } from './model-store';
 import { loadOwwModels, loadSileroVad, type Vad } from './onnx';
 import { createOpenWakeWord, thresholdFor } from './open-wake-word';
-import { loadWhisper, type Transcriber } from './whisper';
+import type { Transcriber } from './whisper';
+import { inference } from '../../inference/client';
+
+/** Whisper in the model process (ADR-029); resolves once the model is loaded there. */
+async function isolatedWhisper(dir: string, multilingual: boolean): Promise<Transcriber> {
+  const ops = inference();
+  await ops.whisperWarm({ dir, multilingual });
+  return {
+    transcribe: (audio, language) =>
+      ops.transcribe({ dir, multilingual, audio, ...(language ? { language } : {}) }),
+    release: () => ops.whisperRelease({ dir }),
+  };
+}
 
 const notReady = (what: string): JarvisError =>
   new JarvisError(
@@ -64,7 +77,8 @@ export function createLocalEngines(
     if (!store.installed(id)) return Promise.reject(notReady('Whisper model'));
     const old = whisper;
     void old?.model.then((t) => t.release()).catch(() => undefined);
-    const loaded = loadWhisper(store.dir(id), id === 'whisper-small').then((t) =>
+    const multilingual = LOCAL_STT_MODELS.find((m) => m.id === id)?.multilingual ?? false;
+    const loaded = isolatedWhisper(store.dir(id), multilingual).then((t) =>
       hooks.onSlow ? watchSpeed(t, hooks.onSlow) : t,
     );
     const model = remember(loaded, () => {
@@ -75,7 +89,7 @@ export function createLocalEngines(
   }
 
   function voiceActivity(): Promise<Vad> {
-    if (!store.installed('silero-vad')) return Promise.reject(notReady('Whisper model'));
+    if (!store.installed('silero-vad')) return Promise.reject(notReady('voice detector'));
     vad ??= remember(loadSileroVad(join(store.dir('silero-vad'), 'silero_vad.onnx')), () => {
       vad = null;
     });
@@ -86,6 +100,16 @@ export function createLocalEngines(
 
   return {
     stt,
+    /**
+     * ADR-038: a phrase engine (cloud, own server, Windows) behind the same on-device voice
+     * detector. No live re-reads: each one would be another paid request.
+     */
+    phraseStt(id: string, t: Transcriber): SttProvider {
+      const base = createWhisperStt({ vad: voiceActivity, transcriber: async () => t });
+      return { id, start: (o) => base.start({ ...o, livePartials: false }) };
+    },
+    /** The small voice detector the phrase engines need is downloaded. */
+    vadReady: (): boolean => store.installed('silero-vad'),
     /** One clip (a voice note) through the warm Whisper model. */
     transcribe: async (audio: Float32Array, language: string): Promise<string> =>
       (await transcriber()).transcribe(audio, language),

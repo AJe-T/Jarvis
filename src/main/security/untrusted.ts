@@ -25,3 +25,21 @@ export function wrapUntrusted(text: string, source: string, url?: string): strin
   const urlAttr = url ? ` url="${attr(url)}"` : '';
   return `<untrusted_content source="${attr(source)}"${urlAttr}>\n${escapeTags(text)}\n</untrusted_content>\n${REMINDER}`;
 }
+
+/** Exactly the first and last lines wrapUntrusted writes (attributes never hold `"`, `<` or `>`). */
+const OWN_OPEN = /^<untrusted_content source="[^"<>\n]*"(?: url="[^"<>\n]*")?>\n/;
+const OWN_CLOSE = new RegExp(
+  `\\n</untrusted_content>\\n${REMINDER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
+);
+
+/**
+ * For the injection scanner: when the WHOLE text is one wrapUntrusted block (a tool that wraps its
+ * own output, like Jarvis Browser), its outer wrapper lines are removed so the wrapper doesn't flag
+ * itself. Anything else is left as is, so the same strings planted mid-page still raise the alarm,
+ * and a break-out inside a real wrapper was escaped to `untrusted-content-escaped` and is still caught.
+ */
+export function withoutOwnWrapper(text: string): string {
+  return OWN_OPEN.test(text) && OWN_CLOSE.test(text)
+    ? text.replace(OWN_OPEN, '').replace(OWN_CLOSE, '')
+    : text;
+}

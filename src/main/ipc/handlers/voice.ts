@@ -5,6 +5,13 @@ import type { ModelStore } from '../../voice/local/model-store';
 import { listAudioDevices } from '../../voice/providers';
 import type { VoiceController } from '../../voice/voice-controller';
 import { handle, onSend } from '../handle';
+import { ENROL_PHRASES, type Enrolment } from '../../voice/enrolment';
+
+interface VoiceMatch {
+  enrolment: Enrolment;
+  enrolled(): boolean;
+  forget(): void;
+}
 
 /** Phase 4 channels. Audio capture never happens in the renderer (ADR-007). */
 export function registerVoiceHandlers(
@@ -13,6 +20,7 @@ export function registerVoiceHandlers(
   ui: { setActiveConversation(id: string | null): void; isTest: boolean },
   local: { models: ModelStore; changed(): void },
   dictations: DictationRepo,
+  match: VoiceMatch,
 ): void {
   const { models } = local;
   handle('dictation:history', () => dictations.list(100));
@@ -26,6 +34,31 @@ export function registerVoiceHandlers(
     const r = await voice.applyMode();
     if (!r.ok) s.settings.set('voice.mode', previous === req.mode ? 'off' : previous);
     return r;
+  });
+  handle('voice:profile', () => ({
+    enrolled: match.enrolled(),
+    phrases: match.enrolment.count(),
+    needed: ENROL_PHRASES,
+  }));
+  handle('voice:enrol', async (req) => {
+    switch (req.action) {
+      case 'sample': {
+        const r = await match.enrolment.sample();
+        return { ok: true as const, count: r.count, heard: r.heard };
+      }
+      case 'finish': {
+        const r = match.enrolment.finish();
+        s.audit.append('user', 'voice.enrol', { phrases: ENROL_PHRASES, threshold: r.threshold });
+        return { ok: true as const, ...r };
+      }
+      case 'cancel':
+        match.enrolment.cancel();
+        return { ok: true as const };
+      case 'delete':
+        match.forget();
+        s.audit.append('user', 'voice.enrolDelete', {});
+        return { ok: true as const };
+    }
   });
   handle('voice:mic', (req) => {
     voice.mic(req.action);

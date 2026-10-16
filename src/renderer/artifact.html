@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Artifacts (Security.md §7): a page Jarvis wrote, shown in a sandboxed frame (opaque origin, no
+      same-origin, no forms, popups or top navigation). This policy also blocks every network request,
+      so a page can neither load anything nor send anything anywhere.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; worker-src 'none'; form-action 'none'; base-uri 'none'"
+    />
+    <title>Artifact</title>
+  </head>
+  <body>
+    <script>
+      // The chat sends the page once; it replaces this document (the policy above stays in force).
+      (function () {
+        var done = false;
+        window.addEventListener('message', function (e) {
+          if (done || e.source !== window.parent || !e.data || typeof e.data.html !== 'string')
+            return;
+          done = true;
+          // WebRTC can reach the network past connect-src (STUN/ICE): take it away first. The page
+          // keeps this same window object, and frame-src 'none' leaves it no fresh one to borrow.
+          [
+            'RTCPeerConnection',
+            'webkitRTCPeerConnection',
+            'RTCDataChannel',
+            'RTCIceCandidate',
+            'RTCSessionDescription',
+          ].forEach(function (k) {
+            try {
+              Object.defineProperty(window, k, {
+                value: undefined,
+                configurable: false,
+                writable: false,
+              });
+            } catch (_) {
+              /* already gone */
+            }
+          });
+          document.open();
+          document.write(e.data.html);
+          document.close();
+        });
+        window.parent.postMessage({ artifactReady: true }, '*');
+      })();
+    </script>
+  </body>
+</html>

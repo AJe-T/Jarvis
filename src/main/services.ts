@@ -1,6 +1,8 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
+import { DEFAULT_PERSONA, personaPrompt } from '@shared/personas';
+import { isDefaultName } from '@shared/assistant-name';
 import {
   backupIfStale,
   backupNow,
@@ -21,8 +23,16 @@ import { runAgentLoop } from './agent/agent-loop';
 import { createOrchestrator, type Emit } from './agent/orchestrator';
 import { createSdkLoop } from './agent/sdk-loop';
 import { createBudgetGuard } from './llm/budget-guard';
+import { budgetAlertText, createBudgetAlerts } from './llm/budget-alerts';
+import { createFallbackClient } from './llm/fallback-client';
+import { createStrategyStore, learnFromTurn } from './agent/strategies';
+import { createBrowserTrail } from './apps/browser-trail';
+import { createGoalTools } from './planner/goals';
+import { localDay } from './lib/util';
 import { createClaudeClient } from './llm/claude-client';
 import { createLocalClient } from './llm/local-client';
+import { createBrains, createCloudClient } from './llm/brains';
+import { createCliBrains, type CliBrain, type CliBrainId } from './llm/cli-brains';
 import {
   createClaudeCodeClient,
   findClaudeCode,
@@ -48,13 +58,34 @@ import { createAppIndex } from './tools/native/app-index';
 import { createNativeTools } from './tools/native/index';
 import type { OsAdapter } from './tools/native/os';
 import { createMealTools, createMealsRepo } from './tools/everyday/meals';
+import { createKnowledgeTools } from './tools/everyday/knowledge';
+import { createModeTools } from './tools/everyday/modes';
+import { createMusicTools } from './tools/everyday/music';
+import { createPlanLimitsStore } from './llm/plan-limits';
+import {
+  createSessionReader,
+  createSessionWatcher,
+  sdkSessionSource,
+  type SessionSource,
+} from './claude-sessions/sessions';
+import { createClaudeSessionTools } from './claude-sessions/tools';
 import { createScreenTools } from './tools/everyday/screen';
 import { createWebPageTools } from './tools/everyday/web-page';
+import { createYouTubeTools } from './tools/everyday/youtube';
+import { createVideoTools } from './tools/everyday/video';
 import { createWeatherTools } from './tools/everyday/weather';
 import { createSkillStore } from './skills/skills';
 import { createToolRegistry } from './tools/registry';
+import { createOutputStore, createSavedOutputTools } from './tools/saved-outputs';
 import { createPlanner } from './planner/planner';
 import { createPlannerTools } from './planner/planner-tools';
+import { createLaya } from './laya/laya';
+import { createTerminal } from './apps/terminal';
+import { LAYA_ACTIONS, createFastPath } from './agent/fast-path';
+
+const LAYA_WARM_DELAY_MS = 5000;
+/** "Your local model is answering" is shown at most this often. */
+const FALLBACK_NOTICE_MS = 10 * 60_000;
 
 export interface ServiceOptions {
   userData: string;
@@ -82,6 +113,10 @@ export interface ServiceOptions {
   };
   startMenuDirs?: string[];
   home?: string;
+  /** Tests: stand-ins for the ChatGPT / Antigravity apps. */
+  cliBrains?: Record<CliBrainId, CliBrain>;
+  /** Tests: Claude Code sessions without reading ~/.claude. */
+  claudeSessionSource?: SessionSource;
 }
 
 /** Database.md §7: a restore chosen in Settings is applied on the next start, before the DB is opened. */
@@ -152,6 +187,11 @@ export function createServices(opts: ServiceOptions) {
   // ── settings, secrets, storage ───────────────────────────────────────────────────────────
   const settings = createSettingsService(createSettingsRepo(db));
   seedPathSettings(settings, opts.paths);
+  // The UI follows the settings Jarvis changes himself (set_personality, quiet_mode); allowlist, so a
+  // future sensitive key is never broadcast by default.
+  settings.onChange((key, value) => {
+    if (key === 'persona' || key === 'quiet.until') opts.emit('settings:changed', { key, value });
+  });
   const secrets = createSecretStore(
     join(opts.userData, 'secrets.bin'),
     opts.encryptor,
@@ -165,20 +205,41 @@ export function createServices(opts: ServiceOptions) {
 
   // ── brain: usage, budget, state ──────────────────────────────────────────────────────────
   const subscription = (): boolean => settings.get('llm.provider') === 'subscription';
+  // Heads-up at 50/75/90 % of the API budgets (idea from ruflo's cost tracker); quiet mode: toast only.
+  const budgetAlerts = createBudgetAlerts({
+    onAlert: (a) => {
+      const text = budgetAlertText(a);
+      if (settings.get('quiet.until') <= Date.now()) opts.os.notify('Budget', text);
+      opts.emit('notify', { level: a.step >= 0.9 ? 'warn' : 'info', message: text });
+    },
+  });
   const ledger = createUsageLedger({
     repo: usageRepo,
     settings,
-    billing: () => settings.get('llm.provider'),
-    onUpdate: (u) =>
+    // Another provider's API is paid per call too: it counts against the budgets like Anthropic's.
+    billing: () => {
+      const p = settings.get('llm.provider');
+      return p === 'cloud' ? 'api' : p;
+    },
+    onUpdate: (u) => {
       opts.emit('usage:update', {
         dayCostUsd: u.dayCostUsd,
         monthCostUsd: u.monthCostUsd,
         // The status bar shows the conversation model, not background helpers.
         model: u.purpose === 'chat' ? u.model : '',
         dailyBudget: settings.get('budget.dailyUsd'),
-      }),
+      });
+      // Budgets only limit API-key spend (ADR-010/013).
+      if (settings.get('llm.provider') === 'api' || settings.get('llm.provider') === 'cloud')
+        budgetAlerts.check(
+          { day: localDay(new Date()), dayCostUsd: u.dayCostUsd, monthCostUsd: u.monthCostUsd },
+          { daily: settings.get('budget.dailyUsd'), monthly: settings.get('budget.monthlyUsd') },
+        );
+    },
   });
   const budget = createBudgetGuard(ledger, settings);
+  // Sub-agents on another provider's API spend money whatever Jarvis's own connection is.
+  const paidBudget = createBudgetGuard(ledger, settings, () => true);
   const killSwitch = createKillSwitch();
   const state = createAssistantStateHub();
   state.onChange((s, detail) =>
@@ -191,7 +252,9 @@ export function createServices(opts: ServiceOptions) {
       ? createFakeClaude(loadFakeScript(process.env['JARVIS_FAKE_SCRIPT']))
       : createClaudeClient(() => secrets.get('anthropic')));
   // ADR-010: Sir's own Claude Code (signed in with his plan), driven through the Agent SDK.
+  const planLimits = createPlanLimitsStore();
   const claudeCode: ClaudeCodeRuntime = {
+    onRateLimit: (info) => planLimits.record(info),
     path: opts.claudeCodePath ?? (() => findClaudeCode()),
     cwd: join(opts.userData, 'claude-code'),
     query: async () =>
@@ -204,17 +267,54 @@ export function createServices(opts: ServiceOptions) {
     baseUrl: () => settings.get('llm.local.baseUrl'),
     model: () => settings.get('llm.local.model'),
     catalog: () => registry.catalog(),
+    apiKey: () => secrets.get('local_llm'),
     ...(opts.fetch ? { fetch: opts.fetch } : {}),
   });
+  // Claude busy or unreachable → the local model answers that call, if Sir turned it on (ruflo idea).
+  let lastFallbackNotice = 0;
+  const llmApiOrLocal = createFallbackClient({
+    primary: llmApi,
+    fallback: llmLocal,
+    enabled: () => settings.get('llm.fallbackLocal') && settings.get('llm.local.model') !== '',
+    onFallback: (err) => {
+      logger.warn({ code: err.code }, 'Claude unavailable; local model answered');
+      if (Date.now() - lastFallbackNotice < FALLBACK_NOTICE_MS) return;
+      lastFallbackNotice = Date.now();
+      opts.emit('notify', {
+        level: 'info',
+        message: 'Claude is unavailable right now, so your local model is answering.',
+      });
+    },
+  });
+  // Another provider's API (OpenAI, Gemini, DeepSeek…), through the same OpenAI-style translation.
+  const brainDeps = {
+    settings,
+    secrets,
+    catalog: () => registry.catalog(),
+    ...(opts.fetch ? { fetch: opts.fetch } : {}),
+  };
+  const llmCloud = createCloudClient(brainDeps, () => settings.get('llm.cloud.provider'));
   const pickLlm = (): LlmClient => {
     const p = settings.get('llm.provider');
-    return p === 'subscription' ? llmSubscription : p === 'local' ? llmLocal : llmApi;
+    if (p === 'subscription') return llmSubscription;
+    if (p === 'local') return llmLocal;
+    if (p === 'cloud') return llmCloud;
+    return llmApiOrLocal;
   };
-  /** Every Claude call goes to whichever connection Sir chose in Settings → Models & budget. */
+  /** Every Claude call goes to whichever connection Sir chose in Settings → Models & AI. */
   const llm: LlmClient = {
     stream: (req, o) => pickLlm().stream(req, o),
     ping: (model, signal) => pickLlm().ping(model, signal),
   };
+  // Every AI Sir has set up, for sub-agents Jarvis sends to another brain.
+  // Sir's ChatGPT / Google plans through their official apps. Tests never find the real apps.
+  const cli =
+    opts.cliBrains ??
+    createCliBrains({
+      workDir: join(opts.userData, 'cli-brains'),
+      ...(opts.isTest ? { exists: () => false } : {}),
+    });
+  const brains = createBrains({ ...brainDeps, jarvis: llm, local: llmLocal, cli });
   const sdkLoop = createSdkLoop(claudeCode, {
     webSearchEnabled: () => settings.get('web.search.enabled'),
   });
@@ -254,11 +354,19 @@ export function createServices(opts: ServiceOptions) {
     },
     onFire: (r, missed) => deliverReminder(missed ? 'Missed reminder' : 'Reminder', r.text, missed),
   });
-  /** One path for every reminder: Windows notification, in-app toast, and Jarvis says it. */
+  /** One path for every reminder: Windows notification, in-app toast, and Jarvis says it (quiet mode: toast only). */
   function deliverReminder(title: string, text: string, missed = false): void {
-    opts.os.notify(title, text);
+    if (settings.get('quiet.until') <= Date.now()) opts.os.notify(title, text);
     opts.emit('notify', { level: 'info', message: `${title}: ${text}` });
     for (const l of reminderListeners) l(text, missed);
+  }
+  /** Jarvis speaking up on his own (Claude Code sessions): pop-up, toast and speech, quiet mode respected. */
+  const announceListeners = new Set<(text: string) => void>();
+  function announce(title: string, text: string): void {
+    const quiet = settings.get('quiet.until') > Date.now();
+    if (!quiet) opts.os.notify(title, text);
+    opts.emit('notify', { level: 'info', message: text });
+    if (!quiet) for (const l of announceListeners) l(text);
   }
   // Tasks and Calendar (PRD F25/F26): Jarvis can read and change both; reminders use the path above.
   const navListeners = new Set<(view: 'tasks' | 'calendar') => void>();
@@ -268,6 +376,14 @@ export function createServices(opts: ServiceOptions) {
     deliver: (title, text) => deliverReminder(title, text),
     onChange: () => opts.emit('planner:changed', {}),
   });
+  const claudeSessions = createSessionReader(opts.claudeSessionSource ?? sdkSessionSource());
+  const sessionWatcher = createSessionWatcher({
+    reader: claudeSessions,
+    level: () => settings.get('claudeCode.announce'),
+    announce: (text) => announce('Claude Code', text),
+    onError: (err) => logger.debug({ err: String(err) }, 'claude session poll failed'),
+  });
+  if (!opts.isTest) sessionWatcher.start();
   const appIndex = createAppIndex(opts.os, opts.startMenuDirs ?? defaultStartMenuDirs());
   const registry = createToolRegistry({
     webSearchEnabled: () => settings.get('web.search.enabled'),
@@ -277,7 +393,15 @@ export function createServices(opts: ServiceOptions) {
     for (const l of navListeners) l(view);
   }))
     registry.register(tool);
+  // Long-term goals on top of Tasks (ruflo goals-plugin idea).
+  for (const tool of createGoalTools(planner)) registry.register(tool);
+  // Jarvis Terminal (ADR-032): Sir's own commands, plus every script Jarvis runs.
+  const terminal = createTerminal({
+    ps: (script, o) => opts.os.ps(script, o),
+    audit: (command) => audit.append('user', 'terminal.run', { command: command.slice(0, 200) }),
+  });
   for (const tool of createNativeTools({
+    onShellRun: (script, r, ms) => terminal.record(script, r, ms),
     os: opts.os,
     appIndex,
     guard: pathGuard,
@@ -291,13 +415,30 @@ export function createServices(opts: ServiceOptions) {
   for (const tool of [
     ...createWeatherTools({ settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) }),
     ...createMealTools({ repo: meals, settings }),
-    ...createScreenTools(opts.os),
+    ...createScreenTools(opts.os, opts.paths.pictures),
+    // Ideas from smaller Jarvis projects on GitHub: Wikipedia, dictionary, distance; personality, quiet mode.
+    ...createKnowledgeTools(opts.fetch ? { fetch: opts.fetch } : {}),
+    ...createModeTools({ settings }),
     ...createWebPageTools(opts.fetch ? { fetch: opts.fetch } : {}),
+    // YouTube transcripts without an API key (idea from jo-inc/camofox-browser).
+    ...createYouTubeTools(opts.fetch ? { fetch: opts.fetch } : {}),
+    // Videos from HTML with HyperFrames (heygen-com/hyperframes), rendered on this PC.
+    ...createVideoTools({ videosDir: () => join(opts.paths.videos, 'Jarvis') }),
     // HuggingGPT (microsoft/JARVIS): Claude plans, picks Hub models, runs them, explains.
     ...createHuggingFaceTools({
       token: () => secrets.get('huggingface'),
       guard: pathGuard,
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
+    }),
+    // Music from Sir's own library (kishanrajput23/Jarvis-Desktop-Voice-Assistant).
+    ...createMusicTools({ os: opts.os, guard: pathGuard, musicDir: () => opts.paths.music }),
+    // Claude Code sessions, plan usage and new sessions by voice (ethanplusai/jarvis).
+    ...createClaudeSessionTools({
+      reader: claudeSessions,
+      planLimits: () => planLimits.get(),
+      claudePath: () => claudeCode.path(),
+      guard: pathGuard,
+      reaConfigDir: join(opts.userData, 'claude-code'),
     }),
     // Everyday plugins (sukeesh/Jarvis): currency, markets, network, passwords, folder tidy.
     ...createUtilityTools({
@@ -307,11 +448,15 @@ export function createServices(opts: ServiceOptions) {
     }),
   ])
     registry.register(tool);
+  // Long tool results stay searchable instead of being cut off (idea from mksglu/context-mode).
+  const outputs = createOutputStore();
+  for (const tool of createSavedOutputTools(outputs)) registry.register(tool);
   const tools = createToolExecutor({
     registry,
     policy,
     broker,
     toolCalls,
+    outputs,
     audit,
     state,
     emit: (e, p) => opts.emit(e, p),
@@ -338,19 +483,64 @@ export function createServices(opts: ServiceOptions) {
     if (key === 'skills.disabled') void refreshSkills();
   });
   for (const tool of skills.tools()) registry.register(tool);
+  // Approaches that worked (ruflo ReasoningBank idea): learned after turns, offered as hints.
+  const strategies = createStrategyStore(db);
+  // Jarvis Browser steps that worked, per conversation, for save_browser_routine (ruflo idea).
+  const browserTrail = createBrowserTrail();
   const slots: { providers: ContextProviders } = {
     providers: { ...NO_PROVIDERS, skills: () => skillSummary },
   };
   const providers: ContextProviders = {
     coreProfile: () => slots.providers.coreProfile(),
     retrieve: (t) => slots.providers.retrieve(t),
-    integrations: () => slots.providers.integrations(),
+    integrations: () => {
+      // Jarvis decides which AI does what: he needs to know which ones Sir set up.
+      const others = brains.available().filter((b) => b !== 'jarvis');
+      const line = others.length
+        ? `other AIs for delegate_task "brain": ${others.map((b) => `${brains.label(b)} (${b})`).join(', ')}`
+        : '';
+      return [slots.providers.integrations(), line].filter(Boolean).join('; ');
+    },
     allowedRoots: () => settings.get('files.allowedRoots'),
     screenCount: () => slots.providers.screenCount(),
     routines: () => slots.providers.routines(),
     skills: () => slots.providers.skills(),
+    persona: () => {
+      const p = settings.get('persona');
+      return p === DEFAULT_PERSONA ? '' : personaPrompt(p);
+    },
+    assistantName: () => {
+      const n = settings.get('assistant.name');
+      return isDefaultName(n) ? '' : n;
+    },
+    moodTags: () => settings.get('appearance.orbMood'),
+    approaches: (t) => strategies.hint(t),
   };
   const context = createContextBuilder({ conversations, providers });
+  const laya = createLaya({
+    modelDir: join(opts.userData, 'models', 'laya-multilingual'),
+    // Laya's labels say "Jarvis": with another name it would drop real requests, so it steps aside.
+    mode: () =>
+      opts.isTest || !isDefaultName(settings.get('assistant.name'))
+        ? 'off'
+        : settings.get('laya.mode'),
+    fastPath: () => !opts.isTest && settings.get('agent.fastCommands') === 'laya',
+    logger,
+  });
+  settings.onChange((key) => {
+    if (key === 'laya.mode' || key === 'agent.fastCommands') laya.warm();
+  });
+  const layaChoices = Object.fromEntries(
+    Object.entries(LAYA_ACTIONS).map(([k, v]) => [k, v.criteria]),
+  );
+  const fastPath = createFastPath({
+    mode: () => settings.get('agent.fastCommands'),
+    classify: (text) => laya.classify(text, layaChoices),
+    assistantName: () => settings.get('assistant.name'),
+    logger,
+  });
+  // Loaded after startup settles so the first voice or chat decision can use it.
+  setTimeout(() => laya.warm(), LAYA_WARM_DELAY_MS).unref();
 
   const orchestrator = createOrchestrator({
     conversations,
@@ -366,7 +556,10 @@ export function createServices(opts: ServiceOptions) {
     state,
     emit: opts.emit,
     logger,
+    fastPath,
   });
+
+  orchestrator.onTurnEnd((turn) => learnFromTurn(strategies, turn));
 
   // Security.md §11: the kill switch stops turns, denies pending confirmations and returns to IDLE.
   killSwitch.onKill((reason) => {
@@ -402,7 +595,11 @@ export function createServices(opts: ServiceOptions) {
     llm,
     llmApi,
     llmLocal,
+    llmCloud,
+    brains,
+    paidBudget,
     claudeCode,
+    planLimits,
     skills,
     refreshSkills,
     fetch: opts.fetch,
@@ -416,13 +613,18 @@ export function createServices(opts: ServiceOptions) {
     scheduler,
     appIndex,
     reminderListeners,
+    announceListeners,
+    sessionWatcher,
     remindersChangedListeners,
     confirmShowListeners,
     planner,
     navListeners,
     context,
     orchestrator,
+    laya,
     slots,
+    terminal,
+    browserTrail,
   };
 }
 

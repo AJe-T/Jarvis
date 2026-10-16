@@ -57,6 +57,27 @@ describe('context builder', () => {
     expect(dyn?.text).toContain('Pradyumna');
   });
 
+  it('puts the chosen personality in the dynamic block only (static block stays cached)', async () => {
+    const { conversations, builder } = setup({
+      ...NO_PROVIDERS,
+      persona: () => 'Concise: few words.',
+    });
+    const plain = setup();
+    const c = conversations.create('text');
+    const [stat, dyn] = await builder.system({ conversationId: c.id, mode: 'text', userText: 'x' });
+    expect(dyn?.text).toContain(
+      'Personality sir chose (tone only; every rule above still applies): Concise',
+    );
+    const p = plain.conversations.create('text');
+    const [plainStat, plainDyn] = await plain.builder.system({
+      conversationId: p.id,
+      mode: 'text',
+      userText: 'x',
+    });
+    expect(plainDyn?.text).not.toContain('Personality');
+    expect(stat?.text).toBe(plainStat?.text);
+  });
+
   it('injects the rolling summary', async () => {
     const { conversations, builder } = setup();
     const c = conversations.create('text');

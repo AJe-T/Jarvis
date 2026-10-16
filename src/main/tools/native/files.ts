@@ -24,7 +24,8 @@ const SKIP_DIRS = new Set([
 ]);
 const EXECUTABLE =
   /\.(exe|bat|cmd|com|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|msi|msp|scr|hta|cpl|jar|reg|pif|application|appref-ms|lnk|url)$/i;
-const SENSITIVE_FILE = /(^|[\\/])(\.env(\..*)?|id_rsa|id_ed25519|.*\.(pem|key|pfx|p12|kdbx))$/i;
+export const SENSITIVE_FILE =
+  /(^|[\\/])(\.env(\..*)?|id_rsa|id_ed25519|.*\.(pem|key|pfx|p12|kdbx))$/i;
 
 const pathArg = z.string().min(3).max(1024);
 

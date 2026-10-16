@@ -46,6 +46,12 @@ export const TodoListSchema = z.object({
   color: Color,
   icon: z.string().max(16),
   sortOrder: z.number(),
+  /** What the list is for, shown on its card. */
+  description: z.string().max(500),
+  /** Most tasks in "Doing" at once (the board warns past it); null = no limit. */
+  wipLimit: z.number().int().min(1).max(50).nullable(),
+  /** Finished projects: hidden from Lists until "Show archived". */
+  archived: z.boolean(),
 });
 export type TodoList = z.infer<typeof TodoListSchema>;
 

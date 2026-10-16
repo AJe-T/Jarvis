@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { AudioLines, Mic, Paperclip, Send, Square, X } from 'lucide-react';
 import clsx from 'clsx';
+import { compactActive } from '../../features/chat/context-meter';
 import { call, cleanError } from '../../lib/api';
 import { useAssistantStore } from '../../stores/assistant-store';
 import { useChatStore, type Attachment } from '../../stores/chat-store';
@@ -48,6 +49,7 @@ export function Composer(): React.JSX.Element {
   const transcript = useAssistantStore((s) => s.transcript);
   const voiceMode = useSetting('voice.mode');
   const pttKey = useSetting('hotkeys.ptt') ?? 'Ctrl+Alt+Space';
+  const name = useSetting('assistant.name') ?? 'Jarvis';
   const online = useUiStore((s) => s.online);
   const toast = useUiStore((s) => s.toast);
   const busy = live !== null;
@@ -99,6 +101,11 @@ export function Composer(): React.JSX.Element {
       return;
     }
     setText('');
+    // /compact (idea from LibreChat): fold the conversation so far into its summary; nothing is sent.
+    if (/^\/compact\s*$/i.test(t)) {
+      await compactActive();
+      return;
+    }
     const files = attachments;
     setAttachments([]);
     await send(t, 'text', files);
@@ -158,13 +165,13 @@ export function Composer(): React.JSX.Element {
       >
         <textarea
           ref={boxRef}
-          aria-label="Message Jarvis"
+          aria-label={`Message ${name}`}
           placeholder={
             composing
               ? 'Listening… speak and your words appear here'
               : listening && transcript
                 ? transcript.text
-                : 'Message Jarvis…'
+                : `Message ${name}…`
           }
           value={text}
           rows={1}

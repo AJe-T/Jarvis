@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import {
   Notification,
   app,
@@ -12,7 +12,7 @@ import {
   type Tray,
 } from 'electron';
 import type { SettingKey } from '@shared/settings';
-import { addEventTarget, emit } from './ipc/emit';
+import { addEventTarget, emit, onEmit } from './ipc/emit';
 import { registerCoreHandlers } from './ipc/handlers/core';
 import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
@@ -23,6 +23,7 @@ import { createSpaces, createSpacesTool } from './spaces/spaces';
 import { createStageTools } from './stage/stage-tools';
 import { createMemorySystem } from './memory/memory-system';
 import { createResearchTool } from './agent/research';
+import { createSubagentTool } from './agent/subagents';
 import { createAutomation } from './automation/automation';
 import { createTelegramChannel } from './channels/telegram';
 import { copilotTool, createCopilot } from './copilot/copilot';
@@ -33,7 +34,19 @@ import { createPhoneRemote } from './channels/phone-remote';
 import { createWhatsAppChannel } from './channels/whatsapp';
 import { registerWhatsAppHandlers } from './ipc/handlers/whatsapp';
 import { registerAutomationHandlers } from './ipc/handlers/automation';
+import { registerAppHandlers } from './ipc/handlers/apps';
+import { createAppTools } from './apps/app-tools';
+import { createJarvisBrowser } from './apps/browser-window';
+import { createTerminalWindow } from './apps/terminal-window';
+import { createCameraView } from './apps/camera-view';
+import { createDock } from './apps/dock';
+import { JARVIS_APP_INFO } from '@shared/jarvis-apps';
+import type { StagePanel } from '@shared/stage';
 import { registerSkillHandlers } from './ipc/handlers/skills';
+import { registerNpcHandlers } from './ipc/handlers/npcs';
+import { createNpcRepo } from './npcs/npc-repo';
+import { createNpcRuntime } from './npcs/npc-runtime';
+import { createNpcTools } from './npcs/npc-tools';
 import { registerVoiceHandlers } from './ipc/handlers/voice';
 import { createVoiceSystem } from './voice/voice-system';
 import { registerMcpHandlers } from './ipc/handlers/mcp';
@@ -43,6 +56,8 @@ import { createElectronScreen } from './tools/computer/electron-screen';
 import { createFakeDriver, createFakeScreen, createNutDriver } from './tools/computer/drivers';
 import { createComputerOverlay } from './windows/overlay-window';
 import { createMiniOrb, type MiniOrb } from './windows/mini-window';
+import { createCaptureWindow } from './windows/capture-window';
+import { createCameraTools } from './tools/everyday/camera';
 import { applyRetention, registerDataHandlers } from './ipc/handlers/data';
 import { handle } from './ipc/handle';
 import { JarvisError, errorMessage } from './errors';
@@ -51,7 +66,7 @@ import { createServices, type Services } from './services';
 import { createFakeOs, createWindowsOs } from './tools/native/os';
 import { hardenSession } from './windows/hardening';
 import { registerHotkeys, unregisterHotkeys } from './windows/hotkeys';
-import { createMainWindow } from './windows/main-window';
+import { createMainWindow, TITLE_BAR_HEIGHT } from './windows/main-window';
 import { createMusicMeter } from './windows/music-meter';
 import { createTray, iconPath } from './windows/tray';
 
@@ -235,7 +250,12 @@ async function boot(): Promise<void> {
   });
   if (!services.dbHealthy) logger.error('database failed quick_check');
   const memory = createMemorySystem(services);
-  const voice = createVoiceSystem(services);
+  // Hidden window for the echo-cancelled microphone and the webcam (windows/capture-window.ts).
+  const capture = createCaptureWindow(logger);
+  app.on('will-quit', () => capture.destroy());
+  const voice = createVoiceSystem(services, isTest ? {} : { capture });
+  for (const tool of createCameraTools({ snapshot: () => capture.snapshot() }))
+    services.registry.register(tool);
   const mcp = createMcpSystem(services, { appVersion: app.getVersion() });
   app.on('will-quit', () => void mcp.manager.shutdown());
   pttHandlers.add(() => voice.voice.ptt());
@@ -275,7 +295,10 @@ async function boot(): Promise<void> {
   });
   registerSpacesHandlers(spaces, { show: showMainWindow });
   services.registry.register(createSpacesTool(spaces));
-  for (const tool of createStageTools((panel) => emit('stage:panel', { panel })))
+  for (const tool of createStageTools(
+    (panel) => emit('stage:panel', { panel }),
+    services.pathGuard,
+  ))
     services.registry.register(tool);
   registerVoiceHandlers(
     services,
@@ -293,6 +316,7 @@ async function boot(): Promise<void> {
       },
     },
     voice.dictations,
+    voice.voiceMatch,
   );
   registerMcpHandlers(services, mcp.manager);
   const overlay = createComputerOverlay();
@@ -311,6 +335,22 @@ async function boot(): Promise<void> {
   handle('computer:calibrate', () => computer.calibrate());
   registerDataHandlers(services);
   registerSkillHandlers(services);
+  // NPCs: Sir's team of single-purpose agents; Jarvis leads them (npc_* tools) and reads their memory.
+  const npcRepo = createNpcRepo(services.db);
+  const npcs = createNpcRuntime({ s: services, repo: npcRepo, vault: () => memory.vault, emit });
+  for (const tool of createNpcTools(npcs, npcRepo)) services.registry.register(tool);
+  registerNpcHandlers(services, npcs, npcRepo);
+  const integrations = services.slots.providers.integrations;
+  services.slots.providers = {
+    ...services.slots.providers,
+    integrations: () => {
+      const team = npcRepo.list().filter((n) => n.enabled);
+      const line = team.length
+        ? `your NPC team (npc_ask / npc_meeting): ${team.map((n) => `${n.name} (${n.role})`).join(', ')}`
+        : '';
+      return [integrations(), line].filter(Boolean).join('; ');
+    },
+  };
   // Scheduled agents (ideas from OpenJarvis): briefing, recurring tasks, proactive check-ins.
   const automation = createAutomation(services, {
     writeNote: (rel, md) => memory.vault.write(rel, md),
@@ -320,6 +360,8 @@ async function boot(): Promise<void> {
   services.registry.register(
     createResearchTool(services, { writeNote: (rel, md) => memory.vault.write(rel, md) }),
   );
+  // Sub-agents (idea from LibreChat): independent jobs in parallel, each in a fresh context.
+  services.registry.register(createSubagentTool(services));
   registerAutomationHandlers(services, automation);
   if (!isTest) automation.start();
   // Telegram channel (ideas from OpenJarvis): only when Sir turned it on and gave a bot token.
@@ -340,8 +382,53 @@ async function boot(): Promise<void> {
   if (!isTest) void whatsapp.start();
   app.on('will-quit', () => whatsapp.stop());
   // Reply copilot (idea from jev-chat-jarvis): hotkey reads the chat in front, then opens the panel.
-  const copilot = createCopilot(services);
+  const copilot = createCopilot(services, {
+    // "Read chat" pressed inside Jarvis: step aside so the chat behind is the window in front.
+    hideSelf: async () => {
+      if (mainWindow?.isVisible() && !mainWindow.isMinimized()) mainWindow.minimize();
+    },
+    showSelf: showMainWindow,
+  });
   registerCopilotHandlers(copilot);
+  // Jarvis Apps (ADR-032/040): every app opens beside the orb. Browser, Terminal and Camera are
+  // their own isolated pages, placed over Core's panel by the dock.
+  const presentApp = (panel: StagePanel): void => {
+    showMainWindow();
+    emit('stage:panel', { panel });
+  };
+  const jarvisBrowser = createJarvisBrowser({
+    present: () => presentApp({ kind: 'browser' }),
+    onClosed: () => {
+      if (dock.current() !== 'browser') return;
+      dock.closed('browser');
+      emit('stage:panel', { panel: null });
+    },
+  });
+  const terminalWindow = createTerminalWindow(services.terminal, {
+    present: () => presentApp({ kind: 'terminal' }),
+  });
+  const cameraView = createCameraView({
+    picturesDir: () => app.getPath('pictures'),
+    audit: (file) => services.audit.append('user', 'camera.photo', { file: basename(file) }),
+  });
+  const dock = createDock({
+    main: () => mainWindow,
+    apps: { browser: jarvisBrowser, terminal: terminalWindow, camera: cameraView },
+  });
+  // Nothing may cover a confirmation: docked app pages hide while one is open.
+  onEmit((event, payload) => {
+    if (event === 'confirm:request' || event === 'confirm:resolved')
+      dock.confirmation((payload as { requestId: string }).requestId, event === 'confirm:request');
+  });
+  services.terminal.onEntry((entry) => terminalWindow.push(entry));
+  registerAppHandlers(services, { dock });
+  for (const tool of createAppTools({
+    browser: jarvisBrowser,
+    show: (jarvisApp) => presentApp(JARVIS_APP_INFO[jarvisApp].panel),
+    settings: services.settings,
+    trail: services.browserTrail,
+  }))
+    services.registry.register(tool);
   services.registry.register(
     copilotTool(copilot, (cap) => {
       emit('copilot:captured', cap);
@@ -377,6 +464,10 @@ async function boot(): Promise<void> {
     save: (dock) => services.settings.set('mini.dock', dock),
     open: () => setMiniMode(false),
     hide: () => miniOrb?.window()?.hide(),
+  });
+  handle('app:titleBar', (req) => {
+    mainWindow?.setTitleBarOverlay({ ...req, height: TITLE_BAR_HEIGHT });
+    return { ok: true };
   });
   handle('app:setMiniMode', (req) => {
     setMiniMode(req.on);

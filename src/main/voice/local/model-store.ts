@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync, statSync } from 'node:fs';
 import { mkdir, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { LOCAL_STT_MODEL_IDS } from '@shared/speech-engines';
 import { JarvisError } from '../../errors';
 import MANIFEST from './models.json';
 
@@ -11,17 +12,16 @@ export const MODEL_IDS = Object.keys(MANIFEST) as ModelId[];
 
 interface ModelFile {
   path: string;
-  url: string;
+  /** null: not hosted anywhere yet, so the model is installed by hand (Laya, ADR-027). */
+  url: string | null;
   sha256: string;
   size: number;
 }
 
-/** Whisper needs the voice-activity model to know when Sir stopped talking. */
-const REQUIRES: Partial<Record<ModelId, ModelId[]>> = {
-  'whisper-base.en': ['silero-vad'],
-  'whisper-small.en': ['silero-vad'],
-  'whisper-small': ['silero-vad'],
-};
+/** Speech-to-text models need the voice-activity model to know when Sir stopped talking. */
+const REQUIRES: Partial<Record<ModelId, ModelId[]>> = Object.fromEntries(
+  LOCAL_STT_MODEL_IDS.map((id) => [id, ['silero-vad']]),
+);
 
 export interface ModelStatus {
   installed: boolean;
@@ -68,6 +68,10 @@ export function createModelStore(deps: {
   ): Promise<void> {
     const target = join(dir(id), f.path);
     const part = `${target}.part`;
+    if (!f.url)
+      throw new Error(
+        `${id} can't be downloaded yet; install it by hand (docs/BIBLE.md, "Local decisions").`,
+      );
     await mkdir(dirname(target), { recursive: true });
     const res = await doFetch(f.url, { signal, redirect: 'follow' });
     if (!res.ok || !res.body) throw new Error(`Download failed (${res.status}) for ${f.path}`);

@@ -9,12 +9,18 @@ export interface BudgetGuard {
 }
 
 /** Security.md §11. */
-export function createBudgetGuard(ledger: UsageLedger, settings: SettingsService): BudgetGuard {
+export function createBudgetGuard(
+  ledger: UsageLedger,
+  settings: SettingsService,
+  /** Calls through this guard are paid per use; default: Jarvis's own connection decides. */
+  paid?: () => boolean,
+): BudgetGuard {
   const budgetError = (text: string): JarvisError => new JarvisError('BUDGET_EXCEEDED', text, text);
 
   function check(): JarvisError | null {
     // ADR-010/013: subscription and local models have no per-call charge; budgets limit API-key spend.
-    if (settings.get('llm.provider') !== 'api') return null;
+    const p = settings.get('llm.provider');
+    if (!(paid ? paid() : p === 'api' || p === 'cloud')) return null;
     const { day, month } = ledger.totals();
     const daily = settings.get('budget.dailyUsd');
     const monthly = settings.get('budget.monthlyUsd');

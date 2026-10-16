@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
+import { STT_ENGINES } from '@shared/speech-engines';
 import clsx from 'clsx';
 import type { VoiceMode } from '@shared/types';
 import { Orb } from '../../components/jarvis/orb';
@@ -35,10 +36,13 @@ export function Onboarding(): React.JSX.Element {
   const sttEngine = useSetting('voice.stt.provider') ?? 'deepgram';
   const wakeEngine = useSetting('voice.wake.provider') ?? 'picovoice';
   const whisperModel = useSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
+  const sttKey = STT_ENGINES.find((e) => e.id === sttEngine)?.key;
+  // On-device: the model is downloaded. Deepgram streams. The rest also need the voice detector.
   const sttReady =
-    sttEngine === 'deepgram'
-      ? Boolean(secrets['deepgram']?.set)
-      : Boolean(models.status?.[whisperModel]?.installed);
+    sttEngine === 'whisper'
+      ? Boolean(models.status?.[whisperModel]?.installed)
+      : (!sttKey || sttEngine === 'server' || Boolean(secrets[sttKey]?.set)) &&
+        (sttEngine === 'deepgram' || Boolean(models.status?.['silero-vad']?.installed));
   const wakeReady =
     wakeEngine === 'picovoice'
       ? Boolean(secrets['picovoice']?.set)
@@ -68,10 +72,14 @@ export function Onboarding(): React.JSX.Element {
 
   const provider = useSetting('llm.provider') ?? 'api';
   const localModel = useSetting('llm.local.model') ?? '';
+  const cloudModels = useSetting('llm.cloud.models') ?? {};
+  const cloudProvider = useSetting('llm.cloud.provider') ?? 'openai';
+  const cloudModel = cloudModels[cloudProvider] ?? '';
   const canNext =
     step !== 1 ||
     provider === 'subscription' ||
     (provider === 'local' && Boolean(localModel)) ||
+    (provider === 'cloud' && Boolean(cloudModel)) ||
     Boolean(anthropic?.set);
 
   return (

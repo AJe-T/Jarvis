@@ -17,6 +17,7 @@ export function startIpcBridge(): Unsubscribe {
   const chat = useChatStore.getState;
   const subs: Unsubscribe[] = [
     on('assistant:state', (p) => useAssistantStore.getState().setState(p.state, p.detail)),
+    on('assistant:mood', (p) => useAssistantStore.getState().setMood(p.mood)),
     on('chat:delta', (p) => chat().applyDelta(p.turnId, p.conversationId, p.textDelta)),
     on('chat:message', (p) => chat().applyMessage(p.turnId, p.conversationId, p.message)),
     on('tool:update', (p) => chat().applyToolUpdate(p.turnId, p.conversationId, p.toolCall)),
@@ -32,6 +33,9 @@ export function startIpcBridge(): Unsubscribe {
     on('voice:transcript', (p) => useAssistantStore.getState().setTranscript(p)),
     on('computer:active', (p) => useAssistantStore.getState().setComputerActive(p.active)),
     on('nav:open', (p) => useUiStore.getState().go(p.view, p.section)),
+    on('settings:changed', (p) =>
+      useSettingsStore.setState((s) => ({ values: { ...s.values, [p.key]: p.value } })),
+    ),
   ];
   for (const fn of extra) subs.push(...fn(on));
   const setOnline = (): void => useUiStore.getState().setOnline(navigator.onLine);

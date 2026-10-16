@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { StagePanel } from '@shared/stage';
+import { isDockedKind } from '@shared/jarvis-apps';
 import { useUiStore } from './ui-store';
 
 interface StageState {
@@ -14,7 +15,8 @@ export const useStageStore = create<StageState>((set, get) => ({
   panel: null,
   serial: 0,
   show(panel) {
-    set({ panel, serial: get().serial + 1 });
+    const same = panel && get().panel?.kind === panel.kind && isDockedKind(panel.kind);
+    set({ panel, serial: same ? get().serial : get().serial + 1 });
     const ui = useUiStore.getState();
     // Jarvis takes the room he needs: Core comes forward and the sidebar steps aside until he's done.
     if (panel && ui.view !== 'chat') ui.go('chat');

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { create } from 'zustand';
 import type { EventPayload, Req, Res } from '@shared/ipc-contract';
@@ -9,6 +9,7 @@ import { call, cleanError } from '../../lib/api';
 import { registerBridge } from '../../lib/ipc-bridge';
 import { useSetting } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
+import { ReplyCard } from './reply-card';
 
 type Capture = EventPayload<'copilot:captured'>;
 type Analysis = Res<'copilot:analyse'>;
@@ -62,7 +63,8 @@ export function CopilotView(): React.JSX.Element {
   const [option, setOption] = useState<string | null>(null);
   const [details, setDetails] = useState('');
   const [drafts, setDrafts] = useState<Candidate[]>([]);
-  const [edits, setEdits] = useState<Record<number, string>>({});
+  const [quick, setQuick] = useState<string[]>([]);
+  const [edits, setEdits] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
 
   const step = async <T,>(label: string, p: () => Promise<T>): Promise<T | undefined> => {
@@ -80,26 +82,54 @@ export function CopilotView(): React.JSX.Element {
     setAnalysis(null);
     setOption(null);
     setDrafts([]);
+    setQuick([]);
     setEdits({});
     setDetails('');
   };
 
+  // A chat captured before: start from who they were last time.
+  useEffect(() => {
+    reset();
+    if (capture?.remembered) {
+      setScene(capture.remembered.scene);
+      setRelationship(capture.remembered.relationship);
+    }
+  }, [capture?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const readChat = (): void =>
+    void step('Reading the chat…', () => call('copilot:capture', {})).then(
+      (c) => c && setCapture(c),
+    );
+  const paste = (text: string): void =>
+    void step('Pasting…', () => call('copilot:fill', { id: capture?.id ?? 'cp_none', text })).then(
+      (r) =>
+        r &&
+        (toast({ level: 'info', message: 'Pasted into the chat. Review it and press Send.' }),
+        setCapture(null),
+        reset()),
+    );
+
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <PageHeader title="Reply copilot" />
+      <PageHeader title="Reply copilot" help="copilot">
+        <Button variant="primary" disabled={busy !== null} onClick={readChat}>
+          {busy === 'Reading the chat…' ? busy : 'Read chat on screen'}
+        </Button>
+      </PageHeader>
       <PageBody className="flex flex-col gap-6">
         <header>
           <p className="text-sm text-ink-300">
-            Open a chat (WhatsApp, Telegram, Slack…) and press <b>{hotkey}</b>. Jarvis reads the
-            conversation from a screenshot, works out what they want, helps you choose how to
-            respond, drafts two replies and checks them. It pastes your pick into the message box.{' '}
-            <b>You press Send.</b>
+            Open a chat (WhatsApp, Telegram, Slack…) and press <b>{hotkey}</b>, or click{' '}
+            <b>Read chat on screen</b>: Jarvis steps aside, reads the conversation, works out what
+            they want, helps you choose how to respond, drafts replies and checks them. It pastes
+            your pick into the message box. <b>You press Send.</b>
           </p>
         </header>
 
         {!capture ? (
           <p className="card p-4 text-sm text-ink-500">
-            No chat captured yet. Press {hotkey} while the chat is on screen.
+            No chat captured yet. Press {hotkey} while the chat is on screen, or click Read chat on
+            screen.
           </p>
         ) : (
           <>
@@ -109,6 +139,7 @@ export function CopilotView(): React.JSX.Element {
                   {capture.chat.contact || 'Chat'}{' '}
                   <span className="text-sm text-ink-500">
                     · {capture.chat.app || capture.windowTitle}
+                    {capture.chat.isGroup && ' · group'}
                   </span>
                 </p>
                 <Button variant="ghost" onClick={() => (setCapture(null), reset())}>
@@ -126,6 +157,7 @@ export function CopilotView(): React.JSX.Element {
                         : 'self-start bg-surface-2 text-ink-300',
                     )}
                   >
+                    {m.name && <b className="block text-xs text-accent-300">{m.name}</b>}
                     {m.text}
                   </li>
                 ))}
@@ -133,7 +165,12 @@ export function CopilotView(): React.JSX.Element {
             </section>
 
             <section aria-label="Who is this" className="flex flex-col gap-3">
-              <h2 className="text-base font-semibold text-ink-100">1 · Who is this?</h2>
+              <h2 className="text-base font-semibold text-ink-100">
+                1 · Who is this?
+                {capture.remembered && (
+                  <span className="ml-2 text-xs font-normal text-ink-500">remembered</span>
+                )}
+              </h2>
               <div className="flex flex-wrap gap-2">
                 {(Object.keys(SCENES) as Scene[]).map((sc) => (
                   <Button
@@ -165,18 +202,49 @@ export function CopilotView(): React.JSX.Element {
                 checked={dispute}
                 onChange={(v) => (setDispute(v), reset())}
               />
-              <Button
-                variant="primary"
-                disabled={busy !== null}
-                onClick={() =>
-                  void step('Reading the situation…', () =>
-                    call('copilot:analyse', { id: capture.id, scene, relationship, dispute }),
-                  ).then((a) => a && (setAnalysis(a), setOption(a.options[0]?.id ?? null)))
-                }
-              >
-                {busy === 'Reading the situation…' ? busy : 'Analyse'}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void step('Reading the situation…', () =>
+                      call('copilot:analyse', { id: capture.id, scene, relationship, dispute }),
+                    ).then((a) => a && (setAnalysis(a), setOption(a.options[0]?.id ?? null)))
+                  }
+                >
+                  {busy === 'Reading the situation…' ? busy : 'Analyse'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={busy !== null}
+                  title="Three short replies straight away, without the analysis and checks"
+                  onClick={() =>
+                    void step('Suggesting…', () =>
+                      call('copilot:quick', { id: capture.id, scene, relationship }),
+                    ).then((q) => q && (setQuick(q), setEdits({})))
+                  }
+                >
+                  {busy === 'Suggesting…' ? busy : 'Quick replies'}
+                </Button>
+              </div>
             </section>
+
+            {quick.length > 0 && (
+              <section aria-label="Quick replies" className="flex flex-col gap-3">
+                <h2 className="text-base font-semibold text-ink-100">Quick replies</h2>
+                {quick.map((q, i) => (
+                  <ReplyCard
+                    key={`q${i}`}
+                    captureId={capture.id}
+                    text={edits[`q${i}`] ?? q}
+                    onText={(t) => setEdits((e) => ({ ...e, [`q${i}`]: t }))}
+                    busy={busy !== null}
+                    step={step}
+                    onPaste={paste}
+                  />
+                ))}
+              </section>
+            )}
 
             {analysis && (
               <section aria-label="Situation" className="flex flex-col gap-3">
@@ -252,76 +320,45 @@ export function CopilotView(): React.JSX.Element {
               <section aria-label="Drafts" className="flex flex-col gap-3">
                 <h2 className="text-base font-semibold text-ink-100">3 · Pick a reply</h2>
                 {drafts.map((d, i) => (
-                  <div
-                    key={i}
-                    className={clsx(
-                      'rounded-md border p-3',
-                      d.topPick
-                        ? 'border-ok-400'
-                        : d.state === 'blocked'
-                          ? 'border-alarm-500'
-                          : 'border-line',
-                    )}
-                  >
-                    <div className="mb-2 flex items-center gap-2 text-sm">
-                      <span
-                        className={clsx(
-                          'font-semibold',
-                          d.state === 'eligible'
-                            ? 'text-ok-400'
-                            : d.state === 'confirm'
-                              ? 'text-lamp-400'
-                              : 'text-alarm-500',
+                  <ReplyCard
+                    key={`d${i}`}
+                    captureId={capture.id}
+                    text={edits[`d${i}`] ?? d.text}
+                    onText={(t) => setEdits((e) => ({ ...e, [`d${i}`]: t }))}
+                    busy={busy !== null}
+                    step={step}
+                    onPaste={paste}
+                    tone={d.topPick ? 'top' : d.state === 'blocked' ? 'blocked' : 'plain'}
+                    header={
+                      <div className="mb-2 flex items-center gap-2 text-sm">
+                        <span
+                          className={clsx(
+                            'font-semibold',
+                            d.state === 'eligible'
+                              ? 'text-ok-400'
+                              : d.state === 'confirm'
+                                ? 'text-lamp-400'
+                                : 'text-alarm-500',
+                          )}
+                        >
+                          {d.topPick ? 'Top pick' : STATE_LABEL[d.state]}
+                        </span>
+                        <span className="text-ink-500 tabular">{d.score.toFixed(1)} / 5</span>
+                      </div>
+                    }
+                    footer={
+                      <>
+                        {d.problems.length > 0 && (
+                          <ul className="mt-1 list-disc pl-5 text-xs text-ink-300">
+                            {d.problems.map((p) => (
+                              <li key={p}>{p}</li>
+                            ))}
+                          </ul>
                         )}
-                      >
-                        {d.topPick ? 'Top pick' : STATE_LABEL[d.state]}
-                      </span>
-                      <span className="text-ink-500 tabular">{d.score.toFixed(1)} / 5</span>
-                    </div>
-                    <textarea
-                      aria-label={`Reply ${i + 1}`}
-                      rows={3}
-                      value={edits[i] ?? d.text}
-                      onChange={(e) => setEdits({ ...edits, [i]: e.target.value })}
-                      className="w-full rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink-100"
-                    />
-                    {d.problems.length > 0 && (
-                      <ul className="mt-1 list-disc pl-5 text-xs text-ink-300">
-                        {d.problems.map((p) => (
-                          <li key={p}>{p}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {d.note && <p className="mt-1 text-xs text-ink-500">{d.note}</p>}
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        variant={d.state === 'blocked' ? 'secondary' : 'primary'}
-                        disabled={busy !== null}
-                        onClick={() =>
-                          void step('Pasting…', () =>
-                            call('copilot:fill', { id: capture.id, text: edits[i] ?? d.text }),
-                          ).then(
-                            (r) =>
-                              r &&
-                              (toast({
-                                level: 'info',
-                                message: 'Pasted into the chat. Review it and press Send.',
-                              }),
-                              setCapture(null),
-                              reset()),
-                          )
-                        }
-                      >
-                        Paste into chat
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => void navigator.clipboard.writeText(edits[i] ?? d.text)}
-                      >
-                        Copy
-                      </Button>
-                    </div>
-                  </div>
+                        {d.note && <p className="mt-1 text-xs text-ink-500">{d.note}</p>}
+                      </>
+                    }
+                  />
                 ))}
               </section>
             )}

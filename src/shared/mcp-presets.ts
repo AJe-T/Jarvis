@@ -10,6 +10,7 @@ export interface SecretNeed {
 export const PRESET_CATEGORIES = [
   { id: 'hubs', label: 'App hubs' },
   { id: 'browser', label: 'Browser & files' },
+  { id: 'desktop', label: 'Desktop control' },
   { id: 'search', label: 'Web search' },
   { id: 'knowledge', label: 'Docs & knowledge' },
   { id: 'dev', label: 'Developer' },
@@ -154,6 +155,30 @@ export const MCP_PRESETS: McpPreset[] = [
         },
       },
     ),
+  },
+  // ── Desktop control ──
+  {
+    id: 'cua-driver',
+    label: 'Cua Driver (desktop apps)',
+    description:
+      "trycua's open-source driver (MIT): reads and operates Windows apps through UI Automation, often without taking your mouse or focus, and also works on the Claude subscription and local models. Install it first (see Help), without the admin auto-start. Listing apps and windows is free; reading a window or acting in it asks you.",
+    category: 'desktop',
+    server: {
+      ...stdio('cua-driver', []),
+      command: 'cua-driver',
+      args: ['mcp'],
+      trustLevel: 'community',
+      toolOverrides: {
+        // Listing apps and windows is harmless; reading a window returns its picture and
+        // contents (like look_at_screen), so that asks too.
+        list_apps: 'SAFE',
+        list_windows: 'SAFE',
+        // Changing the driver's own permission mode, or installing software through it, is never Jarvis's call.
+        set_config: 'BLOCKED',
+        install_extension: 'BLOCKED',
+        install_ffmpeg: 'BLOCKED',
+      },
+    },
   },
   // ── Web search ──
   {
@@ -323,6 +348,17 @@ export const MCP_PRESETS: McpPreset[] = [
     server: stdio('mongodb', ['mongodb-mcp-server@3.0.5', '--readOnly'], {
       envSecrets: { MDB_MCP_CONNECTION_STRING: 'mongodb_uri' },
     }),
+  },
+  {
+    // ADR-031. Claude Code sessions get REA by themselves (start_claude_session studyApp); this
+    // connection lets Jarvis itself inspect apps. 170+ tools: best on the Claude subscription,
+    // which loads tool definitions only when needed.
+    id: 'rea',
+    label: 'REA: reverse engineer apps',
+    description:
+      'See how a feature in another app works, without its source: Electron/JavaScript apps, .NET, native programs and websites. Needs Node.js 22.19+ (or 24.11+). Has 170+ tools, so it adds a lot to each request on an API key; prefer the Claude subscription.',
+    category: 'dev',
+    server: stdio('rea', ['rea-agents@6.4.0', 'mcp'], { trustLevel: 'community' }),
   },
   // ── Productivity ──
   {

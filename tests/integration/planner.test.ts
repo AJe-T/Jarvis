@@ -36,6 +36,22 @@ function setup() {
 }
 
 describe('Tasks', () => {
+  it('lists keep a description, a Doing limit and an archived flag; a patch changes only what it names', () => {
+    const t = setup();
+    const l = t.planner.saveList({ name: 'Launch', description: 'Ship v3', wipLimit: 2 });
+    expect(l).toMatchObject({ description: 'Ship v3', wipLimit: 2, archived: false });
+    const patched = t.planner.saveList({ id: l.id, archived: true });
+    expect(patched).toMatchObject({
+      name: 'Launch',
+      description: 'Ship v3',
+      wipLimit: 2,
+      archived: true,
+    });
+    expect(t.planner.saveList({ id: l.id, wipLimit: null }).wipLimit).toBeNull();
+    expect(t.planner.lists().find((x) => x.id === l.id)?.archived).toBe(true);
+    expect(() => t.planner.saveList({ description: 'no name' })).toThrow();
+  });
+
   it('adds from natural language, reminds once at the due time, and lists today', async () => {
     const t = setup();
     t.planner.saveList({ name: 'Home' });
@@ -260,5 +276,35 @@ describe('Planner edge cases (review fixes)', () => {
     const before = t.planner.calendars().length;
     expect(() => t.planner.importIcs('BEGIN:VCALENDAR\r\nEND:VCALENDAR', 'Empty')).toThrow();
     expect(t.planner.calendars()).toHaveLength(before);
+  });
+});
+
+describe('Goals (ruflo goals idea)', () => {
+  it('a goal lives in the Goals list with its milestones as subtasks, and the list shows progress', async () => {
+    const t = setup();
+    const tl = t.services.registry.get('goals');
+    if (!tl) throw new Error('no goals tool');
+    const goals = async (input: unknown): Promise<string> =>
+      (await tl.run(tl.input.parse(input), ctx)).content
+        .map((c) => (c.type === 'text' ? c.text : ''))
+        .join('');
+    expect(await goals({ action: 'list' })).toBe('No goals yet.');
+    const target = addDays(toDateKey(new Date()), 60);
+    expect(
+      await goals({
+        action: 'set',
+        title: 'Run a half marathon',
+        target,
+        milestones: ['Run 5 km', 'Run 10 km', 'Run 15 km'],
+      }),
+    ).toMatch(/Goal set: Run a half marathon, target .*, 3 milestones/);
+    const list = t.planner.lists().find((l) => l.name === 'Goals');
+    const goal = t.planner.todos().find((x) => x.title === 'Run a half marathon');
+    expect(goal?.listId).toBe(list?.id);
+    expect(t.planner.todos().filter((x) => x.parentId === goal?.id)).toHaveLength(3);
+    await t.tasks({ action: 'complete', query: 'Run 5 km' });
+    expect(await goals({ action: 'list' })).toMatch(
+      /Run a half marathon — on track \(1\/3 milestones/,
+    );
   });
 });

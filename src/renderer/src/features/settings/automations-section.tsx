@@ -7,12 +7,13 @@ import { confirmAction } from '../../components/ui/confirm-modal';
 import { call, cleanError } from '../../lib/api';
 import { useChatStore } from '../../stores/chat-store';
 import { useUiStore } from '../../stores/ui-store';
+import { AUTOMATION_TEMPLATES } from '@shared/automation-templates';
+import { ScheduleEditor } from './schedule-editor';
 import { SettingTextArea } from './settings-controls';
 
 type Task = Res<'tasks:list'>[number];
 type TaskInput = Req<'tasks:save'>;
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const KINDS: Record<TaskInput['kind'], string> = {
   briefing: 'Briefing (digest)',
   task: 'Task (do and report)',
@@ -29,6 +30,17 @@ const blank = (): TaskInput => ({
   saveToVault: false,
 });
 
+const toInput = (t: Task): TaskInput => ({
+  id: t.id,
+  name: t.name,
+  kind: t.kind,
+  prompt: t.prompt,
+  schedule: t.schedule,
+  enabled: t.enabled,
+  speak: t.speak,
+  saveToVault: t.saveToVault,
+});
+
 function TaskEditor({
   initial,
   onDone,
@@ -38,7 +50,6 @@ function TaskEditor({
 }): React.JSX.Element {
   const [t, setT] = useState<TaskInput>(initial);
   const toast = useUiStore((s) => s.toast);
-  const daily = t.schedule.type === 'daily' ? t.schedule : null;
   const save = (): void =>
     void call('tasks:save', t)
       .then(onDone)
@@ -73,75 +84,7 @@ function TaskEditor({
         onChange={(e) => setT({ ...t, prompt: e.target.value })}
         className="rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink-100"
       />
-      <div className="flex flex-wrap items-center gap-3 text-sm text-ink-300">
-        <select
-          aria-label="Schedule type"
-          value={t.schedule.type}
-          onChange={(e) =>
-            setT({
-              ...t,
-              schedule:
-                e.target.value === 'daily'
-                  ? { type: 'daily', time: '09:00', days: [] }
-                  : { type: 'interval', minutes: 60 },
-            })
-          }
-          className="min-h-8 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
-        >
-          <option value="daily">At a time</option>
-          <option value="interval">Every…</option>
-        </select>
-        {daily ? (
-          <>
-            <input
-              type="time"
-              aria-label="Time"
-              value={daily.time}
-              onChange={(e) => setT({ ...t, schedule: { ...daily, time: e.target.value } })}
-              className="min-h-8 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
-            />
-            {DAYS.map((d, i) => (
-              <label key={d} className="flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={daily.days.includes(i + 1)}
-                  onChange={(e) =>
-                    setT({
-                      ...t,
-                      schedule: {
-                        ...daily,
-                        days: e.target.checked
-                          ? [...daily.days, i + 1].sort()
-                          : daily.days.filter((x) => x !== i + 1),
-                      },
-                    })
-                  }
-                />
-                {d}
-              </label>
-            ))}
-            <span className="text-ink-500">(no days ticked = every day)</span>
-          </>
-        ) : (
-          <label className="flex items-center gap-2">
-            <input
-              type="number"
-              min={15}
-              step={15}
-              aria-label="Minutes"
-              value={t.schedule.type === 'interval' ? t.schedule.minutes : 60}
-              onChange={(e) =>
-                setT({
-                  ...t,
-                  schedule: { type: 'interval', minutes: Math.max(15, Number(e.target.value)) },
-                })
-              }
-              className="min-h-8 w-24 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
-            />
-            minutes
-          </label>
-        )}
-      </div>
+      <ScheduleEditor value={t.schedule} onChange={(schedule) => setT({ ...t, schedule })} />
       <Switch
         label="Speak the result (when voice is on)"
         checked={t.speak}
@@ -178,19 +121,15 @@ export function AutomationsSection(): React.JSX.Element {
     load();
     return window.jarvis.on('tasks:changed', load);
   }, [load]);
-  const save = (t: Task, patch: Partial<TaskInput>): void => {
-    const { id, name, kind, prompt, schedule, enabled, speak, saveToVault } = t;
-    void call('tasks:save', {
-      id,
-      name,
-      kind,
-      prompt,
-      schedule,
-      enabled,
-      speak,
-      saveToVault,
-      ...patch,
-    }).then(load);
+  const save = (t: Task, patch: Partial<TaskInput>): void =>
+    void call('tasks:save', { ...toInput(t), ...patch }).then(load);
+  const openConversation = (id: string | null): void => {
+    if (!id) return;
+    void useChatStore
+      .getState()
+      .open(id)
+      .then(() => useUiStore.getState().go('chat'))
+      .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }));
   };
   return (
     <>
@@ -246,17 +185,29 @@ export function AutomationsSection(): React.JSX.Element {
                   variant="ghost"
                   onClick={() =>
                     void call('tasks:runNow', { id: t.id })
-                      .then(async (r) => {
-                        await useChatStore.getState().open(r.conversationId);
-                        useUiStore.getState().go('chat');
-                      })
+                      .then((r) => openConversation(r.conversationId))
                       .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
                   }
                 >
                   Run now
                 </Button>
+                {t.lastConversationId && (
+                  <Button variant="ghost" onClick={() => openConversation(t.lastConversationId)}>
+                    Last result
+                  </Button>
+                )}
                 <Button variant="ghost" onClick={() => setEditing({ ...t })}>
                   Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  title="Make a copy to change"
+                  onClick={() => {
+                    const { id: _id, ...rest } = toInput(t);
+                    setEditing({ ...rest, name: `${t.name} (copy)`.slice(0, 60), enabled: false });
+                  }}
+                >
+                  Duplicate
                 </Button>
                 <Button
                   variant="ghost"
@@ -276,12 +227,50 @@ export function AutomationsSection(): React.JSX.Element {
           )}
         </ul>
         {editing && !editing.id ? (
-          <TaskEditor initial={editing} onDone={() => (setEditing(null), load())} />
+          <div id="new-automation">
+            <TaskEditor
+              key={editing.name}
+              initial={editing}
+              onDone={() => (setEditing(null), load())}
+            />
+          </div>
         ) : (
           <Button variant="primary" className="self-start" onClick={() => setEditing(blank())}>
             New automation
           </Button>
         )}
+      </Section>
+      <Section
+        title="Templates"
+        description="Ready-made automations. Pick one, adjust it, and save."
+      >
+        <ul className="grid max-w-3xl gap-2 sm:grid-cols-2">
+          {AUTOMATION_TEMPLATES.map((tpl) => {
+            const added = tasks.some((t) => t.name === tpl.name);
+            return (
+              <li key={tpl.id} className="inset flex flex-col gap-2 rounded-lg p-3">
+                <p className="font-semibold text-ink-100">{tpl.name}</p>
+                <p className="flex-1 text-sm text-ink-300">{tpl.blurb}</p>
+                <Button
+                  variant="secondary"
+                  className="self-start"
+                  disabled={added}
+                  onClick={() => {
+                    const { id: _tplId, blurb: _blurb, ...input } = tpl;
+                    setEditing({ ...input, enabled: true });
+                    requestAnimationFrame(() =>
+                      document
+                        .getElementById('new-automation')
+                        ?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+                    );
+                  }}
+                >
+                  {added ? 'Added' : 'Use this'}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
       </Section>
       <Section
         title="News feeds"

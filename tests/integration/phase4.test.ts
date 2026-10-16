@@ -15,10 +15,14 @@ import { idle, setupServices } from './helpers';
 function setupVoice(
   script: FakeScript | ((dir: string) => FakeScript),
   transcripts: string[],
-  opts: { edgeFails?: boolean; mode?: 'ptt' | 'wake'; sttStartMs?: number } = {},
+  opts: { edgeFails?: boolean; mode?: 'ptt' | 'wake'; sttStartMs?: number; greet?: boolean } = {},
 ) {
   const t = setupServices(script);
   t.services.settings.set('voice.mode', opts.mode ?? 'ptt');
+  // Instant greetings have their own tests; the rest check what follows them.
+  t.services.settings.set('voice.greet', opts.greet ?? false);
+  // The fake engine stands in for a keyword engine (the default 'name' engine is Whisper-based).
+  t.services.settings.set('voice.wake.provider', 'openwakeword');
   const wake = createFakeWake();
   const stt = createFakeStt(transcripts, { startDelayMs: opts.sttStartMs ?? 0 });
   const edge = createFakeTts('edge', { fail: opts.edgeFails ?? false });
@@ -101,6 +105,36 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     t.v.voice.shutdown();
   });
 
+  it('woken, Jarvis answers at once with no model call, then listens', async () => {
+    const t = setupVoice({ rules: [] }, ['hello'], { mode: 'wake', greet: true });
+    await t.v.start();
+    t.wake.trigger();
+    await until(() => t.audio().some((a) => a.last));
+    expect(t.edge.spoken).toHaveLength(1);
+    expect(t.edge.spoken[0]).toMatch(/sir/i);
+    // Not listening yet: the microphone would hear the greeting.
+    expect(t.stt.sessions).toBe(0);
+    t.play();
+    await until(() => t.stt.sessions === 1);
+    t.v.voice.shutdown();
+  });
+
+  it('says a stock "working on it" line, and the reply plays after it instead of cutting it off', async () => {
+    const t = setupVoice(
+      { rules: [{ match: 'weather', steps: [{ text: '<spoken>Sunny, sir.</spoken>' }] }] },
+      ['what is the weather'],
+      { greet: true },
+    );
+    await t.v.start();
+    t.v.voice.ptt();
+    await until(() => t.services.conversations.list(5).length === 1);
+    await idle(t.services);
+    await until(() => t.edge.spoken.length === 2);
+    expect(t.edge.spoken[1]).toBe('Sunny, sir.');
+    expect(t.edge.spoken[0]).toMatch(/sir\.$/);
+    expect(t.events.some((e) => e.event === 'tts:stop')).toBe(false);
+  });
+
   it('wake word survives the mode being re-applied while the mic is running (regression)', async () => {
     const t = setupVoice({ rules: [] }, ['hello'], { mode: 'wake' });
     t.services.secrets.set('picovoice', 'pv-test-key-123');
@@ -176,7 +210,7 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     expect(
       t.events.filter(
         (e) =>
-          e.event === 'notify' && /Windows voice/.test((e.payload as { message: string }).message),
+          e.event === 'notify' && /backup voice/.test((e.payload as { message: string }).message),
       ),
     ).toHaveLength(1);
   });
@@ -274,7 +308,7 @@ describe('voice engine selection (ADR-011)', () => {
     const t = setupServices();
     const s = t.services;
     const store = createModelStore({ root: join(t.dir, 'models'), onProgress: () => undefined });
-    const f = realFactories(s, createLocalEngines(store, s.settings));
+    const f = realFactories(s, createLocalEngines(store, s.settings), store);
     const signal = new AbortController().signal;
     const start = () => f.stt.start({ sampleRate: 16000, language: 'en-IN', signal });
 

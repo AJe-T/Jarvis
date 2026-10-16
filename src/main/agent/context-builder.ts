@@ -14,6 +14,14 @@ export interface ContextProviders {
   screenCount(): number;
   routines(): string;
   skills(): string;
+  /** One line on how Jarvis talks (Settings → Personality); empty = the static default. */
+  persona?(): string;
+  /** The assistant's name when Sir changed it; empty = JARVIS. */
+  assistantName?(): string;
+  /** Ask for a leading <mood> tag so the orb can show the reply's feeling. */
+  moodTags?(): boolean;
+  /** Tool sequences that handled similar requests before (agent/strategies.ts). */
+  approaches?(userText: string): string;
 }
 
 export const NO_PROVIDERS: ContextProviders = {
@@ -149,9 +157,13 @@ export function createContextBuilder(deps: {
         allowedRoots: deps.providers.allowedRoots(),
         routines: deps.providers.routines(),
         skills: deps.providers.skills(),
+        persona: deps.providers.persona?.() ?? '',
+        assistantName: deps.providers.assistantName?.() ?? '',
+        moodTags: deps.providers.moodTags?.() ?? false,
         coreProfile,
         retrievedMemories,
         earlierSummary: conv?.summary ?? null,
+        approaches: deps.providers.approaches?.(opts.userText) ?? '',
       });
       return [
         { type: 'text', text: STATIC_PERSONA_AND_RULES, cache_control: { type: 'ephemeral' } },

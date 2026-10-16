@@ -67,7 +67,7 @@ export function createUsageLedger(deps: {
     priceFor,
     totals,
     record(
-      message: Pick<LlmMessage, 'model' | 'usage'>,
+      message: Pick<LlmMessage, 'model' | 'usage'> & { id?: string },
       purpose: UsagePurpose,
       conversationId: string | null,
     ): UsageRecord {
@@ -79,7 +79,13 @@ export function createUsageLedger(deps: {
         cacheWrite: u.cache_creation_input_tokens ?? 0,
       };
       const searches = u.server_tool_use?.web_search_requests ?? 0;
-      const billing = deps.billing?.() ?? 'api';
+      // A local-model answer (also a fallback while the API is chosen) is free: local-client ids start "local_".
+      // Another provider's API ("cloud_") is pay-per-use whichever connection is Jarvis's own.
+      const billing = message.id?.startsWith('local_')
+        ? 'local'
+        : message.id?.startsWith('cloud_')
+          ? 'api'
+          : (deps.billing?.() ?? 'api');
       // ADR-013: a model on Sir's own machine costs nothing per call.
       const costUsd =
         billing === 'local'

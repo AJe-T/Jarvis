@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { join, parse } from 'node:path';
 import { z } from 'zod';
 import { ToolError } from '../../errors';
 import type { OsAdapter } from '../native/os';
@@ -35,7 +36,10 @@ export const SCREEN_MAX_WIDTH = 1568;
  * read by Claude. CONFIRM because the screen can show anything; untrusted because pages can carry
  * injected instructions (Security.md §6).
  */
-export function createScreenTools(os: OsAdapter): Tool[] {
+export function createScreenTools(
+  os: OsAdapter,
+  picturesDir = join(homedir(), 'Pictures'),
+): Tool[] {
   return [
     defineTool({
       name: 'look_at_screen',
@@ -111,5 +115,54 @@ export function createScreenTools(os: OsAdapter): Tool[] {
         }
       },
     }),
+    // "Take a screenshot and save it as X" (Gladiator07/JARVIS, BolisettySujith/J.A.R.V.I.S).
+    defineTool({
+      name: 'save_screenshot',
+      description:
+        'Save a full-resolution screenshot of sir\'s main screen as a PNG in Pictures\\Jarvis (never overwrites; returns the path). Use for "take a screenshot", "screenshot this as invoice". Asks sir first. The image stays on this PC; you don\'t see it (use look_at_screen for that).',
+      input: z.object({ name: z.string().trim().max(80).optional() }),
+      // CONFIRM like look_at_screen: the screen can show anything, and Pictures often syncs to OneDrive.
+      tier: 'CONFIRM',
+      confirm: ({ name }) => ({
+        title: 'Save a screenshot?',
+        actionLabel: 'Save screenshot',
+        details: `A full-resolution picture of your main screen is saved to Pictures\\Jarvis${name ? ` as "${name}"` : ''}.`,
+        detailsKind: 'text',
+      }),
+      timeoutMs: 15_000,
+      summarize: ({ name }) => `Save a screenshot${name ? ` as "${name}"` : ''}`,
+      async run({ name }) {
+        const dir = join(picturesDir, 'Jarvis');
+        await mkdir(dir, { recursive: true });
+        const file = freeFile(dir, screenshotName(name, new Date()));
+        await writeFile(file, await os.captureScreen({ maxWidth: FULL_RES_WIDTH }), { flag: 'wx' });
+        return ok(`Saved the screenshot to ${file}.`);
+      },
+    }),
   ];
+}
+
+/** Wide enough for an 8K screen, so the saved picture is never scaled down. */
+const FULL_RES_WIDTH = 7680;
+
+/** "Invoice: March?" → "Invoice March.png"; no name → "Screenshot 2026-10-10 14.05.09.png". */
+export function screenshotName(name: string | undefined, now: Date): string {
+  const clean = (name ?? '')
+    .trim()
+    .replace(/\.png$/i, '')
+    .replace(/[<>:"/\\|?*]|\p{Cc}/gu, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[.\s]+|[.\s]+$/g, '')
+    .slice(0, 80);
+  // CON, NUL, COM1… are devices on Windows even with an extension.
+  if (clean && !/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(clean)) return `${clean}.png`;
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `Screenshot ${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}.${p(now.getMinutes())}.${p(now.getSeconds())}.png`;
+}
+
+function freeFile(dir: string, file: string): string {
+  const { name, ext } = parse(file);
+  let candidate = join(dir, file);
+  for (let i = 1; existsSync(candidate); i++) candidate = join(dir, `${name} (${i})${ext}`);
+  return candidate;
 }

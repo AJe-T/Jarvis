@@ -1,6 +1,33 @@
 import { z } from 'zod';
+import { DEFAULT_NAME } from './assistant-name';
 import { TIERS, VOICE_MODES } from './types';
+import {
+  ELEVEN_MODEL_IDS,
+  ELEVEN_VOICE_RE,
+  KOKORO_VOICE_IDS,
+  type ElevenModel,
+  type KokoroVoice,
+} from './voices';
 import { DEFAULT_ORB_STYLE, ORB_STYLE_IDS } from './orb-styles';
+import { CLOUD_PROVIDER_IDS, type CloudProviderId } from './llm-providers';
+import {
+  AURA_VOICES,
+  GROQ_STT_MODELS,
+  GROQ_VOICES,
+  isAllowedSpeechServer,
+  LOCAL_STT_MODEL_IDS,
+  OPENAI_STT_MODELS,
+  OPENAI_TTS_MODELS,
+  OPENAI_VOICES,
+  PIPER_VOICE_IDS,
+  STT_ENGINE_IDS,
+  TTS_ENGINE_IDS,
+  type LocalSttModelId,
+  type PiperVoice,
+  type SttEngineId,
+  type TtsEngineId,
+} from './speech-engines';
+import { DEFAULT_PERSONA, PERSONA_IDS } from './personas';
 
 export const PriceSchema = z.object({
   inPerMTok: z.number().nonnegative(),
@@ -12,26 +39,53 @@ export type Price = z.infer<typeof PriceSchema>;
 
 const modelId = z.string().min(3).max(100);
 const accelerator = z.string().min(1).max(60);
+/** ADR-038: https anywhere; plain http only to this PC or the home network. */
+const speechServer = z
+  .string()
+  .max(200)
+  .refine(isAllowedSpeechServer, 'Use https://, or http:// to this PC or your home network');
+/** A model or voice name a speech server understands. */
+const serverName = z.string().regex(/^[\w.:/@+-]{1,100}$/);
 
 /**
  * Every persisted setting: key → schema + default (API-Guide.md §10).
  * Paths that depend on the machine (vault, allowed roots) default to empty and are seeded by main on first run.
  */
 export const SETTINGS = {
-  /** ADR-010/013: 'api' = Anthropic API key; 'subscription' = Sir's Claude plan via Claude Code; 'local' = Ollama/LM Studio. */
+  /**
+   * ADR-010/013: 'api' = Anthropic API key; 'subscription' = Sir's Claude plan via Claude Code;
+   * 'local' = Ollama/LM Studio; 'cloud' = another provider's API (OpenAI, Gemini, DeepSeek…).
+   */
   'llm.provider': {
-    schema: z.enum(['api', 'subscription', 'local']),
-    default: 'api' as 'api' | 'subscription' | 'local',
+    schema: z.enum(['api', 'subscription', 'local', 'cloud']),
+    default: 'api' as 'api' | 'subscription' | 'local' | 'cloud',
+  },
+  /** Which cloud provider (shared/llm-providers.ts) the 'cloud' connection uses. */
+  'llm.cloud.provider': {
+    schema: z.enum(CLOUD_PROVIDER_IDS),
+    default: 'openai' as CloudProviderId,
+  },
+  /**
+   * Model chosen for each provider. Every provider with a key and a model here is also a "brain"
+   * Jarvis can hand sub-tasks to (delegate_task), whichever connection is his own.
+   */
+  'llm.cloud.models': {
+    schema: z.partialRecord(z.enum(CLOUD_PROVIDER_IDS), z.string().max(120)),
+    default: {} as Partial<Record<CloudProviderId, string>>,
   },
   /** ADR-013: OpenAI-compatible server on this PC or the home network (Ollama, LM Studio). */
   'llm.local.baseUrl': { schema: z.string().url().max(200), default: 'http://localhost:11434/v1' },
   'llm.local.model': { schema: z.string().max(120), default: '' },
+  /** API connection only: when Claude is busy or unreachable, the local model answers instead (idea from ruflo's provider failover). */
+  'llm.fallbackLocal': { schema: z.boolean(), default: false },
   'models.default': { schema: modelId, default: 'claude-sonnet-5-5' },
   'models.deep': { schema: modelId, default: 'claude-opus-5-5' },
   'models.fast': { schema: modelId, default: 'claude-haiku-4-5-20251001' },
   'models.computer': { schema: modelId, default: 'claude-sonnet-5-5' },
   'budget.dailyUsd': { schema: z.number().min(0).max(1000), default: 2 },
   'budget.monthlyUsd': { schema: z.number().min(0).max(10000), default: 30 },
+  /** One automation run is stopped once it has cost this much (API-equivalent on the subscription); 0 = no cap. */
+  'budget.automationRunUsd': { schema: z.number().min(0).max(100), default: 0.5 },
   'budget.perTurnInputTokens': { schema: z.number().int().min(1000), default: 200_000 },
   // Prices from platform.claude.com/docs/en/about-claude/pricing (checked 2026-10-06). Editable in Settings.
   pricing: {
@@ -63,23 +117,96 @@ export const SETTINGS = {
   'web.search.enabled': { schema: z.boolean(), default: true },
   'voice.mode': { schema: z.enum(VOICE_MODES), default: 'ptt' as (typeof VOICE_MODES)[number] },
   'voice.deviceIndex': { schema: z.number().int().min(-1), default: -1 },
-  // ADR-011: cloud (Deepgram, Picovoice) or on-device (Whisper, openWakeWord), chosen separately.
+  // ADR-011/038: cloud, on-device or Sir's own server, chosen separately (shared/speech-engines.ts).
   'voice.stt.provider': {
-    schema: z.enum(['deepgram', 'whisper']),
-    default: 'deepgram' as 'deepgram' | 'whisper',
+    schema: z.enum(STT_ENGINE_IDS),
+    default: 'deepgram' as SttEngineId,
   },
+  /** The on-device model ('whisper' engine): Whisper, Moonshine or Parakeet. Key kept for saved settings. */
   'voice.stt.whisperModel': {
-    schema: z.enum(['whisper-base.en', 'whisper-small.en', 'whisper-small']),
-    default: 'whisper-small.en' as 'whisper-base.en' | 'whisper-small.en' | 'whisper-small',
+    schema: z.enum(LOCAL_STT_MODEL_IDS),
+    default: 'whisper-small.en' as LocalSttModelId,
   },
+  'voice.stt.groqModel': {
+    schema: z.enum(GROQ_STT_MODELS.map((m) => m.id) as [string, ...string[]]),
+    default: 'whisper-large-v3-turbo',
+  },
+  'voice.stt.openaiModel': {
+    schema: z.enum(OPENAI_STT_MODELS.map((m) => m.id) as [string, ...string[]]),
+    default: 'gpt-4o-mini-transcribe',
+  },
+  /** Base URL of Sir's OpenAI-compatible transcription server (…/v1). */
+  'voice.stt.serverUrl': { schema: speechServer, default: 'http://localhost:8000/v1' },
+  'voice.stt.serverModel': { schema: serverName, default: 'whisper-1' },
+  /**
+   * picovoice = "Jarvis" (cloud key), openwakeword = "Hey Jarvis" (on-device model), name = any name Sir
+   * chose, spotted by on-device Whisper. The first two only know "Jarvis"; another name always uses 'name'.
+   */
   'voice.wake.provider': {
-    schema: z.enum(['picovoice', 'openwakeword']),
-    default: 'picovoice' as 'picovoice' | 'openwakeword',
+    schema: z.enum(['picovoice', 'openwakeword', 'name']),
+    default: 'name' as 'picovoice' | 'openwakeword' | 'name',
   },
   'voice.stt.language': { schema: z.string().min(2).max(10), default: 'en-IN' },
-  'voice.tts.provider': { schema: z.enum(['edge', 'sapi']), default: 'edge' as 'edge' | 'sapi' },
+  /** ADR-038: on-device (Kokoro, Piper, Windows), cloud, or Sir's own server (shared/speech-engines.ts). */
+  'voice.tts.provider': {
+    schema: z.enum(TTS_ENGINE_IDS),
+    default: 'edge' as TtsEngineId,
+  },
+  'voice.tts.piperVoice': {
+    schema: z.enum(PIPER_VOICE_IDS),
+    default: 'piper-en_GB-northern_english_male-medium' as PiperVoice,
+  },
+  'voice.tts.openaiModel': {
+    schema: z.enum(OPENAI_TTS_MODELS.map((m) => m.id) as [string, ...string[]]),
+    default: 'gpt-4o-mini-tts',
+  },
+  'voice.tts.openaiVoice': {
+    schema: z.enum(OPENAI_VOICES as unknown as [string, ...string[]]),
+    default: 'onyx',
+  },
+  /** How the OpenAI voice should sound (gpt-4o-mini-tts only). */
+  'voice.tts.openaiStyle': {
+    schema: z.string().max(400),
+    default: 'Speak like a calm, polite British butler: warm, clear and unhurried.',
+  },
+  'voice.tts.auraVoice': {
+    schema: z.enum(AURA_VOICES.map((v) => v.id) as [string, ...string[]]),
+    default: 'aura-2-draco-en',
+  },
+  'voice.tts.groqVoice': {
+    schema: z.enum(GROQ_VOICES.map((v) => v.id) as [string, ...string[]]),
+    default: 'daniel',
+  },
+  /** Base URL of Sir's OpenAI-compatible speech server (…/v1), e.g. Kokoro-FastAPI or Chatterbox. */
+  'voice.tts.serverUrl': { schema: speechServer, default: 'http://localhost:8880/v1' },
+  'voice.tts.serverModel': { schema: serverName, default: 'tts-1' },
+  'voice.tts.serverVoice': { schema: serverName, default: 'alloy' },
+  'voice.tts.kokoroVoice': {
+    schema: z.enum(KOKORO_VOICE_IDS),
+    default: 'bm_george' as KokoroVoice,
+  },
+  'voice.tts.elevenVoice': {
+    schema: z.string().regex(ELEVEN_VOICE_RE),
+    default: 'onwK4e9ZLuTAKqWW03F9',
+  },
+  'voice.tts.elevenModel': {
+    schema: z.enum(ELEVEN_MODEL_IDS),
+    default: 'eleven_v4_turbo' as ElevenModel,
+  },
   'voice.tts.voice': { schema: z.string().min(2).max(60), default: 'en-GB-RyanNeural' },
   'voice.tts.rate': { schema: z.string().regex(/^[+-]\d{1,3}%$/), default: '+5%' },
+  /**
+   * ADR-039 Voice Match: answer the wake word by name and always-listening only when the voice
+   * matches Sir's enrolled voice (Settings → Voice → Your voice). Not a security lock.
+   */
+  'voice.speaker.verify': { schema: z.boolean(), default: false },
+  /** Similarity (0–1) a phrase needs to count as Sir; enrolment suggests one. */
+  'voice.speaker.threshold': { schema: z.number().min(0.5).max(0.99), default: 0.8 },
+  /** How on-device speech spelled the name while Sir enrolled ("sumer"); also wake Jarvis. */
+  'voice.wake.learned': {
+    schema: z.array(z.string().regex(/^[\p{L}\p{N}' ]{3,30}$/u)).max(6),
+    default: [] as string[],
+  },
   'voice.wake.sensitivity': { schema: z.number().min(0).max(1), default: 0.6 },
   /** ADR-012: seconds after a spoken reply during which Sir can follow up without the wake word (0 = off). */
   'voice.followUpSeconds': { schema: z.number().min(0).max(30), default: 6 },
@@ -88,9 +215,21 @@ export const SETTINGS = {
   /** The wake word may interrupt Jarvis while he talks. Off by default: without echo cancellation the
    * microphone hears Jarvis's own voice and he cuts himself off. The hotkey always interrupts. */
   'voice.bargeIn': { schema: z.boolean(), default: false },
+  /**
+   * Echo-cancelled microphone (idea from Open-LLM-VTuber): the mic is opened in a hidden capture
+   * window where Chromium removes Jarvis's own voice, so saying his name interrupts him even
+   * without headphones. Off = the native recorder (no echo cancellation; barge-in by voice only with
+   * 'voice.bargeIn'). Falls back to the native recorder by itself if the capture window can't open the mic.
+   */
+  'voice.echoCancel': { schema: z.boolean(), default: true },
   /** Priler/jarvis-style instant commands: routine trigger phrases, time and date answered offline. */
   'voice.quickCommands': { schema: z.boolean(), default: true },
   'voice.sounds': { schema: z.boolean(), default: true },
+  /**
+   * Instant spoken replies with no model call: "Yes, sir?" when woken, "On it, sir." while a
+   * request is being worked on. Off = the wake word starts listening at once (say it all in one breath).
+   */
+  'voice.greet': { schema: z.boolean(), default: true },
   // Everyday tools (ideas from isair/jarvis).
   /** Home town for weather ("Hyderabad, India"); empty = ask. */
   'location.home': { schema: z.string().max(120), default: '' },
@@ -122,6 +261,19 @@ export const SETTINGS = {
   /** Reply copilot (idea from jev-chat-jarvis): read the chat in front and help draft a reply. */
   'hotkeys.copilot': { schema: accelerator, default: 'Ctrl+Alt+R' },
   'copilot.enabled': { schema: z.boolean(), default: true },
+  /** Apps → Scratchpad: notes Sir and Jarvis share (ADR-032). */
+  'apps.scratchpad': { schema: z.string().max(20_000), default: '' },
+  /** Who each chat is, remembered from the last reply ("whatsapp|priya" → friends/close). */
+  'copilot.contacts': {
+    schema: z.record(
+      z.string().max(160),
+      z.object({
+        scene: z.enum(['work', 'romance', 'friends', 'family', 'general']),
+        relationship: z.string().max(30),
+      }),
+    ),
+    default: {},
+  },
   'dictation.enabled': { schema: z.boolean(), default: false },
   'dictation.removeFillers': { schema: z.boolean(), default: true },
   /** "heard → written" fixes, one per line, e.g. "jarvis => JARVIS". */
@@ -143,11 +295,30 @@ export const SETTINGS = {
   'app.startHidden': { schema: z.boolean(), default: false },
   /** Hybrid keyword + meaning memory search with an on-device model (isair/jarvis idea). */
   'memory.semanticSearch': { schema: z.boolean(), default: true },
-  /** Dark or light; system follows Windows (Settings → Personalisation → Colours). */
-  'appearance.theme': {
-    schema: z.enum(['system', 'dark', 'light']),
-    default: 'system' as 'system' | 'dark' | 'light',
+  /** Re-order found memories with an on-device cross-encoder when downloaded (hindsight idea). */
+  'memory.rerank': { schema: z.boolean(), default: true },
+  /** Weekly: the fast model looks across memory notes and writes patterns to Facts/Observations.md (hindsight "reflect"). */
+  'memory.reflect': { schema: z.boolean(), default: true },
+  /** ADR-027: on-device Laya decisions. 'shadow' runs beside Claude and only logs; 'on' acts on them. */
+  /**
+   * ADR-030 fast path for plain PC commands (no Claude call): 'rules' = exact phrasings only,
+   * 'laya' = also loosely worded ones, understood on this PC by Laya when it is installed.
+   */
+  'agent.fastCommands': {
+    schema: z.enum(['off', 'rules', 'laya']),
+    default: 'laya' as 'off' | 'rules' | 'laya',
   },
+  'laya.mode': {
+    schema: z.enum(['off', 'shadow', 'on']),
+    default: 'off' as 'off' | 'shadow' | 'on',
+  },
+  /** Dark, light or pitch black (OLED: true #000); system follows Windows (Settings → Personalisation → Colours). */
+  'appearance.theme': {
+    schema: z.enum(['system', 'dark', 'light', 'black']),
+    default: 'system' as 'system' | 'dark' | 'light' | 'black',
+  },
+  /** Text size multiplier for the whole app (Settings → General → Text size); spacing stays put. */
+  'appearance.fontScale': { schema: z.number().min(0.85).max(1.5), default: 1 },
   /** One accent colour the whole neon theme follows (Design-system.md §3.6); cyan is the default. */
   'appearance.accent': { schema: z.string().regex(/^#[0-9a-fA-F]{6}$/), default: '#00e5ff' },
   /** How the orb is drawn (Design-system.md §6.1; list in shared/orb-styles.ts). */
@@ -157,6 +328,38 @@ export const SETTINGS = {
   },
   /** The orb moves to music and other sound playing on this PC (levels only, never recorded). */
   'appearance.orbMusic': { schema: z.boolean(), default: true },
+  /** The orb takes the colour of each reply's mood (calm, happy, concerned…; agent/mood.ts). */
+  'appearance.orbMood': { schema: z.boolean(), default: true },
+  /** Look of the whole app (Design-system.md §3.7): 'soft' = rounded and calm, 'cyberpunk' = Neon Grid HUD. */
+  'appearance.style': {
+    schema: z.enum(['soft', 'cyberpunk']),
+    default: 'soft' as 'soft' | 'cyberpunk',
+  },
+  /** What Sir calls the assistant (Settings → General): the wake word, the name it answers to and calls itself. */
+  'assistant.name': {
+    schema: z
+      .string()
+      .trim()
+      .min(2)
+      .max(20)
+      .regex(/^\p{L}[\p{L}' -]*$/u, 'Letters only, like April or Friday'),
+    default: DEFAULT_NAME as string,
+  },
+  /** How Jarvis talks (shared/personas.ts); Sir can also switch it by voice (set_personality). */
+  persona: {
+    schema: z.enum(PERSONA_IDS),
+    default: DEFAULT_PERSONA,
+  },
+  /**
+   * Claude Code sessions on this PC (ethanplusai/jarvis): say so when one starts waiting on Sir
+   * ('waiting'), also when one finishes ('all'), or never ('off').
+   */
+  'claudeCode.announce': {
+    schema: z.enum(['off', 'waiting', 'all']),
+    default: 'waiting' as 'off' | 'waiting' | 'all',
+  },
+  /** Quiet mode: until this time (epoch ms) Jarvis doesn't speak up or pop up on his own. 0 = off. */
+  'quiet.until': { schema: z.number().int().min(0), default: 0 },
   /** Where the mini orb sits: the screen edge it is docked to and whether it is tucked away. */
   'mini.dock': {
     schema: z
@@ -198,17 +401,37 @@ export const SettingKeySchema = z.enum(SETTING_KEYS as [SettingKey, ...SettingKe
 
 /** Settings whose change must itself be confirmed by Sir in the UI (Security.md §5 step 4). */
 /** Set only by main-process flows (e.g. Telegram pairing), never directly from the renderer. */
-export const MAIN_ONLY_SETTINGS: readonly SettingKey[] = ['telegram.chatId', 'mini.dock'];
+export const MAIN_ONLY_SETTINGS: readonly SettingKey[] = [
+  'telegram.chatId',
+  'mini.dock',
+  'copilot.contacts',
+];
 
 /** Applied live, but a restart gives these a clean start (the Save bar offers one). */
 export const RESTART_SETTINGS: readonly SettingKey[] = [
   'llm.provider',
   'vault.path',
   'memory.semanticSearch',
+  // Voice engines and the microphone reload live, but a stale model or mic handle could leave
+  // the wake word deaf until a restart; offering one is cheaper than Sir debugging it.
+  'voice.mode',
+  'voice.deviceIndex',
+  'voice.echoCancel',
+  'voice.wake.provider',
+  'voice.wake.sensitivity',
+  'voice.stt.provider',
+  'voice.stt.whisperModel',
+  'voice.tts.provider',
 ];
 
 export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   'policy.overrides',
   'files.allowedRoots',
   'llm.provider',
+  'llm.cloud.provider', // where the whole conversation is sent
+  // ADR-038: these decide where microphone audio and reply text are sent, so the audit keeps the value.
+  'voice.stt.provider',
+  'voice.tts.provider',
+  'voice.stt.serverUrl',
+  'voice.tts.serverUrl',
 ];

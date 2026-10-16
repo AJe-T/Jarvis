@@ -1,5 +1,6 @@
 import type { EventPayload } from '@shared/ipc-contract';
 import type { EventChannel } from '@shared/ipc-channels';
+import { isDefaultName, nameVariants } from '@shared/assistant-name';
 import type { VoiceMode } from '@shared/types';
 import type { AssistantStateHub } from '../agent/assistant-state';
 import type { Orchestrator, TurnInfo } from '../agent/orchestrator';
@@ -8,10 +9,19 @@ import type { Logger } from '../logging/logger';
 import type { KillSwitch } from '../security/kill-switch';
 import type { SettingsService } from '../settings/settings-service';
 import type { ConfirmationBroker, ConfirmRequestEvent } from '../tools/confirmation-broker';
-import { TranscriptBuffer, isEcho, isUnclear, mentionsName, type Intent } from './conversation';
+import {
+  TranscriptBuffer,
+  isEcho,
+  isUnclear,
+  mentionsName,
+  stripName,
+  type Intent,
+  type JudgeContext,
+} from './conversation';
 import type { QuickMatch } from './quick-commands';
 import type { ContinuousTranscriber, HeardSegment } from './local/continuous';
 import { Utterance } from './tts-pipeline';
+import { createLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
 import {
   rms,
   type Recorder,
@@ -23,12 +33,27 @@ import {
 
 export interface VoiceFactories {
   recorder(deviceIndex: number, frameLength: number): Recorder;
+  /** True when the microphone in use cancels Jarvis's own voice, so he can be interrupted by voice. */
+  echoCancelled?(): boolean;
   /** The engine chosen in Settings → Voice (Picovoice or local openWakeWord); throws JarvisError if not ready. */
   wake(sensitivity: number): WakeWord | Promise<WakeWord>;
   stt: SttProvider;
   edge: TtsProvider;
   sapi: TtsProvider;
-  /** "Always listening" (on-device Whisper only); throws JarvisError if not available. */
+  /** The other voices of Settings → Voice (ADR-028/038); absent in tests. */
+  kokoro?: TtsProvider;
+  piper?: TtsProvider;
+  elevenlabs?: TtsProvider;
+  openai?: TtsProvider;
+  aura?: TtsProvider;
+  groq?: TtsProvider;
+  server?: TtsProvider;
+  /**
+   * ADR-039 Voice Match: is this phrase in Sir's voice? Resolves true when Voice Match is off or
+   * not set up, so it only ever narrows who can wake Jarvis.
+   */
+  verifySpeaker?(audio: Float32Array): Promise<boolean>;
+  /** On-device Whisper on every phrase: "always listening", and the wake word for a custom name. Throws JarvisError if not available. */
   ambient?(handlers: {
     onSpeechStart(): void;
     onSegment(seg: HeardSegment): void;
@@ -49,7 +74,7 @@ export interface VoiceDeps {
   /** Dictation finished: the words to type into the app in front. */
   onDictation?(text: string): void;
   /** ADR-012 intent judge: is the latest ambient speech for Jarvis, and what does Sir want? */
-  judge?(transcript: string, ctx: { followUp: boolean; lastReply: string }): Promise<Intent>;
+  judge?(transcript: string, ctx: JudgeContext): Promise<Intent>;
   /** Instant commands (routine triggers, time, date): answered without the model. */
   quick?(text: string): QuickMatch | null;
   /** Overridable for tests. */
@@ -66,6 +91,11 @@ const SILENCE_TIMEOUT_MS = 8_000;
 const MAX_LISTEN_MS = 30_000;
 const LEVEL_INTERVAL_MS = 50; // ≤ 20 Hz (Code-style.md §5)
 const METER_MS = 5_000;
+/** Voice Match enrolment: one phrase, ended by a pause or this limit. */
+const SAMPLE_MAX_MS = 5_000;
+const SAMPLE_END_SILENCE_MS = 700;
+/** Frame loudness that counts as speech while enrolling. */
+const SAMPLE_SPEECH_RMS = 0.02;
 const MAX_EARLY_FRAMES = 250; // ≥ 8 s at 512 samples per frame
 /** Dictation lets Sir pause to think mid-sentence. */
 const DICTATION_PAUSE_MS = 1500;
@@ -77,12 +107,19 @@ const COMPOSE_MAX_MS = 5 * 60_000;
 const CONVERSATION_GAP_MS = 15 * 60_000;
 /** Wait for the room to stop echoing Jarvis's voice before opening the follow-up window. */
 const ECHO_SETTLE_MS = 400;
+/** Listening starts after the wake greeting, or after this long if its playback is never reported. */
+const GREETING_MAX_MS = 3_000;
+/** A volunteered line (Claude Code, reminder) waits until Jarvis has been quiet this long. */
+const NOTICE_QUIET_MS = 10_000;
+const NOTICE_RETRY_MS = 3_000;
+const MAX_NOTICES = 3;
 /** How long a transcript is checked against what Jarvis just said. */
 const ECHO_MEMORY_MS = 15_000;
 
 const CANCEL_PHRASES = /^(stop|cancel|never ?mind|forget it|that's all|nothing)[.!]?$/i;
-const STOP_EVERYTHING = /^(jarvis,? )?stop everything[.!]?$/i;
-const SLEEP_PHRASES = /^(jarvis,? )?(go to sleep|stop listening|sleep)[.!]?$/i;
+// Tested on the words without the assistant's name ("Jarvis, stop everything" → "stop everything").
+const STOP_EVERYTHING = /^stop everything[.!]?$/i;
+const SLEEP_PHRASES = /^(go to sleep|stop listening|sleep)[.!]?$/i;
 const YES = /^(yes|yeah|yep|go ahead|do it|confirm|sure|okay|ok|please do)\b/i;
 const NO = /^(no|nope|cancel|stop|don't|do not|negative)\b/i;
 
@@ -129,10 +166,26 @@ export function createVoiceController(d: VoiceDeps) {
   let followUntil = 0;
   const replyUtterances = new Set<string>();
   let ambient: ContinuousTranscriber | null = null;
+  /** Wake mode is listening for the assistant's name with Whisper (custom names, or chosen in Settings). */
+  let spotting = false;
   const heardBuffer = new TranscriptBuffer();
   let meterUntil = 0;
+  /** Voice Match enrolment: the phrase being recorded. */
+  let sample: {
+    frames: Int16Array[];
+    heard: boolean;
+    quietMs: number;
+    done(audio: Float32Array): void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null = null;
   let sleeping = false;
   let speaking: Utterance | null = null;
+  /** "On it, sir.": the reply plays after it instead of cutting it off. */
+  let ack: Utterance | null = null;
+  /** Utterances the renderer is playing right now. */
+  const playing = new Set<string>();
+  const wakeLine = createLinePicker(WAKE_LINES);
+  const workingLine = createLinePicker(WORKING_LINES);
   let fallbackWarned = false;
   const voiceTurns = new Map<string, Utterance>();
   const timings: {
@@ -142,24 +195,54 @@ export function createVoiceController(d: VoiceDeps) {
   } = {};
 
   const mode = (): VoiceMode => d.settings.get('voice.mode');
+  /** The assistant's name and its near spellings (Settings → General → Name). */
+  // Spellings learned while Sir enrolled his voice ("sumer") count as the name too (ADR-039).
+  const names = (): string[] => [
+    ...nameVariants(d.settings.get('assistant.name')),
+    ...d.settings.get('voice.wake.learned'),
+  ];
+
+  /** Voice Match: only Sir's voice wakes Jarvis by name or in always-listening (when turned on). */
+  async function isSir(seg: HeardSegment): Promise<boolean> {
+    if (!seg.audio || !d.factories.verifySpeaker) return true;
+    try {
+      return await d.factories.verifySpeaker(seg.audio);
+    } catch (err) {
+      log.warn({ err: errorMessage(err) }, 'voice match failed; letting the phrase through');
+      return true;
+    }
+  }
+  /** Picovoice and openWakeWord only know "Jarvis"; any other name is spotted by Whisper. */
+  const spotsName = (): boolean =>
+    d.settings.get('voice.wake.provider') === 'name' ||
+    !isDefaultName(d.settings.get('assistant.name'));
+  /** Whisper hears every phrase: always-listening, or wake mode waiting for the name. */
+  const transcribing = (): boolean =>
+    ambient !== null && !sleeping && (mode() === 'ambient' || (mode() === 'wake' && spotting));
 
   // ── TTS ─────────────────────────────────────────────────────────────────────────────────
-  function newUtterance(extractSpoken: boolean, id?: string): Utterance {
+  function newUtterance(extractSpoken: boolean, id?: string, cache = false): Utterance {
     return new Utterance(
       {
-        primary: () =>
-          d.settings.get('voice.tts.provider') === 'sapi' ? d.factories.sapi : d.factories.edge,
-        fallback: d.factories.sapi,
+        primary: () => d.factories[d.settings.get('voice.tts.provider')] ?? d.factories.edge,
+        fallbacks: () =>
+          d.settings.get('voice.tts.provider') === 'sapi'
+            ? []
+            : d.settings.get('voice.tts.provider') === 'edge'
+              ? [d.factories.sapi]
+              : [d.factories.edge, d.factories.sapi],
         voice: () => d.settings.get('voice.tts.voice'),
         rate: () => d.settings.get('voice.tts.rate'),
         emitAudio: (p) => d.emit('tts:audio', p),
         emitStop: (utteranceId) => d.emit('tts:stop', utteranceId ? { utteranceId } : {}),
-        onFallback: () => {
+        onFallback: (err) => {
           if (fallbackWarned) return;
           fallbackWarned = true;
+          const why = err instanceof JarvisError && err.userMessage ? ` ${err.userMessage}` : '';
           d.emit('notify', {
             level: 'warn',
-            message: 'Online voice unavailable; using the Windows voice for now.',
+            message: `Your chosen voice is unavailable, so Jarvis is using a backup voice.${why}`,
+            action: 'settings:voice',
           });
         },
         onFirstAudio: () => {
@@ -172,7 +255,7 @@ export function createVoiceController(d: VoiceDeps) {
         },
         logger: log,
       },
-      { extractSpoken, ...(id ? { id } : {}) },
+      { extractSpoken, cache, ...(id ? { id } : {}) },
     );
   }
 
@@ -181,19 +264,76 @@ export function createVoiceController(d: VoiceDeps) {
     recentSpoken = `${recentSpoken} ${text}`.slice(-800);
   }
 
-  function say(text: string): Utterance {
+  /** `cache`: a stock line (greetings), kept as audio so the next time it plays at once. */
+  function say(text: string, cache = false): Utterance {
     stopSpeaking();
     rememberSpoken(text);
-    const u = newUtterance(false);
+    const u = newUtterance(false, undefined, cache);
     speaking = u;
     u.push(text);
     u.end();
     return u;
   }
 
+  /** Woken: answer at once ("Yes, sir?"), with no model call, then listen for the request. */
+  function greetThenListen(): void {
+    if (!d.settings.get('voice.greet')) return void startListening(false);
+    const u = say(wakeLine(), true);
+    let started = false;
+    const listen = (): void => {
+      // Stopped (kill switch, barge-in) or still audible: the playback report will start it.
+      if (started || u.aborted || playing.has(u.id)) return;
+      started = true;
+      clearTimeout(timer);
+      void startListening(false);
+    };
+    // Playback that is never reported (renderer reloaded, audio failed) must not leave Jarvis deaf.
+    const timer = setTimeout(listen, GREETING_MAX_MS);
+    afterSpeech(u, listen); // onPlayback drops it from `playing` before calling this
+  }
+
+  /**
+   * Lines Jarvis volunteers (Claude Code sessions, reminders) wait for a lull instead of cutting
+   * into a conversation: say() stops whatever is playing, which used to end Sir's reply mid-way.
+   */
+  const notices: string[] = [];
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  function conversing(): boolean {
+    const now = Date.now();
+    const s = d.state.get();
+    return (
+      // ERROR can linger until the next turn; it is not a conversation in progress.
+      (s !== 'IDLE' && s !== 'SLEEP' && s !== 'ERROR') ||
+      listening !== null ||
+      speaking !== null ||
+      voiceTurns.size > 0 ||
+      d.orchestrator.isBusy() ||
+      now < followUntil ||
+      now - spokenEndedAt < NOTICE_QUIET_MS ||
+      (lastVoice !== null && now - lastVoice.at < NOTICE_QUIET_MS)
+    );
+  }
+  function notice(text: string): void {
+    if (!notices.includes(text)) notices.push(text);
+    notices.splice(0, Math.max(0, notices.length - MAX_NOTICES)); // only the latest few matter
+    flushNotices();
+  }
+  function flushNotices(): void {
+    clearTimeout(noticeTimer);
+    if (!notices.length) return;
+    if (conversing()) {
+      noticeTimer = setTimeout(flushNotices, NOTICE_RETRY_MS);
+      noticeTimer.unref?.();
+      return;
+    }
+    say(notices.splice(0).join(' '));
+  }
+
   function stopSpeaking(): void {
     speaking?.stop();
     speaking = null;
+    ack = null;
+    playing.clear();
     for (const u of voiceTurns.values()) u.stop();
     voiceTurns.clear();
     if (d.state.get() === 'SPEAKING') d.state.set('IDLE');
@@ -203,8 +343,9 @@ export function createVoiceController(d: VoiceDeps) {
   function needRecorder(): boolean {
     return (
       (mode() === 'wake' && !sleeping && wake !== null) ||
-      (mode() === 'ambient' && !sleeping && ambient !== null) ||
+      transcribing() ||
       listening !== null ||
+      sample !== null ||
       Date.now() < meterUntil
     );
   }
@@ -244,10 +385,12 @@ export function createVoiceController(d: VoiceDeps) {
           lastLevel = now;
           d.emit('voice:level', { rms: rms(frame) });
         }
-        if (listening) {
+        if (sample) {
+          feedSample(frame, (frame.length / 16000) * 1000);
+        } else if (listening) {
           if (listening.session) listening.session.write(frame);
           else if (listening.early.length < MAX_EARLY_FRAMES) listening.early.push(frame);
-        } else if (ambient && mode() === 'ambient' && !sleeping) {
+        } else if (ambient && transcribing()) {
           ambient.write(frame);
         } else if (wake && mode() === 'wake' && !sleeping) {
           const w = wake;
@@ -277,6 +420,32 @@ export function createVoiceController(d: VoiceDeps) {
     }
   }
 
+  // ── Voice Match enrolment (ADR-039) ─────────────────────────────────────────────────────
+  function endSample(): void {
+    const s = sample;
+    if (!s) return;
+    sample = null;
+    clearTimeout(s.timer);
+    const audio = new Float32Array(s.frames.reduce((a, f) => a + f.length, 0));
+    let at = 0;
+    for (const f of s.frames) for (const x of f) audio[at++] = x / 32768;
+    // Nothing heard at all: an empty phrase, which enrolment reports as "didn't catch that".
+    s.done(s.heard ? audio : new Float32Array(0));
+    if (!needRecorder()) releaseRecorder();
+  }
+
+  function feedSample(frame: Int16Array, frameMs: number): void {
+    if (!sample) return;
+    sample.frames.push(frame);
+    if (rms(frame) >= SAMPLE_SPEECH_RMS) {
+      sample.heard = true;
+      sample.quietMs = 0;
+    } else if (sample.heard) {
+      sample.quietMs += frameMs;
+      if (sample.quietMs >= SAMPLE_END_SILENCE_MS) endSample();
+    }
+  }
+
   // ── listening ───────────────────────────────────────────────────────────────────────────
   /** Jarvis's voice is coming out of the speakers (or just stopped). */
   function audible(): boolean {
@@ -284,12 +453,19 @@ export function createVoiceController(d: VoiceDeps) {
     return d.state.get() === 'SPEAKING' || Date.now() - spokenEndedAt < tail;
   }
 
+  /**
+   * The wake word may cut Jarvis off: with echo cancellation the mic no longer hears his own voice
+   * (Open-LLM-VTuber's "interrupt without headphones"); without it only when Sir turned barge-in on.
+   */
+  function canBargeIn(): boolean {
+    return d.settings.get('voice.bargeIn') || (d.factories.echoCancelled?.() ?? false);
+  }
+
   function onWake(): void {
     // Without echo cancellation the mic hears Jarvis's own voice; that "wake" cut him off mid-reply.
-    if (audible() && !d.settings.get('voice.bargeIn'))
-      return log.info('wake word ignored while speaking');
+    if (audible() && !canBargeIn()) return log.info('wake word ignored while speaking');
     timings.wakeAt = Date.now();
-    void startListening(false);
+    greetThenListen();
   }
 
   /**
@@ -502,8 +678,9 @@ export function createVoiceController(d: VoiceDeps) {
       if (!retried) afterSpeech(u, () => void startListening(true));
       return;
     }
-    if (STOP_EVERYTHING.test(text)) return d.killSwitch.trigger('voice');
-    if (SLEEP_PHRASES.test(text)) {
+    const bare = stripName(text, names());
+    if (STOP_EVERYTHING.test(bare)) return d.killSwitch.trigger('voice');
+    if (SLEEP_PHRASES.test(bare)) {
       sleeping = true;
       d.state.set('SLEEP');
       if (!needRecorder()) releaseRecorder();
@@ -534,7 +711,11 @@ export function createVoiceController(d: VoiceDeps) {
       return;
     }
     // A new request replaces a reply that is still being worked on.
-    if (d.orchestrator.isBusy()) d.orchestrator.cancel();
+    const replacing = d.orchestrator.isBusy();
+    if (replacing) d.orchestrator.cancel();
+    // Instant "On it, sir." while the model works (seconds); the reply plays right after it.
+    // Not when replacing a reply: stopping that one would cut this line off too.
+    if (d.settings.get('voice.greet') && !quick && !replacing) ack = say(workingLine(), true);
     const recent =
       lastVoice && Date.now() - lastVoice.at < CONVERSATION_GAP_MS
         ? lastVoice.conversationId
@@ -567,8 +748,16 @@ export function createVoiceController(d: VoiceDeps) {
     }
     if (now - spokenEndedAt < ECHO_MEMORY_MS && isEcho(text, recentSpoken)) return;
     const followUp = now <= followUntil;
-    if (!mentionsName(text) && !followUp) return;
+    const named = mentionsName(text, names());
+    if (!named && !followUp) return;
+    if (!(await isSir(seg))) return log.info('speech in another voice; ignored');
     if (duringSpeech) stopSpeaking(); // "Jarvis, wait—" interrupts
+    // Just the name ("Jarvis?", "Hey Jarvis"): listen for the request, like a wake word.
+    if (named && !stripName(text, names())) {
+      timings.wakeAt = now;
+      greetThenListen();
+      return;
+    }
     d.emit('voice:transcript', { text, isFinal: false });
     let intent: Intent = { directed: true, query: text };
     if (d.judge) {
@@ -576,6 +765,7 @@ export function createVoiceController(d: VoiceDeps) {
         intent = await d.judge(heardBuffer.format(now), {
           followUp,
           lastReply: recentSpoken.slice(-400),
+          heard: text,
         });
       } catch (err) {
         log.warn({ err: errorMessage(err) }, 'intent judge failed; using the words as they are');
@@ -586,6 +776,29 @@ export function createVoiceController(d: VoiceDeps) {
     followUntil = 0;
     heardBuffer.clear(); // answered: the next mention starts a fresh context
     await route(intent.query, true, followUp);
+  }
+
+  /**
+   * Wake word by name (any name Sir chose): Whisper transcribes each phrase on this PC. "April" alone
+   * opens listening like a wake word; "April, what time is it?" in one breath goes straight through.
+   */
+  async function onNameHeard(seg: HeardSegment): Promise<void> {
+    const text = seg.text.trim();
+    if (!text || !mentionsName(text, names())) return;
+    if (Date.now() - spokenEndedAt < ECHO_MEMORY_MS && isEcho(text, recentSpoken)) return;
+    if (audible() && !canBargeIn()) return log.info('name heard while speaking; ignored');
+    if (!(await isSir(seg))) return log.info('name heard in another voice; ignored');
+    const request = stripName(text, names());
+    if (!request || isUnclear(request)) {
+      timings.wakeAt = Date.now();
+      greetThenListen();
+      return;
+    }
+    stopSpeaking();
+    timings.finalAt = Date.now();
+    d.emit('voice:transcript', { text: request, isFinal: true });
+    await route(request, false);
+    settleAfterListening();
   }
 
   /**
@@ -617,7 +830,7 @@ export function createVoiceController(d: VoiceDeps) {
   d.orchestrator.onTurnStart((turn: TurnInfo) => {
     if (turn.mode !== 'voice' || mode() === 'off') return;
     lastVoice = { conversationId: turn.conversationId, at: Date.now() };
-    stopSpeaking();
+    if (!ack || speaking !== ack) stopSpeaking();
     replyUtterances.add(turn.turnId);
     voiceTurns.set(turn.turnId, newUtterance(true, turn.turnId));
   });
@@ -655,18 +868,25 @@ export function createVoiceController(d: VoiceDeps) {
   return {
     onConfirmShown,
     say,
+    notice,
     stopSpeaking,
 
     /** Renderer playback lifecycle (tts:playback). */
     onPlayback(utteranceId: string, event: 'started' | 'finished' | 'level'): void {
+      if (event === 'started') playing.add(utteranceId);
       if (event === 'started' && d.state.get() !== 'LISTENING') d.state.set('SPEAKING');
       if (event !== 'finished') return;
+      playing.delete(utteranceId);
       spokenEndedAt = Date.now();
       const wasReply = replyUtterances.delete(utteranceId);
       voiceTurns.delete(utteranceId);
       if (speaking?.id === utteranceId) speaking = null;
+      if (ack?.id === utteranceId) ack = null;
+      const replyAudible = [...voiceTurns.keys()].some((id) => playing.has(id));
       if (d.state.get() === 'SPEAKING' && voiceTurns.size === 0 && !speaking)
         d.state.set(sleeping ? 'SLEEP' : 'IDLE');
+      // "On it, sir." is over but the answer is still being written: back to thinking.
+      else if (d.state.get() === 'SPEAKING' && !speaking && !replyAudible) d.state.set('THINKING');
       const waiter = afterSpeechWaiters.get(utteranceId);
       afterSpeechWaiters.delete(utteranceId);
       if (waiter) waiter();
@@ -708,6 +928,31 @@ export function createVoiceController(d: VoiceDeps) {
       else void startListening(false);
     },
 
+    /**
+     * Voice Match enrolment: records one phrase (ends after a short pause, at most 5 s) and returns
+     * it as 16 kHz floats; empty when nothing was heard. Refused while Jarvis is busy listening.
+     */
+    recordSample(): Promise<Float32Array> {
+      if (sample || listening || d.state.get() === 'SPEAKING')
+        return Promise.reject(
+          new JarvisError(
+            'INVALID',
+            'microphone busy',
+            'Wait until Jarvis is idle, then try again.',
+          ),
+        );
+      return new Promise<Float32Array>((resolve) => {
+        sample = {
+          frames: [],
+          heard: false,
+          quietMs: 0,
+          done: resolve,
+          timer: setTimeout(endSample, SAMPLE_MAX_MS),
+        };
+        ensureRecorder();
+      });
+    },
+
     mic(action: 'start' | 'stop' | 'meter'): void {
       if (action === 'meter') {
         meterUntil = Date.now() + METER_MS;
@@ -727,15 +972,17 @@ export function createVoiceController(d: VoiceDeps) {
       wake = null;
       ambient?.close();
       ambient = null;
+      spotting = false;
       heardBuffer.clear();
       sleeping = false;
-      if (m === 'ambient') {
+      const byName = m === 'wake' && spotsName();
+      if (m === 'ambient' || byName) {
         if (!d.factories.ambient)
-          return { ok: false, error: 'Always-listening mode is not available here.' };
+          return { ok: false, error: 'Listening with on-device Whisper is not available here.' };
         try {
           const next = await d.factories.ambient({
             onSpeechStart: () => undefined,
-            onSegment: (seg) => void onHeard(seg),
+            onSegment: (seg) => void (byName ? onNameHeard(seg) : onHeard(seg)),
             onError: (err) => log.warn({ err: errorMessage(err) }, 'ambient transcription failed'),
           });
           if (gen !== modeGeneration) {
@@ -743,13 +990,15 @@ export function createVoiceController(d: VoiceDeps) {
             return { ok: true };
           }
           ambient = next;
+          spotting = byName;
         } catch (err) {
+          if (gen !== modeGeneration) return { ok: true }; // a newer mode replaced this one
           return {
             ok: false,
             error:
               err instanceof JarvisError && err.userMessage
                 ? err.userMessage
-                : `Always-listening mode could not start: ${errorMessage(err)}`,
+                : `${byName ? 'The wake word' : 'Always-listening mode'} could not start: ${errorMessage(err)}`,
           };
         }
         releaseRecorder();
@@ -764,6 +1013,7 @@ export function createVoiceController(d: VoiceDeps) {
           }
           wake = next;
         } catch (err) {
+          if (gen !== modeGeneration) return { ok: true }; // a newer mode replaced this one
           return {
             ok: false,
             error:
@@ -783,11 +1033,15 @@ export function createVoiceController(d: VoiceDeps) {
       cancelListening();
       stopSpeaking();
       afterSpeechWaiters.clear();
+      notices.length = 0;
+      clearTimeout(noticeTimer);
     },
 
     shutdown(): void {
       cancelListening();
       stopSpeaking();
+      notices.length = 0;
+      clearTimeout(noticeTimer);
       ambient?.close();
       ambient = null;
       wake?.release();

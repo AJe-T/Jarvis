@@ -1,11 +1,16 @@
+import { spawn } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { app, dialog, shell, BrowserWindow } from 'electron';
 import { MAIN_ONLY_SETTINGS, SENSITIVE_SETTINGS } from '@shared/settings';
 import { JarvisError } from '../../errors';
+import { createSystemSampler } from '../../lib/system-stats';
 import { localDay } from '../../lib/util';
 import { toSummary } from '../../db/repos/conversations-repo';
 import { toUiToolCall } from '../../db/repos/tool-calls-repo';
 import { buildUiMessages } from '../../agent/ui-history';
 import { claudeCodeStatus, openClaudeLogin } from '../../llm/claude-code';
+import { cliEnv } from '../../llm/cli-brains';
 import { monthStart } from '../../llm/usage-ledger';
 import { detectTownFromIp } from '../../tools/everyday/weather';
 import { pickModel } from '../../agent/model-router';
@@ -85,6 +90,13 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
     );
     return { conversation: toSummary(conv), messages: buildUiMessages(rows, calls) };
   });
+  handle('conversations:search', (req) => s.conversations.searchChats(req.query));
+  handle('conversations:context', (req) => s.orchestrator.contextStats(req.id));
+  handle('conversations:compact', async (req) => {
+    const r = await s.orchestrator.compact(req.id);
+    audit('conversation.compact', { id: req.id, messages: r.summarizedMessages });
+    return r;
+  });
   handle('conversations:delete', (req) => {
     s.conversations.delete(req.id);
     audit('conversation.delete', { id: req.id, alsoVault: req.alsoVault });
@@ -148,6 +160,7 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
           : s.settings.get('budget.monthlyUsd'),
       dayCostUsd: t.day,
       monthCostUsd: t.month,
+      plan: s.planLimits.get(),
     };
   });
   const userError = (err: unknown): string =>
@@ -162,6 +175,62 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
   handle('llm:localTest', async () => {
     try {
       await s.llmLocal.ping('', AbortSignal.timeout(10_000));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: userError(err) };
+    }
+  });
+  handle('llm:cloudModels', async () => {
+    try {
+      return { models: (await s.llmCloud.listModels()).sort() };
+    } catch (err) {
+      return { models: [], error: userError(err) };
+    }
+  });
+  handle('llm:cloudTest', async () => {
+    try {
+      await s.llmCloud.ping('', AbortSignal.timeout(10_000));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: userError(err) };
+    }
+  });
+  handle('llm:cliStatus', async () =>
+    Promise.all(
+      (['chatgpt', 'antigravity'] as const).map(async (id) => {
+        const b = s.brains.cli(id);
+        const installed = b?.find() != null;
+        return {
+          id,
+          label: b?.label ?? id,
+          installed,
+          signedIn: installed && b ? await b.signedIn() : false,
+          installHint: b?.installHint ?? '',
+        };
+      }),
+    ),
+  );
+  handle('llm:cliLogin', (req) => {
+    const b = s.brains.cli(req.id);
+    const exe = b?.find();
+    if (!b || !exe)
+      throw new JarvisError('NOT_FOUND', 'cli missing', `${b?.label ?? req.id} is not installed.`);
+    // The app's own sign-in, in its own console window (browser opens from there). No shell.
+    spawn(exe, b.loginArgs, {
+      env: cliEnv(),
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+      shell: false,
+    }).unref();
+    s.audit.append('user', 'llm.cliLogin', { id: req.id });
+    return { ok: true };
+  });
+  handle('llm:cliTest', async (req) => {
+    const b = s.brains.cli(req.id);
+    if (!b) return { ok: false, error: 'Unknown app.' };
+    try {
+      await b.run('Reply with exactly: OK', AbortSignal.timeout(120_000));
       return { ok: true };
     } catch (err) {
       return { ok: false, error: userError(err) };
@@ -185,6 +254,8 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
     audit('location.detect', {});
     return { town: await detectTownFromIp() };
   });
+  const sampleSystem = createSystemSampler();
+  handle('system:stats', () => sampleSystem());
   handle('usage:breakdown', (req) => {
     const day = localDay();
     return s.usageRepo.breakdown(req.range === 'day' ? day : monthStart(day), day, req.by);
@@ -222,6 +293,29 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
   handle('app:killSwitch', () => {
     s.killSwitch.trigger('ui');
     return { ok: true };
+  });
+  // Chat artifacts: written only where Sir chooses in the Save dialog.
+  handle('artifacts:save', async (req, event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const name =
+      req.title
+        .replace(/[\\/:*?"<>|.]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim() || 'Artifact';
+    const opts = {
+      title: 'Save artifact',
+      defaultPath: join(app.getPath('documents'), `${name}.${req.ext}`),
+      filters: [
+        req.ext === 'html'
+          ? { name: 'Web page', extensions: ['html'] }
+          : { name: 'SVG drawing', extensions: ['svg'] },
+      ],
+    };
+    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+    if (r.canceled || !r.filePath) return { path: null };
+    await writeFile(r.filePath, req.content, 'utf8');
+    audit('artifact.save', { ext: req.ext });
+    return { path: r.filePath };
   });
   handle('app:pickFolder', async (req, event) => {
     const win = BrowserWindow.fromWebContents(event.sender);

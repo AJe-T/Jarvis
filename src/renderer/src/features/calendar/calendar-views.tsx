@@ -38,7 +38,7 @@ export function MonthView({
         {WEEK.map((d) => (
           <div
             key={d}
-            className="py-1.5 text-center text-[11px] font-medium tracking-widest text-ink-500 uppercase"
+            className="py-1.5 text-center text-2xs font-medium tracking-widest text-ink-500 uppercase"
           >
             {d}
           </div>
@@ -100,7 +100,7 @@ export function MonthView({
                   onDragStart={(e) => e.dataTransfer.setData('text/plain', it.key)}
                   onClick={() => onOpen(it)}
                   className={clsx(
-                    'flex min-w-0 items-center gap-1 rounded-xs px-1 text-left text-[11px] leading-5 hover:brightness-110',
+                    'flex min-w-0 items-center gap-1 rounded-xs px-1 text-left text-2xs leading-5 hover:brightness-110',
                     it.done && 'line-through opacity-60',
                   )}
                   style={
@@ -129,7 +129,7 @@ export function MonthView({
                 <button
                   type="button"
                   onClick={() => onPickDay(d)}
-                  className="px-1 text-left text-[11px] text-ink-500 hover:text-ink-100"
+                  className="px-1 text-left text-2xs text-ink-500 hover:text-ink-100"
                 >
                   +{list.length - MAX_CHIPS} more
                 </button>
@@ -254,7 +254,7 @@ export function MiniMonth({
           </span>
         )}
       </div>
-      <div className="grid grid-cols-7 text-center text-[10px] text-ink-500">
+      <div className="grid grid-cols-7 text-center text-3xs text-ink-500">
         {WEEK.map((d) => (
           <span key={d}>{d[0]}</span>
         ))}
@@ -267,7 +267,7 @@ export function MiniMonth({
               onClick={() => onPick(d)}
               aria-label={`${dayLabel(d, today)}${n ? `, ${n} items` : ''}`}
               className={clsx(
-                'relative mx-auto grid size-6 place-items-center rounded-pill text-[11px] transition-colors',
+                'relative mx-auto grid size-6 place-items-center rounded-pill text-2xs transition-colors',
                 d === today
                   ? 'bg-accent-600 font-semibold text-ink-on-accent'
                   : selected.includes(d)

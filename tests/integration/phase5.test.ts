@@ -140,7 +140,10 @@ describe('phase 5 MCP integration (Testing.md §4)', () => {
       t.llm.calls.filter((c) => c.max_tokens === 4096)[1]?.messages.at(-1)?.content,
     );
     expect(firstResult.match(/<\/untrusted_content>/g)).toHaveLength(1);
-    expect(asked[0]?.taintedFrom).toBe('mcp:fake/inject');
+    // The injection scan (2.17) names what the content tried to do.
+    expect(asked[0]?.taintedFrom).toBe(
+      'mcp:fake/inject, which tries to break out of the "outside content" wrapper',
+    );
     expect((t.services.os as unknown as { calls: unknown[] }).calls).toHaveLength(0);
     await t.mcp.manager.shutdown();
   }, 30_000);

@@ -85,19 +85,28 @@ export function createPlanner(deps: {
   // ── lists ──
   function saveList(p: {
     id?: string | undefined;
-    name: string;
+    name?: string | undefined;
     color?: string | undefined;
     icon?: string | undefined;
+    sortOrder?: number | undefined;
+    description?: string | undefined;
+    wipLimit?: number | null | undefined;
+    archived?: boolean | undefined;
   }): TodoList {
     const prev = p.id ? repo.lists().find((l) => l.id === p.id) : undefined;
     if (p.id && !prev) throw notFound('list');
+    if (!prev && !p.name?.trim())
+      throw new JarvisError('INVALID', 'list needs a name', 'Give the list a name.');
     const count = repo.lists().length;
     const list = TodoListSchema.parse({
       id: prev?.id ?? newId('tl_'),
-      name: p.name,
+      name: p.name ?? prev?.name,
       color: p.color ?? prev?.color ?? PLANNER_COLORS[count % PLANNER_COLORS.length],
       icon: p.icon ?? prev?.icon ?? '',
-      sortOrder: prev?.sortOrder ?? count,
+      sortOrder: p.sortOrder ?? prev?.sortOrder ?? count,
+      description: p.description ?? prev?.description ?? '',
+      wipLimit: p.wipLimit !== undefined ? p.wipLimit : (prev?.wipLimit ?? null),
+      archived: p.archived ?? prev?.archived ?? false,
     });
     repo.putList(list, nowIso());
     deps.onChange();

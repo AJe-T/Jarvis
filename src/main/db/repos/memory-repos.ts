@@ -96,6 +96,14 @@ export function createMemoryRepos(db: Db) {
           )
           .all(ftsQuery, k) as unknown as Array<MemoryRow & { snippet: string }>;
       },
+      /** Notes under a vault folder, e.g. "Memory/" (memory tidy-up). */
+      under(prefix: string): MemoryRow[] {
+        return db
+          .prepare(
+            'SELECT * FROM memories WHERE substr(vault_path, 1, length(?)) = ? ORDER BY vault_path',
+          )
+          .all(prefix, prefix) as unknown as MemoryRow[];
+      },
       titles(): string[] {
         return (db.prepare('SELECT title FROM memories').all() as Array<{ title: string }>).map(
           (r) => r.title,
@@ -147,6 +155,12 @@ export function createMemoryRepos(db: Db) {
           r.conversationId,
           nowIso(),
         );
+      },
+      /** Whether an item with this reason was ever queued (pending, accepted or rejected). */
+      seen(reason: string): boolean {
+        return !!db
+          .prepare('SELECT 1 FROM memory_review_queue WHERE reason = ? LIMIT 1')
+          .get(reason);
       },
       pending(): ReviewRow[] {
         return db

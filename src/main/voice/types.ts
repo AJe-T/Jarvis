@@ -1,4 +1,5 @@
 // API-Guide.md §9 voice interfaces.
+import type { TtsEngineId } from '@shared/speech-engines';
 
 export interface SttSession {
   write(frame: Int16Array): void;
@@ -29,7 +30,7 @@ export interface TtsChunk {
 }
 
 export interface TtsProvider {
-  readonly id: 'edge' | 'sapi' | 'fake';
+  readonly id: TtsEngineId | 'fake';
   synthesize(
     text: string,
     opts: { voice: string; rate?: string; signal: AbortSignal },

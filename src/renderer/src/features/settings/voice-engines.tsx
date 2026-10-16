@@ -7,31 +7,23 @@ import { Section } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
 import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
+import { DEFAULT_NAME, isDefaultName } from '@shared/assistant-name';
+import {
+  GROQ_STT_MODELS,
+  LOCAL_STT_MODELS,
+  OPENAI_STT_MODELS,
+  STT_ENGINES,
+  type EngineInfo,
+} from '@shared/speech-engines';
+import { EngineCards, ExternalLink, FactChips } from './engine-cards';
 import { SecretField } from './secret-field';
+import { SettingInput, SettingSelect } from './settings-controls';
 
 type ModelId = Req<'models:download'>['id'];
 type Status = Res<'models:status'>;
 type Progress = EventPayload<'models:progress'>;
 
 const mb = (bytes: number): string => `${Math.round(bytes / 1e6)} MB`;
-
-const WHISPER_MODELS: Array<{ id: ModelId; label: string; hint: string }> = [
-  {
-    id: 'whisper-small.en',
-    label: 'small.en',
-    hint: 'Recommended. Good with Indian-accented English. ~2–4 s per sentence.',
-  },
-  {
-    id: 'whisper-base.en',
-    label: 'base.en',
-    hint: 'Fastest (~1 s), more mistakes on names and accents.',
-  },
-  {
-    id: 'whisper-small',
-    label: 'small (multilingual)',
-    hint: 'Also Hindi, Telugu and more; slightly weaker English.',
-  },
-];
 
 /** models:status plus live models:progress events. */
 export function useModels(): {
@@ -70,7 +62,11 @@ export function ModelDownload({
         <button
           type="button"
           className="ml-2 text-ink-500 underline"
-          onClick={() => void call('models:delete', { id }).then(models.refresh)}
+          onClick={() =>
+            void call('models:delete', { id })
+              .then(models.refresh)
+              .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
+          }
         >
           Remove
         </button>
@@ -115,7 +111,7 @@ export function ModelDownload({
 function Choice<K extends SettingKey>(p: {
   k: K;
   label: string;
-  options: Array<{ value: SettingValue<K>; title: string; body: string }>;
+  options: Array<{ value: SettingValue<K>; title: string; body: string; disabled?: boolean }>;
 }): React.JSX.Element {
   const value = useDraftSetting(p.k);
   const set = useSettingsStore((s) => s.stage);
@@ -127,10 +123,11 @@ function Choice<K extends SettingKey>(p: {
           type="button"
           role="radio"
           aria-checked={value === o.value}
+          disabled={o.disabled}
           onClick={() => void set(p.k, o.value)}
           className={clsx(
-            'rounded-md border p-3 text-left transition-colors',
-            value === o.value
+            'rounded-md border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45',
+            value === o.value && !o.disabled
               ? 'border-accent-edge bg-selected'
               : 'border-line hover:border-ink-500',
           )}
@@ -143,111 +140,236 @@ function Choice<K extends SettingKey>(p: {
   );
 }
 
+function localWhisperReady(models: ReturnType<typeof useModels>, id: string): boolean {
+  return !!models.status?.[id as ModelId]?.installed;
+}
+
 /** ADR-011: pick cloud or on-device engines for the wake word and for speech-to-text, independently. */
 export function VoiceEngines(): React.JSX.Element {
   const models = useModels();
-  const wake = useDraftSetting('voice.wake.provider') ?? 'picovoice';
-  const stt = useDraftSetting('voice.stt.provider') ?? 'deepgram';
+  const chosen = useDraftSetting('voice.wake.provider') ?? 'name';
+  const name = useDraftSetting('assistant.name') ?? DEFAULT_NAME;
+  const custom = !isDefaultName(name);
+  // The keyword engines only know "Jarvis": any other name is always spotted by Whisper.
+  const wake = custom ? 'name' : chosen;
   const whisperModel = useDraftSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
-  const set = useSettingsStore((s) => s.stage);
-  const toast = useUiStore((s) => s.toast);
   return (
     <>
       <Section
         title="Wake word"
-        description="Runs on this PC in both cases; nothing is sent anywhere until it hears you."
+        description={`What starts Wake word mode. Every engine runs on this PC; nothing is sent anywhere until it hears “${name}”. Change the name in Settings → General.`}
       >
         <Choice
           k="voice.wake.provider"
           label="Wake word engine"
           options={[
             {
-              value: 'picovoice',
-              title: 'Picovoice: “Jarvis”',
-              body: 'Needs a free Picovoice AccessKey.',
+              value: 'name',
+              title: `Recommended: “${name}” or “Hey ${name}”`,
+              body: `Whisper on this PC listens for the name, and “${name}, open Notepad” works in one breath. Uses the on-device speech models below (base.en is quickest).`,
             },
             {
               value: 'openwakeword',
-              title: 'On-device: “Hey Jarvis”',
-              body: 'openWakeWord, no account. Model is free for personal, non-commercial use.',
+              title: 'Keyword model: “Hey Jarvis” only',
+              body: custom
+                ? `Only knows “Hey Jarvis”, so it is off while the name is ${name}.`
+                : 'Very light on the CPU, but answers only to “Hey Jarvis” and can miss accents. Raise the sensitivity if it does.',
+              disabled: custom,
+            },
+            {
+              value: 'picovoice',
+              title: 'Picovoice: “Jarvis” only',
+              body: custom
+                ? `Only knows “Jarvis”, so it is off while the name is ${name}.`
+                : 'Accurate keyword engine; needs a free Picovoice AccessKey.',
+              disabled: custom,
             },
           ]}
         />
-        {wake === 'picovoice' ? (
-          <SecretField name="picovoice" label="Picovoice AccessKey" />
-        ) : (
-          <ModelDownload id="openwakeword-hey-jarvis" models={models} />
+        {wake === 'picovoice' && <SecretField name="picovoice" label="Picovoice AccessKey" />}
+        {wake === 'openwakeword' && (
+          <>
+            <ModelDownload id="openwakeword-hey-jarvis" models={models} />
+            <SettingInput
+              k="voice.wake.sensitivity"
+              label="Sensitivity (0–1). Higher hears “Hey Jarvis” more easily but wakes by mistake more often; 0.6–0.7 suits most voices"
+              type="number"
+              step={0.05}
+            />
+          </>
         )}
+        {wake === 'name' &&
+          !(
+            models.status?.['silero-vad']?.installed && localWhisperReady(models, whisperModel)
+          ) && (
+            <p role="alert" className="text-sm text-lamp-400">
+              Needs the on-device speech models: use “Set up free on-device speech” below (about 80
+              MB, once).
+            </p>
+          )}
       </Section>
-      <Section title="Speech to text">
-        {!(
-          models.status?.['silero-vad']?.installed && models.status['whisper-base.en']?.installed
-        ) && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent-edge bg-selected px-3 py-3">
-            <span className="text-sm text-ink-300">
-              <span className="block font-semibold text-ink-100">
-                No key? Use free on-device speech
-              </span>
-              One click downloads Whisper base.en (about 80 MB, once). Private, offline, and words
-              appear as you speak when you dictate.
-            </span>
-            <Button
-              variant="primary"
-              onClick={() =>
-                void call('voice:setupLocal', {})
-                  .then(models.refresh)
-                  .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
-              }
-            >
-              Set up free on-device speech
-            </Button>
-          </div>
-        )}
-        <Choice
-          k="voice.stt.provider"
-          label="Speech-to-text engine"
-          options={[
-            {
-              value: 'deepgram',
-              title: 'Deepgram (cloud)',
-              body: 'Fast and live as you speak. Audio is sent to Deepgram only while Jarvis listens. Needs a key.',
-            },
-            {
-              value: 'whisper',
-              title: 'Whisper (on this PC)',
-              body: 'Free, private and offline. Dictation shows words as you speak; commands are read when you stop talking.',
-            },
-          ]}
-        />
-        {stt === 'deepgram' ? (
-          <SecretField name="deepgram" label="Deepgram API key" />
-        ) : (
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-medium text-ink-100">Whisper model</legend>
-            {WHISPER_MODELS.map((m) => (
-              <div
-                key={m.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2"
-              >
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="whisper-model"
-                    className="mt-1"
-                    checked={whisperModel === m.id}
-                    onChange={() => void set('voice.stt.whisperModel', m.id as typeof whisperModel)}
-                  />
-                  <span>
-                    <span className="text-ink-100">{m.label}</span>
-                    <span className="block text-ink-500">{m.hint}</span>
-                  </span>
-                </label>
-                {whisperModel === m.id && <ModelDownload id={m.id} models={models} />}
-              </div>
-            ))}
-          </fieldset>
-        )}
-      </Section>
+      <SpeechToText models={models} />
     </>
+  );
+}
+
+/** The key an engine needs, with where to get one (ADR-038). */
+export function EngineKey<Id extends string>({
+  info,
+}: {
+  info: EngineInfo<Id> | undefined;
+}): React.JSX.Element | null {
+  if (!info?.key) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <SecretField
+        name={info.key}
+        label={info.keyLabel ?? 'API key'}
+        {...(info.key === 'deepgram' ? { testable: 'deepgram' as const } : {})}
+      />
+      {info.link && (
+        <span className="text-sm text-ink-500">
+          No key yet? <ExternalLink url={info.link}>Get one here</ExternalLink>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The 2 MB voice detector that tells phrase engines (cloud, own server, Windows) Sir stopped talking. */
+function VoiceDetector({ models }: { models: ReturnType<typeof useModels> }): React.JSX.Element {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2">
+      <span className="text-sm">
+        <span className="text-ink-100">Voice detector (needed)</span>
+        <span className="block text-ink-500">
+          Runs on this PC and hears when you stop talking, so only your phrase is sent.
+        </span>
+      </span>
+      <ModelDownload id="silero-vad" models={models} />
+    </div>
+  );
+}
+
+/** On-device models: fast and small at the top, slow and accurate at the bottom. */
+function LocalModels({ models }: { models: ReturnType<typeof useModels> }): React.JSX.Element {
+  const chosen = useDraftSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
+  const set = useSettingsStore((s) => s.stage);
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-1 text-sm font-medium text-ink-100">
+        On-device model (from fastest to most accurate)
+      </legend>
+      {LOCAL_STT_MODELS.map((m) => {
+        const size = models.status?.[m.id]?.sizeBytes;
+        return (
+          <div
+            key={m.id}
+            className={clsx(
+              'flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2',
+              chosen === m.id ? 'border-accent-edge bg-selected' : 'border-line',
+            )}
+          >
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="whisper-model"
+                className="mt-1"
+                checked={chosen === m.id}
+                onChange={() => void set('voice.stt.whisperModel', m.id)}
+              />
+              <span>
+                <span className="text-ink-100">{m.label}</span>
+                <span className="block text-ink-500">{m.hint}</span>
+                <FactChips
+                  facts={{
+                    speed: m.speed,
+                    quality: m.accuracy,
+                    languages: m.multilingual ? '99 languages' : 'English only',
+                    extra: [...(size ? [mb(size)] : []), m.license],
+                  }}
+                />
+              </span>
+            </label>
+            {chosen === m.id && <ModelDownload id={m.id} models={models} />}
+          </div>
+        );
+      })}
+    </fieldset>
+  );
+}
+
+/** ADR-038: every speech-to-text engine, its key and its own options. */
+function SpeechToText({ models }: { models: ReturnType<typeof useModels> }): React.JSX.Element {
+  const stt = useDraftSetting('voice.stt.provider') ?? 'deepgram';
+  const set = useSettingsStore((s) => s.stage);
+  const toast = useUiStore((s) => s.toast);
+  const info = STT_ENGINES.find((e) => e.id === stt);
+  return (
+    <Section
+      title="Speech to text"
+      description="What turns your voice into text. Always listening and the wake word by name always use the on-device model, whatever you pick here."
+    >
+      {!(
+        models.status?.['silero-vad']?.installed && models.status['whisper-base.en']?.installed
+      ) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent-edge bg-selected px-3 py-3">
+          <span className="text-sm text-ink-300">
+            <span className="block font-semibold text-ink-100">
+              No key? Use free on-device speech
+            </span>
+            One click downloads Whisper base.en (about 80 MB, once). Private, offline, and words
+            appear as you speak when you dictate.
+          </span>
+          <Button
+            variant="primary"
+            onClick={() =>
+              void call('voice:setupLocal', {})
+                .then(models.refresh)
+                .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
+            }
+          >
+            Set up free on-device speech
+          </Button>
+        </div>
+      )}
+      <EngineCards
+        label="Speech-to-text engine"
+        engines={STT_ENGINES}
+        value={stt}
+        onChange={(id) => void set('voice.stt.provider', id)}
+      />
+      <EngineKey info={info} />
+      {stt === 'whisper' && <LocalModels models={models} />}
+      {stt === 'groq' && (
+        <SettingSelect
+          k="voice.stt.groqModel"
+          label="Groq model"
+          options={GROQ_STT_MODELS.map((m) => ({ value: m.id, label: m.label }))}
+        />
+      )}
+      {stt === 'openai' && (
+        <SettingSelect
+          k="voice.stt.openaiModel"
+          label="OpenAI model"
+          options={OPENAI_STT_MODELS.map((m) => ({ value: m.id, label: m.label }))}
+        />
+      )}
+      {stt === 'server' && (
+        <>
+          <SettingInput
+            k="voice.stt.serverUrl"
+            label="Server address (ending in /v1)"
+            hint="Speaches (Faster-Whisper): http://localhost:8000/v1. Another PC on your home network works too (http://192.168.x.x:8000/v1); plain http there is unencrypted (others on the network could read it); anything outside it must be https."
+          />
+          <SettingInput
+            k="voice.stt.serverModel"
+            label="Model name on the server"
+            hint="e.g. Systran/faster-distil-whisper-small.en for Speaches; whisper-1 if the server ignores it."
+          />
+        </>
+      )}
+      {stt !== 'whisper' && stt !== 'deepgram' && <VoiceDetector models={models} />}
+    </Section>
   );
 }

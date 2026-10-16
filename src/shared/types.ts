@@ -12,6 +12,18 @@ export const ASSISTANT_STATES = [
 ] as const;
 export type AssistantState = (typeof ASSISTANT_STATES)[number];
 
+/** The feeling of Jarvis's reply (idea from Open-LLM-VTuber's emotion tags); the orb takes its colour. */
+export const MOODS = [
+  'calm',
+  'happy',
+  'amused',
+  'excited',
+  'curious',
+  'concerned',
+  'serious',
+] as const;
+export type Mood = (typeof MOODS)[number];
+
 export const TIERS = ['SAFE', 'CONFIRM', 'BLOCKED'] as const;
 export type Tier = (typeof TIERS)[number];
 
@@ -55,6 +67,10 @@ export const KNOWN_SECRETS = [
   'notion_token',
   'telegram',
   'huggingface',
+  'groq',
+  'assemblyai',
+  'speech_server',
+  'local_llm',
 ] as const;
 export const SECRET_NAME_RE = /^[a-z][a-z0-9_]{1,39}$/;
 export const SecretNameSchema = z.string().regex(SECRET_NAME_RE);

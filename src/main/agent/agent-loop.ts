@@ -21,8 +21,13 @@ export interface TurnContext {
   mode: 'text' | 'voice';
   purpose: TurnPurpose;
   signal: AbortSignal;
-  /** Set once the turn has consumed untrusted content (Security.md §6.3). */
-  taint: { tainted: boolean; source?: string };
+  /**
+   * Set once the turn has consumed untrusted content (Security.md §6.3). `injection` describes outside
+   * text that tried to instruct the AI (security/injection-scan.ts); from then on every action asks.
+   * `privateData` names private data a tool returned (a key, password, card…); from then on actions
+   * that reach outside the PC ask, so it can't be sent out unseen.
+   */
+  taint: { tainted: boolean; source?: string; injection?: string; privateData?: string };
 }
 
 /** What the loop needs from the tool system (implemented by tools/executor in Phase 2). */

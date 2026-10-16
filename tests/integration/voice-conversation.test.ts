@@ -26,11 +26,22 @@ function setup(
     mode?: 'ptt' | 'wake' | 'ambient';
     judge?: (t: string) => Intent;
     followUp?: number;
+    /** 'name' = the wake word is the assistant's name, spotted by (fake) Whisper segments. */
+    wake?: 'openwakeword' | 'name';
+    name?: string;
+    /** The microphone cancels Jarvis's own voice (the capture window's echo-cancelled mic). */
+    echoCancelled?: boolean;
+    /** ADR-039 Voice Match: is this audio Sir? */
+    verify?: (audio: Float32Array) => Promise<boolean>;
+    recorder?: (frameLength: number) => ReturnType<typeof createFakeRecorder>;
   } = {},
 ) {
   const t = setupServices(script);
   const s = t.services;
   s.settings.set('voice.mode', opts.mode ?? 'wake');
+  s.settings.set('voice.greet', false); // instant greetings are tested in phase4.test.ts
+  s.settings.set('voice.wake.provider', opts.wake ?? 'openwakeword');
+  if (opts.name) s.settings.set('assistant.name', opts.name);
   s.settings.set('voice.followUpSeconds', opts.followUp ?? 1);
   const wake = createFakeWake();
   const stt = createFakeStt(transcripts);
@@ -38,7 +49,9 @@ function setup(
   const judged: string[] = [];
   const v = createVoiceSystem(s, {
     factories: {
-      recorder: (_d, n) => createFakeRecorder(n),
+      recorder: (_d, n) => (opts.recorder ?? createFakeRecorder)(n),
+      ...(opts.echoCancelled ? { echoCancelled: () => true } : {}),
+      ...(opts.verify ? { verifySpeaker: opts.verify } : {}),
       wake: () => wake,
       stt,
       edge: createFakeTts('edge'),
@@ -71,9 +84,9 @@ function setup(
       v.voice.onPlayback(a.utteranceId, a.last ? 'finished' : 'started');
     }
   };
-  const segment = (text: string): void => {
+  const segment = (text: string, audio?: Float32Array): void => {
     const now = Date.now();
-    ambientHandlers?.onSegment({ text, start: now - 1500, end: now });
+    ambientHandlers?.onSegment({ text, start: now - 1500, end: now, ...(audio ? { audio } : {}) });
   };
   return { ...t, v, wake, stt, userTurns, playAll, segment, judged };
 }
@@ -182,6 +195,88 @@ describe('conversational voice (ADR-012)', () => {
     t.v.voice.shutdown();
   });
 
+  it('wake word by name: the name alone opens listening; name + request goes straight through', async () => {
+    const t = setup(
+      { rules: [{ match: 'weather', steps: [{ text: '<spoken>Sunny, sir.</spoken>' }] }] },
+      ["what's the weather"],
+      { wake: 'name', name: 'April' },
+    );
+    expect(await t.v.start()).toEqual({ ok: true });
+    t.segment('I told my sister about the trip.'); // no name: nothing happens
+    expect(t.stt.sessions).toBe(0);
+    t.segment('Hey Aprill.'); // Whisper's spelling of the name, alone → listen (like a wake word)
+    await until(() => t.stt.sessions === 1);
+    await until(() => t.userTurns().length === 1);
+    await idle(t.services);
+    expect(t.userTurns()[0]?.text).toBe("what's the weather");
+    t.playAll();
+    await new Promise((r) => setTimeout(r, 30)); // past the echo-settle window
+    t.segment('April, how is the weather tomorrow?'); // one breath: no second listening session
+    await until(() => t.userTurns().length === 2);
+    await idle(t.services);
+    expect(t.userTurns()[1]?.text).toBe('how is the weather tomorrow?');
+    t.v.voice.shutdown();
+  });
+
+  it("Voice Match: the name in another voice is ignored; in Sir's voice it opens listening", async () => {
+    const sir = new Float32Array(16000).fill(0.5);
+    const verify = async (audio: Float32Array): Promise<boolean> => audio[0] === 0.5;
+    const t = setup({ rules: [] }, ['hello'], { wake: 'name', name: 'Summer', verify });
+    expect(await t.v.start()).toEqual({ ok: true });
+    t.segment('Hey Summer.', new Float32Array(16000)); // a guest or the TV
+    await new Promise((r) => setTimeout(r, 100));
+    expect(t.stt.sessions).toBe(0);
+    t.segment('Hey Summer.', sir);
+    await until(() => t.stt.sessions === 1);
+    t.v.voice.shutdown();
+  });
+
+  it('Voice Match: a spelling learned at enrolment wakes Jarvis too', async () => {
+    const t = setup({ rules: [] }, ['hello'], { wake: 'name', name: 'Summer' });
+    t.services.settings.set('voice.wake.learned', ['some are']);
+    expect(await t.v.start()).toEqual({ ok: true });
+    t.segment('Hey some are.');
+    await until(() => t.stt.sessions === 1);
+    // A new name forgets spellings learned for the old one.
+    t.services.settings.set('assistant.name', 'April');
+    expect(t.services.settings.get('voice.wake.learned')).toEqual([]);
+    t.v.voice.shutdown();
+  });
+
+  it('Voice Match enrolment records one phrase and stops after a pause', async () => {
+    let reads = 0;
+    const speaking = (n: number): ReturnType<typeof createFakeRecorder> => {
+      const r = createFakeRecorder(n);
+      const quiet = r.read.bind(r);
+      r.read = async () => {
+        const frame = await quiet();
+        // ~0.5 s of speech, then silence
+        return ++reads <= 15 ? frame.map((x) => x * 20) : frame.map(() => 0);
+      };
+      return r;
+    };
+    const t = setup({ rules: [] }, [], { mode: 'ptt', recorder: speaking });
+    expect(await t.v.start()).toEqual({ ok: true });
+    const audio = await t.v.voice.recordSample();
+    expect(audio.length / 16000).toBeGreaterThan(0.4);
+    expect(audio.length / 16000).toBeLessThan(2.5); // ended by the pause, not the 5 s limit
+    await expect(Promise.all([t.v.voice.recordSample(), t.v.voice.recordSample()])).rejects.toThrow(
+      'microphone busy',
+    );
+    t.v.voice.shutdown();
+  });
+
+  it('a custom name always uses the name engine, even if a keyword engine was chosen', async () => {
+    const t = setup({ rules: [] }, ['hello'], { wake: 'openwakeword', name: 'Friday' });
+    expect(await t.v.start()).toEqual({ ok: true });
+    t.wake.trigger(); // the "Hey Jarvis" engine is not running
+    await new Promise((r) => setTimeout(r, 100));
+    expect(t.stt.sessions).toBe(0);
+    t.segment('Friday?');
+    await until(() => t.stt.sessions === 1);
+    t.v.voice.shutdown();
+  });
+
   it('always-listening needs on-device Whisper', async () => {
     const t = setupServices();
     t.services.settings.set('voice.mode', 'ambient');
@@ -247,6 +342,46 @@ describe('dictation (ideas from isair/jarvis)', () => {
     await new Promise((r) => setTimeout(r, 150));
     expect(t.stt.sessions).toBe(1); // not cut off by hearing himself
     t.services.settings.set('voice.bargeIn', true);
+    t.wake.trigger();
+    await until(() => t.stt.sessions === 2);
+    t.v.voice.shutdown();
+  });
+
+  it('a notice (Claude Code, reminder) waits for a lull instead of cutting the reply off', async () => {
+    const t = setup(
+      { rules: [{ match: 'story', steps: [{ text: '<spoken>Once upon a time, sir.</spoken>' }] }] },
+      ['tell me a story'],
+      { followUp: 0 },
+    );
+    await t.v.start();
+    t.wake.trigger();
+    await until(() => t.userTurns().length === 1);
+    await idle(t.services);
+    const audio = t.events.find((e) => e.event === 'tts:audio')?.payload as { utteranceId: string };
+    t.v.voice.onPlayback(audio.utteranceId, 'started');
+    const stops = t.events.filter((e) => e.event === 'tts:stop').length;
+    const audios = t.events.filter((e) => e.event === 'tts:audio').length;
+    t.v.voice.notice('Sir, Claude Code in Jarvis is waiting on you.');
+    await new Promise((r) => setTimeout(r, 150));
+    expect(t.events.filter((e) => e.event === 'tts:stop').length).toBe(stops);
+    expect(t.events.filter((e) => e.event === 'tts:audio').length).toBe(audios);
+    expect(t.services.state.get()).toBe('SPEAKING');
+    t.v.voice.shutdown();
+  });
+
+  it('with an echo-cancelled mic the wake word interrupts Jarvis mid-reply (no headphones needed)', async () => {
+    const t = setup(
+      { rules: [{ match: 'story', steps: [{ text: '<spoken>Once upon a time, sir.</spoken>' }] }] },
+      ['tell me a story', 'stop'],
+      { followUp: 0, echoCancelled: true },
+    );
+    await t.v.start();
+    t.wake.trigger();
+    await until(() => t.userTurns().length === 1);
+    await idle(t.services);
+    const audio = t.events.find((e) => e.event === 'tts:audio')?.payload as { utteranceId: string };
+    t.v.voice.onPlayback(audio.utteranceId, 'started');
+    expect(t.services.settings.get('voice.bargeIn')).toBe(false);
     t.wake.trigger();
     await until(() => t.stt.sessions === 2);
     t.v.voice.shutdown();

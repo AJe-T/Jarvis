@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'none'; object-src 'none'"
+    />
+    <title>Jarvis Camera</title>
+  </head>
+  <body class="camera">
+    <header id="head">
+      <span class="dot" aria-hidden="true"></span>
+      <b>JARVIS CAMERA</b>
+      <span class="spacer"></span>
+      <label class="muted" for="device">Camera</label>
+      <select id="device" aria-label="Camera"></select>
+      <button type="button" id="mirror" aria-pressed="true" title="Mirror the preview">
+        Mirror
+      </button>
+    </header>
+    <main id="stage">
+      <video id="video" autoplay muted playsinline aria-label="Camera preview"></video>
+      <p id="status" role="status" class="muted">Turning the camera on…</p>
+      <div id="flash" aria-hidden="true"></div>
+    </main>
+    <footer id="foot">
+      <button type="button" id="shoot" class="shoot" disabled>Take photo</button>
+      <span id="saved" class="muted" role="status"></span>
+      <button type="button" id="reveal" hidden>Show in folder</button>
+    </footer>
+    <script type="module" src="./src/apps-pages/camera.ts"></script>
+  </body>
+</html>

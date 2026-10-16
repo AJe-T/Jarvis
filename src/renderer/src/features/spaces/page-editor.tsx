@@ -1,26 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import {
-  ArrowLeft,
-  Bold,
-  CheckSquare,
-  Code,
-  ExternalLink,
-  Heading1,
-  Heading2,
-  ImageIcon,
-  Italic,
-  Link2,
-  List,
-  ListOrdered,
-  Minus,
-  Quote,
-  Smile,
-  Sparkles,
-  Table,
-  Trash2,
-} from 'lucide-react';
+import { ArrowLeft, ExternalLink, ImageIcon, Smile, Sparkles, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
-import { Markdown } from '../../components/jarvis/chat-message';
 import { IconButton } from '../../components/ui/button';
 import { confirmAction } from '../../components/ui/confirm-modal';
 import { call, cleanError } from '../../lib/api';
@@ -28,6 +8,7 @@ import { useChatStore } from '../../stores/chat-store';
 import { useSpacesStore, type SpaceInfo } from '../../stores/spaces-store';
 import { useUiStore } from '../../stores/ui-store';
 import { COVERS, coverClass, readMeta, withFrontmatter } from './page-meta';
+import { RichEditor } from './rich-editor';
 import { SPACE_ICONS } from './space-kit';
 
 function stripFrontmatter(md: string): { fm: string; body: string } {
@@ -35,50 +16,20 @@ function stripFrontmatter(md: string): { fm: string; body: string } {
   return m ? { fm: m[0], body: md.slice(m[0].length).replace(/^\n/, '') } : { fm: '', body: md };
 }
 
-const TOOLBAR: Array<{
-  label: string;
-  Icon: typeof Bold;
-  apply: (sel: string) => { text: string; line?: boolean };
-}> = [
-  {
-    label: 'Heading 1',
-    Icon: Heading1,
-    apply: (s) => ({ text: `# ${s || 'Heading'}`, line: true }),
-  },
-  {
-    label: 'Heading 2',
-    Icon: Heading2,
-    apply: (s) => ({ text: `## ${s || 'Heading'}`, line: true }),
-  },
-  { label: 'Bold', Icon: Bold, apply: (s) => ({ text: `**${s || 'bold'}**` }) },
-  { label: 'Italic', Icon: Italic, apply: (s) => ({ text: `*${s || 'italic'}*` }) },
-  { label: 'Bulleted list', Icon: List, apply: (s) => ({ text: `- ${s}`, line: true }) },
-  { label: 'Numbered list', Icon: ListOrdered, apply: (s) => ({ text: `1. ${s}`, line: true }) },
-  { label: 'To-do', Icon: CheckSquare, apply: (s) => ({ text: `- [ ] ${s}`, line: true }) },
-  { label: 'Quote', Icon: Quote, apply: (s) => ({ text: `> ${s}`, line: true }) },
-  { label: 'Code block', Icon: Code, apply: (s) => ({ text: `\`\`\`\n${s}\n\`\`\``, line: true }) },
-  {
-    label: 'Table',
-    Icon: Table,
-    apply: () => ({ text: '| Column | Column |\n|---|---|\n|  |  |', line: true }),
-  },
-  {
-    label: 'Link to another note',
-    Icon: Link2,
-    apply: (s) => ({ text: `[[${s || 'Note name'}]]` }),
-  },
-  { label: 'Divider', Icon: Minus, apply: () => ({ text: '---', line: true }) },
-];
-
 type Picker = 'icon' | 'cover' | null;
 
-/** Notion-style page: cover, icon, big title, a formatting bar, write / preview, saves itself. */
+/**
+ * Notion-style page: cover, icon, big title, and a formatted editor ("/" for blocks, Ctrl+B …) that
+ * saves itself as Markdown. "Markdown" shows the raw text for anyone who prefers typing it.
+ */
 export function PageEditor({ space, page }: { space: SpaceInfo; page: string }): React.JSX.Element {
   const [title, setTitle] = useState(page);
   const [body, setBody] = useState<string | null>(null);
   const [meta, setMeta] = useState<{ icon?: string; cover?: string }>({});
   const [picker, setPicker] = useState<Picker>(null);
-  const [mode, setMode] = useState<'write' | 'preview'>('write');
+  const [mode, setMode] = useState<'edit' | 'markdown'>('edit');
+  /** Bumped when the stored text differs from the editor's (secrets masked on save): reload it. */
+  const [version, setVersion] = useState(0);
   const [status, setStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
   const fm = useRef('');
   const hash = useRef<string | undefined>(undefined);
@@ -106,26 +57,36 @@ export function PageEditor({ space, page }: { space: SpaceInfo; page: string }):
       .catch((err: unknown) => toast({ level: 'error', message: cleanError(err) }));
   }, [where, page, toast]);
 
+  /** Saves run one after another: each must send the hash the previous one got back. */
+  const queue = useRef<Promise<void>>(Promise.resolve());
   const save = useCallback(
-    async (text: string) => {
+    (text: string): Promise<void> => {
       pending.current = null;
       setStatus('saving');
-      try {
-        const r = await call('spaces:write', {
-          space: where,
-          page,
-          markdown: `${fm.current}${text}`,
-          ...(hash.current ? { expectedHash: hash.current } : {}),
-        });
-        hash.current = r.hash;
-        const saved = stripFrontmatter(r.markdown).body;
-        // Secrets are masked when saved (Security.md §9): show what is actually stored.
-        if (saved.trim() !== text.trim()) setBody(saved);
-        setStatus('saved');
-      } catch (err) {
-        setStatus('dirty');
-        toast({ level: 'error', message: cleanError(err) });
-      }
+      const run = async (): Promise<void> => {
+        try {
+          const r = await call('spaces:write', {
+            space: where,
+            page,
+            markdown: `${fm.current}${text}`,
+            ...(hash.current ? { expectedHash: hash.current } : {}),
+          });
+          hash.current = r.hash;
+          const saved = stripFrontmatter(r.markdown).body;
+          // Secrets are masked when saved (Security.md §9): show what is actually stored, unless
+          // Sir kept typing meanwhile (that newer text is saved next and masked then).
+          if (saved.trim() !== text.trim() && pending.current === null) {
+            setBody(saved);
+            setVersion((v) => v + 1);
+          }
+          if (pending.current === null) setStatus('saved');
+        } catch (err) {
+          setStatus('dirty');
+          toast({ level: 'error', message: cleanError(err) });
+        }
+      };
+      queue.current = queue.current.then(run);
+      return queue.current;
     },
     [where, page, toast],
   );
@@ -161,46 +122,17 @@ export function PageEditor({ space, page }: { space: SpaceInfo; page: string }):
     void save(pending.current ?? body);
   }
 
-  function insert(apply: (typeof TOOLBAR)[number]['apply']): void {
-    const el = box.current;
-    if (!el || body === null) return;
-    const { selectionStart: a, selectionEnd: b } = el;
-    const r = apply(body.slice(a, b));
-    const before = body.slice(0, a);
-    const prefix = r.line && before && !before.endsWith('\n') ? '\n' : '';
-    const next = `${before}${prefix}${r.text}${body.slice(b)}`;
-    change(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      const at = a + prefix.length + r.text.length;
-      el.setSelectionRange(at, at);
-    });
-  }
-
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>): void {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
-      clearTimeout(timer.current);
-      if (body !== null) void save(body);
+      saveNow();
     }
-    // Enter on a list line continues the list, like Notion.
-    if (e.key === 'Enter' && !e.shiftKey && body !== null) {
-      const el = e.currentTarget;
-      const lineStart = body.lastIndexOf('\n', el.selectionStart - 1) + 1;
-      const line = body.slice(lineStart, el.selectionStart);
-      const m = /^(\s*)(- \[[ x]\] |- |\* |(\d+)\. )/.exec(line);
-      if (!m) return;
-      e.preventDefault();
-      if (line.trim() === m[2]?.trim()) {
-        change(body.slice(0, lineStart) + body.slice(el.selectionStart));
-        return;
-      }
-      const bullet = m[3] ? `${Number(m[3]) + 1}. ` : (m[2] ?? '').replace('[x]', '[ ]');
-      const ins = `\n${m[1] ?? ''}${bullet}`;
-      const at = el.selectionStart;
-      change(body.slice(0, at) + ins + body.slice(el.selectionEnd));
-      requestAnimationFrame(() => el.setSelectionRange(at + ins.length, at + ins.length));
-    }
+  }
+
+  function saveNow(): void {
+    clearTimeout(timer.current);
+    const text = pending.current ?? body;
+    if (text !== null) void save(text);
   }
 
   async function rename(): Promise<void> {
@@ -242,7 +174,10 @@ export function PageEditor({ space, page }: { space: SpaceInfo; page: string }):
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-1 border-b border-line-subtle px-3">
+      <header
+        data-titlebar
+        className="flex h-12 shrink-0 items-center gap-1 border-b border-line-subtle px-3"
+      >
         <IconButton label={`Back to ${where}`} onClick={() => go('spaces', where)}>
           <ArrowLeft size={16} aria-hidden />
         </IconButton>
@@ -259,34 +194,25 @@ export function PageEditor({ space, page }: { space: SpaceInfo; page: string }):
           </span>
           <span className="max-w-48 truncate font-code text-xs text-ink-100">{page}</span>
         </nav>
-        <div
-          className="flex items-center gap-0.5 overflow-x-auto border-l border-line-subtle pl-1"
-          role="toolbar"
-          aria-label="Formatting"
-        >
-          {TOOLBAR.map((t) => (
-            <IconButton
-              key={t.label}
-              label={t.label}
-              disabled={mode !== 'write'}
-              onClick={() => insert(t.apply)}
-            >
-              <t.Icon size={16} strokeWidth={1.75} aria-hidden />
-            </IconButton>
-          ))}
-        </div>
         <div className="ml-auto flex items-center gap-1">
-          <span className="mr-2 font-code text-[11px] text-ink-500" role="status">
+          <span className="mr-2 font-code text-2xs text-ink-500" role="status">
             {status === 'saving' ? 'Saving…' : status === 'dirty' ? 'Edited' : 'Saved'}
           </span>
           <div className="flex rounded-sm bg-surface-2 p-0.5" role="tablist" aria-label="Mode">
-            {(['write', 'preview'] as const).map((m) => (
+            {(['edit', 'markdown'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 role="tab"
                 aria-selected={mode === m}
-                onClick={() => setMode(m)}
+                title={m === 'edit' ? 'Formatted page' : 'Raw Markdown text'}
+                onClick={() => {
+                  if (m === mode) return;
+                  // Each side starts from the latest text the other side wrote.
+                  if (pending.current !== null) setBody(pending.current);
+                  setVersion((v) => v + 1);
+                  setMode(m);
+                }}
                 className={clsx(
                   'rounded-xs px-2.5 py-1 font-code text-xs capitalize',
                   mode === m ? 'bg-surface-1 text-ink-100 shadow-sm' : 'text-ink-500',
@@ -394,26 +320,30 @@ export function PageEditor({ space, page }: { space: SpaceInfo; page: string }):
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                box.current?.focus();
+                if (mode === 'markdown') box.current?.focus();
+                else document.querySelector<HTMLElement>('.page-doc')?.focus();
               }
             }}
             className="mb-4 w-full bg-transparent font-code text-3xl font-bold text-ink-100 focus:outline-none"
           />
-          {body === null ? null : mode === 'write' ? (
-            <textarea
-              ref={box}
-              aria-label="Page content"
-              value={body}
-              onChange={(e) => change(e.target.value)}
-              onKeyDown={onKey}
-              placeholder="Start writing… Markdown works: # heading, - list, - [ ] to-do, [[link]]"
-              className="min-h-[50vh] w-full resize-none bg-transparent text-base leading-7 text-ink-100 focus:outline-none focus-visible:outline-none"
-              style={{ fieldSizing: 'content' }}
+          {body === null ? null : mode === 'edit' ? (
+            <RichEditor
+              key={`${where}/${page}#${version}`}
+              markdown={body}
+              onChange={change}
+              onSave={saveNow}
             />
           ) : (
-            <div className="min-h-[50vh]">
-              <Markdown text={body || '_Empty page_'} />
-            </div>
+            <textarea
+              ref={box}
+              aria-label="Page content as Markdown"
+              value={pending.current ?? body}
+              onChange={(e) => change(e.target.value)}
+              onKeyDown={onKey}
+              placeholder="Markdown: # heading, - list, - [ ] to-do, [[link]]"
+              className="min-h-[50vh] w-full resize-none bg-transparent font-mono text-sm leading-7 text-ink-100 focus:outline-none focus-visible:outline-none"
+              style={{ fieldSizing: 'content' }}
+            />
           )}
         </div>
       </div>

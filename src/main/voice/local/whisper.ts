@@ -22,16 +22,26 @@ export function cleanTranscript(text: string, seconds: number): string {
   return seconds < 1.5 && HALLUCINATION.test(t) ? '' : t;
 }
 
-/** `dir` is models/<id>, holding the pinned transformers.js layout (config, tokenizer, onnx/*_quantized). */
-export async function loadWhisper(dir: string, multilingual: boolean): Promise<Transcriber> {
+/**
+ * `dir` is models/<id>, holding the pinned transformers.js layout (config, tokenizer, onnx/*_quantized).
+ * Any model the ASR pipeline knows works here: Whisper, Distil-Whisper, Moonshine, Parakeet CTC (ADR-038).
+ */
+export async function loadWhisper(
+  dir: string,
+  multilingual: boolean,
+  threads?: number,
+): Promise<Transcriber> {
   const { env, pipeline } = await import('@huggingface/transformers');
   // Never fetch anything at runtime: only the files Jarvis downloaded and verified.
   env.allowRemoteModels = false;
   env.allowLocalModels = true;
   env.localModelPath = '';
   const asr = await pipeline('automatic-speech-recognition', dir, {
-    dtype: { encoder_model: 'q8', decoder_model_merged: 'q8' },
+    // int8 for every part: Whisper/Moonshine's encoder + merged decoder, Parakeet's single model.
+    dtype: 'q8',
     device: 'cpu',
+    // onnxruntime's default takes every core, starving the rest of the PC (ADR-029).
+    ...(threads ? { session_options: { intraOpNumThreads: threads } } : {}),
   });
   return {
     async transcribe(audio, language) {

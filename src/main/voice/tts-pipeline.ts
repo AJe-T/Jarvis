@@ -7,14 +7,38 @@ import type { TtsProvider } from './types';
 
 export interface TtsDeps {
   primary: () => TtsProvider;
-  fallback: TtsProvider;
+  /** Tried in order when the primary voice fails (e.g. Kokoro/ElevenLabs → Edge → Windows). */
+  fallbacks: () => TtsProvider[];
   voice: () => string;
   rate: () => string;
   emitAudio(p: EventPayload<'tts:audio'>): void;
   emitStop(utteranceId?: string): void;
-  onFallback(): void;
+  onFallback(err: unknown): void;
   logger: Logger;
   onFirstAudio?(utteranceId: string): void;
+}
+
+interface CachedChunk {
+  mime: 'audio/mpeg' | 'audio/wav';
+  data: Uint8Array;
+}
+
+/** Stock lines ("Yes, sir?") as audio, so they play the moment Jarvis is woken. */
+const speechCache = new Map<string, CachedChunk[]>();
+const SPEECH_CACHE_MAX = 32;
+
+function rememberSpeech(key: string, chunks: CachedChunk[]): void {
+  if (chunks.length === 0) return;
+  if (speechCache.size >= SPEECH_CACHE_MAX) {
+    const oldest = speechCache.keys().next().value;
+    if (oldest !== undefined) speechCache.delete(oldest);
+  }
+  speechCache.set(key, chunks);
+}
+
+/** A voice setting changed (Kokoro voice, ElevenLabs voice…): the kept lines would sound wrong. */
+export function clearSpeechCache(): void {
+  speechCache.clear();
 }
 
 /**
@@ -33,12 +57,15 @@ export class Utterance {
   private firstAudio = false;
   private markerSent = false;
 
+  private readonly cache: boolean;
+
   constructor(
     private readonly deps: TtsDeps,
-    opts: { id?: string; extractSpoken: boolean },
+    opts: { id?: string; extractSpoken: boolean; cache?: boolean },
   ) {
     this.id = opts.id ?? newId('u_');
     this.extractor = opts.extractSpoken ? new SpokenExtractor() : null;
+    this.cache = opts.cache ?? false;
   }
 
   get aborted(): boolean {
@@ -106,21 +133,33 @@ export class Utterance {
       rate: this.deps.rate(),
       signal: this.controller.signal,
     };
-    try {
-      for await (const chunk of this.deps.primary().synthesize(text, opts))
-        this.send(chunk.mime, chunk.data);
-    } catch (err) {
+    const chain = [...new Set([this.deps.primary(), ...this.deps.fallbacks()])];
+    const key = `${chain[0]?.id ?? ''}|${opts.voice}|${opts.rate}|${text}`;
+    const hit = this.cache ? speechCache.get(key) : undefined;
+    if (hit) {
+      for (const c of hit) this.send(c.mime, c.data);
+      return;
+    }
+    for (const [i, provider] of chain.entries()) {
       if (this.aborted) return;
-      this.deps.logger.warn(
-        { err: errorMessage(err), provider: this.deps.primary().id },
-        'TTS failed; using Windows voice',
-      );
-      this.deps.onFallback();
+      const before = this.seq;
+      const chunks: CachedChunk[] = [];
       try {
-        for await (const chunk of this.deps.fallback.synthesize(text, opts))
+        for await (const chunk of provider.synthesize(text, opts)) {
           this.send(chunk.mime, chunk.data);
-      } catch (err2) {
-        this.deps.logger.warn({ err: errorMessage(err2) }, 'fallback TTS failed');
+          chunks.push({ mime: chunk.mime, data: chunk.data });
+        }
+        // Only the chosen voice is kept: a backup voice may be gone once the first one recovers.
+        if (this.cache && i === 0 && !this.aborted) rememberSpeech(key, chunks);
+        return;
+      } catch (err) {
+        // Part of the sentence already played: a backup voice would repeat its start.
+        if (this.aborted || this.seq !== before) return;
+        this.deps.logger.warn(
+          { err: errorMessage(err), provider: provider.id },
+          i === chain.length - 1 ? 'last fallback TTS failed' : 'TTS failed; trying the next voice',
+        );
+        if (i === 0) this.deps.onFallback(err);
       }
     }
   }

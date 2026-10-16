@@ -14,7 +14,8 @@ test('Spaces: create a space and a page; it saves by itself and shows in the Bra
   await page.getByRole('button', { name: 'New page' }).first().click();
   await page.getByRole('menuitem', { name: /Expense log/ }).click();
   const content = page.getByLabel('Page content');
-  await expect(content).toHaveValue(/\| Date \| Item \|/);
+  // 2.8: a formatted editor (the template's table shows as a table, not Markdown text).
+  await expect(content.locator('table')).toContainText('Date');
   await content.click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('\nRent 25000');

@@ -217,7 +217,21 @@ export interface LocalLlmConfig {
   baseUrl(): string;
   model(): string;
   catalog(): ToolCatalogEntry[];
+  /** Optional Bearer key, for servers that want one (e.g. FreeLLMAPI's unified key). */
+  apiKey?(): string | undefined;
   fetch?: typeof fetch;
+  /**
+   * A cloud provider instead of a server on this PC: its fixed address is allowed, every tool is
+   * offered (big models cope), and calls are billed. Name and settings hint for messages.
+   */
+  cloud?: { name(): string; allowedBaseUrls: readonly string[] };
+}
+
+/** Only the catalogue's fixed HTTPS addresses (shared/llm-providers.ts), never one typed in. */
+export function checkCloudUrl(raw: string, allowed: readonly string[]): URL {
+  if (!allowed.includes(raw) || !raw.startsWith('https://'))
+    throw new JarvisError('INVALID', 'unknown cloud url', 'That AI provider is not supported.');
+  return new URL(raw);
 }
 
 /** Only loopback or private-network servers: the whole conversation goes to this endpoint. */
@@ -255,20 +269,43 @@ export function createLocalClient(
   cfg: LocalLlmConfig,
 ): LlmClient & { listModels(): Promise<string[]> } {
   const f = cfg.fetch ?? fetch;
+  const cloud = cfg.cloud;
+  const auth = (): Record<string, string> => {
+    const key = cfg.apiKey?.();
+    return key ? { authorization: `Bearer ${key}` } : {};
+  };
+  const where = (): string => (cloud ? cloud.name() : 'the local model');
+  const settingsHint = cloud
+    ? 'Choose a model for the AI provider in Settings → Brain.'
+    : 'Choose a local model in Settings → Models & AI.';
   const unreachable = (detail: string): JarvisError =>
     new JarvisError(
       'LLM_NETWORK',
       detail,
-      `Couldn't reach the local model at ${cfg.baseUrl()}. Is Ollama or LM Studio running?`,
+      cloud
+        ? `Couldn't reach ${cloud.name()}. Check the internet connection and the API key in Settings → Brain.`
+        : `Couldn't reach the local model at ${cfg.baseUrl()}. Is Ollama or LM Studio running?`,
     );
+  const checkUrl = (raw: string): URL =>
+    cloud ? checkCloudUrl(raw, cloud.allowedBaseUrls) : checkLocalUrl(raw);
+  const needKey = (): void => {
+    if (cloud && !cfg.apiKey?.())
+      throw new JarvisError(
+        'INVALID',
+        'no cloud key',
+        `Add your ${cloud.name()} API key in Settings → Brain.`,
+      );
+  };
 
   async function listModels(): Promise<string[]> {
-    const base = checkLocalUrl(cfg.baseUrl()).toString();
-    const res = await f(join(base, '/models'), { signal: AbortSignal.timeout(8000) }).catch(
-      (e: unknown) => {
-        throw unreachable(String(e));
-      },
-    );
+    needKey();
+    const base = checkUrl(cfg.baseUrl()).toString();
+    const res = await f(join(base, '/models'), {
+      headers: auth(),
+      signal: AbortSignal.timeout(8000),
+    }).catch((e: unknown) => {
+      throw unreachable(String(e));
+    });
     if (!res.ok) throw unreachable(`HTTP ${res.status}`);
     const body = (await res.json()) as { data?: Array<{ id: string }> };
     return (body.data ?? []).map((m) => m.id);
@@ -278,18 +315,14 @@ export function createLocalClient(
     listModels,
     async ping() {
       const model = cfg.model();
-      if (!model)
-        throw new JarvisError(
-          'INVALID',
-          'no local model',
-          'Choose a local model in Settings → Models & budget.',
-        );
+      if (!model) throw new JarvisError('INVALID', 'no model', settingsHint);
       const models = await listModels();
-      if (!models.includes(model))
+      // Some providers list ids as "models/<id>" but take the bare id.
+      if (!models.some((m) => m === model || m === `models/${model}`))
         throw new JarvisError(
           'INVALID',
           'model missing',
-          `The local server doesn't have "${model}". Available: ${models.join(', ') || 'none'}.`,
+          `${where()} doesn't have "${model}". Available: ${models.slice(0, 20).join(', ') || 'none'}.`,
         );
     },
 
@@ -298,17 +331,15 @@ export function createLocalClient(
         throw new JarvisError(
           'LLM_BAD_REQUEST',
           'computer toolset on local model',
-          'Computer control needs an Anthropic API key. Switch the connection in Settings → Models & budget.',
+          'Computer control needs an Anthropic API key. Switch the connection in Settings → Models & AI.',
         );
       const model = cfg.model();
-      if (!model)
-        throw new JarvisError(
-          'INVALID',
-          'no local model',
-          'Choose a local model in Settings → Models & budget.',
-        );
-      const base = checkLocalUrl(cfg.baseUrl()).toString();
-      const tools = selectTools(toOpenAiTools(req.tools, cfg.catalog), req.messages);
+      if (!model) throw new JarvisError('INVALID', 'no model', settingsHint);
+      needKey();
+      const base = checkUrl(cfg.baseUrl()).toString();
+      const all = toOpenAiTools(req.tools, cfg.catalog);
+      // Small local models drift with ~70 tools; cloud models get them all.
+      const tools = cloud ? all : selectTools(all, req.messages);
       const body = {
         model,
         stream: true,
@@ -319,7 +350,7 @@ export function createLocalClient(
       };
       const res = await f(join(base, '/chat/completions'), {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...auth() },
         body: JSON.stringify(body),
         signal: AbortSignal.any([opts.signal, AbortSignal.timeout(300_000)]),
       }).catch((e: unknown) => {
@@ -329,9 +360,13 @@ export function createLocalClient(
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => '');
         throw new JarvisError(
-          'LLM_BAD_REQUEST',
-          `local ${res.status}: ${text}`,
-          `The local model refused the request (${res.status}): ${text.slice(0, 200)}`,
+          res.status === 429
+            ? 'LLM_OVERLOADED'
+            : res.status === 401
+              ? 'LLM_AUTH'
+              : 'LLM_BAD_REQUEST',
+          `${cloud ? 'cloud' : 'local'} ${res.status}: ${text}`,
+          `${where()} refused the request (${res.status}): ${text.slice(0, 200)}`,
         );
       }
 
@@ -406,7 +441,8 @@ export function createLocalClient(
         };
       });
       return {
-        id: `local_${Date.now()}`,
+        // The usage ledger reads "local_" as free; a cloud call is billed.
+        id: `${cloud ? 'cloud' : 'local'}_${Date.now()}`,
         type: 'message',
         role: 'assistant',
         model,

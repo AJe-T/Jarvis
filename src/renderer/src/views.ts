@@ -1,5 +1,7 @@
 import type { ComponentType } from 'react';
 import { ConfirmDialog } from './components/jarvis/confirm-dialog';
+import { AppsView } from './features/apps/apps-view';
+import { NpcsView } from './features/npcs/npcs-view';
 import { ConnectionsView } from './features/connections/connections-view';
 import { CopilotView } from './features/copilot/copilot-view';
 import { MemoryView } from './features/memory/memory-view';
@@ -16,6 +18,7 @@ import { useMcpStore } from './stores/mcp-store';
 import { useStageStore } from './stores/stage-store';
 import { useMemoryStore } from './stores/memory-store';
 import { usePlannerStore } from './stores/planner-store';
+import { useNpcStore } from './stores/npc-store';
 import type { View } from './stores/ui-store';
 
 /** Views and always-mounted overlays added by features beyond chat + settings. */
@@ -30,6 +33,8 @@ export const EXTRA_VIEWS: Partial<Record<View, ComponentType>> = {
   passwords: PasswordsView,
   automations: AutomationsView,
   skills: SkillsView,
+  apps: AppsView,
+  npcs: NpcsView,
 };
 export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog];
 
@@ -39,6 +44,9 @@ registerBridge((on) => [
   on('memory:changed', () => useMemoryStore.getState().bump()),
   on('stage:panel', (p) => useStageStore.getState().show(p.panel)),
   on('planner:changed', () => void usePlannerStore.getState().refresh()),
+  on('npc:message', (p) => useNpcStore.getState().onMessage(p.message)),
+  on('npc:status', (p) => useNpcStore.getState().onStatus(p.npcId, p.state)),
+  on('npc:meeting', (p) => useNpcStore.getState().onMeeting(p.meeting)),
   on('mcp:status', (p) =>
     useMcpStore
       .getState()

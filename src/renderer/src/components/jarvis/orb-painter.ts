@@ -3,6 +3,8 @@ import { DEFAULT_ORB_STYLE, type OrbStyleId } from '@shared/orb-styles';
 import {
   HUD_MIN_PX,
   TAU,
+  moodFor,
+  moodGain,
   readPalette,
   segmentColour,
   toneFor,
@@ -46,9 +48,10 @@ export function createOrbPainter(
     const asleep = f.state === 'SLEEP';
     const level = demo ? 0.05 + 0.08 * Math.abs(Math.sin(t * 2.3) * Math.sin(t * 0.7)) : f.level;
     const breathe = still || asleep ? 0 : 0.06 + 0.04 * Math.sin(t * 1.3);
-    const target = still || asleep ? 0 : Math.max(breathe, Math.min(1, level * 4));
+    const gain = moodGain(f);
+    const target = still || asleep ? 0 : Math.max(breathe, Math.min(1, level * 4 * gain));
     energy += (target - energy) * (target > energy ? 0.45 : 0.08);
-    if (!still) spin += dt * spinRate(f.state, energy);
+    if (!still) spin += dt * spinRate(f.state, energy) * gain;
 
     const env: Env = {
       ctx,
@@ -60,7 +63,7 @@ export function createOrbPainter(
       spin,
       still,
       p: palette,
-      c: toneFor(f.state, palette),
+      c: toneFor(f.state, palette, moodFor(f)),
       alt: f.state === 'ERROR' ? palette.alarm : palette.alt,
       f,
       hud: size >= HUD_MIN_PX,

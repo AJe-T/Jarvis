@@ -227,8 +227,8 @@ Window close → minimise to tray (default) or quit (setting). Quit: stop record
 | **Always listening** | Mic → VAD → Whisper (on-device) → 2-min buffer → phrase contains "Jarvis" (or is inside the follow-up window) → intent judge → directed? → voice turn with the rewritten request |
 | **Barge-in / false wake while thinking** | Wake → listening; the running reply keeps going; only real words replace it (cancel + new turn) |
 | **Dictation** | `Ctrl+Alt+D` → listening (chime) → pause 1.5 s or hotkey → clean text → paste at cursor (clipboard restored) → history |
-| **Connection: subscription** | Settings → Models & budget → My Claude subscription → status card → Sign in with Claude (Claude Code's own window) → status polls until signed in |
-| **Connection: local model** | Settings → Models & budget → Local model → server address → Refresh models → pick → Test |
+| **Connection: subscription** | Settings → Models & AI → My Claude subscription → status card → Sign in with Claude (Claude Code's own window) → status polls until signed in |
+| **Connection: local model** | Settings → Models & AI → Local model → server address → Refresh models → pick → Test |
 | **Voice models** | Settings → Voice → choose on-device engine → Download (size shown) → progress / Cancel → verified → engine loads |
 | **Skill install** | Settings → Skills → GitHub link or folder → validated → preview SKILL.md → on/off/remove |
 | **Automation** | Settings → Automations → New / Edit (name, kind, prompt, time & days or interval, speak, save) → runs on schedule → notification (+ speech, + Obsidian, + Telegram) |

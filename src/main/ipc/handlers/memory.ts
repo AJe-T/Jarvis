@@ -1,9 +1,10 @@
-import { app, shell } from 'electron';
+import { BrowserWindow, app, dialog, shell } from 'electron';
 import { JarvisError } from '../../errors';
 import type { MemorySystem } from '../../memory/memory-system';
 import { normalizeRel } from '../../memory/vault-service';
 import { stringifyNote } from '../../memory/frontmatter';
 import { buildGraph } from '../../memory/graph';
+import { importChats, parseExport, readExport } from '../../memory/chat-import';
 import { nowIso } from '../../lib/util';
 import type { Services } from '../../services';
 import { handle } from '../handle';
@@ -86,6 +87,25 @@ export function registerMemoryHandlers(s: Services, m: MemorySystem): void {
     m.repos.review.resolve(req.id, req.decision);
     s.audit.append('user', 'memory.review', { id: req.id, decision: req.decision });
     return { ok: true };
+  });
+  // ChatGPT / Claude.ai history (idea from LibreChat): Sir picks the export; each chat becomes a note.
+  handle('memory:importChats', async (_req, event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const opts = {
+      title: 'Import ChatGPT or Claude history',
+      properties: ['openFile'] as Array<'openFile'>,
+      filters: [{ name: 'ChatGPT or Claude export', extensions: ['zip', 'json'] }],
+    };
+    const pick = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    const file = pick.canceled ? undefined : pick.filePaths[0];
+    if (!file)
+      return { cancelled: true, source: null, imported: 0, skipped: 0, failed: 0, total: 0 };
+    const chats = parseExport(await readExport(file));
+    s.emit('notify', { level: 'info', message: `Importing ${chats.length} chats into memory…` });
+    const r = await importChats(chats, m.vault);
+    s.audit.append('user', 'memory.importChats', { ...r, total: chats.length });
+    s.emit('memory:changed', { vaultPaths: ['Memory/Imports'] });
+    return { cancelled: false, ...r, total: chats.length };
   });
   handle('memory:rebuildIndex', async () => ({ files: (await m.indexer?.rebuild()) ?? 0 }));
   handle('routines:list', () =>

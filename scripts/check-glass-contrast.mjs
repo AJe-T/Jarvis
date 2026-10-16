@@ -15,21 +15,21 @@ const THEMES = {
     surfaces: {
       app: 'E6EBF1',
       main: 'F2F5F8',
-      'surface-1': 'FBFCFD',
+      'surface-1': 'FFFFFF',
       'surface-2': 'E9EEF3',
       selected: 'D6E6EE',
     },
     hover: ['00788C', 0.07],
     text: {
       'ink-100': '071019',
-      'ink-300': '33475A',
-      'ink-500': '4A5D70',
+      'ink-300': '2A3D4F',
+      'ink-500': '3F5266',
       'accent-300': '006470',
       'alarm-500': 'B0002A',
       'lamp-400': '665000',
       'ok-400': '0B6334',
     },
-    icons: { 'icon-rest': '4A5D70', 'accent-500': '00808F' },
+    icons: { 'icon-rest': '3F5266', 'accent-500': '00808F' },
     fills: {
       'on-accent': ['001318', '00D2E6'],
       'on-accent pressed': ['001318', '00B8CC'],
@@ -38,28 +38,28 @@ const THEMES = {
       'tag accent': ['005561', 'C9F4F9'],
       'tag lamp': ['5C4500', 'FBF3B0'],
       'tag alarm': ['99001F', 'F9D3DB'],
-      'tag neutral': ['33475A', 'E1E8EE'],
+      'tag neutral': ['2A3D4F', 'E1E8EE'],
     },
   },
   dark: {
     surfaces: {
       app: '05070B',
       main: '070A10',
-      'surface-1': '0C1119',
-      'surface-2': '111824',
-      selected: '0F2230',
+      'surface-1': '0F1520',
+      'surface-2': '151D2B',
+      selected: '12293A',
     },
     hover: ['00F0FF', 0.07],
     text: {
-      'ink-100': 'E4F7FF',
-      'ink-300': '9DB4C7',
-      'ink-500': '7D93A8',
+      'ink-100': 'F0FBFF',
+      'ink-300': 'BCCFDE',
+      'ink-500': '9CB1C4',
       'accent-300': '4FE6FF',
       'alarm-500': 'FF4D6D',
       'lamp-400': 'FCEE0A',
       'ok-400': '39FF9F',
     },
-    icons: { 'icon-rest': '7D93A8', 'accent-500': '00E5FF' },
+    icons: { 'icon-rest': '9CB1C4', 'accent-500': '00E5FF' },
     fills: {
       'on-accent': ['001318', '00E5FF'],
       'on-accent pressed': ['001318', '6AF4FF'],
@@ -68,10 +68,55 @@ const THEMES = {
       'tag accent': ['7FF1FF', '00313A'],
       'tag lamp': ['FFF27A', '2E2B05'],
       'tag alarm': ['FF8FA3', '3A0D18'],
-      'tag neutral': ['9DB4C7', '121C28'],
+      'tag neutral': ['BCCFDE', '162231'],
     },
   },
 };
+
+// Soft style (Design-system.md §3.7): its own neutrals and ink, the same accent and status colours.
+THEMES['soft light'] = {
+  ...THEMES.light,
+  surfaces: {
+    app: 'ECEEF2',
+    main: 'F5F6F8',
+    'surface-1': 'FFFFFF',
+    'surface-2': 'EFF1F4',
+    selected: 'E0E9F0',
+  },
+  text: { ...THEMES.light.text, 'ink-100': '14171C', 'ink-300': '2F3640', 'ink-500': '4A525E' },
+  icons: { ...THEMES.light.icons, 'icon-rest': '4A525E' },
+  fills: { ...THEMES.light.fills, 'tag neutral': ['2F3640', 'E6E9ED'] },
+};
+THEMES['soft dark'] = {
+  ...THEMES.dark,
+  surfaces: {
+    app: '0D0F12',
+    main: '121418',
+    'surface-1': '1C1F25',
+    'surface-2': '252930',
+    selected: '1F2E38',
+  },
+  text: {
+    ...THEMES.dark.text,
+    'ink-100': 'F5F6F8',
+    'ink-300': 'D0D5DC',
+    'ink-500': 'ADB4BE',
+    'alarm-500': 'FF6F87',
+  },
+  icons: { ...THEMES.dark.icons, 'icon-rest': 'ADB4BE' },
+  fills: { ...THEMES.dark.fills, 'tag neutral': ['D0D5DC', '262A31'] },
+};
+
+// Pitch black (OLED): same ink and borders on true black, both styles (tokens.css data-oled).
+for (const base of ['dark', 'soft dark'])
+  THEMES[`${base} (pitch black)`] = {
+    ...THEMES[base],
+    surfaces: { app: '000000', main: '000000', 'surface-1': '0C0C0E', 'surface-2': '17171A', selected: '0F2A33' },
+    hover: ['FFFFFF', 0.07],
+    text: { ...THEMES[base].text, 'ink-100': 'FFFFFF', 'ink-300': 'DEDEE3', 'ink-500': 'B6B6BE' },
+    icons: { ...THEMES[base].icons, 'icon-rest': 'B6B6BE' },
+    fills: { ...THEMES[base].fills, 'tag neutral': ['DEDEE3', '1C1C20'] },
+  };
 
 let fails = 0;
 const check = (label, fg, bg, min) => {

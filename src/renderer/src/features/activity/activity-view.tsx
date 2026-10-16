@@ -35,7 +35,7 @@ export function ActivityView(): React.JSX.Element {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <PageHeader title="Activity">
+      <PageHeader title="Activity" help="settings.activity">
         <Button variant="ghost" onClick={() => void load()}>
           <RefreshCw size={14} aria-hidden /> Refresh
         </Button>

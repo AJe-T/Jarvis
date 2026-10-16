@@ -1,18 +1,7 @@
-import {
-  TAU,
-  additive,
-  glow,
-  lerp,
-  project,
-  rgba,
-  segmentColour,
-  type Env,
-  type OrbStyle,
-  type Vec,
-} from '../orb-kit';
-import { halo, markers, ticks } from './parts';
+import { TAU, additive, glow, lerp, rgba, segmentColour, type OrbStyle } from '../orb-kit';
+import { halo } from './parts';
 
-/** Instrument-like styles: meters, scopes, sonar, globes and rings. */
+/** Instrument-like styles: meters, scopes and rings. */
 
 /** Radial equalizer: bars around a ring, mirrored inward, coloured from accent to the second neon. */
 export function equalizer(size: number): OrbStyle {
@@ -46,51 +35,6 @@ export function equalizer(size: number): OrbStyle {
       ctx.arc(R, R, r0 * 0.7, 0, TAU);
       ctx.stroke();
       glow(ctx, R, R, r0 * 0.6, c, 0.35 + e * 0.4);
-    },
-  };
-}
-
-/** Sonar pulse: rings ripple out (faster when loud), a radar arm sweeps and blips fade. */
-export function sonar(): OrbStyle {
-  const pulses: number[] = [];
-  let lastPulse = 0;
-  return {
-    draw(env) {
-      const { ctx, R, e, t, dt, c, alt, spin, still } = env;
-      halo(env, 0.6);
-      if (!still && t - lastPulse > 1.4 / (1 + e * 4)) {
-        pulses.push(0);
-        lastPulse = t;
-      }
-      ctx.lineWidth = Math.max(1, R * 0.012);
-      for (let i = pulses.length - 1; i >= 0; i--) {
-        const age = (pulses[i] ?? 0) + dt * (0.45 + e);
-        pulses[i] = age;
-        if (age >= 1) {
-          pulses.splice(i, 1);
-          continue;
-        }
-        ctx.strokeStyle = rgba(c, (1 - age) * 0.8);
-        ctx.beginPath();
-        ctx.arc(R, R, R * (0.12 + age * 0.85), 0, TAU);
-        ctx.stroke();
-      }
-      const a = spin * 1.5;
-      const g = ctx.createConicGradient(a - 0.9, R, R);
-      g.addColorStop(0, rgba(alt, 0));
-      g.addColorStop(0.143, rgba(alt, 0.4));
-      g.addColorStop(0.1431, rgba(alt, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(R, R, R * 0.92, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = rgba(c, 0.25);
-      for (const k of [0.35, 0.65, 0.92]) {
-        ctx.beginPath();
-        ctx.arc(R, R, R * k, 0, TAU);
-        ctx.stroke();
-      }
-      glow(ctx, R, R, R * 0.12 * (1 + e), c, 0.95);
     },
   };
 }
@@ -132,142 +76,6 @@ export function scope(): OrbStyle {
         ctx.stroke();
       }
       ctx.restore();
-    },
-  };
-}
-
-/** Holo globe: a turning wireframe planet of latitude and longitude lines. */
-export function globe(size: number): OrbStyle {
-  const seg = size >= 150 ? 64 : 32;
-  const lines: Vec[][] = [];
-  for (let lat = -60; lat <= 60; lat += 30) {
-    const y = Math.sin((lat * Math.PI) / 180);
-    const r = Math.cos((lat * Math.PI) / 180);
-    lines.push(
-      Array.from(
-        { length: seg + 1 },
-        (_, i) => [Math.cos((i / seg) * TAU) * r, y, Math.sin((i / seg) * TAU) * r] as Vec,
-      ),
-    );
-  }
-  for (let k = 0; k < 12; k++) {
-    const lon = (k / 12) * Math.PI;
-    lines.push(
-      Array.from({ length: seg + 1 }, (_, i) => {
-        const a = (i / seg) * TAU;
-        return [Math.cos(a) * Math.cos(lon), Math.sin(a), Math.cos(a) * Math.sin(lon)] as Vec;
-      }),
-    );
-  }
-  return {
-    draw(env) {
-      const { ctx, R, e, t, c, alt, spin, hud } = env;
-      halo(env, 0.7);
-      const r = R * 0.6 * (1 + e * 0.1);
-      const pitch = 0.4 + Math.sin(t * 0.2) * 0.1;
-      ctx.lineWidth = Math.max(0.8, R * 0.008);
-      for (const line of lines) {
-        for (let i = 1; i < line.length; i++) {
-          const a = project(line[i - 1] ?? [0, 0, 0], spin, pitch);
-          const b = project(line[i] ?? [0, 0, 0], spin, pitch);
-          const depth = (a[2] + 1) / 2;
-          ctx.strokeStyle = rgba(lerp(alt, c, depth), 0.12 + depth * 0.75 * (0.7 + e * 0.5));
-          ctx.beginPath();
-          ctx.moveTo(R + a[0] * r, R + a[1] * r);
-          ctx.lineTo(R + b[0] * r, R + b[1] * r);
-          ctx.stroke();
-        }
-      }
-      glow(ctx, R, R, r * 0.5, c, 0.25 + e * 0.35);
-      if (hud) {
-        ticks(env, 0.95, 0.15);
-        markers(env, 0.92);
-      }
-    },
-  };
-}
-
-/** A circle in 3D (unit radius) as points, for ring styles. */
-function ring3d(n: number): Vec[] {
-  return Array.from(
-    { length: n + 1 },
-    (_, i) => [Math.cos((i / n) * TAU), Math.sin((i / n) * TAU), 0] as Vec,
-  );
-}
-
-function strokeRing(
-  env: Env,
-  pts: Vec[],
-  r: number,
-  yaw: number,
-  pitch: number,
-  colour: readonly [number, number, number],
-  width: number,
-): void {
-  const { ctx, R, e } = env;
-  ctx.lineWidth = width;
-  for (let i = 1; i < pts.length; i++) {
-    const a = project(pts[i - 1] ?? [0, 0, 0], yaw, pitch);
-    const b = project(pts[i] ?? [0, 0, 0], yaw, pitch);
-    ctx.strokeStyle = rgba(colour, 0.2 + ((a[2] + 1) / 2) * (0.6 + e * 0.3));
-    ctx.beginPath();
-    ctx.moveTo(R + a[0] * r, R + a[1] * r);
-    ctx.lineTo(R + b[0] * r, R + b[1] * r);
-    ctx.stroke();
-  }
-}
-
-/** Gyroscope: three rings spinning on their own axes around a glowing core. */
-export function gyroscope(size: number): OrbStyle {
-  const pts = ring3d(size >= 150 ? 96 : 48);
-  return {
-    draw(env) {
-      const { ctx, R, e, spin, c, alt, p } = env;
-      halo(env, 0.7);
-      const w = Math.max(1.2, R * (0.018 + e * 0.02));
-      strokeRing(env, pts, R * 0.82, spin * 0.9, 1.2, c, w);
-      strokeRing(env, pts, R * 0.7, spin * -1.3 + 1, 0.4 + spin * 0.3, alt, w);
-      strokeRing(env, pts, R * 0.58, 1.57 + spin * 0.6, spin * 1.1, p.mark, w * 0.8);
-      glow(ctx, R, R, R * 0.35 * (1 + e * 0.5), c, 0.8);
-      glow(ctx, R, R, R * 0.1, p.hi, 1);
-    },
-  };
-}
-
-/** Atom: a nucleus with electrons racing round three orbits (faster when loud). */
-export function atom(size: number): OrbStyle {
-  const pts = ring3d(size >= 150 ? 96 : 48);
-  let phase = 0;
-  return {
-    draw(env) {
-      const { ctx, R, e, dt, c, alt, p, still } = env;
-      halo(env, 0.6);
-      if (!still) phase += dt * (1.2 + e * 5);
-      const tilts = [0, Math.PI / 3, (2 * Math.PI) / 3];
-      tilts.forEach((tilt, k) => {
-        ctx.save();
-        ctx.translate(R, R);
-        ctx.rotate(tilt);
-        ctx.translate(-R, -R);
-        strokeRing(env, pts, R * 0.8, 0, 1.25, k === 1 ? alt : c, Math.max(1, R * 0.01));
-        const a = phase * (1 + k * 0.2) + k * 2;
-        const [x, y] = [R + Math.cos(a) * R * 0.8, R + Math.sin(a) * R * 0.8 * Math.cos(1.25)];
-        glow(ctx, x, y, R * 0.09, p.hi, 0.95);
-        glow(ctx, x, y, R * 0.16, c, 0.6);
-        ctx.restore();
-      });
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * TAU + phase * 0.3;
-        glow(
-          ctx,
-          R + Math.cos(a) * R * 0.07,
-          R + Math.sin(a) * R * 0.07,
-          R * 0.1,
-          i % 2 ? alt : c,
-          0.8,
-        );
-      }
-      glow(ctx, R, R, R * 0.06 * (1 + e), p.hi, 1);
     },
   };
 }

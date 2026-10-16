@@ -25,10 +25,19 @@ export interface OsAdapter {
   captureScreen(opts: { maxWidth: number }): Promise<Uint8Array>;
   /** Puts text into the focused app via the clipboard + Ctrl+V, then restores the clipboard. */
   pasteText(text: string): Promise<void>;
-  /** Title and process name of the window in front (for dictation and the reply copilot). */
-  foregroundWindow(): Promise<{ title: string; process: string }>;
+  /** The window in front (for dictation and the reply copilot); hwnd 0 when unknown. */
+  foregroundWindow(): Promise<ForegroundWindow>;
   /** Brings the window with this exact title to the front; false if it isn't open. */
   focusWindow(title: string): Promise<boolean>;
+  /** Brings this exact window (by handle) to the front; false if it has closed. */
+  focusHandle(hwnd: number): Promise<boolean>;
+}
+
+export interface ForegroundWindow {
+  title: string;
+  process: string;
+  hwnd: number;
+  pid: number;
 }
 
 export interface ElectronBits {
@@ -57,7 +66,14 @@ const PASTE_SCRIPT = `${USER32}
 const FOREGROUND_SCRIPT = `${USER32}
 $h = [J.U]::GetForegroundWindow(); $sb = New-Object System.Text.StringBuilder 512; [void][J.U]::GetWindowText($h, $sb, 512)
 $procId = 0; [void][J.U]::GetWindowThreadProcessId($h, [ref]$procId); $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
-@{ title = $sb.ToString(); process = $(if ($p) { $p.ProcessName } else { '' }) } | ConvertTo-Json -Compress`;
+@{ title = $sb.ToString(); process = $(if ($p) { $p.ProcessName } else { '' }); hwnd = $h.ToInt64(); pid = [int]$procId } | ConvertTo-Json -Compress`;
+/** Restores and focuses one window by handle. Allowed because Jarvis (in front) starts this process. */
+const FOCUS_HANDLE_SCRIPT = `Add-Type -Name F -Namespace J -MemberDefinition '[DllImport("user32.dll")] public static extern bool IsWindow(System.IntPtr h); [DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr h); [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int c); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);'
+$h = [System.IntPtr][long]$P.hwnd
+if (-not [J.F]::IsWindow($h)) { "0"; exit }
+if ([J.F]::IsIconic($h)) { [void][J.F]::ShowWindow($h, 9) }
+$ok = [J.F]::SetForegroundWindow($h); Start-Sleep -Milliseconds 250
+if ($ok) { "1" } else { "0" }`;
 
 export function createWindowsOs(e: ElectronBits): OsAdapter {
   return {
@@ -99,9 +115,11 @@ export function createWindowsOs(e: ElectronBits): OsAdapter {
       return r.exitCode === 0 && r.stdout.trim() === '1';
     },
     async foregroundWindow() {
-      return runPowerShellJson<{ title: string; process: string }>(FOREGROUND_SCRIPT, {
-        timeoutMs: 10_000,
-      });
+      return runPowerShellJson<ForegroundWindow>(FOREGROUND_SCRIPT, { timeoutMs: 10_000 });
+    },
+    async focusHandle(hwnd) {
+      const r = await runPowerShell(FOCUS_HANDLE_SCRIPT, { params: { hwnd }, timeoutMs: 10_000 });
+      return r.exitCode === 0 && r.stdout.trim() === '1';
     },
     async mediaKey(key) {
       const script = `Add-Type -Name K -Namespace J -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);'
@@ -125,7 +143,7 @@ export function createFakeOs(
   responses: Partial<{
     psJson: (script: string, opts?: PsOptions) => unknown;
     clipboard: string;
-    foreground: { title: string; process: string };
+    foreground: ForegroundWindow;
   }> = {},
 ) {
   const calls: Array<{ op: string; args: unknown[] }> = [];
@@ -174,9 +192,13 @@ export function createFakeOs(
       calls.push({ op: 'focusWindow', args: [title] });
       return true;
     },
+    async focusHandle(hwnd) {
+      calls.push({ op: 'focusHandle', args: [hwnd] });
+      return true;
+    },
     async foregroundWindow() {
       calls.push({ op: 'foregroundWindow', args: [] });
-      return responses.foreground ?? { title: 'Notepad', process: 'notepad' };
+      return responses.foreground ?? { title: 'Notepad', process: 'notepad', hwnd: 4242, pid: 7 };
     },
   };
   return os;

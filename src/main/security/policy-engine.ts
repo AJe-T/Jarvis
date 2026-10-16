@@ -14,6 +14,10 @@ export interface PolicyDecision {
 export interface PolicyContext {
   signal: AbortSignal;
   tainted: boolean;
+  /** The turn read outside text that tried to instruct the AI (injection-scan.ts). */
+  suspicious?: boolean;
+  /** A tool in this turn returned private data (a key, password, card number…). */
+  privateData?: boolean;
 }
 
 const RANK: Record<Tier, number> = { SAFE: 0, CONFIRM: 1, BLOCKED: 2 };
@@ -75,7 +79,29 @@ export function createPolicyEngine(deps: PolicyDeps) {
         if (tier === 'BLOCKED') return blocked('Sir has blocked this tool in Settings.');
       }
 
-      if (ctx.tainted && tool.externalFacing && tier === 'SAFE') {
+      const external =
+        typeof tool.externalFacing === 'function'
+          ? tool.externalFacing(input)
+          : (tool.externalFacing ?? false);
+      // An injection attempt was seen this turn: nothing runs without Sir, not only external actions.
+      if (ctx.suspicious && tier === 'SAFE') {
+        return {
+          tier: 'CONFIRM',
+          reason: 'Suggested after reading content that tried to give the AI instructions.',
+          humanSummary,
+          destructive,
+        };
+      }
+      // Read private data, then reach outside: ask first (idea from ruflo's protector, rule PR-004).
+      if (ctx.privateData && external && tier === 'SAFE') {
+        return {
+          tier: 'CONFIRM',
+          reason: 'Suggested after reading private data.',
+          humanSummary,
+          destructive,
+        };
+      }
+      if (ctx.tainted && external && tier === 'SAFE') {
         return {
           tier: 'CONFIRM',
           reason: 'Suggested after reading external content.',

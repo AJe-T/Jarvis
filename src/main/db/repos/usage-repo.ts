@@ -61,6 +61,16 @@ export function createUsageRepo(db: Db) {
       return { costUsd: r.cost, tokens: r.tokens };
     },
 
+    /** Estimated cost of one conversation so far (all billings; local calls cost 0). */
+    conversationCost(conversationId: string): number {
+      const r = db
+        .prepare(
+          'SELECT COALESCE(SUM(est_cost_usd), 0) AS cost FROM usage_ledger WHERE conversation_id = ?',
+        )
+        .get(conversationId) as { cost: number };
+      return r.cost;
+    },
+
     breakdown(fromDay: string, toDay: string, by: 'model' | 'purpose' | 'day') {
       const col = { model: 'model', purpose: 'purpose', day: 'day' }[by];
       return db

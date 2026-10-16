@@ -4,12 +4,21 @@ import clsx from 'clsx';
 import type { StagePanel } from '@shared/stage';
 import { Markdown } from '../../components/jarvis/chat-message';
 import { Button, IconButton } from '../../components/ui/button';
+import { Slash } from '../../components/ui/slash';
 import { call } from '../../lib/api';
 import { useSetting, useSettingsStore } from '../../stores/settings-store';
 import { useSpacesStore } from '../../stores/spaces-store';
 import { useStageStore } from '../../stores/stage-store';
 import { useUiStore } from '../../stores/ui-store';
 import { UsagePanel } from '../activity/usage-panel';
+import { QrPanel, SystemMonitor } from './live-panels';
+import { StatGrid } from './stat-grid';
+import { DockedPanel } from './docked-panel';
+import { ScratchpadApp } from '../apps/scratchpad-app';
+import { TimersApp } from '../apps/timers-app';
+import { isDockedKind } from '@shared/jarvis-apps';
+import { ArtifactPanel } from '../../components/jarvis/artifact';
+import { CalculatorApp, ConverterApp, ImagePanel, TodayApp, WorldClockApp } from './app-panels';
 import {
   addMinutes,
   clock,
@@ -23,49 +32,24 @@ import {
 const TITLES: Record<StagePanel['kind'], string> = {
   pomodoro: 'Pomodoro',
   usage: 'AI usage & billing',
-  status: 'System status',
+  status: 'Jarvis status',
+  system: 'System monitor',
+  qr: 'QR code',
   list: 'List',
   stats: 'Stats',
   note: 'Note',
+  today: 'Today',
+  calculator: 'Calculator',
+  converter: 'Unit converter',
+  clock: 'World clock',
+  timers: 'Timers',
+  scratchpad: 'Scratchpad',
+  browser: 'Jarvis Browser',
+  terminal: 'Jarvis Terminal',
+  camera: 'Camera',
+  artifact: 'Artifact',
+  image: 'Picture',
 };
-
-function Meter({ percent }: { percent: number }): React.JSX.Element {
-  return (
-    <span className="mt-1.5 block h-1 overflow-hidden rounded-pill bg-surface-2" aria-hidden>
-      <span
-        className={clsx(
-          'block h-full rounded-pill transition-[width] duration-500',
-          percent >= 100 ? 'bg-alarm-fill' : percent >= 80 ? 'bg-lamp-400' : 'bg-accent-500',
-        )}
-        style={{ width: `${Math.min(100, percent)}%` }}
-      />
-    </span>
-  );
-}
-
-function StatGrid({
-  stats,
-}: {
-  stats: Array<{
-    label: string;
-    value: string;
-    hint?: string | undefined;
-    percent?: number | undefined;
-  }>;
-}): React.JSX.Element {
-  return (
-    <dl className="grid grid-cols-2 gap-2">
-      {stats.map((s) => (
-        <div key={s.label} className="inset px-3 py-2.5">
-          <dt className="hud-label">{s.label}</dt>
-          <dd className="mt-0.5 font-code text-lg text-ink-100 tabular">{s.value}</dd>
-          {s.hint && <dd className="text-xs text-ink-500">{s.hint}</dd>}
-          {s.percent !== undefined && <Meter percent={s.percent} />}
-        </div>
-      ))}
-    </dl>
-  );
-}
 
 const R = 88;
 const CIRC = 2 * Math.PI * R;
@@ -148,6 +132,13 @@ function Pomodoro({
   );
 }
 
+const PROVIDER_LABEL = {
+  api: 'API key',
+  subscription: 'Subscription',
+  local: 'Local',
+  cloud: 'Other AI',
+} as const;
+
 const VOICE = {
   off: 'Off',
   ptt: 'Press to talk',
@@ -184,7 +175,7 @@ function Status(): React.JSX.Element {
         {
           label: 'brain',
           value:
-            provider === 'api' ? 'API key' : provider === 'subscription' ? 'Subscription' : 'Local',
+            PROVIDER_LABEL[provider],
           hint: model,
         },
         { label: 'voice', value: VOICE[voice] },
@@ -219,10 +210,34 @@ function Body({ panel }: { panel: StagePanel }): React.JSX.Element {
       return <UsagePanel />;
     case 'status':
       return <Status />;
+    case 'system':
+      return <SystemMonitor />;
+    case 'qr':
+      return <QrPanel {...panel} />;
     case 'stats':
       return <StatGrid stats={panel.stats} />;
     case 'note':
       return <Markdown text={panel.markdown} />;
+    case 'today':
+      return <TodayApp />;
+    case 'calculator':
+      return <CalculatorApp {...(panel.expression ? { expression: panel.expression } : {})} />;
+    case 'converter':
+      return <ConverterApp />;
+    case 'clock':
+      return <WorldClockApp />;
+    case 'timers':
+      return <TimersApp />;
+    case 'scratchpad':
+      return <ScratchpadApp />;
+    case 'browser':
+    case 'terminal':
+    case 'camera':
+      return <DockedPanel app={panel.kind} />;
+    case 'artifact':
+      return <ArtifactPanel format={panel.format} code={panel.code} title={panel.title} />;
+    case 'image':
+      return <ImagePanel {...panel} />;
     case 'list':
       return (
         <ul className="flex flex-col gap-1.5">
@@ -259,22 +274,33 @@ export function StagePanelFrame({ panel }: { panel: StagePanel }): React.JSX.Ele
   const serial = useStageStore((s) => s.serial);
   const close = (): void => useStageStore.getState().show(null);
   const title = 'title' in panel ? panel.title : TITLES[panel.kind];
+  const fill = isDockedKind(panel.kind);
   return (
     <section
       aria-label={title}
-      className="hud-frame stage-in flex max-h-full min-h-0 w-full flex-col shadow-pop"
+      className={clsx(
+        'hud-frame stage-in flex max-h-full min-h-0 w-full flex-col shadow-pop',
+        // Apps with their own page, and pages from replies, take the panel's full height.
+        (fill || panel.kind === 'artifact') && 'h-full',
+      )}
     >
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-4">
         <span
           className="size-1.5 shrink-0 bg-accent-500 shadow-[0_0_8px_var(--accent-glow)]"
           aria-hidden
         />
-        <h2 className="hud-label truncate text-ink-100!">{`// ${title}`}</h2>
+        <h2 className="hud-label truncate text-ink-100!">
+          <Slash />
+          {title}
+        </h2>
         <IconButton label="Close panel" className="ml-auto" onClick={close}>
           <X size={16} aria-hidden />
         </IconButton>
       </header>
-      <div key={serial} className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div
+        key={fill ? panel.kind : serial}
+        className={clsx('min-h-0 flex-1', fill ? 'overflow-hidden' : 'overflow-y-auto p-4')}
+      >
         <Body panel={panel} />
       </div>
     </section>

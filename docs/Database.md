@@ -25,7 +25,8 @@ JARVIS uses **two stores**:
 | Secrets | `%APPDATA%\Jarvis\secrets.bin` (safeStorage-encrypted JSON) |
 | MCP config | `%APPDATA%\Jarvis\mcp.json` |
 | Password vault | `%APPDATA%\Jarvis\passwords.vault` (JSON: scrypt params + salt, AES-256-GCM iv/tag/data; ADR-024) |
-| Phone remote certificate | `%APPDATA%\Jarvisemote\cert.pfx` (passphrase and paired-device token hashes in `secrets.bin` as `remote_cert`, `remote_devices`) |
+| Phone remote certificate | `%APPDATA%\Jarvis
+emote\cert.pfx` (passphrase and paired-device token hashes in `secrets.bin` as `remote_cert`, `remote_devices`) |
 | WhatsApp session | `%APPDATA%\Jarvis\whatsapp-auth\` (Baileys multi-file auth state; deleted by Unlink) |
 | Logs | `%APPDATA%\Jarvis\logs\` |
 | Vault (default) | `%USERPROFILE%\Documents\JarvisBrain\` (configurable in onboarding) |
@@ -374,12 +375,16 @@ source: curator         # curator | memory_tool | user_edit
 
 - Backend / database teammate on [[Avaan Website]].
 - Works with Sir on API integration for booking pages.
+- Prefers async updates over calls (inferred)
 
 ## History
 - 2026-10-06: First mentioned while discussing [[Avaan Website]] API work.
+- Works from the Pune office (until 2026-10)
 ```
 
 Rules: facts are short bullet points; link related notes with `[[wikilinks]]` (builds Obsidian's graph); no secrets (redaction runs on every write); no instructions to the AI inside memory notes.
+
+Provenance and history (2.17, ADR-041): a fact Sir stated is plain; a curator guess ends in ` (inferred)`; a fact taken from something the assistant read ends in ` (read)` (those always pass the review queue first). `## History` is always the last section: when the curator marks a fact `outdated`, it leaves the list above and is appended there as `- <fact> (until YYYY-MM)`; new facts are always written above it.
 
 ### 8.3 Daily conversation log format
 
@@ -426,7 +431,7 @@ steps:
 Opens Sir's standard development workspace.
 ```
 
-Routine steps are validated against tool schemas on load; invalid routines are disabled with an error shown in Settings.
+Routine steps are validated against tool schemas on load; invalid routines are disabled with an error shown in Settings. A step `tool: ask_to_continue` with `input: { message: "…" }` (2.17) asks Sir before going on; a "no" stops the routine there. Browser routines saved by `save_browser_routine` (2.18) use `jarvis_browser` `{action: open, url}`, `browser_act` `{action: click|select|press|scroll, target: {role, name}}` and `browser_type` `{target, text, clear, submit}`: controls by role and name, found on the page when the step runs.
 
 ### 8.5 Write safety (vault-service)
 
@@ -466,5 +471,8 @@ Full migration list: [REFERENCE.md → Database migrations](REFERENCE.md#databas
 | `008_remote_decisions.sql` | `tool_calls.decided_by` gains `user_remote` (Telegram) (table rebuilt) |
 | `009_embeddings.sql` | `embeddings(kind memory\|message, ref, hash, vector BLOB)`: on-device MiniLM vectors (384 × float32) for semantic search; rows for deleted notes/messages are pruned on each sync |
 | `010_planner.sql` | Tasks and Calendar. `todo_lists(id, name, color, icon, sort_order)`; `todos(id, list_id → todo_lists ON DELETE SET NULL = Inbox, parent_id → todos ON DELETE CASCADE = subtasks, title, notes, status todo\|doing\|done, priority 1–4, due_date, due_time, duration_min, remind_at, reminded, recurrence_json, tags_json, starred, sort_order, created_at, updated_at, completed_at)`; `calendars(id, name, color, visible)`; `events(id, calendar_id → calendars ON DELETE CASCADE, title, notes, location, start_at, end_at, all_day, recurrence_json, exdates_json, reminders_json, …)`; `event_reminders_fired(event_id, occurrence, minutes)` so a reminder never fires twice. Dates and times are **local wall-clock text** (`2026-10-09T17:30`), so repeats keep their time across daylight saving. Repeat rule JSON: `{freq daily\|weekly\|monthly\|yearly, interval, byDay?[0–6], until?, count?}`. Rows are upserted, never `REPLACE`d (that would cascade-delete subtasks). |
+| `011_list_details.sql` | Richer task lists (2.8): `todo_lists` gains `description TEXT ''` (shown on the list card), `wip_limit INTEGER NULL` (most tasks in Doing before the board warns; NULL = none) and `archived INTEGER 0/1` (hidden from All lists). |
+| `012_strategies.sql` | Approaches that worked (2.17, ADR-041): `strategies(id, request ≤ 300 chars, tools_json, successes, failures, created_at, updated_at)`; tool names only, newest 500 kept; never from private chats, automations, fast commands or tainted turns. |
+| `013_npcs.sql` | NPCs (2.21): `npcs(id, name UNIQUE NOCASE, role, emoji, color, brain, instructions, tools_json, enabled, template_id, desk, conversation_id → conversations, created_at, updated_at)`; `npc_messages(id, channel 'office'\|'dm:<npc id>'\|'meeting:<meeting id>', author 'sir'\|'jarvis'\|npc id, text, mentions_json, tainted 0/1, created_at)`; `npc_meetings(id, topic, attendees_json, status running\|done\|stopped, summary, created_at)`. `conversations` gains `kind TEXT 'chat'` (`'npc'` = an NPC's hidden work conversation holding its tool calls and costs; the history list shows `chat` only). Deleting an NPC removes its DM channel; office and meeting messages stay. |
 
-Files outside the DB (all under `%APPDATA%\jarvis`): `models/` (verified voice models), `skills/` (SKILL.md folders), `claude-code/` (empty working folder for subscription mode). Vault folders added: `Briefings/`, `Research/`.
+Files outside the DB (all under `%APPDATA%\jarvis`): `models/` (verified voice models), `skills/` (SKILL.md folders), `claude-code/` (empty working folder for subscription mode), `cli-brains/` (empty working folder for the ChatGPT / Antigravity apps). Vault folders added: `Briefings/`, `Research/`, `NPCs/<name>/Memory.md` (each NPC's own memory, from its `REMEMBER:` lines), `NPCs/Meetings/<date> <topic>.md` (meeting minutes).

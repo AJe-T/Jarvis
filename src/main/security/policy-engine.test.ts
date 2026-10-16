@@ -103,6 +103,33 @@ describe('policy engine', () => {
     expect(engine().evaluate(tool({ externalFacing: true }), {}, live).tier).toBe('SAFE');
   });
 
+  it('external-facing can depend on the input (Jarvis Browser: going somewhere, not reading)', () => {
+    const t = tool({ externalFacing: (i: unknown) => (i as { action: string }).action === 'open' });
+    const tainted = { ...live, tainted: true };
+    expect(engine().evaluate(t, { action: 'open' }, tainted).tier).toBe('CONFIRM');
+    expect(engine().evaluate(t, { action: 'snapshot' }, tainted).tier).toBe('SAFE');
+  });
+
+  it('asks before every SAFE action once a prompt-injection attempt was read, but never loosens', () => {
+    const suspicious = { ...live, tainted: true, suspicious: true };
+    const d = engine().evaluate(tool({ externalFacing: false }), {}, suspicious);
+    expect(d.tier).toBe('CONFIRM');
+    expect(d.reason).toMatch(/tried to give the AI instructions/);
+    expect(engine().evaluate(tool({ tier: 'BLOCKED' }), {}, suspicious).tier).toBe('BLOCKED');
+    expect(
+      engine().evaluate(tool({ guards: () => ({ paths: ['C:\\Windows\\x'] }) }), {}, suspicious)
+        .tier,
+    ).toBe('BLOCKED');
+  });
+
+  it('asks before reaching outside after a tool returned private data', () => {
+    const priv = { ...live, privateData: true };
+    const d = engine().evaluate(tool({ externalFacing: true }), {}, priv);
+    expect(d.tier).toBe('CONFIRM');
+    expect(d.reason).toMatch(/private data/);
+    expect(engine().evaluate(tool({ externalFacing: false }), {}, priv).tier).toBe('SAFE');
+  });
+
   it('never fails on a throwing summarize()', () => {
     const t = tool({
       summarize: () => {

@@ -1,6 +1,7 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { createAppTools } from '@main/apps/app-tools';
 import { createMemorySystem } from '@main/memory/memory-system';
 import type { FakeScript } from '@main/llm/fake-claude';
 import { idle, setupServices } from './helpers';
@@ -199,6 +200,112 @@ describe('phase 3 integration (Testing.md §4 memory rows)', () => {
     ).toBe(true);
     const names = t.services.toolCalls.list(10).map((r) => r.tool_name);
     expect(names).toEqual(expect.arrayContaining(['run_routine', 'open_url', 'set_volume']));
+    await t.m.watcher.stop();
+  });
+
+  it('a checkpoint step waits for Sir; "no" stops the routine before the next step', async () => {
+    const t = await setupMemory({
+      rules: [
+        {
+          match: 'party mode',
+          steps: [
+            { tools: [{ name: 'run_routine', input: { name: 'Party' } }] },
+            { text: 'Stopped, sir.' },
+          ],
+        },
+      ],
+    });
+    writeFileSync(
+      join(t.vaultRoot, 'Routines', 'Party.md'),
+      '---\nname: Party\nsteps:\n  - tool: ask_to_continue\n    input: { message: "Turn the volume up?" }\n  - tool: set_volume\n    input: { level: 90 }\n---\n',
+    );
+    await t.m.reloadRoutines();
+    expect(t.m.repos.routines.byName('Party')?.enabled).toBe(1);
+    const titles: string[] = [];
+    t.services.confirmShowListeners.add((e) => {
+      titles.push(e.title);
+      setTimeout(() => t.services.broker.respond(e.requestId, 'deny', 'click'), 5);
+    });
+    t.services.orchestrator.send({ text: 'party mode', source: 'text' });
+    await idle(t.services);
+    expect(titles).toEqual(['Turn the volume up?']);
+    const names = t.services.toolCalls.list(10).map((r) => r.tool_name);
+    expect(names).not.toContain('set_volume');
+    await t.m.watcher.stop();
+  });
+
+  it('saves what Jarvis did in the browser as a routine, after Sir approves the listed steps', async () => {
+    const t = await setupMemory({
+      rules: [
+        {
+          match: 'save that',
+          steps: [
+            {
+              tools: [
+                {
+                  name: 'save_browser_routine',
+                  input: { name: 'Power bill', triggers: ['check my power bill'] },
+                },
+              ],
+            },
+            { text: 'Saved, sir.' },
+          ],
+        },
+      ],
+    });
+    // The browser tools live in the Electron window layer; their schemas are what routines check.
+    const browser = { refInfo: () => undefined } as never;
+    for (const tool of createAppTools({
+      browser,
+      show: () => undefined,
+      settings: t.services.settings,
+    }))
+      t.services.registry.register(tool);
+    const conv = t.services.conversations.create('text');
+    t.services.browserTrail.record(conv.id, {
+      tool: 'jarvis_browser',
+      input: { action: 'open', url: 'https://power.example' },
+    });
+    t.services.browserTrail.record(conv.id, {
+      tool: 'browser_act',
+      input: { action: 'click', target: { role: 'link', name: 'My bills' } },
+    });
+    const details: string[] = [];
+    t.services.confirmShowListeners.add((e) => {
+      details.push(e.details);
+      setTimeout(() => t.services.broker.respond(e.requestId, 'approve', 'click'), 5);
+    });
+    t.services.orchestrator.send({ text: 'save that', source: 'text', conversationId: conv.id });
+    await idle(t.services);
+    expect(details[0]).toBe('1. Open https://power.example\n2. Click the link "My bills"');
+    const note = readFileSync(join(t.vaultRoot, 'Routines', 'Power bill.md'), 'utf8');
+    expect(note).toContain('name: My bills');
+    await t.m.reloadRoutines();
+    const r = t.m.repos.routines.byName('Power bill');
+    expect(r?.error ?? null).toBeNull();
+    expect(r?.enabled).toBe(1);
+    await t.m.watcher.stop();
+  });
+
+  it('memory tidy-up suggests merging duplicate notes once, through the review queue', async () => {
+    const t = await setupMemory();
+    mkdirSync(join(t.vaultRoot, 'Memory', 'People'), { recursive: true });
+    writeFileSync(
+      join(t.vaultRoot, 'Memory', 'People', 'Priya.md'),
+      '# Priya\n- Sir’s sister\n- Lives in Pune\n',
+    );
+    writeFileSync(
+      join(t.vaultRoot, 'Memory', 'People', 'Priya Sharma.md'),
+      '# Priya Sharma\n- Teaches maths\n',
+    );
+    await t.m.indexer.indexFile('Memory/People/Priya.md', 'external');
+    await t.m.indexer.indexFile('Memory/People/Priya Sharma.md', 'external');
+    expect(t.m.tidy()).toBe(1);
+    const item = t.m.repos.review.pending()[0];
+    expect(item?.target_path).toBe('Memory/People/Priya.md');
+    expect(item?.proposed_markdown).toBe('- Teaches maths');
+    t.m.repos.review.resolve(item?.id ?? '', 'rejected');
+    expect(t.m.tidy()).toBe(0); // Sir said no: never suggested again
     await t.m.watcher.stop();
   });
 

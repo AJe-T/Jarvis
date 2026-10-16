@@ -1,11 +1,14 @@
-import type { Todo } from '@shared/planner';
+import type { Todo, TodoList, TodoStatus } from '@shared/planner';
 import { addDays, parseLocal, startOfWeek, toDateKey } from '@shared/planner-time';
 
 /** Pure helpers for the Tasks view: which tasks a sidebar entry shows, order, groups, labels, stats. */
 
 export type SmartId = 'inbox' | 'today' | 'upcoming' | 'starred' | 'all' | 'done';
 export type Scope =
-  { kind: 'smart'; id: SmartId } | { kind: 'list'; id: string } | { kind: 'tag'; tag: string };
+  | { kind: 'lists' }
+  | { kind: 'smart'; id: SmartId }
+  | { kind: 'list'; id: string }
+  | { kind: 'tag'; tag: string };
 export type SortKey = 'smart' | 'due' | 'priority' | 'title' | 'created' | 'manual';
 
 export const SMART: Array<{ id: SmartId; label: string }> = [
@@ -18,7 +21,7 @@ export const SMART: Array<{ id: SmartId; label: string }> = [
 ];
 
 export function inScope(t: Todo, scope: Scope, today: string): boolean {
-  if (t.parentId) return false;
+  if (t.parentId || scope.kind === 'lists') return false;
   const open = t.status !== 'done';
   if (scope.kind === 'list') return t.listId === scope.id;
   if (scope.kind === 'tag') return open && t.tags.includes(scope.tag);
@@ -170,4 +173,82 @@ export function between(before: number | undefined, after: number | undefined): 
   if (before === undefined) return (after ?? 0) - 1024;
   if (after === undefined) return before + 1024;
   return (before + after) / 2;
+}
+
+// ── Lists (the Lists home and a list's board) ──────────────────────────────────────────────
+
+export interface ListSummary {
+  counts: Record<TodoStatus, number>;
+  total: number;
+  /** Share done, 0–100. */
+  pct: number;
+  overdue: number;
+  /** The open task due soonest. */
+  next: Todo | null;
+  /** First open tasks in "what to do next" order, for the card preview. */
+  preview: Todo[];
+  /** Over the list's "Doing" limit. */
+  overLimit: boolean;
+}
+
+/** Everything a list card shows, from the list's top-level tasks. */
+export function listSummary(list: TodoList, todos: Todo[], today: string): ListSummary {
+  const mine = todos.filter((t) => t.listId === list.id && !t.parentId);
+  const counts: Record<TodoStatus, number> = { todo: 0, doing: 0, done: 0 };
+  for (const t of mine) counts[t.status]++;
+  const open = sortTodos(
+    mine.filter((t) => t.status !== 'done'),
+    'smart',
+  );
+  const dated = open.filter((t) => t.dueDate).sort((a, b) => due(a).localeCompare(due(b)));
+  return {
+    counts,
+    total: mine.length,
+    pct: mine.length ? Math.round((counts.done / mine.length) * 100) : 0,
+    overdue: open.filter((t) => t.dueDate && t.dueDate < today).length,
+    next: dated[0] ?? null,
+    preview: open.slice(0, 3),
+    overLimit: list.wipLimit !== null && counts.doing > list.wipLimit,
+  };
+}
+
+export type DueFilter = 'all' | 'overdue' | 'today' | 'week' | 'none';
+
+export interface BoardFilter {
+  /** 0 = any priority, else only this one. */
+  priority: number;
+  due: DueFilter;
+  tag: string | null;
+}
+
+export const NO_FILTER: BoardFilter = { priority: 0, due: 'all', tag: null };
+
+export function isFiltered(f: BoardFilter): boolean {
+  return f.priority !== 0 || f.due !== 'all' || f.tag !== null;
+}
+
+/** A list's filter bar: priority, when it's due, and one tag. Done tasks only match "all" dates. */
+export function matchesFilter(t: Todo, f: BoardFilter, today: string): boolean {
+  if (f.priority && t.priority !== f.priority) return false;
+  if (f.tag && !t.tags.includes(f.tag)) return false;
+  switch (f.due) {
+    case 'overdue':
+      return !!t.dueDate && t.dueDate < today && t.status !== 'done';
+    case 'today':
+      return t.dueDate === today;
+    case 'week':
+      return !!t.dueDate && t.dueDate >= today && t.dueDate <= addDays(today, 7);
+    case 'none':
+      return !t.dueDate;
+    default:
+      return true;
+  }
+}
+
+/** Done tasks finished before this many days ago fold away under "Show older" on the board. */
+export const RECENT_DONE_DAYS = 7;
+
+export function isRecentDone(t: Todo, today: string): boolean {
+  if (t.status !== 'done' || !t.completedAt) return true;
+  return toDateKey(new Date(t.completedAt)) >= addDays(today, -RECENT_DONE_DAYS);
 }

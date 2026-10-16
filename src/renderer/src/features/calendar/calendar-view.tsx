@@ -373,7 +373,7 @@ export function CalendarView(): React.JSX.Element {
             onClick={() => open(nextUp)}
             className="card flex flex-col gap-0.5 p-3 text-left"
           >
-            <span className="font-code text-[10px] font-semibold tracking-widest text-accent-500 uppercase">
+            <span className="font-code text-3xs font-semibold tracking-widest text-accent-500 uppercase">
               {nextUp.start <= toStamp(new Date()) ? 'Now' : 'Next up'}
             </span>
             <span className="truncate text-sm font-medium text-ink-100">{nextUp.title}</span>
@@ -394,7 +394,7 @@ export function CalendarView(): React.JSX.Element {
         />
         <div>
           <div className="mb-1 flex items-center px-2">
-            <h2 className="font-code text-[11px] font-semibold tracking-widest text-ink-500 uppercase">
+            <h2 className="font-code text-2xs font-semibold tracking-widest text-ink-500 uppercase">
               My calendars
             </h2>
             <IconButton
@@ -472,7 +472,7 @@ export function CalendarView(): React.JSX.Element {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <PageHeader title="Calendar">
+        <PageHeader title="Calendar" help="calendar">
           <div className="hidden items-center gap-1 rounded-sm border border-line px-2 focus-within:border-accent-edge xl:flex">
             <Search size={13} aria-hidden className="text-ink-500" />
             <input

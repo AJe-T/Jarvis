@@ -52,8 +52,8 @@ export interface Tool<I = unknown> {
   tier: Tier | ((input: I) => Tier);
   destructive?: boolean | ((input: I) => boolean);
   untrustedOutput?: boolean;
-  /** Sends data or acts outside this PC (taint escalates these to CONFIRM). */
-  externalFacing?: boolean;
+  /** Sends data or acts outside this PC (taint escalates these to CONFIRM); may depend on the input. */
+  externalFacing?: boolean | ((input: I) => boolean);
   timeoutMs?: number;
   source?: ToolSource;
   summarize(input: I): string;

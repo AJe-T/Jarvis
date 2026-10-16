@@ -1,0 +1,307 @@
+/* Jarvis Browser bar and Jarvis Terminal (ADR-032): small, local, no framework. */
+:root {
+  --bg: #0b0f14;
+  --surface: #121821;
+  --line: #233042;
+  --ink: #e6edf5;
+  --muted: #8a9bb0;
+  --accent: #00e5ff;
+  --ok: #3ddc97;
+  --bad: #ff4d6d;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    13px/1.45 'Segoe UI Variable Text',
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+}
+button {
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  min-width: 32px;
+  height: 30px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--line);
+}
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Browser bar ── */
+.browser-bar form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 46px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, #111823, var(--bg));
+}
+.browser-bar #address {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.browser-bar #lock {
+  width: 18px;
+  text-align: center;
+  font-size: 12px;
+}
+.browser-bar #badge {
+  font:
+    600 10px/1 'Cascadia Mono',
+    Consolas,
+    monospace;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 6px;
+}
+
+/* ── Terminal ── */
+.terminal {
+  display: flex;
+  flex-direction: column;
+  font-family: 'Cascadia Mono', 'Cascadia Code', Consolas, monospace;
+}
+.terminal header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.terminal .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+.terminal .muted {
+  color: var(--muted);
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal .spacer {
+  flex: 1;
+}
+.terminal header button {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 0 10px;
+}
+.terminal #log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+}
+.terminal .entry {
+  margin-bottom: 12px;
+}
+.terminal .entry.jarvis {
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+.terminal .line {
+  display: flex;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.terminal .who {
+  color: var(--accent);
+  font-weight: 600;
+}
+.terminal pre {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+}
+.terminal .command {
+  color: var(--ink);
+}
+.terminal .output {
+  color: #c4cfdc;
+}
+.terminal .status {
+  margin-top: 2px;
+  font-size: 11px;
+}
+.terminal .status.ok {
+  color: var(--ok);
+}
+.terminal .status.bad,
+.terminal .bad {
+  color: var(--bad);
+}
+.terminal .pending {
+  color: var(--muted);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .terminal .pending {
+    animation: none;
+  }
+}
+.terminal #prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.terminal .ps {
+  color: var(--accent);
+  font-weight: 600;
+}
+.terminal #cmd {
+  flex: 1;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+.terminal #cmd:focus-visible {
+  outline: none;
+}
+
+/* ── Camera (ADR-040) ── */
+.camera {
+  display: flex;
+  flex-direction: column;
+}
+.camera header,
+.camera footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.camera footer {
+  height: 56px;
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+.camera .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+  box-shadow: 0 0 8px var(--bad);
+}
+.camera .muted {
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.camera .spacer {
+  flex: 1;
+}
+.camera select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  height: 30px;
+  max-width: 220px;
+}
+.camera button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.camera #stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  background: #000;
+}
+.camera video {
+  max-width: 100%;
+  max-height: 100%;
+}
+.camera video.mirrored {
+  transform: scaleX(-1);
+}
+.camera #status {
+  position: absolute;
+  inset: auto 0 16px;
+  text-align: center;
+}
+.camera #flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+.camera #flash.on {
+  animation: shutter 260ms ease-out;
+}
+@keyframes shutter {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.camera .shoot {
+  height: 36px;
+  padding: 0 18px;
+  background: var(--accent);
+  color: #001014;
+  font-weight: 600;
+}
+.camera .shoot:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.1);
+}

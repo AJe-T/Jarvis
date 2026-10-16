@@ -60,25 +60,30 @@
   --font-body: var(--font-body);
   --font-code: var(--font-code);
 
-  /* §4 type scale (rem so it follows Windows display scaling) */
-  --text-xs: 0.75rem;
-  --text-xs--line-height: 1rem;
-  --text-sm: 0.8125rem;
-  --text-sm--line-height: 1.125rem;
-  --text-ui: 0.875rem;
-  --text-ui--line-height: 1.25rem;
+  /* §4 type scale (rem so it follows Windows display scaling; × --font-scale from Settings → General
+     → Text size, so text grows without the layout's spacing growing with it) */
+  --text-3xs: calc(0.6875rem * var(--font-scale));
+  --text-3xs--line-height: calc(0.875rem * var(--font-scale));
+  --text-2xs: calc(0.75rem * var(--font-scale));
+  --text-2xs--line-height: calc(1rem * var(--font-scale));
+  --text-xs: calc(0.8125rem * var(--font-scale));
+  --text-xs--line-height: calc(1.125rem * var(--font-scale));
+  --text-sm: calc(0.875rem * var(--font-scale));
+  --text-sm--line-height: calc(1.3125rem * var(--font-scale));
+  --text-ui: calc(0.9375rem * var(--font-scale));
+  --text-ui--line-height: calc(1.375rem * var(--font-scale));
   --text-ui--letter-spacing: -0.02em;
-  --text-base: 1rem;
-  --text-base--line-height: 1.55;
-  --text-lg: 1.0625rem;
-  --text-lg--line-height: 1.5rem;
-  --text-xl: 1.25rem;
-  --text-xl--line-height: 1.75rem;
+  --text-base: calc(1.0625rem * var(--font-scale));
+  --text-base--line-height: 1.6;
+  --text-lg: calc(1.125rem * var(--font-scale));
+  --text-lg--line-height: calc(1.625rem * var(--font-scale));
+  --text-xl: calc(1.3125rem * var(--font-scale));
+  --text-xl--line-height: calc(1.875rem * var(--font-scale));
   --text-xl--letter-spacing: -0.03em;
-  --text-2xl: 1.75rem;
+  --text-2xl: calc(1.75rem * var(--font-scale));
   --text-2xl--line-height: 1.25;
   --text-2xl--letter-spacing: -0.04em;
-  --text-hero: 2.25rem;
+  --text-hero: calc(2.25rem * var(--font-scale));
   --text-hero--line-height: 1.2;
   --text-hero--letter-spacing: -0.045em;
 
@@ -102,7 +107,7 @@ body {
   background: var(--bg-app);
   color: var(--ink-100);
   font-family: var(--font-body);
-  font-size: 1rem;
+  font-size: calc(1rem * var(--font-scale));
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -326,6 +331,28 @@ h3 {
   pointer-events: none;
 }
 
+/* Voice flow (Settings → Voice): a wire with a pulse running along it toward the next stage. */
+.flow-wire {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--accent-600) 45%,
+    var(--accent-600) 55%,
+    transparent 100%
+  );
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: flow-run 1.2s linear infinite;
+}
+@keyframes flow-run {
+  from {
+    background-position: -40% 0;
+  }
+  to {
+    background-position: 140% 0;
+  }
+}
+
 /* Loading (§6.7) */
 .skeleton {
   border-radius: var(--radius-sm);
@@ -359,7 +386,51 @@ h3 {
   }
 }
 
+/* ── Window chrome (§5.1): no Windows title bar ─────────────────
+   Header rows drag the window; their controls stay clickable. A header under Windows' caption
+   buttons (top right) is padded clear of them (components/jarvis/titlebar.tsx). */
+[data-titlebar] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+[data-titlebar]
+  :is(
+    button,
+    a,
+    input,
+    select,
+    textarea,
+    label,
+    [role='button'],
+    [role='menu'],
+    [role='separator'],
+    [role='dialog'],
+    [tabindex]
+  ) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+[data-titlebar][data-tb-guard] {
+  padding-right: calc(var(--tb-inset, 140px) + 0.5rem) !important;
+}
+
 /* ── Markdown in Jarvis replies ─────────────────────────────── */
+/* Long paths, links and words wrap instead of pushing the log sideways; code blocks and tables scroll in place. */
+.md {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.md pre,
+.md table {
+  max-width: 100%;
+}
+.md pre code {
+  overflow-wrap: normal;
+}
+.md table {
+  display: block;
+  overflow-x: auto;
+}
 .md > :first-child {
   margin-top: 0;
 }
@@ -431,6 +502,187 @@ h3 {
   border-left: 3px solid var(--line-strong);
   padding-left: 0.75rem;
   color: var(--ink-300);
+}
+
+/* ── Spaces page editor (Notion-style, saved as Markdown) ─────────────── */
+.page-doc {
+  min-height: 50vh;
+  outline: none;
+  color: var(--ink-100);
+  font-size: var(--text-base);
+  line-height: 1.7;
+  caret-color: var(--accent-500);
+  padding-bottom: 4rem;
+}
+.page-doc > * + * {
+  margin-top: 0.5rem;
+}
+.page-doc h1,
+.page-doc h2,
+.page-doc h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin-top: 1.6rem;
+}
+.page-doc h1 {
+  font-size: calc(1.875rem * var(--font-scale));
+}
+.page-doc h2 {
+  font-size: calc(1.5rem * var(--font-scale));
+}
+.page-doc h3 {
+  font-size: calc(1.25rem * var(--font-scale));
+}
+.page-doc ul,
+.page-doc ol {
+  padding-left: 1.6rem;
+}
+.page-doc ul {
+  list-style: disc;
+}
+.page-doc ol {
+  list-style: decimal;
+}
+.page-doc li > p {
+  margin: 0.1rem 0;
+}
+.page-doc ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.2rem;
+}
+.page-doc ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+.page-doc ul[data-type='taskList'] li > label {
+  margin-top: 0.3em;
+  flex-shrink: 0;
+}
+.page-doc ul[data-type='taskList'] li > label input {
+  width: 1.05em;
+  height: 1.05em;
+  accent-color: var(--accent-600);
+  cursor: pointer;
+}
+.page-doc ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+.page-doc ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--ink-500);
+  text-decoration: line-through;
+}
+.page-doc blockquote {
+  border-left: 3px solid var(--accent-500);
+  padding: 0.1rem 0 0.1rem 1rem;
+  color: var(--ink-300);
+}
+.page-doc code {
+  font-family: var(--font-mono, var(--font-code));
+  font-size: 0.88em;
+  background: var(--surface-2);
+  border: 1px solid var(--line-subtle);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  color: var(--alarm-500);
+}
+.page-doc pre {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  font-size: 0.9em;
+}
+.page-doc pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-100);
+}
+.page-doc a {
+  color: var(--accent-300);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.page-doc hr {
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+  margin: 1.5rem 0;
+}
+.page-doc table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+.page-doc th,
+.page-doc td {
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.6rem;
+  vertical-align: top;
+  text-align: left;
+}
+.page-doc th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.page-doc .selectedCell {
+  background: var(--selected);
+}
+.page-doc .wikilink {
+  display: inline-block;
+  padding: 0 0.35em;
+  border-radius: 4px;
+  background: var(--accent-tint);
+  color: var(--accent-tag-ink);
+  font-weight: 500;
+}
+.page-doc .wikilink::before {
+  content: '↗ ';
+  opacity: 0.7;
+}
+.page-doc .ProseMirror-selectednode {
+  outline: 2px solid var(--accent-500);
+}
+/* "Press / for blocks…" on the empty line the cursor is on (Placeholder marks only that one). */
+.page-doc :is(p, h1, h2, h3).is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--ink-500);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ── Style: "Soft" (§3.7), unlayered so it beats utility classes ─────── */
+/* --font-code is the UI's label font in Soft; real code, keys and paths stay monospace. */
+[data-style='soft'] :is(pre, code, kbd, .break-all, .md code, .md pre) {
+  font-family: var(--font-mono);
+}
+[data-style='soft'] .btn {
+  letter-spacing: 0;
+}
+/* Pseudo-elements can't go inside :is(), so one selector each. */
+[data-style='soft'] .glitch::before,
+[data-style='soft'] .glitch::after,
+[data-style='soft'] .orb-dock::before {
+  content: none;
+}
+[data-style='soft'] .orb-dock {
+  box-shadow: var(--soft-shadow-pop);
+}
+[data-style='soft'] .typing-dots span {
+  border-radius: 999px;
+}
+[data-style='soft'] :is(h1, h2, h3) {
+  letter-spacing: -0.02em;
+}
+[data-style='soft'] .page-title {
+  font-size: calc(1rem * var(--font-scale));
+  letter-spacing: -0.01em;
+  text-transform: none;
 }
 
 /* Computer-Control overlay windows are transparent (Design-system.md §4.4). */

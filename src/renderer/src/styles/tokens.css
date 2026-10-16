@@ -10,22 +10,22 @@
   /* Surfaces */
   --bg-app: #e6ebf1; /* sidebar, status bar */
   --bg-main: #f2f5f8; /* canvas */
-  --surface-1: #fbfcfd; /* cards, panels */
+  --surface-1: #ffffff; /* cards, panels */
   --surface-2: #e9eef3; /* inputs' rest, code, Sir's message, segmented tracks */
   --hover: rgba(0, 120, 140, 0.07);
   --press: rgba(0, 120, 140, 0.12);
   --selected: #d6e6ee;
 
   /* Hairlines */
-  --line-subtle: #dde4ea;
-  --line: #cdd7e0;
-  --line-strong: #9fb0bf;
+  --line-subtle: #d3dbe2;
+  --line: #bccad6;
+  --line-strong: #8a9db0;
 
   /* Text */
   --ink-100: #071019;
-  --ink-300: #33475a;
-  --ink-500: #4a5d70;
-  --icon-rest: #4a5d70;
+  --ink-300: #2a3d4f;
+  --ink-500: #3f5266;
+  --icon-rest: #3f5266;
   --ink-strong: #071019; /* brand mark, selection */
   --on-strong: #e4f7ff;
 
@@ -67,6 +67,9 @@
   --scanline: rgba(0, 20, 30, 0.025);
   --mesh-opacity: 0.18;
 
+  /* Settings → General → Text size (ThemeSync sets it); every --text-* token multiplies by it */
+  --font-scale: 1;
+
   /* Orb (§6.1): plasma core, cyan rings, magenta and yellow HUD accents */
   --orb-1: #00a9bd; /* rings, bars, glow */
   --orb-2: #002a33; /* core shadow */
@@ -106,18 +109,18 @@
   color-scheme: dark;
   --bg-app: #05070b;
   --bg-main: #070a10;
-  --surface-1: #0c1119;
-  --surface-2: #111824;
+  --surface-1: #0f1520;
+  --surface-2: #151d2b;
   --hover: rgba(0, 240, 255, 0.07);
   --press: rgba(0, 240, 255, 0.12);
-  --selected: #0f2230;
-  --line-subtle: #111a26;
-  --line: #1b2a3a;
-  --line-strong: #2b4459;
-  --ink-100: #e4f7ff;
-  --ink-300: #9db4c7;
-  --ink-500: #7d93a8;
-  --icon-rest: #7d93a8;
+  --selected: #12293a;
+  --line-subtle: #1a2738;
+  --line: #26384c;
+  --line-strong: #3d5a75;
+  --ink-100: #f0fbff;
+  --ink-300: #bccfde;
+  --ink-500: #9cb1c4;
+  --icon-rest: #9cb1c4;
   --ink-strong: #00f0ff;
   --on-strong: #001318;
   --accent-600: #00e5ff;
@@ -145,7 +148,7 @@
   --lamp-tag-ink: #fff27a;
   --ok-400: #39ff9f;
   --ok-tint: #08291a;
-  --neutral-tint: #121c28;
+  --neutral-tint: #162231;
   --grid-line: rgba(0, 229, 255, 0.045);
   --scanline: rgba(255, 255, 255, 0.018);
   --mesh-opacity: 0.32;
@@ -159,4 +162,90 @@
     0 0 0 1px rgba(0, 229, 255, 0.28), 0 0 32px -8px rgba(0, 229, 255, 0.35),
     0 24px 48px -12px rgba(0, 0, 0, 0.85);
   --scrim: rgba(0, 0, 0, 0.65);
+}
+
+/* ── Style: "Soft" (Design-system.md §3.7) ──────────────────────────────────────────────────
+   Settings → General → Style. Rounded, calm and layered: neutral graphite or paper surfaces, one
+   sans family, soft shadows instead of neon bloom. "Cyberpunk" is everything above, untouched.
+   Colours here apply with the default accent; a custom accent retints surfaces (lib/accent.ts). */
+:root[data-style='soft'] {
+  --font-display: var(--font-body);
+  --font-code: var(--font-body); /* UI labels; real code keeps --font-mono (globals.css) */
+  --font-mono: 'Geist Mono', 'Cascadia Mono', Consolas, monospace;
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --dur-base: 200ms;
+}
+
+:root[data-style='soft']:not([data-theme='dark']) {
+  --bg-app: #eceef2;
+  --bg-main: #f5f6f8;
+  --surface-1: #ffffff;
+  --surface-2: #eff1f4;
+  --selected: #e0e9f0;
+  --line-subtle: #dde0e6;
+  --line: #cdd2d9;
+  --line-strong: #a0a8b3;
+  --ink-100: #14171c;
+  --ink-300: #2f3640;
+  --ink-500: #4a525e;
+  --icon-rest: #4a525e;
+  --neutral-tint: #e6e9ed;
+  --soft-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05), 0 6px 16px -6px rgba(16, 24, 40, 0.08);
+  --soft-shadow-pop: 0 0 0 1px rgba(16, 24, 40, 0.05), 0 18px 40px -12px rgba(16, 24, 40, 0.2);
+  --soft-ring: color-mix(in srgb, var(--accent-500) 22%, transparent);
+  --shadow-sm: var(--soft-shadow-card);
+  --shadow-pop: var(--soft-shadow-pop);
+}
+
+:root[data-style='soft'][data-theme='dark'] {
+  --bg-app: #0d0f12;
+  --bg-main: #121418;
+  --surface-1: #1c1f25;
+  --surface-2: #252930;
+  --selected: #1f2e38;
+  --line-subtle: #2b2f37;
+  --line: #363b44;
+  --line-strong: #575e6a;
+  --ink-100: #f5f6f8;
+  --ink-300: #d0d5dc;
+  --ink-500: #adb4be;
+  --icon-rest: #adb4be;
+  --neutral-tint: #262a31;
+  --void: #0d0f12;
+  --alarm-500: #ff6f87; /* lifted: the default red is under 4.5:1 on the lighter graphite */
+  --soft-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px -10px rgba(0, 0, 0, 0.5);
+  --soft-shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 24px 56px -16px rgba(0, 0, 0, 0.75);
+  --soft-ring: color-mix(in srgb, var(--accent-500) 30%, transparent);
+  --shadow-sm: var(--soft-shadow-card);
+  --shadow-pop: var(--soft-shadow-pop);
+}
+
+/* ── Theme: "Pitch black" (OLED) ────────────────────────────────────────────────────────────
+   Settings → General → Theme. True #000 canvas (pixels off on OLED), the brightest ink and borders
+   that still read on black. Rides on the dark theme (data-theme='dark'), so both styles use it. */
+:root[data-theme='dark'][data-oled='true'] {
+  --bg-app: #000000;
+  --bg-main: #000000;
+  --surface-1: #0c0c0e;
+  --surface-2: #17171a;
+  --hover: rgba(255, 255, 255, 0.07);
+  --press: rgba(255, 255, 255, 0.12);
+  --selected: #0f2a33;
+  --line-subtle: #2a2a2e;
+  --line: #3a3a3f;
+  --line-strong: #5e5e66;
+  --ink-100: #ffffff;
+  --ink-300: #dedee3;
+  --ink-500: #b6b6be;
+  --icon-rest: #b6b6be;
+  --neutral-tint: #1c1c20;
+  --void: #000000;
+  --grid-line: rgba(255, 255, 255, 0.03);
+  --scanline: transparent;
+  --shadow-sm: 0 0 0 1px #2a2a2e;
+  --soft-shadow-card: 0 0 0 1px #2a2a2e;
 }

@@ -3,6 +3,7 @@ import type { Scheduler } from '../../scheduler/scheduler';
 import type { Tool } from '../types';
 import type { AppIndex } from './app-index';
 import { createAppTools } from './apps';
+import { createDocumentTool } from './documents';
 import { createFileTools } from './files';
 import { createMiscTools } from './misc';
 import type { OsAdapter } from './os';
@@ -17,6 +18,8 @@ export interface NativeToolDeps {
   scheduler: Scheduler;
   roots(): string[];
   protectedPaths(): string[];
+  /** Jarvis Terminal mirrors run_powershell (ADR-032). */
+  onShellRun?: Parameters<typeof createShellTool>[1];
 }
 
 /** API-Guide.md §2.3 v1 native tool catalogue (memory/routines/delegation tools are added by their phases). */
@@ -31,7 +34,8 @@ export function createNativeTools(d: NativeToolDeps): Tool[] {
       roots: d.roots,
       protectedPaths: d.protectedPaths,
     }),
+    createDocumentTool(d.guard),
     ...createMiscTools(d.os, d.scheduler),
-    createShellTool(d.os),
+    createShellTool(d.os, d.onShellRun),
   ];
 }

@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { LOCAL_MODEL_IDS } from './speech-engines';
+import { ScheduleSchema } from './schedule';
 import type { EventChannel, InvokeChannel, SendChannel } from './ipc-channels';
-import { SETTING_KEYS, type SettingKey } from './settings';
+import { SETTING_KEYS, SettingKeySchema, type SettingKey } from './settings';
 import {
   ASSISTANT_STATES,
+  MOODS,
   ConversationSummarySchema,
   SecretNameSchema,
   TIERS,
@@ -12,6 +15,12 @@ import {
 } from './types';
 import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
+import { BRAIN_IDS } from './llm-providers';
+import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSchema } from './npcs';
+
+/** 'office', 'dm:<npc id>' or 'meeting:<meeting id>'. */
+const NpcChannel = z.string().regex(/^(office|dm:npc_[\w-]{1,40}|meeting:mtg_[\w-]{1,40})$/);
+const NpcId = z.string().regex(/^npc_[\w-]{1,40}$/);
 import {
   CalendarId,
   CalendarSchema,
@@ -96,15 +105,9 @@ const AuditItem = z.object({
   details: z.string(),
 });
 /** ADR-011 local voice models (ids from src/main/voice/local/models.json). */
-const LocalModelId = z.enum([
-  'whisper-base.en',
-  'whisper-small.en',
-  'whisper-small',
-  'openwakeword-hey-jarvis',
-  'silero-vad',
-  'minilm-embed',
-]);
+const LocalModelId = z.enum(LOCAL_MODEL_IDS);
 const CopilotId = z.string().regex(/^cp_[\w-]+$/);
+const CopilotScene = z.enum(['work', 'romance', 'friends', 'family', 'general']);
 const CopilotCapture = z.object({
   id: CopilotId,
   windowTitle: z.string(),
@@ -113,9 +116,16 @@ const CopilotCapture = z.object({
     contact: z.string(),
     isGroup: z.boolean(),
     messages: z.array(
-      z.object({ from: z.enum(['me', 'them']), text: z.string(), time: z.string().optional() }),
+      z.object({
+        from: z.enum(['me', 'them']),
+        text: z.string(),
+        time: z.string().optional(),
+        name: z.string().optional(),
+      }),
     ),
   }),
+  /** Who this chat was the last time (Settings never shows it; it's kept for the next capture). */
+  remembered: z.object({ scene: CopilotScene, relationship: z.string() }).nullable(),
 });
 const CopilotAnalysis = z.object({
   theyWant: z.string(),
@@ -142,14 +152,7 @@ const TelegramStatus = z.object({
   error: z.string().nullable(),
 });
 const TaskId = z.string().regex(/^task_[\w-]+$/);
-const TaskSchedule = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('daily'),
-    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-    days: z.array(z.number().int().min(1).max(7)).max(7),
-  }),
-  z.object({ type: z.literal('interval'), minutes: z.number().int().min(15).max(10080) }),
-]);
+const TaskSchedule = ScheduleSchema;
 const TaskInput = z.object({
   id: TaskId.optional(),
   name: z.string().min(2).max(60),
@@ -179,6 +182,12 @@ const SkillView = z.object({
   enabled: z.boolean(),
   files: z.array(z.string()),
 });
+/** One link or folder may hold a whole skills library: all installed, plus notes for Sir. */
+const SkillInstallResult = z.object({
+  installed: z.array(SkillView),
+  warnings: z.array(z.string()),
+});
+const PlanWindow = z.object({ usedPercent: z.number(), resetsAt: z.number().nullable() });
 const UsageSummary = z.object({
   costUsd: z.number(),
   tokens: z.number(),
@@ -187,6 +196,14 @@ const UsageSummary = z.object({
   monthCostUsd: z.number(),
   /** API-equivalent cost of calls made through the Claude subscription (not charged, not budgeted). */
   subscriptionCostUsd: z.number(),
+  /** Claude plan windows as last reported by Claude Code (subscription only), percent used. */
+  plan: z
+    .object({
+      fiveHour: PlanWindow.nullable(),
+      sevenDay: PlanWindow.nullable(),
+      updatedAt: z.number(),
+    })
+    .nullable(),
 });
 const BreakdownRow = z.object({
   key: z.string(),
@@ -284,6 +301,47 @@ export const INVOKE = {
     z.object({ conversation: ConversationSummarySchema, messages: z.array(UiMessageSchema) }),
   ),
   'conversations:delete': contract(z.object({ id: Id, alsoVault: z.boolean() }), Ok),
+  /** Context meter (idea from LibreChat): how full the next request's context is, and of what. */
+  'conversations:context': contract(
+    z.object({ id: Id }),
+    z.object({
+      usedTokens: z.number(),
+      windowTokens: z.number(),
+      dialogueTokens: z.number(),
+      toolTokens: z.number(),
+      otherTokens: z.number(),
+      estimated: z.boolean(),
+      messages: z.number(),
+      summarizedMessages: z.number(),
+    }),
+  ),
+  /** Save a chat artifact where Sir picks (a Save dialog); null when he cancels. */
+  'artifacts:save': contract(
+    z.object({
+      title: z.string().min(1).max(80),
+      ext: z.enum(['html', 'svg']),
+      content: z.string().max(5_000_000),
+    }),
+    z.object({ path: z.string().nullable() }),
+  ),
+  /** Search every past chat (idea from LibreChat): best matching messages, one per conversation. */
+  'conversations:search': contract(
+    z.object({ query: z.string().min(1).max(200) }),
+    z.array(
+      z.object({
+        conversationId: z.string(),
+        title: z.string().nullable(),
+        snippet: z.string(),
+        role: z.string(),
+        createdAt: z.string(),
+      }),
+    ),
+  ),
+  /** /compact: fold the conversation so far into its running summary. */
+  'conversations:compact': contract(
+    z.object({ id: Id }),
+    z.object({ summarizedMessages: z.number() }),
+  ),
   'confirm:respond': contract(
     z.object({
       requestId: Id,
@@ -323,17 +381,68 @@ export const INVOKE = {
     z.object({ models: z.array(z.string()), error: z.string().optional() }),
   ),
   'llm:localTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
+  /** The cloud provider chosen in Settings → Brain: its model list, and a test call. */
+  'llm:cloudModels': contract(
+    Empty,
+    z.object({ models: z.array(z.string()), error: z.string().optional() }),
+  ),
+  'llm:cloudTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
+  /** Sir's ChatGPT / Google plans through their official apps (llm/cli-brains.ts). */
+  'llm:cliStatus': contract(
+    Empty,
+    z.array(
+      z.object({
+        id: z.enum(['chatgpt', 'antigravity']),
+        label: z.string(),
+        installed: z.boolean(),
+        signedIn: z.boolean().nullable(),
+        installHint: z.string(),
+      }),
+    ),
+  ),
+  'llm:cliLogin': contract(z.object({ id: z.enum(['chatgpt', 'antigravity']) }), Ok),
+  'llm:cliTest': contract(
+    z.object({ id: z.enum(['chatgpt', 'antigravity']) }),
+    z.object({ ok: z.boolean(), error: z.string().optional() }),
+  ),
   'location:detect': contract(Empty, z.object({ town: z.string() })),
+  /** Live PC monitor panel: one sample (CPU % since the previous call). */
+  'system:stats': contract(
+    Empty,
+    z.object({
+      cpuPercent: z.number(),
+      cpuModel: z.string(),
+      cores: z.number(),
+      memUsedBytes: z.number(),
+      memTotalBytes: z.number(),
+      diskUsedBytes: z.number().nullable(),
+      diskTotalBytes: z.number().nullable(),
+      uptimeSec: z.number(),
+    }),
+  ),
   'telegram:status': contract(Empty, TelegramStatus),
   'copilot:capture': contract(Empty, CopilotCapture),
   'copilot:analyse': contract(
     z.object({
       id: CopilotId,
-      scene: z.enum(['work', 'romance', 'friends', 'family', 'general']),
+      scene: CopilotScene,
       relationship: z.string().max(30),
       dispute: z.boolean(),
     }),
     CopilotAnalysis,
+  ),
+  'copilot:quick': contract(
+    z.object({ id: CopilotId, scene: CopilotScene, relationship: z.string().max(30) }),
+    z.array(z.string()),
+  ),
+  'copilot:refine': contract(
+    z.object({
+      id: CopilotId,
+      text: z.string().min(1).max(4000),
+      how: z.enum(['shorter', 'warmer', 'firmer', 'formal', 'casual', 'emoji', 'translate']),
+      language: z.string().max(40).optional(),
+    }),
+    z.object({ text: z.string() }),
   ),
   'copilot:draft': contract(
     z.object({ id: CopilotId, optionId: z.string().max(20), details: z.string().max(500) }),
@@ -357,10 +466,10 @@ export const INVOKE = {
   'tasks:runNow': contract(z.object({ id: TaskId }), z.object({ conversationId: z.string() })),
   'skills:list': contract(Empty, z.array(SkillView)),
   'skills:read': contract(z.object({ name: SkillName }), z.object({ markdown: z.string() })),
-  'skills:installFolder': contract(Empty, z.object({ skill: SkillView.nullable() })),
+  'skills:installFolder': contract(Empty, SkillInstallResult),
   'skills:installGitHub': contract(
     z.object({ url: z.string().url().startsWith('https://github.com/').max(500) }),
-    z.object({ skill: SkillView }),
+    SkillInstallResult,
   ),
   'skills:remove': contract(z.object({ name: SkillName }), Ok),
   'skills:setEnabled': contract(z.object({ name: SkillName, enabled: z.boolean() }), Ok),
@@ -402,6 +511,18 @@ export const INVOKE = {
     Ok,
   ),
   'memory:rebuildIndex': contract(Empty, z.object({ files: z.number() })),
+  /** Import a ChatGPT or Claude.ai export (.zip or conversations.json) into Memory/Imports. */
+  'memory:importChats': contract(
+    Empty,
+    z.object({
+      cancelled: z.boolean(),
+      source: z.enum(['chatgpt', 'claude', 'mixed']).nullable(),
+      imported: z.number(),
+      skipped: z.number(),
+      failed: z.number(),
+      total: z.number(),
+    }),
+  ),
   'mcp:list': contract(Empty, z.array(McpServerView)),
   'mcp:add': contract(McpServerInput, Ok),
   'mcp:update': contract(z.object({ id: Id, patch: McpServerInput.partial() }), Ok),
@@ -426,6 +547,25 @@ export const INVOKE = {
   /** One click: download Whisper base.en + the voice detector and switch speech to on-device. */
   'voice:setupLocal': contract(Empty, Ok),
   'voice:devices': contract(Empty, z.array(z.object({ index: z.number(), name: z.string() }))),
+  /**
+   * ADR-039 Voice Match enrolment: 'sample' records one "Hey <name>" in main (ADR-007) and keeps
+   * only its fingerprint; 'finish' saves the profile; 'cancel' drops the phrases; 'delete' forgets it.
+   */
+  'voice:enrol': contract(
+    z.object({ action: z.enum(['sample', 'finish', 'cancel', 'delete']) }),
+    z.object({
+      ok: z.literal(true),
+      count: z.number().int().optional(),
+      heard: z.string().optional(),
+      threshold: z.number().optional(),
+      aliases: z.array(z.string()).optional(),
+      scores: z.array(z.number()).optional(),
+    }),
+  ),
+  'voice:profile': contract(
+    Empty,
+    z.object({ enrolled: z.boolean(), phrases: z.number().int(), needed: z.number().int() }),
+  ),
   'app:killSwitch': contract(Empty, Ok),
   /** Settings Save bar: restart to apply big changes cleanly (audited). */
   'app:relaunch': contract(Empty, Ok),
@@ -446,6 +586,14 @@ export const INVOKE = {
     z.object({ path: z.string().nullable() }),
   ),
   'app:setMiniMode': contract(z.object({ on: z.boolean() }), Ok),
+  /** The window buttons' colours follow the theme (no Windows title bar, §5.1). */
+  'app:titleBar': contract(
+    z.object({
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      symbolColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    }),
+    Ok,
+  ),
   'usage:summary': contract(z.object({ range: z.enum(['day', 'month']) }), UsageSummary),
   'usage:breakdown': contract(
     z.object({ range: z.enum(['day', 'month']), by: z.enum(['model', 'purpose', 'day']) }),
@@ -475,6 +623,33 @@ export const INVOKE = {
       }),
     ),
   ),
+  /**
+   * ADR-040: where Core's panel for a docked app (browser, terminal, camera) is, in CSS px; bounds
+   * null = covered by a dialog; open false = the panel closed.
+   */
+  'apps:dock': contract(
+    z.object({
+      app: z.enum(['browser', 'terminal', 'camera']),
+      open: z.boolean(),
+      bounds: z
+        .object({
+          x: z.number().finite(),
+          y: z.number().finite(),
+          width: z.number().finite().min(0).max(20_000),
+          height: z.number().finite().min(0).max(20_000),
+        })
+        .nullable(),
+    }),
+    Ok,
+  ),
+  'apps:timerAdd': contract(
+    z.object({
+      seconds: z.number().int().min(1).max(86_400),
+      label: z.string().trim().min(1).max(100),
+    }),
+    Ok,
+  ),
+  'apps:timerCancel': contract(z.object({ id: z.string().max(80) }), Ok),
   'reminders:list': contract(
     Empty,
     z.array(z.object({ id: z.string(), text: z.string(), dueAt: z.string(), status: z.string() })),
@@ -610,12 +785,17 @@ export const INVOKE = {
   'todos:saveList': contract(
     z.object({
       id: ListId.optional(),
-      name: z.string().trim().min(1).max(60),
+      /** Required when creating; a patch may leave it out. */
+      name: z.string().trim().min(1).max(60).optional(),
       color: z
         .string()
         .regex(/^#[0-9a-fA-F]{6}$/)
         .optional(),
       icon: z.string().max(16).optional(),
+      sortOrder: z.number().finite().optional(),
+      description: z.string().max(500).optional(),
+      wipLimit: z.number().int().min(1).max(50).nullable().optional(),
+      archived: z.boolean().optional(),
     }),
     TodoListSchema,
   ),
@@ -681,10 +861,45 @@ export const INVOKE = {
     z.object({ current: MasterPassword, next: MasterPassword }),
     Ok,
   ),
+  /** NPCs (2.21): Sir's team of single-purpose agents, Jarvis at their head. */
+  'npcs:list': contract(
+    Empty,
+    z.object({
+      npcs: z.array(NpcSchema),
+      states: z.record(z.string(), z.enum(NPC_STATES)),
+      /** Brains set up right now (the editor offers only these). */
+      brains: z.array(z.enum(BRAIN_IDS)),
+      /** Jarvis's tools an NPC may be given (his policy still applies to every call). */
+      tools: z.array(z.object({ name: z.string(), description: z.string() })),
+    }),
+  ),
+  'npcs:create': contract(NpcInputSchema, NpcSchema),
+  'npcs:update': contract(z.object({ id: NpcId, input: NpcInputSchema }), NpcSchema),
+  'npcs:delete': contract(z.object({ id: NpcId }), Ok),
+  'npcs:messages': contract(z.object({ channel: NpcChannel }), z.array(NpcMessageSchema)),
+  /** Sir writes in a channel; replies arrive as npc:message events. */
+  'npcs:send': contract(z.object({ channel: NpcChannel, text: z.string().min(1).max(8000) }), Ok),
+  'npcs:clear': contract(z.object({ channel: NpcChannel }), Ok),
+  'npcs:memory': contract(
+    z.object({ id: NpcId }),
+    z.object({ path: z.string(), markdown: z.string() }),
+  ),
+  'npcs:meetings': contract(Empty, z.array(NpcMeetingSchema)),
+  'npcs:startMeeting': contract(
+    z.object({
+      topic: z.string().min(3).max(300),
+      attendees: z.array(NpcId).min(1).max(6),
+      rounds: z.number().int().min(1).max(3),
+    }),
+    NpcMeetingSchema,
+  ),
+  'npcs:stopMeeting': contract(z.object({ id: z.string().regex(/^mtg_[\w-]{1,40}$/) }), Ok),
 } satisfies Record<InvokeChannel, { request: z.ZodType; response: z.ZodType }>;
 
 export const EVENTS = {
   'assistant:state': z.object({ state: z.enum(ASSISTANT_STATES), detail: z.string().optional() }),
+  /** The feeling of the reply being given (agent/mood.ts); the orb takes its colour for a while. */
+  'assistant:mood': z.object({ mood: z.enum(MOODS) }),
   'chat:delta': z.object({ turnId: z.string(), conversationId: z.string(), textDelta: z.string() }),
   'chat:message': z.object({
     turnId: z.string(),
@@ -763,7 +978,12 @@ export const EVENTS = {
   /** Core stage: Jarvis shows a panel beside the orb (null = close it). */
   'stage:panel': z.object({ panel: StagePanelSchema.nullable() }),
   'planner:changed': z.object({}),
+  'npc:message': z.object({ message: NpcMessageSchema }),
+  'npc:status': z.object({ npcId: z.string(), state: z.enum(NPC_STATES) }),
+  'npc:meeting': z.object({ meeting: NpcMeetingSchema }),
   'mini:layout': z.object({ side: z.enum(['left', 'right']), tucked: z.boolean() }),
+  /** A setting changed in main (e.g. Jarvis switched his personality by voice); the UI follows. */
+  'settings:changed': z.object({ key: SettingKeySchema, value: z.unknown() }),
   'nav:open': z.object({
     view: z.enum([
       'chat',
@@ -778,6 +998,7 @@ export const EVENTS = {
       'brain',
       'tasks',
       'calendar',
+      'apps',
     ]),
     section: z.string().optional(),
   }),

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FileText, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import { Button } from '../../components/ui/button';
+import { Slash } from '../../components/ui/slash';
 import { TextInput } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
 import { useMemoryStore } from '../../stores/memory-store';
@@ -11,6 +12,7 @@ import { coverClass } from './page-meta';
 import { PageEditor } from './page-editor';
 import { SpaceGallery } from './space-gallery';
 import { ago, SPACE_ICONS, type Page } from './space-kit';
+import { HelpButton } from '../../help/help-button';
 
 /** "New space" form: a name and an icon. */
 export function NewSpaceForm({ onDone }: { onDone(name: string | null): void }): React.JSX.Element {
@@ -95,8 +97,14 @@ function Dashboard(): React.JSX.Element {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-6xl px-6 py-10 md:px-10">
-        <p className="hud-label">{`// spaces · ${String(spaces.length).padStart(2, '0')} online`}</p>
-        <h1 className="mt-1 text-3xl font-bold text-ink-100">Spaces</h1>
+        <p className="hud-label">
+          <Slash />
+          {`spaces · ${String(spaces.length).padStart(2, '0')} online`}
+        </p>
+        <h1 className="mt-1 flex items-center gap-2 text-3xl font-bold text-ink-100">
+          Spaces
+          <HelpButton topic="spaces" />
+        </h1>
         <p className="mt-2 max-w-xl text-sm text-ink-500">
           Your own notebooks for anything — learning, money, ideas. Pages are Markdown files in your
           Obsidian vault, so Jarvis can look things up in them when you ask.
@@ -118,7 +126,7 @@ function Dashboard(): React.JSX.Element {
                   <span className="block font-semibold text-ink-100 group-hover:text-accent-300">
                     {sp.name}
                   </span>
-                  <span className="font-code text-[11px] text-ink-500">
+                  <span className="font-code text-2xs text-ink-500">
                     {sp.pageCount} {sp.pageCount === 1 ? 'page' : 'pages'} · {ago(sp.updatedAt)}
                   </span>
                 </div>
@@ -148,7 +156,10 @@ function Dashboard(): React.JSX.Element {
         </ul>
         {recent.length > 0 && (
           <>
-            <h2 className="hud-label mt-12 mb-3">{'// recently edited'}</h2>
+            <h2 className="hud-label mt-12 mb-3">
+              <Slash />
+              recently edited
+            </h2>
             <ul className="divide-y divide-line-subtle rounded-md border border-line bg-surface-1">
               {recent.map((p) => (
                 <li key={`${p.space.name}/${p.name}`}>
@@ -166,7 +177,7 @@ function Dashboard(): React.JSX.Element {
                         {p.excerpt || 'Empty page'}
                       </span>
                     </span>
-                    <span className="shrink-0 font-code text-[11px] text-ink-500">
+                    <span className="shrink-0 font-code text-2xs text-ink-500">
                       {p.space.icon} {p.space.name} · {ago(p.updatedAt)}
                     </span>
                   </button>

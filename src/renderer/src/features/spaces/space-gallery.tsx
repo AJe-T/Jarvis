@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FilePlus2, FileText, LayoutGrid, List, Plus, Search, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { Button, IconButton } from '../../components/ui/button';
+import { Slash } from '../../components/ui/slash';
 import { confirmAction } from '../../components/ui/confirm-modal';
 import { TextInput } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
@@ -51,7 +52,7 @@ function PageCard({ page, onOpen }: { page: Page; onOpen(): void }): React.JSX.E
             <span className="line-clamp-2 font-semibold text-ink-100 group-hover:text-accent-300">
               {page.name}
             </span>
-            <span className="mt-0.5 block font-code text-[11px] text-ink-500">
+            <span className="mt-0.5 block font-code text-2xs text-ink-500">
               {ago(page.updatedAt)}
             </span>
           </span>
@@ -137,7 +138,10 @@ export function SpaceGallery({ space }: { space: SpaceInfo }): React.JSX.Element
             {space.icon}
           </span>
           <div className="min-w-0 pb-1">
-            <p className="hud-label">{`// space · ${String(pages.length).padStart(2, '0')} pages`}</p>
+            <p className="hud-label">
+              <Slash />
+              {`space · ${String(pages.length).padStart(2, '0')} pages`}
+            </p>
             <h1 className="truncate text-3xl font-bold text-ink-100">{space.name}</h1>
           </div>
         </div>
@@ -249,7 +253,7 @@ export function SpaceGallery({ space }: { space: SpaceInfo }): React.JSX.Element
                   <span className="min-w-0 flex-1 truncate text-sm text-ink-500">
                     {p.excerpt || 'Empty page'}
                   </span>
-                  <span className="shrink-0 font-code text-[11px] text-ink-500">
+                  <span className="shrink-0 font-code text-2xs text-ink-500">
                     {ago(p.updatedAt)}
                   </span>
                 </button>

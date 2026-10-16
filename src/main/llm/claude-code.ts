@@ -23,6 +23,8 @@ export interface ClaudeCodeRuntime {
   /** Empty working folder Jarvis owns, so no project CLAUDE.md or settings are picked up. */
   cwd: string;
   query(): Promise<QueryFn>;
+  /** Claude Code's plan usage report (SDK `rate_limit_event`), seen on every subscription call. */
+  onRateLimit?(info: unknown): void;
 }
 
 export interface ClaudeCodeStatus {
@@ -126,13 +128,13 @@ export function requirePath(rt: ClaudeCodeRuntime): string {
     throw new JarvisError(
       'LLM_NO_KEY',
       'claude.exe not found',
-      'Claude Code is not installed. Install it, sign in, then choose "Claude subscription" again in Settings → Models & budget.',
+      'Claude Code is not installed. Install it, sign in, then choose "Claude subscription" again in Settings → Models & AI.',
     );
   return path;
 }
 
 const SIGN_IN =
-  'Claude Code is not signed in. Open Settings → Models & budget and choose "Sign in with Claude".';
+  'Claude Code is not signed in. Open Settings → Models & AI and choose "Sign in with Claude".';
 
 /** Maps SDK assistant-message errors and result errors to Jarvis errors Sir can act on. */
 export function claudeCodeError(
@@ -161,7 +163,7 @@ export function claudeCodeError(
       return new JarvisError(
         'LLM_BAD_REQUEST',
         detail,
-        `Your Claude plan can't use ${model}. Pick another model in Settings → Models & budget.`,
+        `Your Claude plan can't use ${model}. Pick another model in Settings → Models & AI.`,
       );
     case 'billing_error':
     case 'account_on_hold':
@@ -272,7 +274,7 @@ export function createClaudeCodeClient(rt: ClaudeCodeRuntime): LlmClient {
         throw new JarvisError(
           'LLM_BAD_REQUEST',
           'tools via subscription client',
-          'Computer control needs an Anthropic API key. Switch the connection in Settings → Models & budget.',
+          'Computer control needs an Anthropic API key. Switch the connection in Settings → Models & AI.',
         );
       const path = requirePath(rt);
       const query = await rt.query();
@@ -298,6 +300,8 @@ export function createClaudeCodeClient(rt: ClaudeCodeRuntime): LlmClient {
             if (e.type === 'content_block_delta' && e.delta.type === 'text_delta') {
               opts.onText?.(e.delta.text);
             }
+          } else if (m.type === 'rate_limit_event') {
+            rt.onRateLimit?.(m.rate_limit_info);
           } else if (m.type === 'assistant') {
             errorKind ??= m.error;
             for (const b of m.message.content) if (b.type === 'text') text += b.text;

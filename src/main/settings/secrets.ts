@@ -23,7 +23,7 @@ export interface SecretStore {
  * `devFallback` (dev builds only) lets ANTHROPIC_API_KEY from .env stand in for an unset key.
  */
 /** Secrets Jarvis creates for itself; Settings never shows any of their characters. */
-const INTERNAL = /^(remote_|whatsapp_)/;
+const INTERNAL = /^(remote_|whatsapp_|voice_)/;
 
 export function createSecretStore(
   file: string,

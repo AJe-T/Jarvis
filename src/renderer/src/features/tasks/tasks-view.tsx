@@ -6,7 +6,9 @@ import {
   Grid2x2,
   Hash,
   Inbox,
+  ChevronRight,
   Kanban,
+  LayoutGrid,
   List,
   ListChecks,
   Plus,
@@ -17,7 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { PLANNER_COLORS, type TodoList } from '@shared/planner';
+import { PLANNER_COLORS, type TodoList, type TodoStatus } from '@shared/planner';
 import { toDateKey } from '@shared/planner-time';
 import type { QuickAdd } from '@shared/quick-add';
 import { IconButton } from '../../components/ui/button';
@@ -25,16 +27,24 @@ import { confirmAction } from '../../components/ui/confirm-modal';
 import { PageHeader } from '../../components/ui/page';
 import { call } from '../../lib/api';
 import { plannerCall, usePlannerStore } from '../../stores/planner-store';
-import { QuickAddInput, selectClass } from './planner-kit';
-import { TaskBoard, TaskMatrix } from './task-boards';
+import { ListSettings } from './list-settings';
+import { ListsHome } from './lists-home';
+import { PRIORITY, QuickAddInput, selectClass } from './planner-kit';
+import { COLUMN, COLUMN_DOT, TaskBoard, TaskMatrix } from './task-boards';
 import { TaskDetail } from './task-detail';
 import {
+  NO_FILTER,
   SMART,
   between,
   groupTodos,
   inScope,
+  isFiltered,
+  listSummary,
+  matchesFilter,
   sortTodos,
   taskStats,
+  type BoardFilter,
+  type DueFilter,
   type Scope,
   type SmartId,
   type SortKey,
@@ -52,19 +62,47 @@ const SMART_ICON: Record<SmartId, LucideIcon> = {
   done: CheckCheck,
 };
 
-function loadPrefs(): { scope: Scope; mode: Mode; sort: SortKey } {
-  const fallback = {
-    scope: { kind: 'smart', id: 'today' } as Scope,
-    mode: 'list' as Mode,
-    sort: 'smart' as SortKey,
+interface Prefs {
+  scope: Scope;
+  /** Layout for smart lists and tags. */
+  mode: Mode;
+  /** Layout inside a list (a board by default: To do / Doing / Done). */
+  listMode: Mode;
+  sort: SortKey;
+}
+
+function loadPrefs(): Prefs {
+  const fallback: Prefs = {
+    scope: { kind: 'lists' },
+    mode: 'list',
+    listMode: 'board',
+    sort: 'smart',
   };
   try {
-    const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null') as typeof fallback | null;
-    return v && typeof v === 'object' && v.scope && v.mode && v.sort ? v : fallback;
+    const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null') as Partial<Prefs> | null;
+    return v && typeof v === 'object' && v.scope && v.mode && v.sort
+      ? { ...fallback, ...v }
+      : fallback;
   } catch {
     return fallback;
   }
 }
+
+const DUE_FILTERS: Array<{ id: DueFilter; label: string }> = [
+  { id: 'all', label: 'Any date' },
+  { id: 'overdue', label: 'Overdue' },
+  { id: 'today', label: 'Today' },
+  { id: 'week', label: 'Next 7 days' },
+  { id: 'none', label: 'No date' },
+];
+
+const chip = (on: boolean): string =>
+  clsx(
+    'inline-flex h-7 items-center gap-1 rounded-pill border px-2.5 text-xs transition-colors',
+    on
+      ? 'border-accent-edge bg-selected font-medium text-accent-300'
+      : 'border-line text-ink-300 hover:bg-hover hover:text-ink-100',
+  );
 
 function ListRow({
   list,
@@ -159,9 +197,21 @@ export function TasksView(): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [newList, setNewList] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  /** Lists › Work › To do: one column of a list on its own. */
+  const [column, setColumn] = useState<TodoStatus | null>(null);
+  const [filter, setFilter] = useState<BoardFilter>(NO_FILTER);
   const quickRef = useRef<HTMLInputElement>(null);
   const today = toDateKey(new Date());
-  const { scope, mode, sort } = prefs;
+  const { scope, sort } = prefs;
+  const inList = scope.kind === 'list';
+  const mode = inList ? prefs.listMode : prefs.mode;
+  const setMode = (m: Mode): void =>
+    setPrefs((p) => (inList ? { ...p, listMode: m } : { ...p, mode: m }));
+  const scopeKey = JSON.stringify(scope);
+  useEffect(() => {
+    setColumn(null);
+    setFilter(NO_FILTER);
+  }, [scopeKey]);
 
   useEffect(() => {
     if (!loaded) void refresh();
@@ -209,31 +259,51 @@ export function TasksView(): React.JSX.Element {
     todos.filter((t) => inScope(t, s, today) && t.status !== 'done').length;
   const stats = useMemo(() => taskStats(todos, today), [todos, today]);
 
-  const visible = useMemo(() => {
+  /** The list's tasks after search and the filter bar, before picking a column. */
+  const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const inView = todos.filter(
       (t) =>
         inScope(t, scope, today) &&
+        (!inList || matchesFilter(t, filter, today)) &&
         (!q ||
           t.title.toLowerCase().includes(q) ||
           t.notes.toLowerCase().includes(q) ||
           t.tags.some((x) => x.includes(q))),
     );
     return sortTodos(inView, sort);
-  }, [todos, scope, today, query, sort]);
+  }, [todos, scope, today, query, sort, inList, filter]);
+  const visible = useMemo(
+    () => (inList && column ? filtered.filter((t) => t.status === column) : filtered),
+    [filtered, inList, column],
+  );
   const groups = useMemo(() => groupTodos(visible, scope, today), [visible, scope, today]);
   const selected = todos.find((t) => t.id === selectedId) ?? null;
 
+  const currentList = scope.kind === 'list' ? listMap.get(scope.id) : undefined;
+  const summary = currentList ? listSummary(currentList, todos, today) : null;
+  const listTags = useMemo(
+    () =>
+      currentList
+        ? [
+            ...new Set(todos.filter((t) => t.listId === currentList.id).flatMap((t) => t.tags)),
+          ].sort()
+        : [],
+    [todos, currentList],
+  );
   const title =
-    scope.kind === 'smart'
-      ? (SMART.find((s) => s.id === scope.id)?.label ?? 'Tasks')
-      : scope.kind === 'list'
-        ? (listMap.get(scope.id)?.name ?? 'List')
-        : `#${scope.tag}`;
+    scope.kind === 'lists'
+      ? 'Lists'
+      : scope.kind === 'smart'
+        ? (SMART.find((s) => s.id === scope.id)?.label ?? 'Tasks')
+        : scope.kind === 'list'
+          ? (currentList?.name ?? 'List')
+          : `#${scope.tag}`;
   const setScope = (s: Scope): void => setPrefs((p) => ({ ...p, scope: s }));
   const same = (a: Scope, b: Scope): boolean => JSON.stringify(a) === JSON.stringify(b);
 
-  function add(_text: string, q: QuickAdd): void {
+  function add(_text: string, q: QuickAdd, status?: TodoStatus): void {
+    const into = status ?? (inList && column !== 'done' ? column : null);
     const hashList = q.hashtags
       .map((h) => lists.find((l) => l.name.toLowerCase() === h.toLowerCase()))
       .find(Boolean);
@@ -254,6 +324,7 @@ export function TasksView(): React.JSX.Element {
           ]),
         ],
         starred: scope.kind === 'smart' && scope.id === 'starred',
+        ...(into ? { status: into } : {}),
       }),
     ).then((t) => t && setSelectedId(null));
   }
@@ -274,6 +345,21 @@ export function TasksView(): React.JSX.Element {
         aria-label="Task lists"
         className="hidden w-56 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line-subtle p-3 md:flex"
       >
+        <button
+          type="button"
+          aria-current={scope.kind === 'lists' ? 'page' : undefined}
+          onClick={() => setScope({ kind: 'lists' })}
+          className={clsx(
+            'flex h-9 w-full items-center gap-2.5 rounded-sm px-2 text-sm font-medium',
+            scope.kind === 'lists' ? 'rail-active' : 'text-ink-100 hover:bg-hover',
+          )}
+        >
+          <LayoutGrid size={15} aria-hidden />
+          All lists
+          <span className="ml-auto text-xs text-ink-500">
+            {lists.filter((l) => !l.archived).length || ''}
+          </span>
+        </button>
         <ul className="flex flex-col gap-0.5">
           {SMART.map((s) => {
             const Icon = SMART_ICON[s.id];
@@ -306,7 +392,7 @@ export function TasksView(): React.JSX.Element {
         </ul>
         <div>
           <div className="mb-1 flex items-center px-2">
-            <h2 className="font-code text-[11px] font-semibold tracking-widest text-ink-500 uppercase">
+            <h2 className="font-code text-2xs font-semibold tracking-widest text-ink-500 uppercase">
               Lists
             </h2>
             <IconButton label="New list" className="ml-auto size-6" onClick={() => setNewList('')}>
@@ -314,15 +400,17 @@ export function TasksView(): React.JSX.Element {
             </IconButton>
           </div>
           <ul className="flex flex-col gap-0.5">
-            {lists.map((l) => (
-              <ListRow
-                key={l.id}
-                list={l}
-                count={count({ kind: 'list', id: l.id })}
-                active={same(scope, { kind: 'list', id: l.id })}
-                onOpen={() => setScope({ kind: 'list', id: l.id })}
-              />
-            ))}
+            {lists
+              .filter((l) => !l.archived || same(scope, { kind: 'list', id: l.id }))
+              .map((l) => (
+                <ListRow
+                  key={l.id}
+                  list={l}
+                  count={count({ kind: 'list', id: l.id })}
+                  active={same(scope, { kind: 'list', id: l.id })}
+                  onOpen={() => setScope({ kind: 'list', id: l.id })}
+                />
+              ))}
           </ul>
           {newList !== null && (
             <form
@@ -353,7 +441,7 @@ export function TasksView(): React.JSX.Element {
         </div>
         {tags.length > 0 && (
           <div>
-            <h2 className="mb-1 px-2 font-code text-[11px] font-semibold tracking-widest text-ink-500 uppercase">
+            <h2 className="mb-1 px-2 font-code text-2xs font-semibold tracking-widest text-ink-500 uppercase">
               Tags
             </h2>
             <ul className="flex flex-col gap-0.5">
@@ -379,171 +467,335 @@ export function TasksView(): React.JSX.Element {
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <PageHeader title={title}>
-          <div className="hidden items-center gap-1 rounded-sm border border-line px-2 focus-within:border-accent-edge lg:flex">
-            <Search size={13} aria-hidden className="text-ink-500" />
-            <input
-              aria-label="Search tasks"
-              placeholder="Search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="h-7 w-32 bg-transparent text-sm text-ink-100 outline-none focus-visible:outline-none placeholder:text-ink-500"
-            />
-          </div>
-          <select
-            aria-label="Sort"
-            className={selectClass}
-            value={sort}
-            onChange={(e) => setPrefs((p) => ({ ...p, sort: e.target.value as SortKey }))}
-          >
-            <option value="smart">Smart order</option>
-            <option value="due">Due date</option>
-            <option value="priority">Priority</option>
-            <option value="title">A–Z</option>
-            <option value="created">Newest</option>
-            <option value="manual">My order (drag)</option>
-          </select>
-          <div
-            className="flex rounded-sm border border-line p-0.5"
-            role="radiogroup"
-            aria-label="Layout"
-          >
-            {(
-              [
-                ['list', List, 'List'],
-                ['board', Kanban, 'Board'],
-                ['matrix', Grid2x2, 'Priority matrix'],
-              ] as const
-            ).map(([m, Icon, label]) => (
-              <IconButton
-                key={m}
-                label={label}
-                active={mode === m}
-                className="size-7"
-                onClick={() => setPrefs((p) => ({ ...p, mode: m }))}
+        {scope.kind === 'lists' ? (
+          <>
+            <PageHeader title="Lists" help="tasks" />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ListsHome
+                lists={lists}
+                todos={todos}
+                today={today}
+                onOpen={(id) => setScope({ kind: 'list', id })}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <PageHeader title={title} help="tasks">
+              {currentList && (
+                <ListSettings
+                  list={currentList}
+                  todos={todos}
+                  onDeleted={() => setScope({ kind: 'lists' })}
+                />
+              )}
+              <div className="hidden items-center gap-1 rounded-sm border border-line px-2 focus-within:border-accent-edge lg:flex">
+                <Search size={13} aria-hidden className="text-ink-500" />
+                <input
+                  aria-label="Search tasks"
+                  placeholder="Search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="h-7 w-32 bg-transparent text-sm text-ink-100 outline-none focus-visible:outline-none placeholder:text-ink-500"
+                />
+              </div>
+              <select
+                aria-label="Sort"
+                className={selectClass}
+                value={sort}
+                onChange={(e) => setPrefs((p) => ({ ...p, sort: e.target.value as SortKey }))}
               >
-                <Icon size={14} aria-hidden />
-              </IconButton>
-            ))}
-          </div>
-          {scope.kind === 'smart' && scope.id === 'done' && visible.length > 0 && (
-            <IconButton
-              label="Clear completed"
-              onClick={() =>
-                void confirmAction({
-                  title: 'Clear completed tasks?',
-                  body: `${visible.length} completed tasks will be deleted.`,
-                  actionLabel: 'Clear',
-                  destructive: true,
-                }).then((ok) => void (ok && plannerCall(call('todos:clearCompleted', {}))))
-              }
-            >
-              <Trash2 size={15} aria-hidden />
-            </IconButton>
-          )}
-        </PageHeader>
+                <option value="smart">Smart order</option>
+                <option value="due">Due date</option>
+                <option value="priority">Priority</option>
+                <option value="title">A–Z</option>
+                <option value="created">Newest</option>
+                <option value="manual">My order (drag)</option>
+              </select>
+              <div
+                className="flex rounded-sm border border-line p-0.5"
+                role="radiogroup"
+                aria-label="Layout"
+              >
+                {(
+                  [
+                    ['list', List, 'List'],
+                    ['board', Kanban, 'Board'],
+                    ['matrix', Grid2x2, 'Priority matrix'],
+                  ] as const
+                ).map(([m, Icon, label]) => (
+                  <IconButton
+                    key={m}
+                    label={label}
+                    active={mode === m}
+                    className="size-7"
+                    onClick={() => {
+                      setMode(m);
+                      setColumn(null);
+                    }}
+                  >
+                    <Icon size={14} aria-hidden />
+                  </IconButton>
+                ))}
+              </div>
+              {scope.kind === 'smart' && scope.id === 'done' && visible.length > 0 && (
+                <IconButton
+                  label="Clear completed"
+                  onClick={() =>
+                    void confirmAction({
+                      title: 'Clear completed tasks?',
+                      body: `${visible.length} completed tasks will be deleted.`,
+                      actionLabel: 'Clear',
+                      destructive: true,
+                    }).then((ok) => void (ok && plannerCall(call('todos:clearCompleted', {}))))
+                  }
+                >
+                  <Trash2 size={15} aria-hidden />
+                </IconButton>
+              )}
+            </PageHeader>
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line-subtle px-4 py-2 text-xs text-ink-500 md:px-6">
-          <span>
-            <b className="text-ink-100">{stats.doneToday}</b> done today
-          </span>
-          <span>
-            <b className="text-ink-100">{stats.doneWeek}</b> this week
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Flame size={12} aria-hidden className={stats.streak ? 'text-lamp-400' : ''} />
-            <b className="text-ink-100">{stats.streak}</b> day streak
-          </span>
-          {stats.overdue > 0 && (
-            <button
-              type="button"
-              onClick={() => setScope({ kind: 'smart', id: 'today' })}
-              className="text-alarm-500 hover:underline"
-            >
-              {stats.overdue} overdue
-            </button>
-          )}
-          <span className="ml-auto hidden xl:inline">
-            Press <kbd className="font-code">N</kbd> to add · try “call mom tomorrow 6pm #home !1
-            every week”
-          </span>
-        </div>
-
-        <div className="px-4 pt-3 md:px-6">
-          <QuickAddInput
-            inputRef={quickRef}
-            today={today}
-            placeholder={`Add a task to ${title}`}
-            onSubmit={add}
-          />
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {mode === 'board' ? (
-            <TaskBoard
-              todos={visible}
-              today={today}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          ) : mode === 'matrix' ? (
-            <TaskMatrix
-              todos={visible}
-              today={today}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          ) : (
-            <div className="px-4 py-3 md:px-6">
-              {groups.map((g) => (
-                <section key={g.key} className="mb-4">
-                  {g.label && (
-                    <h2
-                      className={clsx(
-                        'mb-1 flex items-center gap-2 px-3 font-code text-[11px] font-semibold tracking-widest uppercase',
-                        g.label === 'Overdue' ? 'text-alarm-500' : 'text-ink-500',
-                      )}
-                    >
-                      {g.label} <span className="text-ink-500">{g.items.length}</span>
-                    </h2>
+            {currentList && summary && (
+              <div className="flex flex-col gap-2.5 border-b border-line-subtle px-4 py-3 md:px-6">
+                <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setScope({ kind: 'lists' })}
+                    className="text-ink-500 hover:text-accent-300"
+                  >
+                    Lists
+                  </button>
+                  <ChevronRight size={14} aria-hidden className="text-ink-500" />
+                  <button
+                    type="button"
+                    onClick={() => setColumn(null)}
+                    className={clsx(
+                      'inline-flex min-w-0 items-center gap-1.5 truncate',
+                      column ? 'text-ink-500 hover:text-accent-300' : 'font-semibold text-ink-100',
+                    )}
+                  >
+                    <span
+                      className="size-2 shrink-0 rounded-pill"
+                      style={{ background: currentList.color }}
+                    />
+                    {currentList.icon} {currentList.name}
+                  </button>
+                  {column && (
+                    <>
+                      <ChevronRight size={14} aria-hidden className="text-ink-500" />
+                      <span className="font-semibold text-ink-100">{COLUMN[column]}</span>
+                    </>
                   )}
-                  <ul className="overflow-hidden rounded-md border border-line-subtle bg-surface-1">
-                    {g.items.map((t) => (
-                      <TaskRow
-                        key={t.id}
-                        todo={t}
-                        today={today}
-                        lists={listMap}
-                        subtasks={subsOf.get(t.id) ?? []}
-                        selected={t.id === selectedId}
-                        showList={scope.kind !== 'list'}
-                        draggable={sort === 'manual'}
-                        onSelect={() => setSelectedId(t.id === selectedId ? null : t.id)}
-                        onDragStart={() => setDragId(t.id)}
-                        onDropOn={() => dropOn(t.id)}
+                  <span className="ml-auto hidden shrink-0 items-center gap-2 text-xs text-ink-500 sm:flex">
+                    {summary.counts.done}/{summary.total} done
+                    <span className="h-1.5 w-28 overflow-hidden rounded-pill bg-neutral-tint">
+                      <span
+                        className="block h-full rounded-pill transition-[width] duration-500"
+                        style={{ width: `${summary.pct}%`, background: currentList.color }}
                       />
+                    </span>
+                    {summary.pct}%
+                  </span>
+                </nav>
+                {currentList.description && (
+                  <p className="text-sm text-ink-300">{currentList.description}</p>
+                )}
+                <div
+                  className="flex flex-wrap items-center gap-1.5"
+                  role="tablist"
+                  aria-label="Columns"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={column === null && mode === 'board'}
+                    onClick={() => {
+                      setColumn(null);
+                      setMode('board');
+                    }}
+                    className={chip(column === null && mode === 'board')}
+                  >
+                    <Kanban size={13} aria-hidden /> Board
+                  </button>
+                  {(['todo', 'doing', 'done'] as const).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      role="tab"
+                      aria-selected={column === st}
+                      onClick={() => setColumn(column === st ? null : st)}
+                      className={chip(column === st)}
+                    >
+                      <span className={clsx('size-2 rounded-pill', COLUMN_DOT[st])} />
+                      {COLUMN[st]}
+                      <span className="tabular-nums text-ink-500">{summary.counts[st]}</span>
+                    </button>
+                  ))}
+                  <span aria-hidden className="mx-1 h-5 w-px bg-line" />
+                  <select
+                    aria-label="Filter by priority"
+                    value={filter.priority}
+                    onChange={(e) => setFilter((f) => ({ ...f, priority: Number(e.target.value) }))}
+                    className={clsx(chip(filter.priority !== 0), 'bg-surface-1 pr-1')}
+                  >
+                    <option value={0}>Any priority</option>
+                    {[1, 2, 3].map((p) => (
+                      <option key={p} value={p}>
+                        {PRIORITY[p]?.label}
+                      </option>
                     ))}
-                  </ul>
-                </section>
-              ))}
-              {visible.length === 0 && (
-                <div className="flex flex-col items-center gap-2 py-16 text-center">
-                  <CheckCheck size={32} aria-hidden className="text-accent-500" />
-                  <p className="text-sm text-ink-300">
-                    {query
-                      ? 'Nothing matches.'
-                      : scope.kind === 'smart' && scope.id === 'today'
-                        ? 'All clear for today, sir.'
-                        : 'No tasks here yet.'}
-                  </p>
-                  <p className="text-xs text-ink-500">
-                    Type above, or ask Jarvis: “add buy milk to my tasks for tomorrow”.
-                  </p>
+                  </select>
+                  <select
+                    aria-label="Filter by due date"
+                    value={filter.due}
+                    onChange={(e) => setFilter((f) => ({ ...f, due: e.target.value as DueFilter }))}
+                    className={clsx(chip(filter.due !== 'all'), 'bg-surface-1 pr-1')}
+                  >
+                    {DUE_FILTERS.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                  {listTags.slice(0, 8).map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      aria-pressed={filter.tag === tag}
+                      onClick={() => setFilter((f) => ({ ...f, tag: f.tag === tag ? null : tag }))}
+                      className={chip(filter.tag === tag)}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                  {isFiltered(filter) && (
+                    <button
+                      type="button"
+                      onClick={() => setFilter(NO_FILTER)}
+                      className="h-7 px-2 text-xs text-accent-300 hover:underline"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!currentList && (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line-subtle px-4 py-2 text-xs text-ink-500 md:px-6">
+                <span>
+                  <b className="text-ink-100">{stats.doneToday}</b> done today
+                </span>
+                <span>
+                  <b className="text-ink-100">{stats.doneWeek}</b> this week
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Flame size={12} aria-hidden className={stats.streak ? 'text-lamp-400' : ''} />
+                  <b className="text-ink-100">{stats.streak}</b> day streak
+                </span>
+                {stats.overdue > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setScope({ kind: 'smart', id: 'today' })}
+                    className="text-alarm-500 hover:underline"
+                  >
+                    {stats.overdue} overdue
+                  </button>
+                )}
+                <span className="ml-auto hidden xl:inline">
+                  Press <kbd className="font-code">N</kbd> to add · try “call mom tomorrow 6pm #home
+                  !1 every week”
+                </span>
+              </div>
+            )}
+
+            <div className="px-4 pt-3 md:px-6">
+              <QuickAddInput
+                inputRef={quickRef}
+                today={today}
+                placeholder={`Add a task to ${title}${column ? ` › ${COLUMN[column]}` : ''}`}
+                onSubmit={add}
+              />
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {mode === 'board' && !column ? (
+                <TaskBoard
+                  todos={visible}
+                  today={today}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  subsOf={subsOf}
+                  wipLimit={currentList?.wipLimit ?? null}
+                  {...(inList
+                    ? {
+                        onAdd: (st: TodoStatus, text: string, q: QuickAdd) => add(text, q, st),
+                        onFocusColumn: setColumn,
+                      }
+                    : {})}
+                />
+              ) : mode === 'matrix' ? (
+                <TaskMatrix
+                  todos={visible}
+                  today={today}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+              ) : (
+                <div className="px-4 py-3 md:px-6">
+                  {groups.map((g) => (
+                    <section key={g.key} className="mb-4">
+                      {g.label && (
+                        <h2
+                          className={clsx(
+                            'mb-1 flex items-center gap-2 px-3 font-code text-2xs font-semibold tracking-widest uppercase',
+                            g.label === 'Overdue' ? 'text-alarm-500' : 'text-ink-500',
+                          )}
+                        >
+                          {g.label} <span className="text-ink-500">{g.items.length}</span>
+                        </h2>
+                      )}
+                      <ul className="overflow-hidden rounded-md border border-line-subtle bg-surface-1">
+                        {g.items.map((t) => (
+                          <TaskRow
+                            key={t.id}
+                            todo={t}
+                            today={today}
+                            lists={listMap}
+                            subtasks={subsOf.get(t.id) ?? []}
+                            selected={t.id === selectedId}
+                            showList={scope.kind !== 'list'}
+                            draggable={sort === 'manual'}
+                            onSelect={() => setSelectedId(t.id === selectedId ? null : t.id)}
+                            onDragStart={() => setDragId(t.id)}
+                            onDropOn={() => dropOn(t.id)}
+                          />
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+                  {visible.length === 0 && (
+                    <div className="flex flex-col items-center gap-2 py-16 text-center">
+                      <CheckCheck size={32} aria-hidden className="text-accent-500" />
+                      <p className="text-sm text-ink-300">
+                        {query || isFiltered(filter)
+                          ? 'Nothing matches.'
+                          : column
+                            ? `Nothing in ${COLUMN[column]} yet.`
+                            : scope.kind === 'smart' && scope.id === 'today'
+                              ? 'All clear for today, sir.'
+                              : 'No tasks here yet.'}
+                      </p>
+                      <p className="text-xs text-ink-500">
+                        Type above, or ask Jarvis: “add buy milk to my tasks for tomorrow”.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {selected && (

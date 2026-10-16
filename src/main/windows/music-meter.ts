@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { BrowserWindow, app, desktopCapturer, ipcMain, session, type Session } from 'electron';
 import { z } from 'zod';
 import { logger } from '../logging/logger';
-import { CSP, HARDENED_WEB_PREFERENCES, hardenWindow, isAppUrl } from './hardening';
+import { CSP, HARDENED_WEB_PREFERENCES, hardenWindow, isAppPage } from './hardening';
 
 /**
  * Security.md §7, Design-system.md §6.1: the orb follows music playing on the PC. Loopback audio
@@ -14,8 +14,7 @@ const PARTITION = 'music-meter';
 const Level = z.number().min(0).max(1);
 
 export function isMeterUrl(raw: string): boolean {
-  if (!isAppUrl(raw)) return false;
-  return new URL(raw).pathname.endsWith('/meter.html');
+  return isAppPage(raw, 'meter.html');
 }
 
 let hardened: Session | null = null;

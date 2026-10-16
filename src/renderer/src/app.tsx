@@ -3,7 +3,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { ThemeSync } from './components/jarvis/theme-sync';
 import { OrbDock } from './components/jarvis/orb-dock';
 import { Rail } from './components/jarvis/rail';
-import { StatusBar } from './components/jarvis/status-bar';
+import { TitleBar } from './components/jarvis/titlebar';
 import { ConfirmModalHost } from './components/ui/confirm-modal';
 import { Toasts } from './components/ui/toasts';
 import { ActivityDrawer } from './features/activity/activity-drawer';
@@ -42,7 +42,7 @@ function DbBanner(): React.JSX.Element | null {
   );
 }
 
-/** §5.1: HUD shell: sidebar, gridded canvas, status bar; scanlines over it all and the orb on every screen. */
+/** §5.1: HUD shell: sidebar and gridded canvas edge to edge (no title or status bar); scanlines over it all and the orb on every screen. */
 function Shell(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const activityOpen = useUiStore((s) => s.activityOpen);
@@ -85,7 +85,7 @@ function Shell(): React.JSX.Element {
         )}
         {drawer && <ActivityDrawer />}
       </div>
-      <StatusBar />
+      <TitleBar />
     </div>
   );
 }

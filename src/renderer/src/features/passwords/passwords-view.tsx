@@ -20,6 +20,7 @@ import { Field, TextInput } from '../../components/ui/field';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
 import { generatePassword, strength } from './password-tools';
+import { HelpButton } from '../../help/help-button';
 
 type Summary = Res<'passwords:list'>[number];
 type Entry = Res<'passwords:get'>;
@@ -589,6 +590,7 @@ export function PasswordsView(): React.JSX.Element {
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle pr-2 pl-4">
           <ShieldCheck size={16} aria-hidden className="text-ok-400" />
           <h1 className="text-ui font-semibold text-ink-100">Passwords</h1>
+          <HelpButton topic="passwords" />
           <IconButton
             label="New entry"
             className="ml-auto"

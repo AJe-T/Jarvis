@@ -301,7 +301,7 @@ export function QuickAddInput({
           onKeyDown={(e) => e.key === 'Escape' && setText('')}
           className="min-w-0 flex-1 bg-transparent text-sm text-ink-100 outline-none focus-visible:outline-none placeholder:text-ink-500"
         />
-        {parsed?.title && <kbd className="font-code text-[11px] text-ink-500">Enter ↵</kbd>}
+        {parsed?.title && <kbd className="font-code text-2xs text-ink-500">Enter ↵</kbd>}
       </div>
       {parsed && <ParsedChips q={parsed} today={today} />}
     </form>

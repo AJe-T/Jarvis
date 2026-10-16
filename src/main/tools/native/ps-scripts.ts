@@ -92,6 +92,35 @@ switch ($P.action) {
 }
 @{ ok = $true; title = $p.MainWindowTitle } | ConvertTo-Json -Compress`;
 
+/**
+ * $P.moves: [{ pid, x, y, w, h }] as fractions (0–1) of the primary screen's work area (taskbar
+ * excluded). Restores each window first (a maximized window ignores MoveWindow), then places it.
+ */
+export const PS_ARRANGE_WINDOWS = `
+Add-Type -AssemblyName System.Windows.Forms
+if (-not ('JarvisLayout' -as [type])) {
+Add-Type -Name JarvisLayout -Namespace J -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int c);
+[DllImport("user32.dll")] public static extern bool MoveWindow(System.IntPtr h, int x, int y, int w, int ht, bool r);
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
+'@
+}
+$a = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+$placed = @()
+foreach ($m in $P.moves) {
+  $proc = Get-Process -Id $m.pid -ErrorAction SilentlyContinue
+  if (-not $proc -or $proc.MainWindowHandle -eq 0) { continue }
+  $h = $proc.MainWindowHandle
+  [J.JarvisLayout]::ShowWindow($h, 9) | Out-Null
+  $x = [int]($a.X + $a.Width * $m.x); $y = [int]($a.Y + $a.Height * $m.y)
+  # MoveWindow fails on apps running as administrator (UIPI): report only what really moved.
+  if ([J.JarvisLayout]::MoveWindow($h, $x, $y, [int]($a.Width * $m.w), [int]($a.Height * $m.h), $true)) {
+    [J.JarvisLayout]::SetForegroundWindow($h) | Out-Null
+    $placed += $proc.MainWindowTitle
+  }
+}
+@{ placed = $placed } | ConvertTo-Json -Compress`;
+
 /** $P.ids: process ids whose main windows should close gracefully. */
 export const PS_CLOSE_WINDOWS = `
 $closed = @()

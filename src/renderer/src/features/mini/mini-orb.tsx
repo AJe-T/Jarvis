@@ -4,8 +4,9 @@ import clsx from 'clsx';
 import type { AssistantState } from '@shared/types';
 import { DEFAULT_ORB_STYLE, ORB_STYLES, type OrbStyleId } from '@shared/orb-styles';
 import { Orb } from '../../components/jarvis/orb';
-import { applyTheme } from '../../components/jarvis/theme-sync';
+import { applyTheme, resolveTheme } from '../../components/jarvis/theme-sync';
 import { call } from '../../lib/api';
+import { useAssistantStore } from '../../stores/assistant-store';
 
 const IDLE_FADE_MS = 4000;
 
@@ -16,6 +17,7 @@ const IDLE_FADE_MS = 4000;
  */
 export function MiniOrb(): React.JSX.Element {
   const [state, setState] = useState<AssistantState>('IDLE');
+  const mood = useAssistantStore((s) => s.mood);
   const [mic, setMic] = useState(0);
   const [music, setMusic] = useState(0);
   const [caption, setCaption] = useState('');
@@ -30,9 +32,8 @@ export function MiniOrb(): React.JSX.Element {
   // The mini window has no settings store: read the theme and accent once when it opens.
   useEffect(() => {
     void call('settings:getAll', {}).then((v) => {
-      const choice = v['appearance.theme'];
       const light = window.matchMedia('(prefers-color-scheme: light)').matches;
-      const theme = choice === 'light' || choice === 'dark' ? choice : light ? 'light' : 'dark';
+      const theme = resolveTheme(v['appearance.theme'], light);
       const accent = v['appearance.accent'];
       applyTheme(theme, typeof accent === 'string' ? accent : '');
       const style = ORB_STYLES.find((s) => s.id === v['appearance.orbStyle']);
@@ -47,6 +48,7 @@ export function MiniOrb(): React.JSX.Element {
         setState(p.state);
         if (p.state === 'IDLE' || p.state === 'LISTENING') setTimeout(() => setCaption(''), 4000);
       }),
+      on('assistant:mood', (p) => useAssistantStore.getState().setMood(p.mood)),
       on('voice:level', (p) => setMic(p.rms)),
       on('music:level', (p) => setMusic(p.rms)),
       on('chat:delta', (p) =>
@@ -163,6 +165,7 @@ export function MiniOrb(): React.JSX.Element {
             level={state === 'LISTENING' ? mic : music}
             size="dock"
             orbStyle={orbStyle}
+            mood={mood}
           />
         </button>
         <button

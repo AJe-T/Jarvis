@@ -111,7 +111,7 @@ export function TaskRow({
             {todo.title}
           </span>
           {todo.status === 'doing' && (
-            <span className="shrink-0 rounded-pill bg-accent-tint px-1.5 text-[10px] font-semibold tracking-wide text-accent-tag-ink uppercase">
+            <span className="shrink-0 rounded-pill bg-accent-tint px-1.5 text-3xs font-semibold tracking-wide text-accent-tag-ink uppercase">
               Doing
             </span>
           )}

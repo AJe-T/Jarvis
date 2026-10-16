@@ -81,7 +81,12 @@ describe('deep research agent (ideas from OpenJarvis)', () => {
     expect(research.length).toBe(2);
     const offered = (research[0]?.tools ?? []).map((d) => (d as { name: string }).name).sort();
     // Only reading tools (search_memory too when the memory system is running).
-    expect(offered).toEqual(['fetch_web_page', 'web_search']);
+    expect(offered).toEqual([
+      'fetch_web_page',
+      'search_tool_output',
+      'web_search',
+      'youtube_transcript',
+    ]);
     const second = JSON.stringify(research[1]?.messages.at(-1)?.content);
     expect(second).toContain('Electron 44 ships Node 24');
     expect(second).toContain('can only search and read'); // open_app refused inside research

@@ -9,6 +9,7 @@ import { createPathGuard } from '../../security/path-guard';
 import { createScheduler } from '../../scheduler/scheduler';
 import type { Tool, ToolContext, ToolOutput } from '../types';
 import { createAppIndex } from './app-index';
+import { layoutSlots, type Slot } from './apps';
 import { createNativeTools } from './index';
 import { createFakeOs } from './os';
 
@@ -89,6 +90,7 @@ describe('native tool catalogue', () => {
       focus_window: 'SAFE',
       minimize_window: 'SAFE',
       maximize_window: 'SAFE',
+      arrange_windows: 'SAFE',
       set_volume: 'SAFE',
       mute: 'SAFE',
       media_control: 'SAFE',
@@ -240,6 +242,49 @@ describe('apps and windows', () => {
       /Asked Spotify to close/,
     );
     expect((await run(tools, 'focus_window', { name: 'zzz-nothing' })).isError).toBe(true);
+  });
+
+  it('arrange_windows snaps matched windows into layout slots on the work area', async () => {
+    const windows = [
+      { Id: 11, ProcessName: 'chrome', MainWindowTitle: 'GitHub - Google Chrome' },
+      { Id: 22, ProcessName: 'Code', MainWindowTitle: 'app.tsx - Visual Studio Code' },
+    ];
+    const { tools, os } = setup((script) =>
+      script.includes('MainWindowHandle -ne 0')
+        ? windows
+        : { placed: windows.map((w) => w.MainWindowTitle) },
+    );
+    const out = await run(tools, 'arrange_windows', { windows: ['chrome', 'code'] });
+    expect(out.text).toBe('Arranged: GitHub - Google Chrome | app.tsx - Visual Studio Code.');
+    expect(os.calls.at(-1)?.args[1]).toEqual({
+      moves: [
+        { pid: 11, x: 0, y: 0, w: 0.5, h: 1 },
+        { pid: 22, x: 0.5, y: 0, w: 0.5, h: 1 },
+      ],
+    });
+    expect((await run(tools, 'arrange_windows', { windows: ['zzq'] })).isError).toBe(true);
+    const twoLeft = await run(tools, 'arrange_windows', {
+      windows: ['chrome', 'code'],
+      layout: 'left',
+    });
+    expect(twoLeft.isError).toBe(true);
+    const same = await run(tools, 'arrange_windows', { windows: ['chrome', 'GitHub'] });
+    expect(same.text).toMatch(/same window/);
+  });
+
+  it('layoutSlots tiles the screen without gaps or overlaps', () => {
+    const area = (slots: Slot[]): number => slots.reduce((a, s) => a + s.w * s.h, 0);
+    for (const layout of ['columns', 'rows', 'main_side'] as const)
+      for (const n of [1, 2, 3, 4])
+        expect(area(layoutSlots(layout, n)), `${layout} ${n}`).toBeCloseTo(1);
+    expect(area(layoutSlots('grid', 4))).toBeCloseTo(1);
+    expect(layoutSlots('grid', 3)[2]).toEqual({ x: 0, y: 0.5, w: 0.5, h: 0.5 });
+    expect(layoutSlots('main_side', 3)).toEqual([
+      { x: 0, y: 0, w: 2 / 3, h: 1 },
+      { x: 2 / 3, y: 0, w: 1 / 3, h: 0.5 },
+      { x: 2 / 3, y: 0.5, w: 1 / 3, h: 0.5 },
+    ]);
+    expect(layoutSlots('right', 1)).toEqual([{ x: 0.5, y: 0, w: 0.5, h: 1 }]);
   });
 
   it('kill_process refuses system processes', async () => {

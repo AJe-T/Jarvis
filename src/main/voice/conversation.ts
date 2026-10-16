@@ -4,6 +4,8 @@
  * listening design; the code is our own.
  */
 
+import { DEFAULT_NAME, nameVariants } from '@shared/assistant-name';
+
 const words = (text: string): string[] =>
   text
     .toLowerCase()
@@ -92,16 +94,92 @@ function longestSharedRun(a: string[], b: string[]): number {
   return best;
 }
 
-export const DEFAULT_NAMES = ['jarvis', 'jervis', 'javis', 'jarvas'];
+export const DEFAULT_NAMES = nameVariants(DEFAULT_NAME);
 
-function nameRegex(names: readonly string[]): RegExp {
-  const alts = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?:'s)?(?![\\p{L}\\p{N}])`, 'iu');
+/** Edit distance, capped: only "is it within 2" matters here. */
+function distance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++)
+      row[j] = Math.min(
+        (prev[j] ?? 0) + 1,
+        (row[j - 1] ?? 0) + 1,
+        (prev[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    prev = row;
+  }
+  return prev[b.length] ?? 3;
 }
 
-/** Whole-word mention of the assistant's name (or a configured mishearing of it). */
+/**
+ * Whisper spells an unusual name a little differently each time ("Aprill", "Fridey"), so a word
+ * starting with the same letter counts as the name within one edit (two for names of 8+ letters).
+ * Names under 6 letters only forgive a missing or extra letter, so "Mike" doesn't wake on "mine";
+ * names of 3 letters must match exactly.
+ */
+function isName(word: string, names: readonly string[]): boolean {
+  const w = word.replace(/'s$/, '');
+  return names.some((n) => {
+    if (w === n) return true;
+    if (n.length <= 3 || w.length <= 3 || w[0] !== n[0]) return false;
+    if (n.length < 6 && w.length === n.length) return false;
+    return distance(w, n) <= (n.length >= 8 ? 2 : 1);
+  });
+}
+
+/** Indexes of the words that are the name; a two-word name ("Lady Grey") matches as a pair. */
+function nameAt(w: string[], names: readonly string[]): number[] {
+  const hits: number[] = [];
+  for (let i = 0; i < w.length; i++) {
+    if (isName(w[i] ?? '', names)) hits.push(i);
+    else if (i + 1 < w.length && isName(`${w[i]} ${w[i + 1]}`, names)) hits.push(i, ++i);
+    // Whisper sometimes splits the name in two ("Jar vis")
+    else if (i + 1 < w.length && isName(`${w[i]}${w[i + 1]}`, names)) hits.push(i, ++i);
+  }
+  return hits;
+}
+
+/** Whole-word mention of the assistant's name (or a near spelling of it). */
 export function mentionsName(text: string, names: readonly string[] = DEFAULT_NAMES): boolean {
-  return nameRegex(names).test(text);
+  return nameAt(words(text), names).length > 0;
+}
+
+export const GREETING = new Set([
+  'hey',
+  'hi',
+  'hello',
+  'ok',
+  'okay',
+  'yo',
+  'oi',
+  'excuse',
+  'me',
+  'dear',
+]);
+
+/**
+ * The request around the name: "Hey April, what time is it?" → "what time is it?". Empty when Sir
+ * only said the name (then Jarvis starts listening, like a wake word).
+ */
+export function stripName(text: string, names: readonly string[] = DEFAULT_NAMES): string {
+  const tokens = text.trim().split(/\s+/);
+  const plain = tokens.map((t) => t.toLowerCase().replace(/[^\p{L}\p{N}']+/gu, ''));
+  const hits = new Set(nameAt(plain, names));
+  if (hits.size === 0) return text.trim();
+  // A greeting right before the name goes with it ("hey April").
+  for (const i of [...hits])
+    for (let j = i - 1; j >= 0 && GREETING.has(plain[j] ?? ''); j--) hits.add(j);
+  const kept = tokens.filter((_, i) => !hits.has(i) && plain[i] !== '');
+  // "…, April?" keeps its question mark.
+  const end = hits.has(tokens.length - 1) ? (/[?!.]$/.exec(tokens.at(-1) ?? '')?.[0] ?? '') : '';
+  const rest = kept
+    .join(' ')
+    .replace(/^[\s,.!?;:-]+/, '')
+    .replace(/[\s,;:-]+$/, '')
+    .trim();
+  return rest && end && !/[?!.]$/.test(rest) ? rest + end : rest;
 }
 
 export interface Segment {
@@ -150,6 +228,13 @@ export class TranscriptBuffer {
 export interface Intent {
   directed: boolean;
   query: string;
+}
+
+/** What the intent judge gets beside the transcript. `heard` is the newest phrase on its own. */
+export interface JudgeContext {
+  followUp: boolean;
+  lastReply: string;
+  heard: string;
 }
 
 /** Parses the judge's JSON; anything malformed counts as "not for Jarvis". */

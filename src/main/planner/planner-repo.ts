@@ -107,19 +107,39 @@ export function createPlannerRepo(db: Db) {
 
   return {
     lists: (): TodoList[] =>
-      all<{ id: string; name: string; color: string; icon: string; sort_order: number }>(
-        'SELECT * FROM todo_lists ORDER BY sort_order, created_at',
-      ).map((r) => ({
+      all<{
+        id: string;
+        name: string;
+        color: string;
+        icon: string;
+        sort_order: number;
+        description: string;
+        wip_limit: number | null;
+        archived: number;
+      }>('SELECT * FROM todo_lists ORDER BY sort_order, created_at').map((r) => ({
         id: r.id,
         name: r.name,
         color: r.color,
         icon: r.icon,
         sortOrder: r.sort_order,
+        description: r.description,
+        wipLimit: r.wip_limit,
+        archived: r.archived === 1,
       })),
     putList(l: TodoList, now: string): void {
       db.prepare(
-        'INSERT INTO todo_lists (id, name, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, color = excluded.color, icon = excluded.icon, sort_order = excluded.sort_order',
-      ).run(l.id, l.name, l.color, l.icon, l.sortOrder, now);
+        'INSERT INTO todo_lists (id, name, color, icon, sort_order, description, wip_limit, archived, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, color = excluded.color, icon = excluded.icon, sort_order = excluded.sort_order, description = excluded.description, wip_limit = excluded.wip_limit, archived = excluded.archived',
+      ).run(
+        l.id,
+        l.name,
+        l.color,
+        l.icon,
+        l.sortOrder,
+        l.description,
+        l.wipLimit,
+        l.archived ? 1 : 0,
+        now,
+      );
     },
     deleteList(id: string): void {
       db.prepare('DELETE FROM todo_lists WHERE id = ?').run(id);

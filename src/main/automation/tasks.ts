@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { ScheduleSchema, type Schedule } from '@shared/schedule';
 import type { Db } from '../db/connection';
 import { newId } from '../lib/util';
 
@@ -8,23 +8,7 @@ import { newId } from '../lib/util';
  * safety rules. Confirmations still need Sir; nothing runs while the app is closed.
  */
 
-export const ScheduleSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('daily'),
-    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-    /** 1 = Monday … 7 = Sunday; empty = every day. */
-    days: z.array(z.number().int().min(1).max(7)).max(7).default([]),
-  }),
-  z.object({
-    type: z.literal('interval'),
-    minutes: z
-      .number()
-      .int()
-      .min(15)
-      .max(7 * 24 * 60),
-  }),
-]);
-export type Schedule = z.infer<typeof ScheduleSchema>;
+export { ScheduleSchema, type Schedule };
 
 export const TASK_KINDS = ['briefing', 'task', 'checkin'] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
@@ -47,31 +31,72 @@ export interface TaskRow {
 
 /** ISO weekday: Monday 1 … Sunday 7. */
 const isoDay = (d: Date): number => ((d.getDay() + 6) % 7) + 1;
+const hm = (time: string): [number, number] => time.split(':').map(Number) as [number, number];
 
-/** Next time after `from` (local time) the schedule fires. */
-export function nextRun(s: Schedule, from: Date): Date {
-  if (s.type === 'interval') return new Date(from.getTime() + s.minutes * 60_000);
-  const [h, m] = s.time.split(':').map(Number) as [number, number];
-  for (let add = 0; add <= 7; add++) {
-    const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + add, h, m, 0, 0);
-    if (d <= from) continue;
-    if (s.days.length && !s.days.includes(isoDay(d))) continue;
-    return d;
+/** `day` of that month at h:m, or its last day when the month is shorter (31 → 30 Apr, 28 Feb). */
+function monthDay(year: number, month: number, day: number, h: number, m: number): Date {
+  const last = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, last), h, m, 0, 0);
+}
+
+/**
+ * Next time after `from` (local time) the schedule fires; null when it never will by the clock
+ * (a one-off that has passed, or "when Jarvis starts", which automation.start() runs itself).
+ */
+export function nextRun(s: Schedule, from: Date): Date | null {
+  switch (s.type) {
+    case 'interval':
+      return new Date(from.getTime() + s.minutes * 60_000);
+    case 'once': {
+      const at = new Date(s.at);
+      return at > from ? at : null;
+    }
+    case 'startup':
+      return null;
+    case 'monthly': {
+      const [h, m] = hm(s.time);
+      const here = monthDay(from.getFullYear(), from.getMonth(), s.day, h, m);
+      return here > from ? here : monthDay(from.getFullYear(), from.getMonth() + 1, s.day, h, m);
+    }
+    case 'daily': {
+      const [h, m] = hm(s.time);
+      for (let add = 0; add <= 7; add++) {
+        const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + add, h, m, 0, 0);
+        if (d <= from) continue;
+        if (s.days.length && !s.days.includes(isoDay(d))) continue;
+        return d;
+      }
+      return new Date(from.getTime() + 7 * 86_400_000);
+    }
   }
-  return new Date(from.getTime() + 7 * 86_400_000);
 }
 
 const DAY = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const ordinal = (n: number): string =>
+  `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
+
 export function describeSchedule(s: Schedule): string {
-  if (s.type === 'interval')
-    return s.minutes % 60 === 0 ? `every ${s.minutes / 60} h` : `every ${s.minutes} min`;
-  const days =
-    !s.days.length || s.days.length === 7
-      ? 'every day'
-      : s.days.join(',') === '1,2,3,4,5'
-        ? 'weekdays'
-        : s.days.map((d) => DAY[d]).join(', ');
-  return `${days} at ${s.time}`;
+  switch (s.type) {
+    case 'interval':
+      return s.minutes % 60 === 0 ? `every ${s.minutes / 60} h` : `every ${s.minutes} min`;
+    case 'once':
+      return `once, ${new Date(s.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`;
+    case 'monthly':
+      return `monthly on the ${ordinal(s.day)} at ${s.time}`;
+    case 'startup':
+      return s.delayMinutes
+        ? `when Jarvis starts (after ${s.delayMinutes} min)`
+        : 'when Jarvis starts';
+    case 'daily': {
+      const days =
+        !s.days.length || s.days.length === 7
+          ? 'every day'
+          : s.days.join(',') === '1,2,3,4,5'
+            ? 'weekdays'
+            : s.days.map((d) => DAY[d]).join(', ');
+      return `${days} at ${s.time}`;
+    }
+  }
 }
 
 export interface NewTask {
@@ -105,7 +130,7 @@ export function createTasksRepo(db: Db) {
     upsert(t: NewTask & { id?: string | undefined }, now = new Date()): TaskRow {
       const id = t.id ?? newId('task_');
       const existing = get(id);
-      const next = (t.enabled ?? true) ? nextRun(t.schedule, now).toISOString() : null;
+      const next = (t.enabled ?? true) ? (nextRun(t.schedule, now)?.toISOString() ?? null) : null;
       db.prepare(
         `INSERT INTO scheduled_tasks (id, name, kind, prompt, schedule_json, enabled, speak, save_to_vault, next_run_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -136,6 +161,12 @@ export function createTasksRepo(db: Db) {
       db.prepare(
         'UPDATE scheduled_tasks SET last_run_at = ?, last_status = ?, last_conversation_id = ?, next_run_at = ? WHERE id = ?',
       ).run(at.toISOString(), status, conversationId, next ? next.toISOString() : null, id);
+    },
+    /** Switches a task off (auto-pause); Sir switches it back on in Settings → Automations. */
+    pause(id: string, status: string): void {
+      db.prepare(
+        'UPDATE scheduled_tasks SET enabled = 0, next_run_at = NULL, last_status = ? WHERE id = ?',
+      ).run(status, id);
     },
     setStatus(id: string, status: string): void {
       db.prepare('UPDATE scheduled_tasks SET last_status = ? WHERE id = ?').run(status, id);

@@ -7,8 +7,9 @@ import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { SecretField } from './secret-field';
 import { SettingInput } from './settings-controls';
+import { CLOUD_PROVIDERS, cloudProvider, type CloudProviderId } from '@shared/llm-providers';
 
-type Provider = 'api' | 'subscription' | 'local';
+type Provider = 'api' | 'subscription' | 'local' | 'cloud';
 type Status = Res<'llm:claudeCodeStatus'>;
 
 const OPTIONS: Array<{ id: Provider; title: string; body: string }> = [
@@ -25,7 +26,12 @@ const OPTIONS: Array<{ id: Provider; title: string; body: string }> = [
   {
     id: 'local',
     title: 'Local model (Ollama / LM Studio)',
-    body: 'Runs fully offline on this PC. Free, private, but slower and less capable than Claude; no web search or computer control.',
+    body: 'Any OpenAI-compatible server on this PC or your network. With Ollama or LM Studio it runs offline: free and private, but slower and less capable than Claude; no web search or computer control.',
+  },
+  {
+    id: 'cloud',
+    title: 'Another AI (ChatGPT, Gemini, DeepSeek, Grok…)',
+    body: 'Your API key for OpenAI, Google Gemini, DeepSeek, xAI, Mistral, Groq, OpenRouter or Together. Paid per use on that account and counted in the budget; all tools work except computer control and Claude web search.',
   },
 ];
 
@@ -124,7 +130,12 @@ export function LocalModelCard(): React.JSX.Element {
       <SettingInput
         k="llm.local.baseUrl"
         label="Server address (OpenAI-compatible)"
-        hint="Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1. Only this PC or your home network."
+        hint="Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1 · FreeLLMAPI: http://localhost:3001/v1. Only this PC or your home network."
+      />
+      <SecretField
+        name="local_llm"
+        label="Server key (only if the server asks for one)"
+        placeholder="freellmapi-…"
       />
       <label className="flex flex-col gap-1 text-sm text-ink-100">
         Model
@@ -159,6 +170,109 @@ export function LocalModelCard(): React.JSX.Element {
         No Ollama yet? Install it from ollama.com, then run e.g. <code>ollama pull qwen3:8b</code>.
         Models that support tool calling (Qwen 3, Llama 3.1+, Mistral) can use Jarvis's tools.
       </p>
+      <p className="text-xs text-lamp-400">
+        FreeLLMAPI (github.com/tashfeenahmed/freellmapi) runs on this PC but forwards every message
+        to free cloud AI providers, which may keep or train on it. It is not offline or private;
+        don&apos;t use it for anything sensitive.
+      </p>
+    </div>
+  );
+}
+
+/** Another provider's API: pick it, add its key, choose a model from its own list. */
+export function CloudModelCard(): React.JSX.Element {
+  const id = useDraftSetting('llm.cloud.provider') ?? 'openai';
+  const chosen = useDraftSetting('llm.cloud.models') ?? {};
+  const model = chosen[id] ?? '';
+  const set = useSettingsStore((s) => s.stage);
+  const saved = useSettingsStore((s) => s.values['llm.cloud.provider']);
+  const p = cloudProvider(id);
+  const [models, setModels] = useState<string[]>([]);
+  const [status, setStatus] = useState<{ ok: boolean; error?: string | undefined } | null>(null);
+  const refresh = useCallback(async () => {
+    const r = await call('llm:cloudModels', {});
+    setModels(r.models);
+    setStatus(r.error ? { ok: false, error: r.error } : null);
+  }, []);
+  // The list comes from the saved provider: refresh once a change of provider is saved.
+  useEffect(() => void refresh(), [refresh, saved]);
+  const unsaved = saved !== id;
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-line p-3">
+      <label className="flex flex-col gap-1 text-sm text-ink-100">
+        Provider
+        <select
+          value={id}
+          onChange={(e) => {
+            void set('llm.cloud.provider', e.target.value as CloudProviderId);
+            setModels([]);
+            setStatus(null);
+          }}
+          className="min-h-8 max-w-md rounded-md border border-line bg-surface-2 px-2 text-ink-100"
+        >
+          {CLOUD_PROVIDERS.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <SecretField
+        key={p.secret}
+        name={p.secret}
+        label={`${p.label} API key`}
+        placeholder={p.keyHint}
+        onSaved={() => void refresh()}
+      />
+      <p className="text-xs text-ink-500">
+        Get a key at{' '}
+        <button
+          type="button"
+          className="text-accent-300 underline"
+          onClick={() => void call('app:openExternal', { url: p.keysUrl })}
+        >
+          {new URL(p.keysUrl).host}
+        </button>
+        . A ChatGPT or Gemini app subscription is separate from API access.
+      </p>
+      <label className="flex flex-col gap-1 text-sm text-ink-100">
+        Model
+        <input
+          list="cloud-models"
+          value={model}
+          placeholder={models.length ? 'Choose or type a model id…' : 'Type a model id'}
+          onChange={(e) =>
+            void set('llm.cloud.models', { ...chosen, [id]: e.target.value.trim() }).then(() =>
+              setStatus(null),
+            )
+          }
+          className="min-h-8 max-w-md rounded-md border border-line bg-surface-2 px-2 text-ink-100"
+        />
+        <datalist id="cloud-models">
+          {models.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="ghost" disabled={unsaved} onClick={() => void refresh()}>
+          Refresh models
+        </Button>
+        <Button disabled={unsaved} onClick={() => void call('llm:cloudTest', {}).then(setStatus)}>
+          Test
+        </Button>
+        {unsaved && (
+          <span className="text-sm text-ink-300">Save to load this provider&apos;s models.</span>
+        )}
+        {status && (
+          <span
+            role="status"
+            className={clsx('text-sm', status.ok ? 'text-ok-400' : 'text-alarm-500')}
+          >
+            {status.ok ? '✓ Model ready.' : status.error}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -197,6 +311,8 @@ export function ConnectionPicker(): React.JSX.Element {
         <ClaudeCodeCard />
       ) : provider === 'local' ? (
         <LocalModelCard />
+      ) : provider === 'cloud' ? (
+        <CloudModelCard />
       ) : (
         <SecretField
           name="anthropic"
@@ -205,6 +321,98 @@ export function ConnectionPicker(): React.JSX.Element {
           testable="anthropic"
         />
       )}
+    </div>
+  );
+}
+
+type CliStatus = Res<'llm:cliStatus'>[number];
+
+/**
+ * Sir's ChatGPT and Gemini plans, through each company's own app (Codex, Antigravity): no API key.
+ * They only think and write (no tools), for NPCs and sub-agents. Jarvis's own connection stays above.
+ */
+export function SubscriptionApps(): React.JSX.Element {
+  const [apps, setApps] = useState<CliStatus[] | null>(null);
+  const [tests, setTests] = useState<Record<string, { ok: boolean; error?: string | undefined }>>(
+    {},
+  );
+  const [testing, setTesting] = useState<string | null>(null);
+  const toast = useUiStore((s) => s.toast);
+  const refresh = useCallback(async () => setApps(await call('llm:cliStatus', {})), []);
+  useEffect(() => void refresh(), [refresh]);
+  if (!apps) return <span className="skeleton block h-16 w-full" aria-hidden />;
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {apps.map((a) => (
+        <div key={a.id} className="flex flex-col gap-2 rounded-md border border-line p-3">
+          <span className="font-semibold text-ink-100">{a.label}</span>
+          <span
+            role="status"
+            className={clsx(
+              'text-sm',
+              !a.installed
+                ? 'text-lamp-400'
+                : a.signedIn === false
+                  ? 'text-lamp-400'
+                  : 'text-ok-400',
+            )}
+          >
+            {!a.installed
+              ? `Not installed. ${a.installHint}`
+              : a.signedIn === true
+                ? '✓ Installed and signed in'
+                : a.signedIn === false
+                  ? 'Installed, not signed in'
+                  : '✓ Installed (press Test to check the sign-in)'}
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {a.installed && (
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  void call('llm:cliLogin', { id: a.id })
+                    .then(() =>
+                      toast({
+                        level: 'info',
+                        message: 'Finish signing in in the window that opened.',
+                      }),
+                    )
+                    .catch((e: unknown) => toast({ level: 'error', message: cleanError(e) }))
+                }
+              >
+                Sign in
+              </Button>
+            )}
+            {a.installed && (
+              <Button
+                disabled={testing === a.id}
+                onClick={() => {
+                  setTesting(a.id);
+                  void call('llm:cliTest', { id: a.id })
+                    .then((r) => setTests((t) => ({ ...t, [a.id]: r })))
+                    .finally(() => {
+                      setTesting(null);
+                      void refresh();
+                    });
+                }}
+              >
+                {testing === a.id ? 'Testing…' : 'Test'}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => void refresh()}>
+              Check again
+            </Button>
+          </div>
+          {tests[a.id] && (
+            <span
+              role="status"
+              className={clsx('text-sm', tests[a.id]?.ok ? 'text-ok-400' : 'text-alarm-500')}
+            >
+              {tests[a.id]?.ok ? '✓ It answered.' : tests[a.id]?.error}
+            </span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

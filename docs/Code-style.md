@@ -139,8 +139,8 @@ Before adding a package, answer in the PR:
 
 ## 10. Licensing & Third-Party Code
 
-- **Do not copy code from other repositories** into this project by default. Re-implement from our specs.
-- AGPL/GPL projects (e.g., Open Interpreter, Khoj): **never** copy code, even small snippets. Ideas and public behaviour are fine; code is not.
+- **Do not copy code from other repositories** into this project by default. **Reverse-engineer instead:** read the source (or study the running app), understand the logic, then write our own code with the same logic, in our structure, naming and conventions. No pasting and no line-by-line translation into TypeScript.
+- AGPL/GPL projects (e.g., Open Interpreter, Khoj): **never** copy code, even small snippets, and don't closely paraphrase it. Re-implement from their public behaviour and ideas only.
 - MIT/Apache snippets (only if truly necessary): keep the original copyright + licence header in the file, and add an entry to `THIRD_PARTY_NOTICES.md` (project, URL, licence, files).
 - Fonts are OFL; bundle their licence files in `resources/fonts/`.
 - Bundled MCP servers (e.g., `@playwright/mcp`, Apache-2.0) run as separate processes; list them in `THIRD_PARTY_NOTICES.md`.

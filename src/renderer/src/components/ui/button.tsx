@@ -26,7 +26,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       className={clsx(
-        'inline-flex h-9 items-center justify-center gap-2 rounded-sm px-4 font-code text-[13px] font-medium tracking-wide whitespace-nowrap transition-colors duration-[120ms] disabled:cursor-not-allowed disabled:opacity-50',
+        'btn inline-flex h-9 items-center justify-center gap-2 rounded-sm px-4 font-code text-sm font-medium tracking-wide whitespace-nowrap transition-colors duration-[120ms] disabled:cursor-not-allowed disabled:opacity-50',
         VARIANTS[variant],
         className,
       )}
@@ -39,6 +39,8 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   label: string;
   hint?: string;
   active?: boolean;
+  /** Where the tooltip opens (header buttons: below, so it isn't under the window buttons). */
+  tipSide?: 'top' | 'right' | 'bottom' | 'left';
 }
 
 /** Icon-only buttons always carry an aria-label and a tooltip (Code-style.md §6). */
@@ -46,6 +48,7 @@ export function IconButton({
   label,
   hint,
   active,
+  tipSide = 'right',
   className,
   children,
   type = 'button',
@@ -73,7 +76,7 @@ export function IconButton({
       </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content
-          side="right"
+          side={tipSide}
           sideOffset={6}
           className="fade-in z-50 rounded-sm border border-line-strong bg-surface-1 px-2 py-1 text-xs text-ink-100 shadow-pop"
         >

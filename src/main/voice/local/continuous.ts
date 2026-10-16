@@ -18,6 +18,8 @@ export interface HeardSegment {
   text: string;
   start: number;
   end: number;
+  /** The phrase itself (memory only), for Voice Match (ADR-039). */
+  audio?: Float32Array;
 }
 
 export interface ContinuousTranscriber {
@@ -64,7 +66,8 @@ export function createContinuousTranscriber(deps: {
         const job = backlog.shift();
         if (!job) break;
         const text = await deps.transcriber.transcribe(job.audio, deps.language?.());
-        if (text && !closed) deps.onSegment({ text, start: job.start, end: job.end });
+        if (text && !closed)
+          deps.onSegment({ text, start: job.start, end: job.end, audio: job.audio });
       }
     } catch (err) {
       deps.onError(err instanceof Error ? err : new Error(String(err)));

@@ -7,7 +7,13 @@ import type { ToolRuntime, TurnContext } from './agent-loop';
 import { pickModel } from './model-router';
 
 /** Tools the researcher may use: reading the web, nothing that acts on the PC. */
-const RESEARCH_TOOLS = new Set(['web_search', 'fetch_web_page', 'search_memory']);
+const RESEARCH_TOOLS = new Set([
+  'web_search',
+  'fetch_web_page',
+  'search_tool_output',
+  'search_memory',
+  'youtube_transcript',
+]);
 
 export const RESEARCH_PROMPT = `You are JARVIS's research agent. Answer ONE research question thoroughly, then stop.
 

@@ -1,12 +1,15 @@
+import { PERSONAS } from '@shared/personas';
 import { Section } from '../../components/ui/field';
 import { Button } from '../../components/ui/button';
 import { call, cleanError } from '../../lib/api';
-import { useSettingsStore } from '../../stores/settings-store';
+import { useSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { AccentPicker } from './accent-picker';
+import { TextSizePicker, ThemePicker } from './appearance-pickers';
 import { OrbStylePicker } from './orb-style-picker';
 import { SecretField } from './secret-field';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
+import { StylePicker } from './style-picker';
 
 export function HotkeysSection(): React.JSX.Element {
   return (
@@ -43,28 +46,73 @@ export function PrivacySection(): React.JSX.Element {
 export function GeneralSection(): React.JSX.Element {
   return (
     <Section title="General">
+      <SettingInput
+        k="assistant.name"
+        label="Assistant name: what you call it and what it calls itself. The wake word follows it, so with “April” you say “Hey April”."
+        hint="Letters only, 2–20 characters. Short, distinct names (April, Friday, Nova) are heard best."
+      />
       <SettingSwitch
         k="app.closeToTray"
         label="Closing the window keeps Jarvis running in the tray"
       />
       <SettingSwitch k="app.startWithWindows" label="Start Jarvis when Windows starts" />
       <SettingSwitch k="app.startHidden" label="Start hidden in the tray" />
-      <SettingSelect
-        k="appearance.theme"
-        label="Theme"
-        options={[
-          { value: 'system', label: 'Match Windows' },
-          { value: 'dark', label: 'Dark' },
-          { value: 'light', label: 'Light' },
-        ]}
-      />
+      <StylePicker />
+      <ThemePicker />
+      <TextSizePicker />
       <AccentPicker />
       <OrbStylePicker />
       <SettingSwitch
         k="appearance.orbMusic"
         label="The orb moves to music playing on this PC (only the loudness is read; nothing is recorded)"
       />
+      <SettingSwitch
+        k="appearance.orbMood"
+        label="The orb shows Jarvis's mood: each reply tints it (warm when happy, amber when concerned, calmer when serious)"
+      />
+      <SettingSelect
+        k="persona"
+        label="Personality: Butler (classic), Concise, Friendly, Sarcastic or Coach. You can also just say “be more concise”."
+        options={PERSONAS.map((p) => ({ value: p.id, label: p.label }))}
+      />
+      <QuietMode />
     </Section>
+  );
+}
+
+const QUIET_CHOICES = [
+  { minutes: 30, label: '30 min' },
+  { minutes: 60, label: '1 hour' },
+  { minutes: 180, label: '3 hours' },
+] as const;
+
+/** Quiet mode (do not disturb): reminders and automations arrive silently, in the app only. */
+function QuietMode(): React.JSX.Element {
+  const until = useSetting('quiet.until') ?? 0;
+  const set = useSettingsStore((s) => s.set);
+  const on = until > Date.now();
+  const save = (value: number): void => void set('quiet.until', value);
+  return (
+    <fieldset>
+      <legend className="text-sm font-medium text-ink-100">Quiet mode</legend>
+      <p className="mb-2 text-xs text-ink-500">
+        {on
+          ? `On until ${new Date(until).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })}: reminders and briefings arrive silently in the app (no pop-ups, nothing spoken).`
+          : 'Off. Say “be quiet for an hour”, or pick a length: reminders and briefings then arrive silently in the app.'}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {QUIET_CHOICES.map((c) => (
+          <Button key={c.minutes} onClick={() => save(Date.now() + c.minutes * 60_000)}>
+            {c.label}
+          </Button>
+        ))}
+        {on && (
+          <Button variant="ghost" onClick={() => save(0)}>
+            Turn off
+          </Button>
+        )}
+      </div>
+    </fieldset>
   );
 }
 
@@ -105,6 +153,20 @@ export function EverydaySection(): React.JSX.Element {
           label="Daily calorie target (meal log)"
           type="number"
           step={50}
+        />
+      </Section>
+      <Section
+        title="Claude Code sessions"
+        description="Jarvis watches the Claude Code sessions on this PC (read-only) and tells you out loud when one is stuck waiting for your permission. Ask “which of my Claude sessions need me?”, or have him start a new session on a project. Quiet mode silences these too."
+      >
+        <SettingSelect
+          k="claudeCode.announce"
+          label="Speak up when a session"
+          options={[
+            { value: 'waiting', label: 'is waiting on me' },
+            { value: 'all', label: 'is waiting on me or has finished' },
+            { value: 'off', label: 'Never' },
+          ]}
         />
       </Section>
       <Section

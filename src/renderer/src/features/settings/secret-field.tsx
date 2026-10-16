@@ -11,11 +11,13 @@ export function SecretField({
   label,
   placeholder,
   testable,
+  onSaved,
 }: {
   name: string;
   label: string;
   placeholder?: string;
   testable?: 'anthropic' | 'deepgram' | 'picovoice';
+  onSaved?: () => void;
 }): React.JSX.Element {
   const status = useSettingsStore((s) => s.secrets[name]);
   const refresh = useSettingsStore((s) => s.refreshSecrets);
@@ -33,6 +35,7 @@ export function SecretField({
       setValue('');
       setEditing(false);
       await refresh();
+      onSaved?.();
       if (testable) setTest(await call('secrets:test', { name: testable }));
     } catch (err) {
       toast({ level: 'error', message: cleanError(err) });

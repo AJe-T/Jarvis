@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Boxes,
   Brain,
   CalendarDays,
   ChevronRight,
@@ -16,6 +17,7 @@ import {
   Plus,
   Puzzle,
   Settings,
+  UsersRound,
   Workflow,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -24,14 +26,18 @@ import { NewSpaceForm } from '../../features/spaces/spaces-view';
 import { call } from '../../lib/api';
 import { useMemoryStore } from '../../stores/memory-store';
 import { useSpacesStore, type SpaceInfo } from '../../stores/spaces-store';
+import { useSetting } from '../../stores/settings-store';
 import { useUiStore, type View } from '../../stores/ui-store';
+import { Slash } from '../ui/slash';
 import { LiveOrb } from './orb';
+import { useMcpIssues } from '../../stores/mcp-store';
 
 type Page = Res<'spaces:pages'>[number];
 type Item = { view: View; label: string; Icon: typeof Brain };
 
 const WORKSPACE: Item[] = [
   { view: 'chat', label: 'Core', Icon: Orbit },
+  { view: 'npcs', label: 'NPCs', Icon: UsersRound },
   { view: 'spaces', label: 'Spaces', Icon: LayoutGrid },
   { view: 'tasks', label: 'Tasks', Icon: ListChecks },
   { view: 'calendar', label: 'Calendar', Icon: CalendarDays },
@@ -40,6 +46,7 @@ const WORKSPACE: Item[] = [
   { view: 'passwords', label: 'Passwords', Icon: KeyRound },
 ];
 const SYSTEMS: Item[] = [
+  { view: 'apps', label: 'Apps', Icon: Boxes },
   { view: 'automations', label: 'Automations', Icon: Workflow },
   { view: 'skills', label: 'Skills', Icon: Puzzle },
   { view: 'connections', label: 'Connections', Icon: Plug },
@@ -156,7 +163,7 @@ function SpaceNode({
             {space.icon}
           </span>
           <span className="hidden truncate lg:inline">{space.name}</span>
-          <span className="ml-auto hidden font-code text-[10px] text-ink-500 tabular lg:inline">
+          <span className="ml-auto hidden font-code text-3xs text-ink-500 tabular lg:inline">
             {space.pageCount}
           </span>
         </button>
@@ -175,7 +182,7 @@ function SpaceNode({
                 aria-label={`Page: ${p.name}`}
                 aria-current={current && currentPage === p.name ? 'page' : undefined}
                 onClick={() => go('spaces', `${space.name}/${p.name}`)}
-                className={clsx(rowClass(current && currentPage === p.name), 'h-7 text-[13px]')}
+                className={clsx(rowClass(current && currentPage === p.name), 'h-7 text-sm')}
               >
                 <span aria-hidden className="flex w-4 shrink-0 justify-center">
                   {p.icon ?? <FileText size={13} className="text-icon-rest" />}
@@ -292,7 +299,8 @@ function SpacesSection(): React.JSX.Element {
 function GroupLabel({ children }: { children: string }): React.JSX.Element {
   return (
     <p aria-hidden className="hud-label mt-3 mb-1 hidden px-2.5 lg:block">
-      {`// ${children}`}
+      <Slash />
+      {children}
     </p>
   );
 }
@@ -319,8 +327,11 @@ function RailStub(): React.JSX.Element {
 export function Rail(): React.JSX.Element {
   const view = useUiStore((s) => s.view);
   const go = useUiStore((s) => s.go);
+  const name = useSetting('assistant.name') ?? 'Jarvis';
   const hidden = useUiStore((s) => s.railHidden);
   const toggleRail = useUiStore((s) => s.toggleRail);
+  // Connection problems (shown in the old status bar) now badge the Connections item.
+  const mcpIssues = useMcpIssues();
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
@@ -332,41 +343,53 @@ export function Rail(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleRail]);
   if (hidden) return <RailStub />;
-  const item = ({ view: v, label, Icon }: Item): React.JSX.Element => (
-    <button
-      key={v}
-      type="button"
-      aria-label={label}
-      title={label}
-      aria-current={view === v ? 'page' : undefined}
-      onClick={() => go(v)}
-      className={rowClass(view === v)}
-    >
-      <Icon size={18} strokeWidth={1.75} className="shrink-0" aria-hidden />
-      <span className="hidden truncate lg:inline">{label}</span>
-    </button>
-  );
+  const item = ({ view: v, label, Icon }: Item): React.JSX.Element => {
+    const issues = v === 'connections' ? mcpIssues : 0;
+    const tip = issues ? `${label} (${issues} ${issues === 1 ? 'issue' : 'issues'})` : label;
+    return (
+      <button
+        key={v}
+        type="button"
+        aria-label={tip}
+        title={tip}
+        aria-current={view === v ? 'page' : undefined}
+        onClick={() => go(v)}
+        className={rowClass(view === v)}
+      >
+        <span className="relative shrink-0">
+          <Icon size={18} strokeWidth={1.75} aria-hidden />
+          {issues > 0 && (
+            <span
+              className="absolute -top-1 -right-1 size-2 rounded-pill bg-lamp-400"
+              aria-hidden
+            />
+          )}
+        </span>
+        <span className="hidden truncate lg:inline">{label}</span>
+      </button>
+    );
+  };
   return (
     <nav
       aria-label="Main"
       className="flex w-14 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line bg-app px-2 py-2 lg:w-64"
     >
-      <div className="mb-1 flex items-center">
+      <div data-titlebar className="mb-1 flex items-center">
         <button
           type="button"
           onClick={() => go('chat')}
-          aria-label="Jarvis home"
+          aria-label={`${name} home`}
           className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-sm py-1 hover:bg-hover lg:justify-start lg:px-1"
         >
           <LiveOrb size="sm" announce={false} />
           <span className="hidden flex-col items-start lg:flex" aria-hidden>
             <span
               className="glitch font-code text-sm font-semibold tracking-[0.3em] text-ink-100"
-              data-text="JARVIS"
+              data-text={name.toUpperCase()}
             >
-              JARVIS
+              {name.toUpperCase()}
             </span>
-            <span className="hud-label text-[9px]! text-accent-300!">neural core · online</span>
+            <span className="hud-label text-3xs! text-accent-300!">neural core · online</span>
           </span>
         </button>
         <button

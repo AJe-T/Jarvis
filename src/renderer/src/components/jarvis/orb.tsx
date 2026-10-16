@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import type { AssistantState } from '@shared/types';
+import type { AssistantState, Mood } from '@shared/types';
 import { DEFAULT_ORB_STYLE, type OrbStyleId } from '@shared/orb-styles';
 import { useReducedMotion } from '../../lib/use-reduced-motion';
 import { createOrbPainter, type OrbFrame, type OrbStep } from './orb-painter';
@@ -10,6 +10,8 @@ import { useDraftSetting } from '../../stores/settings-store';
 export type { OrbStep } from './orb-painter';
 
 const SIZES = { sm: 32, dock: 72, md: 88, lg: 168, xl: 340 } as const;
+/** ~30 fps while idle or asleep (a little under 33 ms so a 60 Hz display keeps an even beat). */
+const IDLE_FRAME_MS = 30;
 
 const LABEL: Record<AssistantState, string> = {
   IDLE: 'idle',
@@ -37,6 +39,8 @@ export interface OrbProps {
   demo?: boolean;
   /** Draw one still frame (previews that aren't hovered or selected). */
   paused?: boolean;
+  /** The feeling of the latest reply: tints the orb and changes how lively it is. */
+  mood?: Mood | null;
 }
 
 /**
@@ -52,12 +56,13 @@ export function Orb({
   orbStyle = DEFAULT_ORB_STYLE,
   demo = false,
   paused = false,
+  mood = null,
 }: OrbProps): React.JSX.Element {
   const reduced = useReducedMotion() || paused;
   const px = SIZES[size];
   const canvas = useRef<HTMLCanvasElement>(null);
-  const frame = useRef<OrbFrame>({ state, level, steps });
-  frame.current = { state, level, steps };
+  const frame = useRef<OrbFrame>({ state, level, steps, mood });
+  frame.current = { state, level, steps, mood };
   const [announced, setAnnounced] = useState(LABEL[state]);
 
   // Debounced live-region announcement so fast state flips don't spam screen readers.
@@ -70,7 +75,7 @@ export function Orb({
   // Still frames repaint when the state, the steps or the colours change.
   const accent = useDraftSetting('appearance.accent');
   const theme = useDraftSetting('appearance.theme');
-  const stillKey = reduced ? `${state}:${steps.join(',')}:${accent}:${theme}` : '';
+  const stillKey = reduced ? `${state}:${steps.join(',')}:${accent}:${theme}:${mood}` : '';
   useEffect(() => {
     const el = canvas.current;
     const ctx = el?.getContext('2d');
@@ -84,9 +89,14 @@ export function Orb({
       draw(frame.current, 0, true);
       return;
     }
+    let last = 0;
     let raf = requestAnimationFrame(function tick(now) {
-      draw(frame.current, now / 1000, false);
       raf = requestAnimationFrame(tick);
+      // At rest the orb only breathes: half the frames is invisible and halves its CPU.
+      const calm = frame.current.state === 'IDLE' || frame.current.state === 'SLEEP';
+      if (calm && now - last < IDLE_FRAME_MS) return;
+      last = now;
+      draw(frame.current, now / 1000, false);
     });
     return () => cancelAnimationFrame(raf);
   }, [px, reduced, stillKey, orbStyle, demo]);
@@ -118,5 +128,6 @@ export function LiveOrb(props: Omit<OrbProps, 'state' | 'level'>): React.JSX.Ele
   const state = useAssistantStore((s) => s.state);
   const level = useAssistantStore(selectOrbLevel);
   const orbStyle = useDraftSetting('appearance.orbStyle') ?? DEFAULT_ORB_STYLE;
-  return <Orb state={state} level={level} orbStyle={orbStyle} {...props} />;
+  const mood = useAssistantStore((s) => s.mood);
+  return <Orb state={state} level={level} orbStyle={orbStyle} mood={mood} {...props} />;
 }

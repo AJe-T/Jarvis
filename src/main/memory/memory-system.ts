@@ -1,9 +1,12 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { createMemoryRepos } from '../db/repos/memory-repos';
 import { errorMessage } from '../errors';
 import { logger } from '../logging/logger';
 import { pickModel } from '../agent/model-router';
+import { historyWindow } from '../agent/context-builder';
+import { keywords } from '../db/fts-query';
 import type { Services } from '../services';
 import { defineTool, ok, type Tool } from '../tools/types';
 import { createConversationLogger } from './conversation-logger';
@@ -11,11 +14,17 @@ import { createCurator } from './curator';
 import { createIndexer } from './indexer';
 import { createMemoryTool } from './memory-tool';
 import { createRetriever } from './retriever';
+import { OBSERVATIONS_PATH, REFLECT_EVERY_MS, reflect, reflectDue } from './reflect';
+import { createReranker } from './rerank';
 import { createSemanticIndex } from './semantic';
-import { createRoutineTools, loadRoutines } from './routines';
+import { createBrowserRoutineTool, createRoutineTools, loadRoutines } from './routines';
 import { createVaultService } from './vault-service';
 import { createVaultWatcher } from './vault-watcher';
+import { findDuplicates, tidyReason } from './tidy';
 
+/** Memory tidy-up: first run a few minutes after start, then daily. */
+const TIDY_FIRST_MS = 5 * 60_000;
+const TIDY_EVERY_MS = 24 * 3_600_000;
 const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date like 2026-10-07.');
 
 /** Sir's local days (inclusive) → UTC instants, end exclusive, as stored in messages.created_at. */
@@ -27,6 +36,63 @@ export function localDayRange(from?: string, to?: string): { from?: string; to?:
     ...(from ? { from: start(from).toISOString() } : {}),
     ...(end ? { to: end.toISOString() } : {}),
   };
+}
+
+const RECALL_MAX_CHARS = 1500;
+
+/**
+ * recall_earlier (idea from ranxianglei/billion-context's decompress; code is ours): long chats keep
+ * only the newest messages verbatim and fold the rest into a summary. This returns the exact words
+ * that were folded away, so a number or a name lost in the summary can be looked up again.
+ */
+export function recallEarlierTool(conversations: Services['conversations']): Tool {
+  return defineTool({
+    name: 'recall_earlier',
+    description:
+      'Exact earlier messages of THIS conversation that are no longer in view (folded into the summary to save space). Use when the summary lacks a detail: a number, a name, the exact wording. Optional query keeps only matching messages.',
+    input: z.object({
+      query: z.string().min(1).max(200).optional(),
+      limit: z.number().int().min(1).max(30).default(10),
+    }),
+    tier: 'SAFE',
+    summarize: ({ query }) => `Recall earlier messages${query ? ` about "${query}"` : ''}`,
+    async run({ query, limit }, ctx) {
+      const rows = conversations.messages(ctx.conversationId);
+      const conv = conversations.get(ctx.conversationId);
+      const inView = new Set(
+        historyWindow(rows, conv?.summary_upto_seq ?? 0).included.map((r) => r.id),
+      );
+      const folded = rows.filter((r) => !inView.has(r.id) && r.text_plain.trim());
+      if (!folded.length)
+        return ok('Nothing in this conversation is folded away; all of it is already in view.');
+      const words = query ? keywords(query) : [];
+      const score = (text: string): number => {
+        const t = text.toLowerCase();
+        return words.filter((w) => t.includes(w)).length;
+      };
+      const picked = words.length
+        ? folded
+            .map((r) => ({ r, s: score(r.text_plain) }))
+            .filter((x) => x.s > 0)
+            .sort((a, b) => b.s - a.s || a.r.seq - b.r.seq)
+            .slice(0, limit)
+            .map((x) => x.r)
+            .sort((a, b) => a.seq - b.seq)
+        : folded.slice(-limit);
+      if (!picked.length) return ok(`No earlier message mentions "${query ?? ''}".`);
+      return ok(
+        picked
+          .map((r) => {
+            const text =
+              r.text_plain.length > RECALL_MAX_CHARS
+                ? `${r.text_plain.slice(0, RECALL_MAX_CHARS)}…`
+                : r.text_plain;
+            return `${r.created_at.slice(0, 16).replace('T', ' ')} · ${r.role === 'user' ? 'sir' : 'assistant'}: ${text}`;
+          })
+          .join('\n\n'),
+      );
+    },
+  });
 }
 
 function searchTools(m: {
@@ -53,6 +119,7 @@ function searchTools(m: {
         );
       },
     }),
+    recallEarlierTool(m.conversations),
     defineTool({
       name: 'search_conversations',
       description: `Search past conversations with sir. Give a query for "what did we decide about X"; give from/to dates (YYYY-MM-DD, Sir's local days, inclusive) for "what did we talk about yesterday / last Monday", with or without a query. Returns dated snippets.`,
@@ -125,7 +192,19 @@ export function createMemorySystem(s: Services) {
     enabled: () => s.settings.get('memory.semanticSearch'),
     logger,
   });
-  const retriever = createRetriever({ vault, repos, conversations: s.conversations, semantic });
+  // Re-ranking (hindsight idea): on when the cross-encoder is downloaded (Settings → Memory).
+  const reranker = createReranker({
+    modelDir: join(s.userData, 'models', 'minilm-rerank'),
+    enabled: () => s.settings.get('memory.rerank'),
+    logger,
+  });
+  const retriever = createRetriever({
+    vault,
+    repos,
+    conversations: s.conversations,
+    semantic,
+    reranker,
+  });
   const convLogger = createConversationLogger(vault);
   const curator = createCurator({
     llm: () => s.llm,
@@ -150,6 +229,7 @@ export function createMemorySystem(s: Services) {
   for (const t of [
     ...searchTools({ retriever, conversations: s.conversations }),
     ...createRoutineTools(repos, () => s.tools),
+    createBrowserRoutineTool(vault, s.browserTrail),
   ])
     s.registry.register(t);
 
@@ -211,6 +291,58 @@ export function createMemorySystem(s: Services) {
   s.remindersChangedListeners.add(() => void writeRemindersMirror().catch(() => undefined));
   s.reminderListeners.add(() => void writeRemindersMirror().catch(() => undefined));
 
+  /** Memory tidy-up (ruflo idea, made safe): duplicate-looking notes become review suggestions. */
+  function tidy(): number {
+    let added = 0;
+    for (const p of findDuplicates(repos.memories.under('Memory/'))) {
+      const reason = tidyReason(p);
+      if (repos.review.seen(reason)) continue; // suggested before, or Sir already said no
+      repos.review.add({
+        op: 'UPDATE',
+        targetPath: p.keep,
+        proposedMarkdown: p.missing.join('\n') || null,
+        reason,
+        conversationId: null,
+      });
+      added++;
+    }
+    if (added)
+      s.emit('notify', {
+        level: 'info',
+        message: `${added} memory ${added === 1 ? 'note looks' : 'notes look'} like duplicates: check Memory → Review.`,
+        action: 'memory',
+      });
+    return added;
+  }
+  let tidyTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** Weekly reflection (hindsight idea): when on, set up, and neither the note nor the last run is a week old. */
+  const reflectStamp = join(s.userData, 'memory-reflect-last.txt');
+  async function reflectIfDue(): Promise<number> {
+    if (!s.settings.get('memory.reflect') || !s.settings.get('onboarding.complete')) return 0;
+    const notes = repos.memories.under('Memory/');
+    const last = existsSync(reflectStamp) ? Date.parse(readFileSync(reflectStamp, 'utf8')) : 0;
+    if (Date.now() - (last || 0) < REFLECT_EVERY_MS) return 0;
+    if (!reflectDue(notes.find((n) => n.vault_path === `Memory/${OBSERVATIONS_PATH}`))) return 0;
+    const r = await reflect({
+      llm: () => s.llm,
+      model: () => pickModel(s.settings, { purpose: 'curator' }),
+      ledger: s.ledger,
+      curator,
+      notes: () => notes,
+      signal: () => s.killSwitch.signal(),
+    });
+    // Stamped only after a run that finished: a failed call (offline, budget) tries again tomorrow.
+    writeFileSync(reflectStamp, new Date().toISOString(), 'utf8');
+    if (r.queued)
+      s.emit('notify', {
+        level: 'info',
+        message: `Weekly reflection: ${r.queued} ${r.queued === 1 ? 'observation waits' : 'observations wait'} for you in Memory → Review.`,
+        action: 'memory',
+      });
+    return r.applied.length;
+  }
+
   /** Startup (App-flow.md §2 step 4): skeleton, catch up on edits made while Jarvis was closed, watch. */
   async function start(): Promise<void> {
     const missing = !vault.exists('');
@@ -225,6 +357,19 @@ export function createMemorySystem(s: Services) {
     await reloadRoutines();
     await watcher.start();
     void semantic.sync(); // background: embeds what's new since last time
+    // Once a day, starting a few minutes after start-up when nothing else is busy.
+    if (!tidyTimer && !s.isTest) {
+      const run = (): void =>
+        void Promise.resolve()
+          .then(tidy)
+          .then(reflectIfDue)
+          .catch((err: unknown) =>
+            logger.warn({ err: errorMessage(err) }, 'memory tidy/reflection failed'),
+          );
+      setTimeout(run, TIDY_FIRST_MS).unref();
+      tidyTimer = setInterval(run, TIDY_EVERY_MS);
+      tidyTimer.unref();
+    }
   }
 
   return {
@@ -236,6 +381,8 @@ export function createMemorySystem(s: Services) {
     semantic,
     convLogger,
     curator,
+    tidy,
+    reflectIfDue,
     start,
     reloadRoutines,
   };

@@ -28,7 +28,10 @@ export function ActivityDrawer(): React.JSX.Element {
       // §6.10: a column beside the chat from lg; a sheet over the page below that.
       className="panel flex w-80 shrink-0 flex-col overflow-hidden border-l border-line xl:w-90 max-lg:fixed max-lg:inset-y-2 max-lg:right-2 max-lg:z-30 max-lg:w-[min(340px,88%)] max-lg:rounded-lg max-lg:border max-lg:shadow-pop"
     >
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-line-subtle px-4">
+      <div
+        data-titlebar
+        className="flex h-12 shrink-0 items-center justify-between border-b border-line-subtle px-4"
+      >
         <h2 className="text-ui font-semibold text-ink-100">Activity</h2>
         <button
           type="button"

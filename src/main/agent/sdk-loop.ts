@@ -34,7 +34,7 @@ const API_ONLY_TOOLS = new Set(['delegate_desktop_task']);
 /** Longer than a confirmation (120 s) plus the slowest tool timeout. */
 const TOOL_CALL_TIMEOUT_MS = 10 * 60_000;
 
-const SUBSCRIPTION_NOTE = `\n\n## Connection\nYou are running through Sir's Claude subscription. Your tools are named with the prefix "${PREFIX}" (for example ${PREFIX}open_app); tool descriptions refer to them without it. Computer control (moving the mouse, typing into apps) is not available in this mode: if Sir asks for it, say it needs an Anthropic API key (Settings → Models & budget).`;
+const SUBSCRIPTION_NOTE = `\n\n## Connection\nYou are running through Sir's Claude subscription. Your tools are named with the prefix "${PREFIX}" (for example ${PREFIX}open_app); tool descriptions refer to them without it. Computer control (moving the mouse, typing into apps) is not available in this mode: if Sir asks for it, say it needs an Anthropic API key (Settings → Models & AI).`;
 
 type ResultBlock = { type: string; text?: string; source?: { data?: string; media_type?: string } };
 
@@ -163,7 +163,8 @@ export function createSdkLoop(rt: ClaudeCodeRuntime, opts: { webSearchEnabled():
           abortController,
         },
       }) as AsyncIterable<SDKMessage>) {
-        if (m.type === 'stream_event') {
+        if (m.type === 'rate_limit_event') rt.onRateLimit?.(m.rate_limit_info);
+        else if (m.type === 'stream_event') {
           const e = m.event;
           if (
             m.parent_tool_use_id === null &&

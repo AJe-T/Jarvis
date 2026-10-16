@@ -23,16 +23,27 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Voice' }).click();
   // ADR-011: on-device engines show what they need (downloads aren't started in tests).
-  await page.getByRole('radio', { name: /On-device: “Hey Jarvis”/ }).click();
+  await page.getByRole('radio', { name: /Keyword model: “Hey Jarvis” only/ }).click();
   await expect(page.getByRole('button', { name: /^Download \(4 MB\)$/ })).toBeVisible();
-  await page.getByRole('radio', { name: /Whisper \(on this PC\)/ }).click();
+  await page.getByRole('radio', { name: /^On this PC \(choose a model below\)/ }).click();
   await expect(page.getByRole('button', { name: /^Download \(254 MB\)$/ })).toBeVisible();
-  await page.getByRole('radio', { name: /Deepgram \(cloud\)/ }).click();
-  await page.getByRole('radio', { name: /^Picovoice: “Jarvis”/ }).click();
-  await page.getByLabel(/Press to talk/).check();
+  // ADR-038: a phrase engine asks for its key and the small on-device voice detector.
+  await page.getByRole('radio', { name: /^Groq Whisper \(free tier\)/ }).click();
+  await expect(page.getByText('Groq API key')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Download \(2 MB\)$/ })).toBeVisible();
+  await page.getByRole('radio', { name: /^Deepgram Nova-3/ }).click();
+  // ADR-039 Voice Match: the voice model is downloaded on request first.
+  await expect(page.getByRole('heading', { name: 'Your voice (Voice Match)' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Download \(102 MB\)$/ })).toBeVisible();
+  await page.getByRole('radio', { name: /^Picovoice: “Jarvis” only/ }).click();
+  await page.getByRole('radio', { name: /^Recommended: “Jarvis”/ }).click();
+  await page.getByRole('radio', { name: 'Press to talk' }).click();
+  // 2.20: a new voice mode offers a clean restart; not now.
+  await expect(page.getByText('Restart Jarvis now?')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
   // The engine radios above were only drafts and are back on the saved values: nothing to save.
   await expect(page.getByRole('button', { name: 'Save changes' })).toBeHidden();
-  await expect(page.getByText('Voice: press to talk')).toBeVisible();
+  await expect(page.getByRole('radio', { name: 'Press to talk' })).toBeChecked();
 
   await page.getByRole('button', { name: 'Core', exact: true }).click();
   // Orb only on Core: the orb itself is the talk button.

@@ -16,16 +16,17 @@ export const ORB_STYLES = [
   { id: 'sun', label: 'Solar flare', hint: 'A burning core with a corona of rays' },
   { id: 'plasma', label: 'Plasma ball', hint: 'Lightning tendrils reaching for the glass' },
   { id: 'equalizer', label: 'Radial equalizer', hint: 'Audio bars around a ring' },
-  { id: 'sonar', label: 'Sonar pulse', hint: 'Pulses ripple out; a radar sweeps' },
   { id: 'scope', label: 'Oscilloscope', hint: 'A glowing Lissajous trace' },
-  { id: 'globe', label: 'Holo globe', hint: 'A turning wireframe planet' },
-  { id: 'gyroscope', label: 'Gyroscope', hint: 'Three rings spinning on their own axes' },
-  { id: 'atom', label: 'Atom', hint: 'Electrons orbiting a nucleus' },
   { id: 'ring', label: 'Light ring', hint: 'A smart-speaker ring with a running light' },
-  { id: 'mandala', label: 'Sorcery circle', hint: 'Rotating rune rings and sparks' },
   { id: 'blackhole', label: 'Black hole', hint: 'An accretion disk around the dark' },
   { id: 'galaxy', label: 'Galaxy', hint: 'Spiral arms of stars' },
-  { id: 'rain', label: 'Digital rain', hint: 'Falling code inside a sphere' },
+  { id: 'aurora', label: 'Aurora', hint: 'Curtains of northern lights inside a dark sphere' },
+  { id: 'waves', label: 'Voice waves', hint: 'Layered glowing waves that swell as it speaks' },
+  { id: 'wormhole', label: 'Wormhole', hint: 'Rings rushing into a bright, twisting throat' },
+  { id: 'tesseract', label: 'Tesseract', hint: 'A 4D cube turning through itself' },
+  { id: 'iris', label: 'Iris', hint: 'Camera-aperture blades that open when it listens' },
+  { id: 'swarm', label: 'Firefly swarm', hint: 'Glowing motes circling the core' },
+  { id: 'crystal', label: 'Crystal', hint: 'Two counter-turning gems around a burning core' },
 ] as const;
 
 export type OrbStyleId = (typeof ORB_STYLES)[number]['id'];

@@ -21,8 +21,15 @@ import type { SettingsService } from '../settings/settings-service';
 import { runAgentLoop, textOfContent, type ToolRuntime, type TurnContext } from './agent-loop';
 import type { AssistantStateHub } from './assistant-state';
 import { historyWindow, type ContextBuilder } from './context-builder';
+import { createMoodFilter, stripMood } from './mood';
 import { pickModel, type TurnPurpose } from './model-router';
-import { SUMMARY_PROMPT, TITLE_PROMPT } from './prompts/orchestrator';
+import {
+  COMPACT_PROMPT,
+  STATIC_PERSONA_AND_RULES,
+  SUMMARY_PROMPT,
+  TITLE_PROMPT,
+} from './prompts/orchestrator';
+import { contextStats, type ContextStats } from './context-stats';
 import { displayText } from './ui-history';
 
 export type Emit = <E extends EventChannel>(event: E, payload: EventPayload<E>) => void;
@@ -59,12 +66,29 @@ export interface TurnInfo {
   isPrivate: boolean;
   purpose: TurnPurpose;
   direct?: DirectAction | undefined;
+  /** Sir's own plain request (no attachments, not an automation): the fast path may answer it. */
+  fastPathOk?: boolean;
 }
 
 export interface TurnEnd extends TurnInfo {
   outcome: 'end_turn' | 'max_iterations' | 'aborted' | 'error';
   replyText: string;
   toolSummaries: string[];
+  /** What the safety layer stopped in this turn (the automation watchdog reports it to Sir). */
+  watch?: TurnWatch;
+}
+
+export interface TurnWatch {
+  /** The turn read untrusted content (Security.md §6.3). */
+  tainted: boolean;
+  /** Tools in call order: whether each ran at all (not declined/blocked) and succeeded. */
+  tools: Array<{ name: string; ran: boolean; ok: boolean }>;
+  /** Outside text that tried to instruct the AI (injection-scan.ts). */
+  injection?: string;
+  /** Summaries of actions the policy blocked. */
+  blocked: string[];
+  /** Summaries of actions that waited for approval and nobody answered. */
+  unanswered: string[];
 }
 
 export interface OrchestratorDeps {
@@ -82,9 +106,15 @@ export interface OrchestratorDeps {
   state: AssistantStateHub;
   emit: Emit;
   logger: Logger;
+  /** ADR-030: a plain PC command Sir typed or said → one tool, no model call (agent/fast-path). */
+  fastPath?: (text: string) => Promise<DirectAction | null>;
 }
 
 const PRIVATE_PREFIX = /^\/private\s+/i;
+/** The per-turn context block (date, memories, skills…) before anything was measured. */
+const BASE_DYNAMIC_TOKENS = 1500;
+/** Manual compaction reads at most this much of the transcript (the newest part). */
+const COMPACT_MAX_CHARS = 150_000;
 
 function userContent(text: string, attachments: Attachment[] = []): MessageParam['content'] {
   const blocks: Exclude<MessageParam['content'], string> = attachments.map((a) =>
@@ -118,7 +148,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     const clean = messages.map((m) => ({
       ...m,
       content: redactContent(m.content),
-      textPlain: redact(m.textPlain),
+      // Mood tags stay in the API content (history) but not in search text or summaries.
+      textPlain: redact(stripMood(m.textPlain)),
     }));
     deps.conversations.appendMessages(conversationId, clean);
   }
@@ -138,12 +169,13 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     text: string,
     conversationId: string,
     signal: AbortSignal,
+    maxTokens = purpose === 'title' ? 30 : 400,
   ): Promise<string> {
     const model = pickModel(deps.settings, { purpose });
     const msg = await deps.llm().stream(
       {
         model,
-        max_tokens: purpose === 'title' ? 30 : 400,
+        max_tokens: maxTokens,
         system,
         messages: [{ role: 'user', content: text }],
       },
@@ -192,6 +224,19 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     if (summary) deps.conversations.setSummary(conversationId, redact(summary), cutSeq);
   }
 
+  /** Rough size of what every turn sends besides the conversation: the instructions and the tool list. */
+  function baseTokens(): number {
+    const tools = JSON.stringify(deps.tools().definitions()).length;
+    return Math.ceil((STATIC_PERSONA_AND_RULES.length + tools) / 4) + BASE_DYNAMIC_TOKENS;
+  }
+
+  function busyWith(conversationId: string): boolean {
+    return (
+      running?.info.conversationId === conversationId ||
+      queue.some((q) => q.info.conversationId === conversationId)
+    );
+  }
+
   function emitNotice(info: TurnInfo, text: string): void {
     const message: UiMessage = { id: newId('n_'), role: 'notice', text, createdAt: nowIso() };
     deps.emit('chat:message', {
@@ -206,6 +251,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     ctx: TurnContext,
     onText: (delta: string) => void,
     toolUseIds: string[],
+    /** After each model step: a later step may open with its own mood tag. */
+    onStepEnd: () => void,
   ): Promise<{ outcome: TurnEnd['outcome']; text: string; citations: Citation[] }> {
     const system = await deps.context.system({
       conversationId: info.conversationId,
@@ -232,6 +279,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         persist: (msgs) => persist(info.conversationId, msgs),
         onStep: (msg) => {
           for (const b of msg.content) if (b.type === 'tool_use') toolUseIds.push(b.id);
+          onStepEnd();
         },
       },
     );
@@ -283,7 +331,8 @@ ${detail.trim()}`;
     let replyText = '';
     for (const l of startListeners) l(info);
     deps.state.set('THINKING');
-    const onText = (delta: string): void => {
+    const forward = (delta: string): void => {
+      if (!delta) return;
       deps.emit('chat:delta', {
         turnId: info.turnId,
         conversationId: info.conversationId,
@@ -291,12 +340,24 @@ ${detail.trim()}`;
       });
       for (const l of deltaListeners) l(info, delta);
     };
+    // A leading <mood> tag never reaches the screen or the voice; the orb takes its colour.
+    const mood = createMoodFilter((m) => deps.emit('assistant:mood', { mood: m }));
+    const onText = (delta: string): void => forward(mood.push(delta));
     try {
-      const result = info.direct
-        ? await directTurn(info, info.direct, ctx, onText, toolUseIds)
-        : await modelTurn(info, ctx, onText, toolUseIds);
+      const direct =
+        info.direct ??
+        (info.fastPathOk && deps.fastPath
+          ? await deps.fastPath(info.userText).catch((e: unknown) => {
+              log.warn({ err: errorMessage(e) }, 'fast path failed; asking the model');
+              return null;
+            })
+          : null);
+      const result = direct
+        ? await directTurn(info, direct, ctx, onText, toolUseIds)
+        : await modelTurn(info, ctx, onText, toolUseIds, () => forward(mood.flush()));
+      forward(mood.flush());
       outcome = result.outcome;
-      replyText = result.text;
+      replyText = stripMood(result.text);
       const toolCalls = deps.toolCalls.byToolUseIds(toolUseIds).map(toUiToolCall);
       const message: UiMessage = {
         id: info.turnId,
@@ -343,17 +404,24 @@ ${detail.trim()}`;
 
     const conv = deps.conversations.get(info.conversationId);
     if (conv) deps.emit('conversation:updated', toSummary(conv));
-    const toolSummaries = deps.toolCalls
-      .byToolUseIds(toolUseIds)
-      .map((t) => `\`${t.tool_name}\` ${t.human_summary} ${t.status === 'success' ? '✅' : '❌'}`);
-    const end: TurnEnd = { ...info, outcome, replyText, toolSummaries };
-    for (const l of endListeners) {
-      try {
-        await l(end);
-      } catch (e) {
-        log.warn({ err: errorMessage(e) }, 'turn-end listener failed');
-      }
-    }
+    const rows = deps.toolCalls.byToolUseIds(toolUseIds);
+    const toolSummaries = rows.map(
+      (t) => `\`${t.tool_name}\` ${t.human_summary} ${t.status === 'success' ? '✅' : '❌'}`,
+    );
+    const watch: TurnWatch = {
+      tainted: ctx.taint.tainted,
+      tools: rows.map((t) => ({
+        name: t.tool_name,
+        ran: t.status !== 'not_run',
+        ok: t.status === 'success',
+      })),
+      ...(ctx.taint.injection ? { injection: ctx.taint.injection } : {}),
+      blocked: rows.filter((t) => t.decision === 'blocked').map((t) => t.human_summary),
+      unanswered: rows
+        .filter((t) => t.decision === 'denied' && t.decided_by === 'timeout')
+        .map((t) => t.human_summary),
+    };
+    await notifyEnd({ ...info, outcome, replyText, toolSummaries, watch });
     if (conv && outcome !== 'error') {
       void maybeTitle(conv, info.userText, replyText).catch((e: unknown) =>
         log.warn({ err: errorMessage(e) }, 'titler failed'),
@@ -361,6 +429,16 @@ ${detail.trim()}`;
       void maybeSummarize(conv.id).catch((e: unknown) =>
         log.warn({ err: errorMessage(e) }, 'summary failed'),
       );
+    }
+  }
+
+  async function notifyEnd(end: TurnEnd): Promise<void> {
+    for (const l of endListeners) {
+      try {
+        await l(end);
+      } catch (e) {
+        log.warn({ err: errorMessage(e) }, 'turn-end listener failed');
+      }
     }
   }
 
@@ -400,6 +478,7 @@ ${detail.trim()}`;
         isPrivate: conv.is_private === 1,
         purpose: req.purpose ?? 'chat',
         ...(req.direct ? { direct: req.direct } : {}),
+        fastPathOk: (req.purpose ?? 'chat') === 'chat' && !req.attachments?.length,
       };
       // Typed messages are shown optimistically by the renderer; spoken ones appear once recognised.
       if (req.source === 'voice') {
@@ -427,8 +506,67 @@ ${detail.trim()}`;
         if (q && (!turnId || q.info.turnId === turnId)) {
           q.controller.abort();
           queue.splice(i, 1);
+          // A turn cancelled before it started still ends, so listeners (automations) can clean up.
+          void notifyEnd({ ...q.info, outcome: 'aborted', replyText: '', toolSummaries: [] });
         }
       }
+    },
+
+    /** Context meter (idea from LibreChat): how full the next request's context is. */
+    contextStats(conversationId: string): ContextStats {
+      const conv = deps.conversations.get(conversationId);
+      if (!conv)
+        throw new JarvisError('NOT_FOUND', 'conversation not found', 'That conversation is gone.');
+      return contextStats(
+        deps.conversations.messages(conversationId),
+        conv.summary_upto_seq,
+        baseTokens(),
+      );
+    },
+
+    /**
+     * Manual compaction (LibreChat's "compact"): folds the whole conversation so far into its
+     * running summary, so the next turn starts light. Refused while a turn of it is running.
+     */
+    async compact(conversationId: string): Promise<{ summarizedMessages: number }> {
+      const conv = deps.conversations.get(conversationId);
+      if (!conv)
+        throw new JarvisError('NOT_FOUND', 'conversation not found', 'That conversation is gone.');
+      if (busyWith(conversationId))
+        throw new JarvisError(
+          'INVALID',
+          'busy',
+          'Let Jarvis finish (or stop him) before compacting.',
+        );
+      const rows = deps.conversations.messages(conversationId);
+      const pending = rows.filter((r) => r.seq > conv.summary_upto_seq);
+      const last = rows.at(-1);
+      if (!last || pending.length === 0) return { summarizedMessages: 0 };
+      const transcript = pending
+        .filter((r) => r.text_plain)
+        .map((r) => `${r.role === 'user' ? 'Sir' : 'Assistant'}: ${r.text_plain.slice(0, 2000)}`)
+        .join('\n')
+        .slice(-COMPACT_MAX_CHARS);
+      const prior = conv.summary ? `Previous summary: ${conv.summary}\n\n` : '';
+      const summary = await oneShot(
+        'summary',
+        COMPACT_PROMPT,
+        `${prior}${transcript || '(only tool activity so far)'}`,
+        conversationId,
+        deps.killSwitch.signal(),
+        700,
+      );
+      if (!summary)
+        throw new JarvisError(
+          'INTERNAL',
+          'empty summary',
+          'The summary came back empty; nothing changed.',
+        );
+      deps.conversations.setSummary(conversationId, redact(summary), last.seq);
+      const updated = deps.conversations.get(conversationId);
+      if (updated) deps.emit('conversation:updated', toSummary(updated));
+      log.info({ conversationId, messages: pending.length }, 'conversation compacted');
+      return { summarizedMessages: pending.length };
     },
 
     isBusy: () => running !== null || queue.length > 0,

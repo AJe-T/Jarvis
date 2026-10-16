@@ -30,6 +30,7 @@ import { MindmapView } from './views/mindmap-view';
 import { NeuralView } from './views/neural-view';
 import { Orb3DView } from './views/orb3d-view';
 import { TreemapView } from './views/treemap-view';
+import { HelpButton } from '../../help/help-button';
 
 type Graph = Res<'memory:graph'>;
 type ViewId = 'neural' | 'orbs' | 'clusters' | 'stars' | 'mindmap' | 'treemap';
@@ -191,6 +192,10 @@ export function BrainView(): React.JSX.Element {
             />
           )}
 
+          <HelpButton
+            topic="brain"
+            className="absolute top-3 left-3 z-10 border border-white/10 bg-black/60"
+          />
           {/* View switcher */}
           <div
             role="tablist"
@@ -332,7 +337,10 @@ export function BrainView(): React.JSX.Element {
           aria-label="Selected note"
           className="flex w-80 shrink-0 flex-col border-l border-line-subtle lg:w-96"
         >
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle pr-2 pl-4">
+          <header
+            data-titlebar
+            className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle pr-2 pl-4"
+          >
             <span
               className="size-2.5 shrink-0 rounded-pill"
               style={{ background: colorOf(selected.group) }}

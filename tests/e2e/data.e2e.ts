@@ -14,7 +14,7 @@ test('Phase 7: manual backup, usage tab, mini orb round-trip', async () => {
   await expect(page.getByText('Backup saved.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(1);
   // ADR-010: switch the connection to the Claude subscription and back.
-  await page.getByRole('button', { name: 'Models & budget' }).click();
+  await page.getByRole('button', { name: 'Models & AI' }).click();
   await page.getByRole('radio', { name: /My Claude subscription/ }).click();
   await expect(page.getByRole('radio', { name: /My Claude subscription/ })).toHaveAttribute(
     'aria-checked',

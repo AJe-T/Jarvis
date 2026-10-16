@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Status | v7.2 — Neon Grid (cyberpunk HUD), any accent, 18 orb styles |
-| Last updated | 2026-10-09 |
+| Status | v8.0 — two styles: **Soft** (default) and **Neon Grid** (cyberpunk HUD); any accent, 19 orb styles; a **?** help button on every page and main section |
+| Last updated | 2026-10-10 |
 | Theme | **Neon Grid** dark (signature) and **Daylight HUD** light |
 | Stack | Electron · React · TypeScript · Tailwind v4 · CSS transitions · Canvas 2D (orb) |
 | Related | [App-flow](App-flow.md) · [Code-style](Code-style.md) §6 · [PRD](PRD.md) F4.6 |
@@ -101,6 +101,28 @@ Orange `#FF7A1A`, Gold `#FFC400`, Lime `#B6FF2E`, Green `#2BFF88`, Silver `#C8D6
 native `<input type="color">` (the Windows colour dialog) plus a hex field. The mini-orb window
 reads theme and accent once when it opens.
 
+### 3.7 Style: Soft and Cyberpunk (`appearance.style`, `<html data-style>`)
+
+Settings → General → **Style** picks the whole look; theme (light/dark) and accent are independent
+of it. `ThemeSync` sets `data-style` on `<html>` (`index.html` starts as `soft` so there is no
+flash). Everything in §2–§3.6 is the **Cyberpunk** style and stays untouched; **Soft** (the
+default since 2.6) is layered on top in three places:
+
+- `tokens.css` `:root[data-style='soft']`: corners 6 / 10 / 12 / 16 / 20 px (`radius-xs…xl`), one
+  family (`font-display` and `font-code` become Geist; `--font-mono` keeps code monospace), and
+  graphite (dark) or paper (light) neutrals plus `--soft-shadow-card`, `--soft-shadow-pop` and
+  `--soft-ring`. A custom accent still retints neutrals through `accentVars` (inline wins).
+- `surfaces.css` (components layer): no canvas grid or scanlines; `.card`/`.popover`/`.dialog`/
+  `.hud-frame` lose the corner brackets and get soft shadows; `.btn-accent` loses the clipped
+  corners; the active sidebar row is a rounded fill; `.hud-label` is sentence case; `.tag` is a pill;
+  focus is a 3 px accent ring; the mesh bloom is fainter.
+- `globals.css` (unlayered, beats utilities): real code (`pre`, `code`, `kbd`, `.break-all`) stays
+  monospace; `.btn` drops letter-spacing; no glitch copies or dashed orb-dock ring.
+
+Section labels write their `// ` prefix with `<Slash />` (`components/ui/slash.tsx`), hidden in Soft.
+New components need nothing special: use the tokens and recipes and both styles follow. The style
+picker's previews use fixed colours on purpose (a `[data-style]` rule matches any ancestor).
+
 ### 3.3 Status tags
 
 | Meaning | Tag fill / ink (dark) | Tag fill / ink (light) | Text colour |
@@ -134,12 +156,18 @@ chat, notes, descriptions, form text. Both SIL OFL, bundled in `src/renderer/src
 
 | Utility | Size / line | Use |
 |---|---|---|
-| `.hud-label` | 11 / 16, caps, 0.16em | Section labels, readouts, status |
-| `text-xs` | 12 / 16 | Badges, metadata |
-| `text-sm` | 13 / 18 | Secondary text, nav items, buttons (mono 13) |
-| `text-base` | 16 / 1.55 | Body, chat |
-| `text-lg` | 17 / 24 | Core captions |
-| `text-xl`–`text-3xl` | 20–30 | Greeting, space and page titles (mono, bold) |
+| `.hud-label` | 12 / 16, caps, 0.16em | Section labels, readouts, status |
+| `text-3xs` · `text-2xs` | 11 · 12 | Tiny chips and kbd hints (replace the old fixed `text-[9–11px]`) |
+| `text-xs` | 13 / 18 | Badges, metadata |
+| `text-sm` | 14 / 21 | Secondary text, nav items, buttons |
+| `text-ui` | 15 / 22 | Form text |
+| `text-base` | 17 / 1.6 | Body, chat, Spaces pages |
+| `text-lg` | 18 / 26 | Core captions |
+| `text-xl`–`text-3xl` | 21–30 | Greeting, space and page titles (bold) |
+
+Sizes above are at **Text size 100 %** (2.8: one step bigger than before). Every `--text-*` token
+is `rem × var(--font-scale)`; Settings → General → Text size sets `--font-scale` (0.9–1.5) on
+`<html>`, so text grows while spacing stays. Never use fixed `text-[Npx]`: it ignores the setting.
 
 Tabular figures for numbers. Uppercase only on mono labels and page titles, never on body text.
 
@@ -161,10 +189,11 @@ Tabular figures for numbers. Uppercase only on mono labels and page titles, neve
 │  …       │  AUDIO.IN                       SPEND.TODAY  │              │
 │ ⚙        │           [ composer, max 672px ]            │              │
 ├──────────┴──────────────────────────────────────────────┴──────────────┤
-│ VOICE · MODEL · TODAY $                                       ● ONLINE  │  28px status bar
+│ (v2.15: no title bar or status bar; Windows' ─ □ ✕ over the top right) │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
+- **Window chrome** (v2.15): `titleBarStyle: 'hidden'` with `titleBarOverlay` (48px, coloured from `--bg-main` / `--ink-100` through `app:titleBar`). Rows marked `data-titlebar` (every 48px header, the sidebar's logo row) drag the window; their controls are `no-drag`. `TitleBar` (`components/jarvis/titlebar.tsx`) gives the header under the caption buttons `data-tb-guard` (right padding = the buttons' width from `navigator.windowControlsOverlay`, else 140px). Connection issues badge the Connections item.
 - **Sidebar** (`bg-app`, hairline right edge): a live `sm` orb + glitching **JARVIS** wordmark
   (decorative, `aria-hidden` copies) and a **Hide sidebar** button, `// workspace` (Core, Spaces
   tree, Brain, Memory, Passwords), `// tools` (Automations, Skills, Connections, Reply copilot),
@@ -188,7 +217,7 @@ The stage: `.mesh` bloom behind the `xl` orb (340px; `lg` below 760px tall), the
 `[ BRACKETED ]` line, then either the reply streaming as **captions** (`captionOf`: spoken tags,
 Markdown marks and code removed, last 320 characters, caret) or, before a conversation, the
 greeting and three `cmd.0n` suggestion cards. Four corner readouts (clock, uplink + model, audio
-mode, spend) are decorative (`aria-hidden`; the status bar carries the same facts). Composer at the
+mode, spend) form a "Readouts" group (they replaced the status bar). Composer at the
 bottom, max 672px.
 
 **Comms log:** the conversation, secondary to the orb: a 400–460px column beside the stage
@@ -207,14 +236,16 @@ caret at the end (rewind uses the same path).
 
 ### 5.2a Panels beside the orb (`features/stage/`, `shared/stage.ts`)
 
-`show_panel` (main tool, SAFE, display only) or the header's panel menu sets `useStageStore.panel`;
+**Apps** (v2.16, ADR-040, `shared/jarvis-apps.ts` + `features/apps/apps-grid.tsx`): Core's header has one **All apps** button opening a dialog with the same card grid as Sidebar → Apps (Today, Calculator, Browser, Terminal, Camera, Timers, Pomodoro, Scratchpad, Unit converter, World clock, QR code, System monitor, AI usage, Jarvis status). Browser, Terminal and Camera fill the panel (their own pages placed over a `DockedPanel` hole; dark `#0b0f14` until drawn). Each opens as a panel; pressing the open one again closes it. **Outputs:** a finished reply with an `artifact-html/svg/mermaid` block opens it here (kind `artifact`, the same network-less sandbox as in chat), every artifact card has **Show beside the orb**, and `show_file` shows a picture, page or text file.
+
+`show_panel` (main tool, SAFE, display only) or the header apps set `useStageStore.panel`;
 `stage:panel` carries it to the renderer. Core then animates: the orb column shrinks to 40% and
 scales to 0.8 (500ms, `--ease-standard`), the right readouts hide, the comms log and the sidebar
 step aside, and the panel (`.hud-frame`, `.stage-in`: slide + clip reveal, 420ms) fills the right
 60%. Header: a glowing square, `// TITLE`, **Close panel**. Below 760px wide the panel takes the
 stage alone. Kinds: `pomodoro` (SVG ring countdown in `accent-500`, break in `ok-400`, Start/Pause,
 +5 min, Reset; `pomodoro.ts` holds the tested maths), `usage` (the Usage panel), `status` (stat
-tiles with budget meters), `list`, `stats`, `note` (Markdown). A new feature adds a kind to
+tiles with budget meters), `system` (live monitor: CPU sparkline polled from `system:stats` every 2 s, memory, disk, battery via `navigator.getBattery`, uptime), `qr` (drawn as one SVG path from `qrcode`'s matrix, no network; Wi-Fi passwords masked in the caption), `list`, `stats`, `note` (Markdown). A new feature adds a kind to
 `StagePanelSchema` and a case to `Body`.
 
 ### 5.3 Page structure (`components/ui/page.tsx`)
@@ -285,8 +316,12 @@ tuck are per-PC conveniences in `localStorage` (`jarvis.orbDock`). Only the Core
 
 **Styles** (`appearance.orbStyle`, list in `shared/orb-styles.ts`, painters in `orb-styles/`):
 `particles` (default, below), `reactor` (the v2.1 arc reactor), `fluid`, `cloud`, `liquid`, `sun`,
-`plasma` (`fluid.ts`), `equalizer`, `sonar`, `scope`, `globe`, `gyroscope`, `atom`, `ring`
-(`instruments.ts`), `mandala`, `blackhole`, `galaxy`, `rain` (`cosmic.ts`). Shared HUD pieces (halo,
+`plasma` (`fluid.ts`), `equalizer`, `scope`, `ring` (`instruments.ts`), `blackhole`, `galaxy`
+(`cosmic.ts`), and v8.1's `aurora`, `waves`, `wormhole`, `tesseract`, `iris`, `swarm`, `crystal`
+(`signature.ts`). `atom`, `mandala`, `rain`, `gyroscope`, `globe` and `sonar` were removed in v8.1;
+a saved removed id fails the setting's schema and falls back to `particles`. At rest (IDLE, SLEEP)
+the animated loop draws every other frame (≤ 30 fps); `orb-painter.test.ts` paints every style in
+every state at 32/88/340 px against a counting fake context. Shared HUD pieces (halo,
 ticks, segmented arcs, glyph ring, markers, sparks, bucketed dot styles) live in `parts.ts`. The
 base painter owns the level smoothing, spin, palette, sleep dimming and error jitter, and calls
 `style.draw(env)`; styles that don't show tool progress get a segmented ring at 0.95R while ACTING.
@@ -334,6 +369,8 @@ Sizes `sm` 32 (bars and core) · `dock` 72 · `md` 88 · `lg` 168 · `xl` 340. `
 `aria-label`, debounced live announcement when `announce` (default on). Reduced motion: drawn once
 per state change, never moves, no jitter.
 
+**Mood (v8.2):** `OrbFrame.mood` tints the state colour 50 % toward the mood (happy warm gold, amused pink, excited the third neon, curious the second neon, concerned amber, serious grey; calm keeps the accent) and scales liveliness (0.8–1.4). Only IDLE, LISTENING and SPEAKING take a mood; waiting and errors keep their colours. It fades after 30 s (`assistant-store`).
+
 ### 6.2 Composer
 
 `.composer`, 52px minimum, icon buttons inside: dictate, talk (cyan with a ring while recording),
@@ -344,6 +381,14 @@ attach, send (neon fill when there is text). While a turn runs, Send becomes Sto
 Sir: right-aligned `surface-2` block, radius 4, magenta 2px right edge, max 85%. Jarvis: text
 behind a 2px cyan left edge, Markdown, links `accent-300`, code on `surface-2` in Geist Mono.
 Streaming text is shown as Core captions with a glowing caret (§5.2).
+
+**Artifacts (v8.2, `components/jarvis/artifact.tsx`):** a `surface-1` card with the title, a kind tag
+(HTML / SVG / MERMAID) and icon buttons (code ↔ preview, full screen, save). The preview is a fixed
+24rem frame (resizable) on white, so the log never jumps when it finishes drawing; full screen is an
+`app/95` overlay with blur, Esc closes. **Context meter:** a 48px bar plus percentage in the log
+header (accent, `lamp-400` from 60 %, `alarm-500` from 85 %); click for a popover with the split and
+Compact now. **Chat search:** a search field atop Conversations; hits show the title, a two-line
+snippet with the matched words in `<mark>` (accent at 25 %), and the date.
 
 ### 6.4 Tool cards
 
@@ -406,8 +451,12 @@ same cover. No network images (CSP `img-src 'self' data: blob:`).
 
 ## 7. Theme
 
-`<html data-theme="dark|light">` from Settings → General → Theme (Match Windows / Dark / Light),
-applied live. Dark is Neon Grid; Light ("Daylight HUD") keeps the same neon fill, brackets, grid
+`<html data-theme="dark|light">` from Settings → General → Theme (Match Windows / Light / Dark /
+**Pitch black**), applied live. Pitch black (2.8) is the dark theme plus `data-oled="true"`: true
+`#000` canvas and surfaces `#0C0C0E` / `#17171A`, ink `#FFF` / `#DEDEE3` / `#B6B6BE`, borders
+`#2A2A2E` / `#3A3A3F` / `#5E5E66`; a custom accent tints only the accent roles, never the black.
+2.8 also lifted every theme's secondary ink and borders (soft dark ink-300 `#D0D5DC`, ink-500
+`#ADB4BE`, line `#363B44`), all checked by `npm run check:contrast` (pitch black included). Dark is Neon Grid; Light ("Daylight HUD") keeps the same neon fill, brackets, grid
 and mono voice on pale steel, with deeper cyan for text roles.
 
 ---
@@ -452,6 +501,9 @@ name the action ("Move to Recycle Bin", not "OK"); errors say what to do next. T
 
 | Version | Change |
 |---|---|
+| v8.2 Artifacts and mood | Artifact cards with a sandboxed preview, context meter in the comms log, chat search in Conversations, mood-tinted orb. |
+| v8.1 Apps and help | Seven new orb styles (aurora, voice waves, wormhole, tesseract, iris, firefly swarm, crystal; six removed); idle orb at 30 fps; Apps view (tiles, Timers with stopwatch, Scratchpad, System monitor); Jarvis Browser bar and Jarvis Terminal as small framework-free pages (`apps-pages.css`, Cascadia Mono); `HelpButton` (?) in `PageHeader` (`help` prop) and `Section` (auto `section:<title>`) opening a dialog: what, how, say, tips. |
+| v8.0 Soft style | Second style beside Neon Grid, now the default (§3.7): rounded cards and buttons, pill tags, graphite / paper neutrals, soft shadows, one sans family; Style picker with previews. New panels: System monitor (live CPU graph, memory, disk, battery, uptime) and QR code. |
 | v7.2 Whole-theme accent | Accent re-tints every neutral; 18 orb styles with a live picker; composer moved into the comms log, orb-only Core with click-to-talk and type-to-chat. |
 | v7.1 Any accent | Accent picker with derived, contrast-checked tokens; panels beside the orb (§5.2a); hideable sidebar with Automations and Skills, Activity and Bible moved to Settings; Save bar; particle-sphere orb (liquid ripple, shells, sparks, glyph ring). |
 | v7.0 Neon Grid | Cyberpunk HUD redesign: void canvas with grid and scanlines, HUD corner brackets, neon cyan primary with clipped corners, magenta / yellow second neons, Geist Mono HUD voice, 2–6px corners. Orb-first **Core** (340px reactor orb, corner readouts, captions; conversation moved to a side comms log), live orb dock on every screen, reactor orb (plasma filaments, segmented arcs, counter-ring, sweep, markers, breathing, error glitch). Spaces as Notion galleries with generated covers and page icons; foldable sidebar tree. Connections catalogue tabs and MCP Registry browser. |

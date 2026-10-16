@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   ThinkFilter,
+  checkCloudUrl,
   checkLocalUrl,
+  createLocalClient,
   selectTools,
   toOpenAiMessages,
   toOpenAiTools,
@@ -81,6 +83,29 @@ describe('local model client (ADR-013)', () => {
   });
 });
 
+describe('local server key (FreeLLMAPI and other keyed servers)', () => {
+  const client = (key: string | undefined, seen: Array<RequestInit['headers']>) =>
+    createLocalClient({
+      baseUrl: () => 'http://localhost:3001/v1',
+      model: () => 'auto',
+      catalog: () => [],
+      apiKey: () => key,
+      fetch: (async (_url: string, init?: RequestInit) => {
+        seen.push(init?.headers);
+        return Response.json({ data: [{ id: 'auto' }] });
+      }) as typeof fetch,
+    });
+
+  it('sends the key as a Bearer token only when one is saved', async () => {
+    const withKey: Array<RequestInit['headers']> = [];
+    expect(await client('freellmapi-abc', withKey).listModels()).toEqual(['auto']);
+    expect(withKey[0]).toEqual({ authorization: 'Bearer freellmapi-abc' });
+    const without: Array<RequestInit['headers']> = [];
+    await client(undefined, without).listModels();
+    expect(without[0]).toEqual({});
+  });
+});
+
 describe('tool routing for local models (idea from isair/jarvis)', () => {
   const tool = (name: string, description: string) => ({
     type: 'function' as const,
@@ -119,5 +144,51 @@ describe('tool routing for local models (idea from isair/jarvis)', () => {
       expect.arrayContaining(['set_volume', 'open_app']),
     );
     expect(selectTools(many.slice(0, 5), [{ role: 'user', content: 'hi' }])).toHaveLength(5);
+  });
+});
+
+describe('cloud providers (OpenAI, Gemini, DeepSeek… through the same translation)', () => {
+  const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/openai';
+  const sse = (...events: object[]): Response =>
+    new Response(events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') + 'data: [DONE]\n\n');
+  const client = (base: string, key: string | undefined, urls: string[] = []) =>
+    createLocalClient({
+      baseUrl: () => base,
+      model: () => 'gemini-flash',
+      catalog: () => [],
+      apiKey: () => key,
+      cloud: { name: () => 'Google Gemini', allowedBaseUrls: [GEMINI] },
+      fetch: (async (url: string) => {
+        urls.push(url);
+        return url.endsWith('/models')
+          ? Response.json({ data: [{ id: 'models/gemini-flash' }] })
+          : sse(
+              { choices: [{ delta: { content: 'Hi, sir.' } }] },
+              {
+                choices: [{ delta: {}, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 3, completion_tokens: 2 },
+              },
+            );
+      }) as typeof fetch,
+    });
+  const req = { model: 'x', max_tokens: 100, messages: [{ role: 'user' as const, content: 'hi' }] };
+
+  it('only talks to the catalogue address, and needs a key', async () => {
+    expect(() => checkCloudUrl('https://evil.example/v1', [GEMINI])).toThrow();
+    await expect(client('https://evil.example/v1', 'k').listModels()).rejects.toThrow();
+    const err = await client(GEMINI, undefined)
+      .listModels()
+      .catch((e: unknown) => e);
+    expect((err as { userMessage?: string }).userMessage).toMatch(/API key/);
+  });
+
+  it('accepts "models/<id>" listings and bills the reply (not the free local_ id)', async () => {
+    const urls: string[] = [];
+    const c = client(GEMINI, 'AIza-test', urls);
+    await expect(c.ping('', AbortSignal.timeout(1000))).resolves.toBeUndefined();
+    const msg = await c.stream(req, { signal: new AbortController().signal });
+    expect(urls.at(-1)).toBe(`${GEMINI}/chat/completions`);
+    expect(msg.id.startsWith('cloud_')).toBe(true);
+    expect(msg.usage.output_tokens).toBe(2);
   });
 });

@@ -129,7 +129,7 @@ describe.skipIf(!DIR)('local voice with real models (ADR-011)', () => {
         },
       };
     };
-    const real = realFactories(s, createLocalEngines(store, s.settings));
+    const real = realFactories(s, createLocalEngines(store, s.settings), store);
     const v = createVoiceSystem(s, {
       factories: { ...real, recorder: (_d, n) => fileRecorder(n) },
     });

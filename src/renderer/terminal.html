@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'"
+    />
+    <title>Jarvis Terminal</title>
+  </head>
+  <body>
+    <header id="head">
+      <span class="dot" aria-hidden="true"></span>
+      <b>JARVIS TERMINAL</b>
+      <span id="cwd" class="muted"></span>
+      <span class="spacer"></span>
+      <button type="button" id="stop" disabled>Stop</button>
+      <button type="button" id="clear" title="Ctrl+L">Clear</button>
+    </header>
+    <main id="log" role="log" aria-live="polite"></main>
+    <form id="prompt" autocomplete="off">
+      <label for="cmd" class="ps">PS&gt;</label>
+      <input
+        id="cmd"
+        spellcheck="false"
+        placeholder="Type a PowerShell command and press Enter (↑ ↓ history)"
+      />
+    </form>
+    <script type="module" src="./src/apps-pages/terminal.ts"></script>
+  </body>
+</html>

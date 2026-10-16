@@ -4,6 +4,7 @@ import type { ConversationsRepo } from '../db/repos/conversations-repo';
 import type { MemoryRepos } from '../db/repos/memory-repos';
 import { keywords, toFtsQuery } from '../db/fts-query';
 import { parseNote } from './frontmatter';
+import type { Reranker } from './rerank';
 import { fuse, type SemanticIndex } from './semantic';
 import type { VaultService } from './vault-service';
 
@@ -25,6 +26,8 @@ export function createRetriever(deps: {
   conversations: ConversationsRepo;
   /** Hybrid search when the on-device embedding model is installed (idea from isair/jarvis). */
   semantic?: SemanticIndex;
+  /** Re-orders fused candidates with a cross-encoder when downloaded (idea from hindsight). */
+  reranker?: Reranker;
 }) {
   async function note(rel: string): Promise<string> {
     if (!deps.vault.exists(rel)) return '';
@@ -77,19 +80,26 @@ export function createRetriever(deps: {
       const words = this.searchMemories(text, k * 2);
       const near = (await deps.semantic?.search('memory', text, k * 2)) ?? [];
       const byPath = new Map(words.map((h) => [h.vaultPath, h]));
-      return fuse([words.map((h) => h.vaultPath), near.map((n) => n.ref)], k).flatMap((path) => {
-        const hit = byPath.get(path);
-        if (hit) return [hit];
-        const m = deps.repos.memories.get(path);
-        if (!m || m.kind === 'profile' || m.kind === 'preference') return [];
-        return [
-          {
-            vaultPath: path,
-            title: m.title,
-            snippet: m.body.length <= 600 ? m.body : `${m.body.slice(0, 600)}…`,
-          },
-        ];
-      });
+      // With a re-ranker, fuse a wider pool and let it pick the best k.
+      const pool = deps.reranker?.ready() ? k * 2 : k;
+      const fused = fuse([words.map((h) => h.vaultPath), near.map((n) => n.ref)], pool).flatMap(
+        (path) => {
+          const hit = byPath.get(path);
+          if (hit) return [hit];
+          const m = deps.repos.memories.get(path);
+          if (!m || m.kind === 'profile' || m.kind === 'preference') return [];
+          return [
+            {
+              vaultPath: path,
+              title: m.title,
+              snippet: m.body.length <= 600 ? m.body : `${m.body.slice(0, 600)}…`,
+            },
+          ];
+        },
+      );
+      return deps.reranker
+        ? deps.reranker.rerank(text, fused, (h) => `${h.title}\n${h.snippet}`, k)
+        : fused.slice(0, k);
     },
 
     async findConversations(text: string, k = 8, range: { from?: string; to?: string } = {}) {

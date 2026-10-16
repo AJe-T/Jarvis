@@ -28,9 +28,11 @@ Do NOT store:
 - Facts already present in the existing notes (output NOOP).
 
 Output ONLY valid JSON matching:
-{"ops":[{"op":"ADD"|"UPDATE"|"DELETE"|"NOOP","path":"People/Name.md"|"Projects/Name.md"|"Facts/Topic.md"|"Preferences.md"|"About Sir.md","title":string,"kind":"profile"|"preference"|"person"|"project"|"fact","facts":[string],"remove_facts":[string],"links":[string],"confidence":number}],"flag":string|null}
+{"ops":[{"op":"ADD"|"UPDATE"|"DELETE"|"NOOP","path":"People/Name.md"|"Projects/Name.md"|"Facts/Topic.md"|"Preferences.md"|"About Sir.md","title":string,"kind":"profile"|"preference"|"person"|"project"|"fact","facts":[string],"remove_facts":[string],"outdated":[string],"source":"said"|"inferred"|"read","links":[string],"confidence":number}],"flag":string|null}
 - Facts are short, declarative, third person ("Sir deploys web projects on Vercel").
 - Prefer UPDATE of an existing note over ADD of a near-duplicate.
+- source: "said" = sir stated it himself; "inferred" = you concluded it from what he said or did; "read" = it came from something the assistant read (a web page, file, email, screen, tool result), not from sir. Use one op per source.
+- When a fact has changed (sir moved, changed jobs, switched tools), put the old fact in "outdated" (it is kept as history) and the new one in "facts". Use "remove_facts" only for things that were wrong or that sir asked to forget.
 - confidence: 0.9+ explicit statements; 0.6–0.8 strong implications; below 0.5 don't include.`;
 
 const PathSchema = z
@@ -49,6 +51,10 @@ const OpSchema = z.discriminatedUnion('op', [
     kind: z.enum(['profile', 'preference', 'person', 'project', 'fact']).optional(),
     facts: z.array(z.string().min(2).max(400)).max(20).default([]),
     remove_facts: z.array(z.string().max(400)).max(20).default([]),
+    /** Facts that were true and no longer are: kept under "## History" with the month they ended. */
+    outdated: z.array(z.string().max(400)).max(20).default([]),
+    /** Provenance (idea from ruflo ADR-323): who the fact came from. Missing = "said" (older curator output). */
+    source: z.enum(['said', 'inferred', 'read']).default('said'),
     links: z.array(z.string().max(100)).max(10).default([]),
     confidence: z.number().min(0).max(1),
   }),
@@ -86,39 +92,131 @@ export function parseCuratorJson(text: string): CuratorOutput | null {
   }
 }
 
-function bullet(f: string): string {
-  return `- ${f.replace(/^[-*]\s*/, '').trim()}`;
+export type FactSource = ChangeOp['source'];
+
+/** How a fact's source shows in the note: Sir's own words are unmarked; guesses and things read are labelled. */
+const SOURCE_MARK: Record<FactSource, string> = {
+  said: '',
+  inferred: ' (inferred)',
+  read: ' (read)',
+};
+
+/** Notes in the core profile are read on every turn, so only Sir's own words go there without review. */
+const CORE_PROFILE = new Set(['About Sir.md', 'Preferences.md']);
+
+const HISTORY_HEADING = '## History';
+
+function factText(f: string): string {
+  return f
+    .replace(/^[-*]\s*/, '')
+    .trim()
+    .replace(/\s*\((inferred|read)\)$/i, '');
+}
+
+function sourceOf(line: string): FactSource {
+  const m = /\((inferred|read)\)\s*$/i.exec(line);
+  return m ? (m[1]?.toLowerCase() as FactSource) : 'said';
+}
+
+function bullet(f: string, source: FactSource = 'said'): string {
+  return `- ${factText(f)}${SOURCE_MARK[source]}`;
+}
+
+/** Splits a note into its current facts and the lines of its "## History" section (always kept last). */
+export function splitHistory(body: string): { live: string; history: string[] } {
+  const m = /^## History[ \t]*$/m.exec(body);
+  if (!m) return { live: body, history: [] };
+  const history = body
+    .slice(m.index + m[0].length)
+    .split('\n')
+    .filter((l) => l.trim());
+  return { live: body.slice(0, m.index), history };
+}
+
+function mentions(line: string, fact: string): boolean {
+  return line.toLowerCase().includes(factText(fact).toLowerCase());
+}
+
+/**
+ * Applies one op to a note body: removes wrong/forgotten facts, moves outdated ones to History with the
+ * month they stopped being true (idea from ruflo's bitemporal facts), then adds new facts and links.
+ */
+export function editNoteBody(
+  body: string,
+  op: Pick<ChangeOp, 'facts' | 'remove_facts' | 'outdated' | 'links' | 'source'>,
+  month: string,
+): string {
+  const split = splitHistory(body);
+  let live = split.live;
+  let history = split.history;
+  for (const rf of op.remove_facts) {
+    live = live
+      .split('\n')
+      .filter((line) => !mentions(line, rf))
+      .join('\n');
+    history = history.filter((line) => !mentions(line, rf));
+  }
+  for (const od of op.outdated) {
+    live = live
+      .split('\n')
+      .filter((line) => !mentions(line, od))
+      .join('\n');
+    if (!history.some((line) => mentions(line, od)))
+      history = [...history, `- ${factText(od)} (until ${month})`];
+  }
+  // Sir confirming a guess turns "(inferred)" into his own words.
+  if (op.source === 'said') {
+    const confirmed = new Set(op.facts.map((f) => factText(f).toLowerCase()));
+    live = live
+      .split('\n')
+      .map((l) => (l.startsWith('- ') && confirmed.has(factText(l).toLowerCase()) ? bullet(l) : l))
+      .join('\n');
+  }
+  const existingLines = new Set(live.split('\n').map((l) => factText(l).toLowerCase()));
+  const newFacts = op.facts
+    .map((f) => bullet(f, op.source))
+    .filter((b) => !existingLines.has(factText(b).toLowerCase()));
+  const links = op.links
+    .map((l) => `[[${l.replace(/[[\]]/g, '')}]]`)
+    .filter((l) => !body.includes(l));
+  if (newFacts.length) live = `${live.trimEnd()}\n${newFacts.join('\n')}\n`;
+  if (links.length) live = `${live.trimEnd()}\n\nRelated: ${links.join(', ')}\n`;
+  return history.length ? `${live.trimEnd()}\n\n${HISTORY_HEADING}\n${history.join('\n')}\n` : live;
+}
+
+/** Why an op must wait for Sir instead of being applied (null = apply it). */
+export function reviewReason(op: ChangeOp): string | null {
+  const suspicious = [...op.facts, op.title ?? ''].find((f) => isInstructionLike(f));
+  if (suspicious) return `Looks like an instruction, not a fact: "${suspicious.slice(0, 120)}"`;
+  // A web page or file can't write itself into memory (ruflo ADR-323: provenance against poisoning).
+  if (op.source === 'read' && op.facts.length)
+    return 'Came from something Jarvis read, not from you';
+  if (op.source === 'inferred' && op.facts.length && CORE_PROFILE.has(op.path))
+    return 'A guess about you for your core profile';
+  if (op.confidence < 0.8) return `Low confidence (${op.confidence.toFixed(2)})`;
+  return null;
 }
 
 /** Applies one op to the vault (ADD creates or extends, UPDATE adds/removes facts, DELETE trashes or edits). */
-async function applyOp(vault: VaultService, op: ChangeOp, conversationId: string): Promise<string> {
+async function applyOp(
+  vault: VaultService,
+  op: ChangeOp,
+  conversationId: string | null,
+): Promise<string> {
   const rel = `Memory/${op.path}`;
   const exists = vault.exists(rel);
-  if (op.op === 'DELETE' && op.remove_facts.length === 0) {
+  if (op.op === 'DELETE' && op.remove_facts.length === 0 && op.outdated.length === 0) {
     if (exists) await vault.trash(rel);
     return rel;
   }
   const current = exists ? await vault.read(rel) : null;
   const title = op.title ?? path.posix.basename(op.path, '.md');
-  let body = current ? current.body : `# ${title}\n`;
-  for (const rf of op.remove_facts) {
-    body = body
-      .split('\n')
-      .filter((line) => !line.toLowerCase().includes(rf.toLowerCase().replace(/^[-*]\s*/, '')))
-      .join('\n');
-  }
-  const existingLines = new Set(body.split('\n').map((l) => l.trim().toLowerCase()));
-  const newFacts = op.facts.map(bullet).filter((b) => !existingLines.has(b.toLowerCase()));
-  const links = op.links
-    .map((l) => `[[${l.replace(/[[\]]/g, '')}]]`)
-    .filter((l) => !body.includes(l));
-  if (newFacts.length) body = `${body.trimEnd()}\n${newFacts.join('\n')}\n`;
-  if (links.length) body = `${body.trimEnd()}\n\nRelated: ${links.join(', ')}\n`;
+  const body = editNoteBody(current ? current.body : `# ${title}\n`, op, nowIso().slice(0, 7));
   const fm = {
     ...(current?.frontmatter ?? { kind: op.kind ?? 'fact', title, tags: [], created: nowIso() }),
     updated: nowIso(),
     source: 'curator',
-    ...(current ? {} : { source_conversation: conversationId }),
+    ...(current || !conversationId ? {} : { source_conversation: conversationId }),
   };
   await vault.write(rel, stringifyNote(fm, body), current ? { expectedHash: current.hash } : {});
   return rel;
@@ -182,10 +280,13 @@ export function createCurator(deps: CuratorDeps) {
     return applyOutput(out, conversationId);
   }
 
+  /** `conversationId` is null for work not tied to a chat (weekly reflection). */
   async function applyOutput(
-    out: CuratorOutput,
-    conversationId: string,
+    raw: z.input<typeof CuratorOutputSchema>,
+    conversationId: string | null,
   ): Promise<{ applied: string[]; queued: number }> {
+    // Fills defaults (source, outdated) for callers that build ops by hand.
+    const out = CuratorOutputSchema.parse(raw);
     const applied: string[] = [];
     let queued = 0;
     if (out.flag) {
@@ -200,17 +301,19 @@ export function createCurator(deps: CuratorDeps) {
     }
     for (const op of out.ops) {
       if (op.op === 'NOOP') continue;
-      const suspicious = [...op.facts, op.title ?? ''].find((f) => isInstructionLike(f));
       if (op.confidence < 0.5) continue;
-      if (suspicious || op.confidence < 0.8) {
+      const reason = reviewReason(op);
+      if (reason) {
         deps.repos.review.add({
           op: op.op,
           targetPath: `Memory/${op.path}`,
           proposedMarkdown:
-            [...op.facts.map(bullet), ...op.remove_facts.map((f) => `~~${f}~~`)].join('\n') || null,
-          reason: suspicious
-            ? `Looks like an instruction, not a fact: "${suspicious.slice(0, 120)}"`
-            : `Low confidence (${op.confidence.toFixed(2)})`,
+            [
+              ...op.facts.map((f) => bullet(f, op.source)),
+              ...op.remove_facts.map((f) => `~~${f}~~`),
+              ...op.outdated.map((f) => `~~${f}~~ (no longer true)`),
+            ].join('\n') || null,
+          reason,
           conversationId,
         });
         queued++;
@@ -255,11 +358,18 @@ export function createCurator(deps: CuratorDeps) {
       if (!item?.target_path || !item.proposed_markdown) return;
       const rel = item.target_path;
       const current = deps.vault.exists(rel) ? await deps.vault.read(rel) : null;
-      const additions = item.proposed_markdown
-        .split('\n')
-        .filter((l) => l.startsWith('- '))
-        .join('\n');
-      const body = `${(current?.body ?? `# ${path.posix.basename(rel, '.md')}\n`).trimEnd()}\n${additions}\n`;
+      const additions = item.proposed_markdown.split('\n').filter((l) => l.startsWith('- '));
+      // Each fact keeps the source label it was proposed with; new facts go above "## History".
+      let body = current?.body ?? `# ${path.posix.basename(rel, '.md')}\n`;
+      for (const source of ['said', 'inferred', 'read'] as const) {
+        const facts = additions.filter((l) => sourceOf(l) === source);
+        if (facts.length)
+          body = editNoteBody(
+            body,
+            { facts, remove_facts: [], outdated: [], links: [], source },
+            nowIso().slice(0, 7),
+          );
+      }
       await deps.vault.write(
         rel,
         stringifyNote(

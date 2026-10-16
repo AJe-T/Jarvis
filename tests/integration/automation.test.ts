@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { createAutomation } from '@main/automation/automation';
+import { describe, expect, it, vi } from 'vitest';
+import { MAX_FAILURES, createAutomation } from '@main/automation/automation';
 import { parseFeed, parseFeedList } from '@main/automation/feeds';
 import { describeSchedule, nextRun } from '@main/automation/tasks';
+import { createFakeClaude } from '@main/llm/fake-claude';
 import { idle, setupServices } from './helpers';
 
 describe('schedules', () => {
@@ -21,6 +22,61 @@ describe('schedules', () => {
       'weekdays at 07:30',
     );
     expect(describeSchedule({ type: 'interval', minutes: 120 })).toBe('every 2 h');
+  });
+
+  it('once, monthly and startup', () => {
+    const wed = new Date(2026, 9, 7, 8, 0);
+    expect(nextRun({ type: 'once', at: '2026-10-09T18:30' }, wed)).toEqual(
+      new Date(2026, 9, 9, 18, 30),
+    );
+    expect(nextRun({ type: 'once', at: '2026-10-01T09:00' }, wed)).toBeNull(); // passed
+    expect(nextRun({ type: 'monthly', day: 7, time: '09:00' }, wed)).toEqual(
+      new Date(2026, 9, 7, 9, 0),
+    );
+    expect(nextRun({ type: 'monthly', day: 1, time: '09:00' }, wed)).toEqual(
+      new Date(2026, 10, 1, 9, 0),
+    );
+    // Day 31 in a 30-day month runs on its last day.
+    expect(nextRun({ type: 'monthly', day: 31, time: '09:00' }, new Date(2026, 10, 2))).toEqual(
+      new Date(2026, 10, 30, 9, 0),
+    );
+    expect(nextRun({ type: 'startup', delayMinutes: 5 }, wed)).toBeNull();
+    expect(describeSchedule({ type: 'monthly', day: 22, time: '10:00' })).toBe(
+      'monthly on the 22nd at 10:00',
+    );
+    expect(describeSchedule({ type: 'startup', delayMinutes: 0 })).toBe('when Jarvis starts');
+  });
+
+  it('runs "when Jarvis starts" automations once after start, and a one-off only once', async () => {
+    vi.useFakeTimers();
+    try {
+      const t = setupServices({ rules: [{ steps: [{ text: 'Two tasks are overdue.' }] }] });
+      const a = createAutomation(t.services);
+      const boot = a.repo.upsert({
+        name: 'Boot check',
+        kind: 'task',
+        prompt: 'Say what is overdue.',
+        schedule: { type: 'startup', delayMinutes: 1 },
+      });
+      expect(boot.next_run_at).toBeNull();
+      a.start();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(a.repo.get(boot.id)?.last_run_at).toBeNull(); // still waiting out the delay
+      await vi.advanceTimersByTimeAsync(25_000);
+      expect(a.repo.get(boot.id)?.last_run_at).not.toBeNull();
+      a.stop();
+
+      const once = a.repo.upsert({
+        name: 'One-off',
+        kind: 'task',
+        prompt: 'Do it once.',
+        schedule: { type: 'once', at: '2099-01-01T09:00' },
+      });
+      a.runNow(once.id);
+      expect(a.repo.get(once.id)?.next_run_at).not.toBeNull(); // still due in 2099
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -100,6 +156,48 @@ describe('scheduled agents (ideas from OpenJarvis)', () => {
     expect(feed?.output_preview).toContain('Big news');
   });
 
+  it('tells Sir what the safety layer held back while an automation ran', async () => {
+    const t = setup({
+      rules: [
+        {
+          match: 'Scheduled "Cleanup"',
+          steps: [
+            {
+              tools: [
+                {
+                  name: 'run_powershell',
+                  input: {
+                    script: 'Set-MpPreference -DisableRealtimeMonitoring $true',
+                    purpose: 'speed up the PC',
+                  },
+                },
+              ],
+            },
+            { text: 'I could not do that.' },
+          ],
+        },
+      ],
+    });
+    const task = t.a.repo.upsert({
+      name: 'Cleanup',
+      kind: 'task',
+      prompt: 'Tidy up.',
+      schedule: { type: 'interval', minutes: 60 },
+    });
+    t.a.runNow(task.id);
+    await idle(t.services);
+    await new Promise((r) => setTimeout(r, 50));
+    const warn = t.events.find(
+      (e) =>
+        e.event === 'notify' &&
+        /While running "Cleanup"/.test((e.payload as { message: string }).message),
+    );
+    expect((warn?.payload as { message: string; level: string }).message).toMatch(
+      /the safety policy blocked:/,
+    );
+    expect(t.services.audit.all().some((r) => r.event === 'task.watchdog')).toBe(true);
+  });
+
   it('a check-in with nothing to say stays silent and leaves no conversation', async () => {
     const t = setup({ rules: [{ match: 'Scheduled "Hydration"', steps: [{ text: 'NOTHING' }] }] });
     const task = t.a.repo.upsert({
@@ -164,6 +262,78 @@ describe('scheduled agents (ideas from OpenJarvis)', () => {
     await idle(t.services);
     expect(asked).toEqual(['Run "Weekly review" Fri at 17:00?']);
     expect(t.a.repo.list().map((x) => x.name)).toContain('Weekly review');
+  });
+
+  it('stops a run that goes over the per-run cost cap and pauses the automation', async () => {
+    const t = setup({ rules: [{ match: 'Scheduled "Pricey"', steps: [{ text: 'Done, sir.' }] }] });
+    t.services.settings.set('budget.automationRunUsd', 0.25);
+    const task = t.a.repo.upsert({
+      name: 'Pricey',
+      kind: 'task',
+      prompt: 'Research everything.',
+      schedule: { type: 'interval', minutes: 30 },
+    });
+    const conversationId = t.a.runNow(task.id) ?? '';
+    t.services.usageRepo.insert({
+      model: 'claude-sonnet-5-5',
+      purpose: 'task',
+      conversationId,
+      inputTokens: 1,
+      outputTokens: 1,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      estCostUsd: 0.3,
+    });
+    t.a.tick();
+    await idle(t.services);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(t.a.repo.get(task.id)).toMatchObject({ enabled: 0, next_run_at: null });
+    expect(t.a.repo.get(task.id)?.last_status).toMatch(
+      /^paused: stopped at \$0\.30, over its \$0\.25/,
+    );
+  });
+
+  it(`pauses an automation after ${MAX_FAILURES} failed runs in a row`, async () => {
+    const t = setupServices(
+      { rules: [] },
+      {
+        llm: {
+          ...createFakeClaude({ rules: [] }),
+          stream: () => Promise.reject(new Error('API is down')),
+        },
+      },
+    );
+    const a = createAutomation(t.services);
+    const task = a.repo.upsert({
+      name: 'Broken',
+      kind: 'task',
+      prompt: 'Do the broken thing.',
+      schedule: { type: 'interval', minutes: 30 },
+    });
+    for (let i = 0; i < MAX_FAILURES; i++) {
+      expect(a.repo.get(task.id)?.enabled).toBe(1);
+      a.runNow(task.id);
+      await idle(t.services);
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(a.repo.get(task.id)).toMatchObject({ enabled: 0, next_run_at: null });
+    expect(a.repo.get(task.id)?.last_status).toMatch(/^paused: failed/);
+  }, 15_000); // each failed turn shows its error for 1.5 s before the next one starts
+
+  it('a run cancelled while still queued ends as stopped, not stuck on running', async () => {
+    const t = setup({ rules: [{ steps: [{ text: 'Working on it, sir.' }] }] });
+    const task = t.a.repo.upsert({
+      name: 'Queued',
+      kind: 'task',
+      prompt: 'Wait your turn.',
+      schedule: { type: 'interval', minutes: 30 },
+    });
+    t.services.orchestrator.send({ text: 'Something first', source: 'text' });
+    t.a.runNow(task.id);
+    t.services.orchestrator.cancel();
+    await idle(t.services);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(t.a.repo.get(task.id)?.last_status).toBe('stopped');
   });
 
   it('ships a switched-off morning briefing preset once', () => {

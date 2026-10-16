@@ -1,9 +1,14 @@
 import { z } from 'zod';
 import { defineTool, ok, type Tool } from '../types';
+import type { PsResult } from '../powershell';
 import type { OsAdapter } from './os';
 
 /** Agents.md §B1 tool description guidance; Security.md §5.2 (CONFIRM always + shell guard). */
-export function createShellTool(osa: OsAdapter): Tool {
+export function createShellTool(
+  osa: OsAdapter,
+  /** Jarvis Terminal shows what Jarvis ran (ADR-032). */
+  onRun?: (script: string, r: PsResult, ms: number) => void,
+): Tool {
   return defineTool({
     name: 'run_powershell',
     description:
@@ -22,7 +27,9 @@ export function createShellTool(osa: OsAdapter): Tool {
     }),
     guards: ({ script }) => ({ script }),
     async run({ script }, ctx) {
+      const started = Date.now();
       const r = await osa.ps(script, { timeoutMs: 30_000, signal: ctx.signal });
+      onRun?.(script, r, Date.now() - started);
       const parts = [`Exit code ${r.exitCode}`];
       if (r.stdout) parts.push(`Output:\n${r.stdout}`);
       if (r.stderr) parts.push(`Errors:\n${r.stderr}`);

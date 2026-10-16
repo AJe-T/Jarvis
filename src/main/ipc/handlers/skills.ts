@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog } from 'electron';
 import type { Services } from '../../services';
-import type { Skill } from '../../skills/skills';
+import type { InstallResult, Skill } from '../../skills/skills';
 import { handle } from '../handle';
 
 const view = (s: Skill) => ({
@@ -28,23 +28,26 @@ export function registerSkillHandlers(s: Services): void {
     };
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
     const folder = r.canceled ? null : r.filePaths[0];
-    if (!folder) return { skill: null };
-    const skill = await changed(s.skills.installFromFolder(folder));
-    s.audit.append('user', 'skill.install', { name: skill.name, from: 'folder' });
-    return { skill: view(skill) };
+    if (!folder) return { installed: [], warnings: [] };
+    return installed(await changed(s.skills.installFromFolder(folder)), 'folder');
   });
-  handle('skills:installGitHub', async (req) => {
-    const skill = await changed(s.skills.installFromGitHub(req.url));
-    s.audit.append('user', 'skill.install', { name: skill.name, from: req.url });
-    return { skill: view(skill) };
-  });
+  handle('skills:installGitHub', async (req) =>
+    installed(await changed(s.skills.installFromGitHub(req.url)), req.url),
+  );
   handle('skills:remove', async (req) => {
     await changed(s.skills.remove(req.name));
     s.audit.append('user', 'skill.remove', { name: req.name });
     return { ok: true };
   });
-  handle('skills:setEnabled', (req) => {
-    s.skills.setEnabled(req.name, req.enabled);
+  handle('skills:setEnabled', async (req) => {
+    // A library skill can be off by its folder marker alone, so refresh the context list directly.
+    await changed(Promise.resolve(s.skills.setEnabled(req.name, req.enabled)));
     return { ok: true };
   });
+
+  function installed(r: InstallResult, from: string) {
+    for (const skill of r.installed)
+      s.audit.append('user', 'skill.install', { name: skill.name, from, enabled: skill.enabled });
+    return { installed: r.installed.map(view), warnings: r.warnings };
+  }
 }

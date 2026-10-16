@@ -1,5 +1,6 @@
 import type { Citation, UiMessage, UiToolCall } from '@shared/types';
 import type { MessageRow } from '../db/repos/conversations-repo';
+import { stripMood } from './mood';
 
 type Block = {
   type: string;
@@ -8,9 +9,11 @@ type Block = {
   citations?: Array<{ type: string; url?: string; title?: string | null }> | null;
 };
 
-/** Strips the voice-mode <spoken> wrapper for on-screen display (the sentence stays, the tags go). */
+/** Strips the voice-mode <spoken> wrapper and mood tags for display (the sentence stays, the tags go). */
 export function displayText(text: string): string {
-  return text.replace(/<\/?spoken>/g, '').replace(/^\s+/, '');
+  return stripMood(text)
+    .replace(/<\/?spoken>/g, '')
+    .replace(/^\s+/, '');
 }
 
 /**

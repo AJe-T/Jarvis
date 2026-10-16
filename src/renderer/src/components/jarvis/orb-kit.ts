@@ -1,4 +1,4 @@
-import type { AssistantState } from '@shared/types';
+import type { AssistantState, Mood } from '@shared/types';
 
 /** One segment per tool call while ACTING (§6.1). */
 export type OrbStep = 'pending' | 'running' | 'done' | 'error';
@@ -8,6 +8,8 @@ export interface OrbFrame {
   /** Raw RMS of whatever the orb follows (voice or music), 0..~0.3. */
   level: number;
   steps: readonly OrbStep[];
+  /** The feeling of the latest reply (absent = none). */
+  mood?: Mood | null;
 }
 
 export type Rgb = readonly [number, number, number];
@@ -144,11 +146,36 @@ export function glow(
 export const additive = (env: Env): GlobalCompositeOperation =>
   env.p.light ? 'source-over' : 'lighter';
 
-export function toneFor(state: AssistantState, p: Palette): Rgb {
+/** Tint and liveliness per mood. Calm keeps the accent and only slows the orb down. */
+const MOOD_LOOK: Record<Mood, { tint: (p: Palette) => Rgb | null; gain: number }> = {
+  calm: { tint: () => null, gain: 0.85 },
+  happy: { tint: () => [255, 196, 92], gain: 1.15 },
+  amused: { tint: () => [255, 128, 204], gain: 1.2 },
+  excited: { tint: (p) => p.mark, gain: 1.4 },
+  curious: { tint: (p) => p.alt, gain: 1.05 },
+  concerned: { tint: () => [255, 160, 64], gain: 0.9 },
+  serious: { tint: (p) => p.dim, gain: 0.8 },
+};
+/** How far the state colour moves toward the mood's tint. */
+const MOOD_MIX = 0.5;
+
+/** A mood colours the orb only in the everyday states; warnings and errors keep their colours. */
+export function moodFor(f: OrbFrame): Mood | null {
+  const { state, mood } = f;
+  return mood && (state === 'IDLE' || state === 'SPEAKING' || state === 'LISTENING') ? mood : null;
+}
+
+export function moodGain(f: OrbFrame): number {
+  const m = moodFor(f);
+  return m ? MOOD_LOOK[m].gain : 1;
+}
+
+export function toneFor(state: AssistantState, p: Palette, mood: Mood | null = null): Rgb {
   if (state === 'AWAITING_CONFIRMATION') return p.lamp;
   if (state === 'ERROR') return p.alarm;
   if (state === 'SLEEP') return p.dim;
-  return p.main;
+  const tint = mood ? MOOD_LOOK[mood].tint(p) : null;
+  return tint ? lerp(p.main, tint, MOOD_MIX) : p.main;
 }
 
 /** Colour of one of n segments for the current frame (ACTING steps, THINKING sweep, else the level). */

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createCopilot, parseJson, rank, scoreCandidate } from '@main/copilot/copilot';
+import {
+  createCopilot,
+  parseJson,
+  rank,
+  sameChatTitle,
+  scoreCandidate,
+} from '@main/copilot/copilot';
 import { z } from 'zod';
 import { setupServices } from './helpers';
 
@@ -107,9 +113,91 @@ describe('reply copilot end to end', () => {
     await c.fill(cap.id, drafts[0]?.text ?? '');
     const os = t.services.os as unknown as { calls: Array<{ op: string; args: unknown[] }> };
     expect(
-      os.calls.filter((x) => ['focusWindow', 'pasteText'].includes(x.op)).map((x) => x.op),
-    ).toEqual(['focusWindow', 'pasteText']);
+      os.calls
+        .filter((x) => ['focusHandle', 'focusWindow', 'pasteText'].includes(x.op))
+        .map((x) => [x.op, x.args[0]]),
+    ).toEqual([
+      ['focusHandle', 4242], // back to exactly the captured window
+      ['pasteText', drafts[0]?.text],
+    ]);
     expect(os.calls.some((x) => x.op === 'run' || x.op === 'ps')).toBe(false); // no Enter, no send
     await expect(c.fill(cap.id, 'again')).rejects.toMatchObject({ userMessage: /expired/ });
+
+    // Who Priya is was remembered for next time.
+    const again = await createCopilot(t.services).capture();
+    expect(again.remembered).toEqual({ scene: 'work', relationship: 'peer' });
+  });
+
+  it('reads group chats, suggests quick replies and rewrites a draft in another language', async () => {
+    const t = setupServices({
+      rules: [
+        {
+          system: 'transcribe the visible conversation',
+          steps: [
+            {
+              text: '{"app":"WhatsApp","contact":"Flat 4B","isGroup":true,"messages":[{"from":"them","name":"Ravi","text":"Who is buying milk?"}]}',
+            },
+          ],
+        },
+        {
+          system: 'Suggest three short',
+          steps: [{ text: '{"replies":["I will","Not today","Which brand?"]}' }],
+        },
+        { system: 'Rewrite the user', steps: [{ text: '{"text":"Main le aaunga"}' }] },
+      ],
+    });
+    const c = createCopilot(t.services);
+    const cap = await c.capture();
+    expect(cap.remembered).toBeNull();
+    expect(await c.quick(cap.id, 'friends', 'casual')).toEqual([
+      'I will',
+      'Not today',
+      'Which brand?',
+    ]);
+    const quickCall = t.llm.calls.find((x) => JSON.stringify(x.system).includes('Suggest three'));
+    expect(JSON.stringify(quickCall?.system)).toContain('group chat');
+    expect(JSON.stringify(quickCall?.messages)).toContain('THEM (Ravi)');
+    expect(await c.refine(cap.id, 'I will', 'translate', 'Hindi')).toBe('Main le aaunga');
+    const refineCall = t.llm.calls.find((x) => JSON.stringify(x.system).includes('Rewrite'));
+    expect(JSON.stringify(refineCall?.system)).toContain('Translate it into Hindi');
+  });
+
+  it('steps aside when Jarvis itself is in front, then comes back', async () => {
+    const t = setupServices({
+      rules: [
+        {
+          system: 'transcribe the visible conversation',
+          steps: [
+            {
+              text: '{"app":"Telegram","contact":"Mom","isGroup":false,"messages":[{"from":"them","text":"Call me"}]}',
+            },
+          ],
+        },
+      ],
+    });
+    const fg = [
+      { title: 'Jarvis', process: 'Jarvis', hwnd: 1, pid: process.pid },
+      { title: 'Telegram (2)', process: 'Telegram', hwnd: 99, pid: 55 },
+    ];
+    t.services.os.foregroundWindow = async () =>
+      fg.shift() ?? { title: 'Telegram', process: 'Telegram', hwnd: 99, pid: 55 };
+    const order: string[] = [];
+    const c = createCopilot(t.services, {
+      hideSelf: async () => void order.push('hide'),
+      showSelf: () => void order.push('show'),
+    });
+    const cap = await c.capture();
+    expect(order).toEqual(['hide', 'show']);
+    expect(cap.windowTitle).toBe('Telegram (2)');
+    // The unread counter changed, but it is the same window: pasting is allowed.
+    await expect(c.fill(cap.id, 'Calling in 5')).resolves.toBeUndefined();
+  });
+});
+
+describe('sameChatTitle', () => {
+  it('ignores unread counters but not a different chat', () => {
+    expect(sameChatTitle('(3) WhatsApp', 'WhatsApp')).toBe(true);
+    expect(sameChatTitle('Slack | #team | 2 new items', 'Slack | #team')).toBe(true);
+    expect(sameChatTitle('Slack | #team', 'Slack | #random')).toBe(false);
   });
 });

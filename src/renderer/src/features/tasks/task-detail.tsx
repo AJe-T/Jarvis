@@ -55,7 +55,10 @@ export function TaskDetail({
       aria-label="Task details"
       className="flex w-[22rem] shrink-0 flex-col border-l border-line-subtle bg-main xl:w-[26rem]"
     >
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle pr-2 pl-4">
+      <header
+        data-titlebar
+        className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle pr-2 pl-4"
+      >
         <CheckCircle todo={todo} size={20} />
         <span className="truncate text-xs text-ink-500">
           {todo.completedAt

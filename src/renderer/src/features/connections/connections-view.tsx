@@ -152,7 +152,7 @@ export function ConnectionsView(): React.JSX.Element {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <PageHeader title="Connections">
+      <PageHeader title="Connections" help="connections">
         <Button variant="primary" onClick={() => setAdding(true)}>
           <Plus size={14} aria-hidden /> Add connection
         </Button>

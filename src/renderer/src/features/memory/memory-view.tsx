@@ -18,6 +18,7 @@ import { call, cleanError } from '../../lib/api';
 import { useMemoryStore } from '../../stores/memory-store';
 import { useUiStore } from '../../stores/ui-store';
 import { ReviewQueue } from './review-queue';
+import { HelpButton } from '../../help/help-button';
 
 type Entry = Res<'memory:list'>[number];
 
@@ -148,6 +149,7 @@ export function MemoryView(): React.JSX.Element {
       >
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle pr-2 pl-4">
           <h1 className="text-ui font-semibold text-ink-100">Memory</h1>
+          <HelpButton topic="memory" />
           <Button
             variant="ghost"
             className="ml-auto"
@@ -212,7 +214,10 @@ export function MemoryView(): React.JSX.Element {
       <section className="flex min-w-0 flex-1 flex-col" aria-label="Note">
         {selected && note !== null ? (
           <>
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle px-4 md:px-6">
+            <header
+              data-titlebar
+              className="flex h-12 shrink-0 items-center gap-2 border-b border-line-subtle px-4 md:px-6"
+            >
               <h2 className="truncate text-lg font-semibold">
                 {selected.replace(/^Memory\//, '').replace(/\.md$/, '')}
               </h2>
@@ -237,7 +242,26 @@ export function MemoryView(): React.JSX.Element {
             </div>
           </>
         ) : (
-          <p className="m-auto text-ink-500">Choose a note to read it.</p>
+          <div className="m-auto flex max-w-md flex-col gap-2 p-6 text-sm text-ink-300">
+            <h2 className="text-base font-semibold text-ink-100">
+              What Jarvis remembers about you
+            </h2>
+            <p>
+              These notes are Jarvis&apos;s long-term memory: facts about you, the people in your
+              life, your projects and how you like things done. <b>About Sir</b> and{' '}
+              <b>Preferences</b> are read before every reply; other notes are looked up when a
+              conversation needs them.
+            </p>
+            <p>
+              Say “remember that…” to add one, or just talk: after each chat Jarvis proposes what is
+              worth keeping (anything that looks like an instruction waits in the review queue for
+              your OK). Open a note on the left to read, edit or delete it.
+            </p>
+            <p className="text-ink-500">
+              Brain is the map of your whole vault (memory, Spaces pages, conversations); Memory is
+              the part Jarvis learns about you.
+            </p>
+          </div>
         )}
       </section>
     </div>

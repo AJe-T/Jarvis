@@ -157,7 +157,7 @@ export function TimeGrid({
             >
               <span
                 className={clsx(
-                  'text-[11px] font-medium tracking-widest uppercase',
+                  'text-2xs font-medium tracking-widest uppercase',
                   d === today ? 'text-accent-500' : 'text-ink-500',
                 )}
               >
@@ -174,7 +174,7 @@ export function TimeGrid({
             </button>
           );
         })}
-        <div className="border-t border-line-subtle py-1 pr-2 text-right text-[10px] text-ink-500">
+        <div className="border-t border-line-subtle py-1 pr-2 text-right text-3xs text-ink-500">
           all-day
         </div>
         {days.map((d) => (
@@ -215,7 +215,7 @@ export function TimeGrid({
             {Array.from({ length: 24 }, (_, h) => (
               <span
                 key={h}
-                className="absolute right-2 -translate-y-1/2 font-code text-[10px] text-ink-500"
+                className="absolute right-2 -translate-y-1/2 font-code text-3xs text-ink-500"
                 style={{ top: px(h * 60) }}
               >
                 {h === 0 ? '' : `${String(h).padStart(2, '0')}:00`}

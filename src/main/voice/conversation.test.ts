@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { TranscriptBuffer, isEcho, isUnclear, mentionsName, parseIntent } from './conversation';
+import {
+  TranscriptBuffer,
+  isEcho,
+  isUnclear,
+  mentionsName,
+  parseIntent,
+  stripName,
+} from './conversation';
+import { nameVariants } from '@shared/assistant-name';
 import { createContinuousTranscriber, type HeardSegment } from './local/continuous';
 
 describe('echo rejection', () => {
@@ -38,6 +46,46 @@ describe('name anywhere in a sentence', () => {
     ['the jarvisproject repo', false],
     ['nothing to see here', false],
   ])('%s → %s', (text, yes) => expect(mentionsName(text)).toBe(yes));
+});
+
+describe('a name Sir chose', () => {
+  const april = ['april'];
+  it.each([
+    ['April, what time is it?', true],
+    ['hey aprill', true],
+    ['A pril open notes', true],
+    ['the apricot is ripe', false],
+    ['I was born in May', false],
+    ['the bread is stale', false],
+  ])('%s → %s', (text, yes) => expect(mentionsName(text, april)).toBe(yes));
+
+  it('stays exact for very short names', () => {
+    expect(mentionsName('Max, lights off', ['max'])).toBe(true);
+    expect(mentionsName('mix the paint', ['max'])).toBe(false);
+  });
+
+  it('short names forgive a missing or extra letter, not a different one', () => {
+    expect(mentionsName('Mikee, lights off', ['mike'])).toBe(true);
+    expect(mentionsName('that one is mine', ['mike'])).toBe(false);
+    expect(mentionsName('Mary Jane, play music', nameVariants('Mary-Jane'))).toBe(true);
+  });
+
+  it('two-word names match as a pair', () => {
+    expect(mentionsName('lady grey, play music', ['lady grey'])).toBe(true);
+  });
+
+  it.each([
+    ['Hey April, what time is it?', 'what time is it?'],
+    ['what do you think, April?', 'what do you think?'],
+    ['April.', ''],
+    ['Hey April', ''],
+    ['okay aprill open notepad', 'open notepad'],
+    ['nothing here', 'nothing here'],
+  ])('stripName(%s) → %s', (text, rest) => expect(stripName(text, april)).toBe(rest));
+
+  it('keeps Jarvis mishearings working by default', () => {
+    expect(stripName('Hey Jervis, lights off')).toBe('lights off');
+  });
 });
 
 describe('intent judge output', () => {

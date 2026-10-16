@@ -5,6 +5,7 @@ import { defineTool, fail, ok, type Tool } from '../types';
 import { asArray, type AppIndex } from './app-index';
 import type { OsAdapter } from './os';
 import {
+  PS_ARRANGE_WINDOWS,
   PS_CLOSE_WINDOWS,
   PS_LIST_WINDOWS,
   PS_PROCESSES,
@@ -63,6 +64,40 @@ export function matchWindow(list: WindowInfo[], query: string): WindowInfo | und
 }
 
 const name = z.object({ name: z.string().min(1).max(100) });
+
+export const LAYOUTS = ['columns', 'rows', 'grid', 'main_side', 'left', 'right'] as const;
+export type Layout = (typeof LAYOUTS)[number];
+export interface Slot {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Where n windows go, as fractions of the work area (first window first). */
+export function layoutSlots(layout: Layout, n: number): Slot[] {
+  const range = Array.from({ length: n }, (_, i) => i);
+  switch (layout) {
+    case 'left':
+      return [{ x: 0, y: 0, w: 0.5, h: 1 }];
+    case 'right':
+      return [{ x: 0.5, y: 0, w: 0.5, h: 1 }];
+    case 'rows':
+      return range.map((i) => ({ x: 0, y: i / n, w: 1, h: 1 / n }));
+    case 'grid':
+      return range.map((i) => ({ x: (i % 2) / 2, y: Math.floor(i / 2) / 2, w: 0.5, h: 0.5 }));
+    case 'main_side': {
+      if (n === 1) return [{ x: 0, y: 0, w: 1, h: 1 }];
+      const side = n - 1;
+      return [
+        { x: 0, y: 0, w: 2 / 3, h: 1 },
+        ...range.slice(1).map((i) => ({ x: 2 / 3, y: (i - 1) / side, w: 1 / 3, h: 1 / side })),
+      ];
+    }
+    default:
+      return range.map((i) => ({ x: i / n, y: 0, w: 1 / n, h: 1 }));
+  }
+}
 
 export function createAppTools(osa: OsAdapter, index: AppIndex): Tool[] {
   const windowAction = (action: 'focus' | 'minimize' | 'maximize', verb: string) =>
@@ -206,5 +241,40 @@ export function createAppTools(osa: OsAdapter, index: AppIndex): Tool[] {
     windowAction('focus', 'Switch to'),
     windowAction('minimize', 'Minimize'),
     windowAction('maximize', 'Maximize'),
+    // Window snapping (idea from Julian-Ivanov/jarvis-voice-assistant's quadrant layout).
+    defineTool({
+      name: 'arrange_windows',
+      description:
+        'Snap open windows into a layout on the main screen ("put Chrome and VS Code side by side", "snap Spotify to the right", "tile my four windows"). windows: app names or titles, in order (first = left/top/main). layout: columns (default; 2 = halves, 3 = thirds), rows, grid (2×2, up to 4), main_side (first big on the left, the rest stacked right), left / right (one window, half the screen).',
+      input: z.object({
+        windows: z.array(z.string().min(1).max(100)).min(1).max(4),
+        layout: z.enum(LAYOUTS).default('columns'),
+      }),
+      tier: 'SAFE',
+      timeoutMs: 20_000,
+      summarize: ({ windows: w, layout }) =>
+        `Arrange ${w.join(', ')} (${layout.replace('_', ' ')})`,
+      async run({ windows: names, layout }, ctx) {
+        if ((layout === 'left' || layout === 'right') && names.length > 1)
+          return fail('left / right snaps one window; use columns for several.');
+        const list = await windows(osa, ctx.signal);
+        const found = names.map((n) => ({ n, w: matchWindow(list, n) }));
+        const missing = found.filter((f) => !f.w).map((f) => f.n);
+        if (missing.length)
+          return fail(`No open window matches ${missing.map((m) => `"${m}"`).join(', ')}.`);
+        const ids = found.map((f) => (f.w as WindowInfo).Id);
+        if (new Set(ids).size !== ids.length)
+          return fail('Two of those names match the same window.');
+        const slots = layoutSlots(layout, ids.length);
+        const r = await osa.psJson<{ placed: string[] | string }>(PS_ARRANGE_WINDOWS, {
+          params: { moves: ids.map((pid, i) => ({ pid, ...slots[i] })) },
+          signal: ctx.signal,
+        });
+        const placed = asArray(r.placed);
+        return placed.length
+          ? ok(`Arranged: ${placed.join(' | ')}.`)
+          : fail("Couldn't move those windows (closed, or running as administrator).");
+      },
+    }),
   ];
 }

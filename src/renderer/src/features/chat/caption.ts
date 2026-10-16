@@ -17,6 +17,7 @@ const CAPTION_MAX = 320;
 export function captionOf(text: string, max = CAPTION_MAX): string {
   const plain = text
     .replace(/<\/?spoken>/g, '')
+    .replace(/<mood>[^<]{0,12}<\/mood>/gi, '')
     .replace(/```[\s\S]*?(```|$)/g, ' ')
     .replace(/[*_`#>|]/g, '')
     .replace(/-{3,}/g, ' ')

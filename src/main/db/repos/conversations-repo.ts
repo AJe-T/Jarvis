@@ -1,6 +1,7 @@
 import type { ConversationSummary } from '@shared/types';
 import { newId, nowIso } from '../../lib/util';
 import { tx, type Db, type SqlValue } from '../connection';
+import { keywords } from '../fts-query';
 
 export type ConversationSource = 'text' | 'voice' | 'mixed';
 export type MessageSource = 'text' | 'voice' | 'system';
@@ -28,6 +29,10 @@ export interface MessageRow {
   model: string | null;
   stop_reason: string | null;
   created_at: string;
+  /** Measured usage of the request that produced an assistant message (null when unknown). */
+  input_tokens?: number | null;
+  cache_read_tokens?: number | null;
+  cache_write_tokens?: number | null;
 }
 
 export interface NewMessage {
@@ -51,12 +56,16 @@ export function createConversationsRepo(db: Db) {
   return {
     get,
 
-    create(source: ConversationSource, isPrivate = false): ConversationRow {
+    create(
+      source: ConversationSource,
+      isPrivate = false,
+      kind: 'chat' | 'npc' = 'chat',
+    ): ConversationRow {
       const id = newId('c_');
       const now = nowIso();
       db.prepare(
-        'INSERT INTO conversations (id, started_at, last_active_at, source, is_private) VALUES (?, ?, ?, ?, ?)',
-      ).run(id, now, now, source, isPrivate ? 1 : 0);
+        'INSERT INTO conversations (id, started_at, last_active_at, source, is_private, kind) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(id, now, now, source, isPrivate ? 1 : 0, kind);
       const row = get(id);
       if (!row) throw new Error('conversation insert failed');
       return row;
@@ -64,9 +73,10 @@ export function createConversationsRepo(db: Db) {
 
     list(limit: number, beforeLastActive?: string): ConversationRow[] {
       const params: SqlValue[] = [];
-      let where = '';
+      // NPC work conversations (migration 013) hold tool calls and costs, not chats with Sir.
+      let where = "WHERE kind = 'chat'";
       if (beforeLastActive) {
-        where = 'WHERE last_active_at < ?';
+        where += ' AND last_active_at < ?';
         params.push(beforeLastActive);
       }
       params.push(limit);
@@ -90,12 +100,11 @@ export function createConversationsRepo(db: Db) {
       db.prepare('UPDATE conversations SET title = ? WHERE id = ?').run(title, id);
     },
 
+    /** Never moves the summary point back (a slow background summary after a manual compact). */
     setSummary(id: string, summary: string, uptoSeq: number): void {
-      db.prepare('UPDATE conversations SET summary = ?, summary_upto_seq = ? WHERE id = ?').run(
-        summary,
-        uptoSeq,
-        id,
-      );
+      db.prepare(
+        'UPDATE conversations SET summary = ?, summary_upto_seq = ? WHERE id = ? AND summary_upto_seq <= ?',
+      ).run(summary, uptoSeq, id, uptoSeq);
     },
 
     setVaultLogPath(id: string, path: string): void {
@@ -167,18 +176,50 @@ export function createConversationsRepo(db: Db) {
       ).n;
     },
 
-    /** Full-text search; `range` (ISO instants, end exclusive) limits it to a period. */
-    searchMessages(ftsQuery: string, limit: number, range: { from?: string; to?: string } = {}) {
+    /**
+     * Full-text search; `range` (ISO instants, end exclusive) limits it to a period. Private chats
+     * are left out unless `includePrivate` (Sir searching his own history in the app).
+     */
+    searchMessages(
+      ftsQuery: string,
+      limit: number,
+      range: { from?: string; to?: string } = {},
+      includePrivate = false,
+    ) {
       return db
         .prepare(
           `SELECT m.id AS id, m.conversation_id AS conversationId, m.created_at AS createdAt, m.role AS role, c.title AS title,
              snippet(messages_fts, 0, '[', ']', '…', 16) AS snippet
            FROM messages_fts JOIN messages m ON m.rowid = messages_fts.rowid
            JOIN conversations c ON c.id = m.conversation_id
-           WHERE messages_fts MATCH ? AND c.is_private = 0 AND m.created_at >= ? AND m.created_at < ?
+           WHERE messages_fts MATCH ? AND (? = 1 OR c.is_private = 0) AND m.created_at >= ? AND m.created_at < ?
            ORDER BY bm25(messages_fts) LIMIT ?`,
         )
-        .all(ftsQuery, range.from ?? '', range.to ?? '9999', limit) as unknown as MessageHit[];
+        .all(
+          ftsQuery,
+          includePrivate ? 1 : 0,
+          range.from ?? '',
+          range.to ?? '9999',
+          limit,
+        ) as unknown as MessageHit[];
+    },
+
+    /**
+     * Sir's chat search in the app (idea from LibreChat): search-as-you-type, so each word also
+     * matches as a prefix; all words first, then any of them; best hit per conversation, private
+     * chats included (it is his own history).
+     */
+    searchChats(query: string, limit = 25): MessageHit[] {
+      const terms = keywords(query).map((t) => `"${t.replace(/"/g, '""')}"*`);
+      if (terms.length === 0) return [];
+      const run = (op: string): MessageHit[] =>
+        this.searchMessages(terms.join(` ${op} `), limit * 3, {}, true);
+      const all = run('AND');
+      const hits = all.length ? all : run('OR');
+      const seen = new Set<string>();
+      return hits
+        .filter((h) => !seen.has(h.conversationId) && seen.add(h.conversationId))
+        .slice(0, limit);
     },
 
     /** What was said in a period, oldest first (date-scoped recall, idea from isair/jarvis's diary). */

@@ -15,7 +15,14 @@ export default defineConfig({
     build: {
       externalizeDeps: true,
       // node:sqlite is only importable with the node: prefix, so it is not in builtinModules.
-      rollupOptions: { external: ['node:sqlite'] },
+      rollupOptions: {
+        external: ['node:sqlite'],
+        // inference-host: the utility process that runs Whisper, Kokoro and Laya (ADR-029).
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'inference-host': resolve(__dirname, 'src/main/inference/host.ts'),
+        },
+      },
     },
   },
   preload: {
@@ -26,6 +33,10 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
           meter: resolve(__dirname, 'src/preload/meter.ts'),
+          'browser-bar': resolve(__dirname, 'src/preload/browser-bar.ts'),
+          terminal: resolve(__dirname, 'src/preload/terminal.ts'),
+          capture: resolve(__dirname, 'src/preload/capture.ts'),
+          camera: resolve(__dirname, 'src/preload/camera.ts'),
         },
       },
     },
@@ -39,6 +50,14 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
           meter: resolve(__dirname, 'src/renderer/meter.html'),
+          'browser-bar': resolve(__dirname, 'src/renderer/browser-bar.html'),
+          terminal: resolve(__dirname, 'src/renderer/terminal.html'),
+          // camera.html: Jarvis Camera beside the orb (apps/camera-view.ts), the only page that may open the camera on its own.
+          camera: resolve(__dirname, 'src/renderer/camera.html'),
+          // capture.html: the hidden window that opens the microphone and camera (windows/capture-window.ts).
+          capture: resolve(__dirname, 'src/renderer/capture.html'),
+          // artifact.html: the sandboxed frame chat artifacts render in (components/jarvis/artifact.tsx).
+          artifact: resolve(__dirname, 'src/renderer/artifact.html'),
         },
       },
     },

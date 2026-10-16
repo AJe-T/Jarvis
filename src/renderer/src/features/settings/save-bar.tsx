@@ -5,6 +5,17 @@ import { call } from '../../lib/api';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 
+/** Asks before restarting: some changes (connection, memory, vault, voice engines) apply best after one. */
+export async function offerRestart(what = 'connection, memory, vault or voice'): Promise<void> {
+  const now = await confirmAction({
+    title: 'Restart Jarvis now?',
+    body: `Some of these changes (${what}) apply best after a restart. It takes a few seconds and nothing is lost.`,
+    actionLabel: 'Restart now',
+    destructive: false,
+  });
+  if (now) await call('app:relaunch', {});
+}
+
 /** Design-system.md §6.9: edits wait here until Save; big ones offer a restart. Ctrl+S saves. */
 export function SaveBar(): React.JSX.Element | null {
   const count = useSettingsStore((s) => Object.keys(s.drafts).length);
@@ -15,13 +26,9 @@ export function SaveBar(): React.JSX.Element | null {
     for (const message of errors) toast({ level: 'error', message });
     if (errors.length === 0) toast({ level: 'info', message: 'Settings saved.' });
     if (restart.length === 0) return;
-    const now = await confirmAction({
-      title: 'Restart Jarvis now?',
-      body: 'Some of these changes (connection, memory or vault) apply best after a restart.',
-      actionLabel: 'Restart now',
-      destructive: false,
-    });
-    if (now) await call('app:relaunch', {});
+    await offerRestart(
+      restart.every((k) => k.startsWith('voice.')) ? 'voice engines, microphone' : undefined,
+    );
   }
 
   useEffect(() => {

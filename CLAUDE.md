@@ -3,6 +3,7 @@
 You are helping Sir build **JARVIS**, a voice-first AI assistant desktop app for Windows (Electron + React + TypeScript, Claude API, MCP, Obsidian memory).
 
 ## Start here (every session)
+0. Follow the standing rules: @conversations/RULES.md
 1. Read `docs/Agents.md` **Part A** (your working rules).
 2. Check the **CURRENT PHASE** line at the top of `docs/Implementation.md` and work only on that phase.
 3. Read the docs that phase's prompt lists. `docs/Security.md` always applies and wins every conflict.
@@ -33,6 +34,6 @@ You are helping Sir build **JARVIS**, a voice-first AI assistant desktop app for
 - Secrets never reach the renderer, logs, vault, tests, or git.
 - No `child_process.exec`; no string-built shell commands.
 - Every tool: Zod schema + tier + summarize + timeout + tests.
-- Don't copy code from other repos (never from AGPL/GPL).
+- Don't copy code from other repos; study how they work (read the source or reverse-engineer the app) and write our own code with the same logic. No pasting or line-by-line translation. AGPL/GPL: work from behaviour and ideas only.
 - Verify ⚠️-marked external APIs against official docs; fix the docs when they're wrong.
 - End every task with a Before/After/Why table and PowerShell commands Sir can run to verify.
