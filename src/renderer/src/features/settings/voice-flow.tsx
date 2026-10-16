@@ -96,6 +96,7 @@ const WAKE_ENGINE: Record<string, string> = {
   picovoice: 'Porcupine',
   openwakeword: 'openWakeWord',
   name: 'Whisper, by name',
+  personal: 'Your own voice',
 };
 
 const short = (title: string | undefined): string => (title ?? '').replace(/\s*\(.*\)$/, '');

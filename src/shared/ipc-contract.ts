@@ -579,11 +579,18 @@ export const INVOKE = {
       threshold: z.number().optional(),
       aliases: z.array(z.string()).optional(),
       scores: z.array(z.number()).optional(),
+      /** ADR-043: the phrases also became the personal wake word. */
+      wakeWord: z.boolean().optional(),
     }),
   ),
   'voice:profile': contract(
     Empty,
-    z.object({ enrolled: z.boolean(), phrases: z.number().int(), needed: z.number().int() }),
+    z.object({
+      enrolled: z.boolean(),
+      wakeTrained: z.boolean(),
+      phrases: z.number().int(),
+      needed: z.number().int(),
+    }),
   ),
   'app:killSwitch': contract(Empty, Ok),
   /** Settings Save bar: restart to apply big changes cleanly (audited). */

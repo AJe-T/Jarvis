@@ -11,7 +11,15 @@ import {
 import { createWhisperStt } from './local-stt';
 import type { ModelId, ModelStore } from './model-store';
 import { loadOwwModels, loadSileroVad, type Vad } from './onnx';
-import { createOpenWakeWord, thresholdFor } from './open-wake-word';
+import { createOpenWakeWord, thresholdFor, type OwwModels } from './open-wake-word';
+import {
+  createPersonalWake,
+  phraseFeatures,
+  type PhraseFeatures,
+  type WakeTemplates,
+} from './personal-wake';
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 import type { Transcriber } from './whisper';
 import { inference } from '../../inference/client';
 
@@ -60,10 +68,18 @@ export function watchSpeed(t: Transcriber, onSlow: () => void, now = Date.now): 
 export function createLocalEngines(
   store: ModelStore,
   settings: SettingsService,
-  hooks: { onSlow?(): void } = {},
+  hooks: { onSlow?(): void; onNearMiss?(info: Record<string, unknown>): void } = {},
 ) {
   let vad: Promise<Vad> | null = null;
   let whisper: { id: ModelId; model: Promise<Transcriber> } | null = null;
+  let featureModels: Promise<OwwModels> | null = null;
+
+  /** A fresh set of the openWakeWord models (each wake engine owns and releases its own). */
+  function owwModels(): Promise<OwwModels> {
+    if (!store.installed('openwakeword-hey-jarvis'))
+      return Promise.reject(notReady('"Hey Jarvis" wake-word model'));
+    return loadOwwModels(store.dir('openwakeword-hey-jarvis'));
+  }
 
   /** Caches the promise, but forgets a failed load so the next attempt retries. */
   function remember<T>(p: Promise<T>, forget: () => void): Promise<T> {
@@ -117,12 +133,41 @@ export function createLocalEngines(
     ready: (): boolean =>
       store.installed('silero-vad') && store.installed(settings.get('voice.stt.whisperModel')),
     async wake(sensitivity: number): Promise<WakeWord> {
-      if (!store.installed('openwakeword-hey-jarvis'))
-        throw notReady('"Hey Jarvis" wake-word model');
-      return createOpenWakeWord(
-        await loadOwwModels(store.dir('openwakeword-hey-jarvis')),
-        thresholdFor(sensitivity),
+      const threshold = thresholdFor(sensitivity);
+      return createOpenWakeWord(await owwModels(), threshold, Date.now, (score) =>
+        hooks.onNearMiss?.({ engine: 'hey-jarvis', score: round2(score), threshold }),
       );
+    },
+    /**
+     * ADR-043: Sir's own recorded "Hey <name>" is the wake word. With the default name the
+     * "hey jarvis" model listens too, so either one wakes him.
+     */
+    async personalWake(
+      sensitivity: number,
+      templates: WakeTemplates,
+      alsoHeyJarvis: boolean,
+    ): Promise<WakeWord> {
+      return createPersonalWake(await owwModels(), templates, {
+        sensitivity,
+        ...(alsoHeyJarvis ? { classifierThreshold: thresholdFor(sensitivity) } : {}),
+        onNearMiss: (distance, threshold) =>
+          hooks.onNearMiss?.({
+            engine: 'personal',
+            distance: round2(distance),
+            threshold: round2(threshold),
+          }),
+      });
+    },
+    /** The wake-word model is downloaded (needed for the personal wake word too). */
+    wakeReady: (): boolean => store.installed('openwakeword-hey-jarvis'),
+    /** One enrolment phrase as wake-word features (null without the wake-word model). */
+    async wakeFeatures(audio: Float32Array): Promise<PhraseFeatures | null> {
+      if (!store.installed('openwakeword-hey-jarvis')) return null;
+      // Kept warm through the enrolment; never released (three small models, a few MB).
+      featureModels ??= remember(owwModels(), () => {
+        featureModels = null;
+      });
+      return phraseFeatures(await featureModels, audio);
     },
     /** ADR-012 always-listening: its own VAD instance, the shared (warm) Whisper. */
     async ambient(handlers: {

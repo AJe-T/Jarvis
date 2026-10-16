@@ -49,6 +49,7 @@ import { createNpcRuntime } from './npcs/npc-runtime';
 import { createNpcTools } from './npcs/npc-tools';
 import { registerVoiceHandlers } from './ipc/handlers/voice';
 import { createVoiceSystem } from './voice/voice-system';
+import { startupFacts, startupLine } from './voice/greetings';
 import { registerMcpHandlers } from './ipc/handlers/mcp';
 import { createMcpSystem } from './mcp/mcp-system';
 import { createComputerSystem } from './tools/computer/computer-system';
@@ -71,6 +72,8 @@ import { createMusicMeter } from './windows/music-meter';
 import { createTray, iconPath } from './windows/tray';
 
 const isTest = process.env['JARVIS_TEST'] === '1';
+/** The startup hello waits this long after the window loads, so the app has settled first. */
+const STARTUP_GREETING_DELAY_MS = 1500;
 if (process.env['JARVIS_USER_DATA']) app.setPath('userData', process.env['JARVIS_USER_DATA']);
 
 let mainWindow: BrowserWindow | null = null;
@@ -495,13 +498,21 @@ async function boot(): Promise<void> {
   services.navListeners.add(() => setMiniMode(false));
   if (!isTest) services.planner.start();
   app.on('will-quit', () => services.planner.stop());
+  let voiceStarted: Promise<{ ok: boolean }> | null = null;
   if (services.settings.get('onboarding.complete')) {
     void mcp.manager.start();
     startMemory();
-    void voice.start().then((r) => {
-      if (!r.ok && r.error)
-        emit('notify', { level: 'warn', message: r.error, action: 'settings:voice' });
-    });
+    voiceStarted = voice
+      .start()
+      .then((r) => {
+        if (!r.ok && r.error)
+          emit('notify', { level: 'warn', message: r.error, action: 'settings:voice' });
+        return r;
+      })
+      .catch((err: unknown) => {
+        logger.warn({ err: errorMessage(err) }, 'voice start failed');
+        return { ok: false };
+      });
   }
   services.settings.onChange((key) => {
     if (key === 'vault.path' && services.settings.get('onboarding.complete')) startMemory();
@@ -513,6 +524,21 @@ async function boot(): Promise<void> {
     !isTest && (process.argv.includes('--hidden') || services.settings.get('app.startHidden'));
   mainWindow = createMainWindow({ startHidden: hidden });
   addEventTarget(mainWindow);
+  // Spoken hello with today's plan, then the mic opens. The renderer plays the audio, so it waits
+  // for the page; quiet mode (do not disturb) skips it.
+  const greetAfterStart = voiceStarted;
+  if (!isTest && greetAfterStart && services.settings.get('voice.startupGreeting'))
+    mainWindow.webContents.once(
+      'did-finish-load',
+      () =>
+        void greetAfterStart.then((r) => {
+          if (!r.ok || services.settings.get('quiet.until') > Date.now()) return;
+          setTimeout(
+            () => voice.voice.welcome(startupLine(startupFacts(services.planner))),
+            STARTUP_GREETING_DELAY_MS,
+          );
+        }),
+    );
   // §6.1: the orb follows music on the PC (off in tests; stops with the main window so the app can quit).
   const meter = createMusicMeter((rms) => emit('music:level', { rms }));
   const applyMeter = (): void => {

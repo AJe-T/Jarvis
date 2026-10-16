@@ -10,6 +10,7 @@ import { ENROL_PHRASES, type Enrolment } from '../../voice/enrolment';
 interface VoiceMatch {
   enrolment: Enrolment;
   enrolled(): boolean;
+  wakeTrained(): boolean;
   forget(): void;
 }
 
@@ -37,6 +38,7 @@ export function registerVoiceHandlers(
   });
   handle('voice:profile', () => ({
     enrolled: match.enrolled(),
+    wakeTrained: match.wakeTrained(),
     phrases: match.enrolment.count(),
     needed: ENROL_PHRASES,
   }));
@@ -48,7 +50,11 @@ export function registerVoiceHandlers(
       }
       case 'finish': {
         const r = match.enrolment.finish();
-        s.audit.append('user', 'voice.enrol', { phrases: ENROL_PHRASES, threshold: r.threshold });
+        s.audit.append('user', 'voice.enrol', {
+          phrases: ENROL_PHRASES,
+          threshold: r.threshold,
+          wakeWord: r.wakeWord,
+        });
         return { ok: true as const, ...r };
       }
       case 'cancel':

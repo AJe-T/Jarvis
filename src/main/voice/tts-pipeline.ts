@@ -41,6 +41,31 @@ export function clearSpeechCache(): void {
   speechCache.clear();
 }
 
+const speechKey = (provider: string, voice: string, rate: string, sentence: string): string =>
+  `${provider}|${voice}|${rate}|${sentence}`;
+
+/**
+ * Renders a stock line into the cache without playing it, so even its first use after a start
+ * (or a voice change) plays at once instead of waiting seconds for an on-device voice.
+ */
+export async function warmSpeech(
+  deps: Pick<TtsDeps, 'primary' | 'voice' | 'rate'>,
+  text: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const chunker = new SentenceChunker();
+  const provider = deps.primary();
+  const opts = { voice: deps.voice(), rate: deps.rate(), signal };
+  for (const sentence of [...chunker.push(text), ...chunker.flush()]) {
+    const key = speechKey(provider.id, opts.voice, opts.rate, sentence);
+    if (signal.aborted || speechCache.has(key)) continue;
+    const chunks: CachedChunk[] = [];
+    for await (const c of provider.synthesize(sentence, opts))
+      chunks.push({ mime: c.mime, data: c.data });
+    if (!signal.aborted) rememberSpeech(key, chunks);
+  }
+}
+
 /**
  * One spoken reply. Text arrives as deltas (from Claude) or all at once (prompts, reminders);
  * sentences are synthesised strictly in order and sent to the renderer as they become ready.
@@ -134,7 +159,7 @@ export class Utterance {
       signal: this.controller.signal,
     };
     const chain = [...new Set([this.deps.primary(), ...this.deps.fallbacks()])];
-    const key = `${chain[0]?.id ?? ''}|${opts.voice}|${opts.rate}|${text}`;
+    const key = speechKey(chain[0]?.id ?? '', opts.voice, opts.rate, text);
     const hit = this.cache ? speechCache.get(key) : undefined;
     if (hit) {
       for (const c of hit) this.send(c.mime, c.data);

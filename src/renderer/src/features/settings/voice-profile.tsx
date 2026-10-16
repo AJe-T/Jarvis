@@ -71,9 +71,15 @@ export function VoiceProfile(): React.JSX.Element {
         setStep('saving');
         const f = await call('voice:enrol', { action: 'finish' });
         setRedo(false);
+        const also = f.aliases?.length
+          ? ` and also hears “${f.aliases.join('”, “')}” as the name`
+          : '';
+        const wake = f.wakeWord
+          ? ` Your “Hey ${name}” is now the wake word too (Wake word engine: Your own voice).`
+          : '';
         toast({
           level: 'info',
-          message: `Voice Match is on. ${name} now answers your voice${f.aliases?.length ? ` and also hears “${f.aliases.join('”, “')}” as the name` : ''}.`,
+          message: `Voice Match is on. ${name} now answers your voice${also}.${wake}`,
         });
       }
     } catch (e) {
@@ -94,7 +100,7 @@ export function VoiceProfile(): React.JSX.Element {
   return (
     <Section
       title="Your voice (Voice Match)"
-      description={`Like setting up “Hey Google”: say “Hey ${name}” ${needed} times. ${name} learns your voice and how you say the name, then the wake word by name and Always listening answer only you. Press to talk always works. The recordings are never kept: only a voice fingerprint, encrypted on this PC.`}
+      description={`Like setting up “Hey Google”: say “Hey ${name}” ${needed} times. ${name} learns your voice and how you say the name: your “Hey ${name}” becomes the wake word, and the wake word by name and Always listening answer only you. Press to talk always works. The recordings are never kept: only a voice fingerprint and the wake-word pattern, encrypted on this PC.`}
     >
       {!ready && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2">
@@ -151,8 +157,15 @@ export function VoiceProfile(): React.JSX.Element {
       {ready && !enrolling && (
         <>
           <p className="flex items-center gap-2 text-sm text-ok-400">
-            <Check size={16} aria-hidden /> Your voice is set up.
+            <Check size={16} aria-hidden /> Your voice is set up
+            {profile?.wakeTrained ? `, and your “Hey ${name}” is a wake word` : ''}.
           </p>
+          {!profile?.wakeTrained && (
+            <p className="text-sm text-lamp-400">
+              Set up again once the “Hey Jarvis” wake-word model is downloaded (Wake word above) to
+              make your own “Hey {name}” the wake word.
+            </p>
+          )}
           <SettingSwitch
             k="voice.speaker.verify"
             label={`Only answer to my voice (wake word by name and Always listening)`}
@@ -176,7 +189,7 @@ export function VoiceProfile(): React.JSX.Element {
           </div>
         </>
       )}
-      {wakeEngine !== 'name' && (
+      {wakeEngine !== 'name' && wakeEngine !== 'personal' && (
         <p className="text-sm text-lamp-400">
           Voice Match checks phrases heard by the “{name}” wake word (by name) and Always listening.
           The keyword engines above don’t pass it their audio.

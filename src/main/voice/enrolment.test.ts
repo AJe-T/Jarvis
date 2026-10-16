@@ -66,4 +66,31 @@ describe('Voice Match enrolment (ADR-039)', () => {
     for (let i = 0; i < ENROL_PHRASES; i++) await e.sample();
     expect(e.finish().aliases).toEqual([]);
   });
+
+  it('ADR-043: the same phrases become the personal wake word when its model is there', async () => {
+    const frame = (k: number): Float32Array => {
+      const v = new Float32Array(96).fill(0.01);
+      v[k] = 1;
+      return v;
+    };
+    let n = 0;
+    const saveWake = vi.fn();
+    const { e } = setup({
+      wakeFeatures: async () => {
+        n++;
+        return {
+          embeddings: [frame(0), ...[1, 2, 3, 4, 5].map((k) => frame(k + (n % 2))), frame(0)],
+          loud: [false, true, true, true, true, true, false],
+        };
+      },
+      saveWake,
+    });
+    for (let i = 0; i < ENROL_PHRASES; i++) await e.sample();
+    expect(e.finish().wakeWord).toBe(true);
+    expect(saveWake).toHaveBeenCalledOnce();
+    // Without the wake-word model: Voice Match only.
+    const plain = setup({ wakeFeatures: async () => null, saveWake: vi.fn() });
+    for (let i = 0; i < ENROL_PHRASES; i++) await plain.e.sample();
+    expect(plain.e.finish().wakeWord).toBe(false);
+  });
 });

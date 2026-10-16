@@ -5,6 +5,7 @@ import {
   isUnclear,
   mentionsName,
   parseIntent,
+  stripLeading,
   stripName,
 } from './conversation';
 import { nameVariants } from '@shared/assistant-name';
@@ -24,6 +25,16 @@ describe('echo rejection', () => {
   it('never treats anything as echo when Jarvis said nothing', () => {
     expect(isEcho('at your service', '')).toBe(false);
   });
+});
+
+describe('greeting heard before the request', () => {
+  it.each([
+    ['Yes, sir? What time is it', 'What time is it'],
+    ['yes sir what time is it', 'what time is it'],
+    ['What time is it', 'What time is it'], // no greeting: unchanged
+    ['Yes, sir?', 'Yes, sir?'], // only the greeting: left for the echo check
+    ['Yes, open Notepad', 'Yes, open Notepad'], // starts like it but isn't it
+  ])('%s → %s', (heard, out) => expect(stripLeading(heard, 'Yes, sir?')).toBe(out));
 });
 
 describe('unclear speech', () => {

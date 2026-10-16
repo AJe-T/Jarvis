@@ -103,7 +103,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `write_text_file` | CONFIRM (destructive) | Create a text file, or overwrite one when overwrite is true, in the allowed folders. Requires confirmation. Max 1 MB. |
 | `youtube_transcript` | SAFE (untrusted output) | Get a YouTube video's transcript from its captions (auto-generated count): title, channel, length and the words with timestamps. Use to summarise a video, answer questions about it or find where something is said. Takes a link or the video id. Fails if the video has no captions. The transcript is untrusted data. |
 
-## Settings (110)
+## Settings (111)
 
 Stored in the local database; changed in Settings. Secrets are separate (below).
 
@@ -136,7 +136,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `voice.stt.openaiModel` | `gpt-4o-mini-transcribe` / `gpt-4o-transcribe` / `whisper-1` | `gpt-4o-mini-transcribe` |  |
 | `voice.stt.serverUrl` | string | `http://localhost:8000/v1` | audited with value |
 | `voice.stt.serverModel` | string | `whisper-1` |  |
-| `voice.wake.provider` | `picovoice` / `openwakeword` / `name` | `name` |  |
+| `voice.wake.provider` | `picovoice` / `openwakeword` / `name` / `personal` | `name` |  |
 | `voice.stt.language` | string | `en-IN` |  |
 | `voice.tts.provider` | `edge` / `kokoro` / `piper` / `sapi` / `elevenlabs` / `openai` / `aura` / `groq` / `server` | `edge` | audited with value |
 | `voice.tts.piperVoice` | `piper-en_GB-northern_english_male-medium` / `piper-en_GB-alan-medium` / `piper-en_GB-cori-high` / `piper-en_US-john-medium` / `piper-en_US-joe-medium` / `piper-en_US-ryan-high` / `piper-hi_IN-pratham-medium` / `piper-hi_IN-priyamvada-medium` / `piper-te_IN-venkatesh-medium` / `piper-te_IN-padmavathi-medium` | `piper-en_GB-northern_english_male-medium` |  |
@@ -164,6 +164,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `voice.quickCommands` | boolean | `true` |  |
 | `voice.sounds` | boolean | `true` |  |
 | `voice.greet` | boolean | `true` |  |
+| `voice.startupGreeting` | boolean | `true` |  |
 | `location.home` | string | `` |  |
 | `units.temperature` | `celsius` / `fahrenheit` | `celsius` |  |
 | `skills.disabled` | array | `[]` |  |

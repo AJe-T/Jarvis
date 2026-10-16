@@ -365,6 +365,7 @@ Decisions taken while building the policy layer; the code is the reference (`src
 - Biometric data: the voice fingerprint is stored only as secret `voice_profile` (DPAPI-encrypted `secrets.bin`, never shown in Settings, never sent to the renderer, logs, vault or any service). **Forget my voice** deletes it; it is not in backups of the vault.
 - Enrolment audio stays in main memory for one phrase and is dropped once its embedding is computed; the five embeddings are dropped when the profile is saved, cancelled or the page is left. Nothing is written to disk but the profile.
 - Logs carry the match score only, never audio or words.
+- Personal wake word (ADR-043): the same phrases become wake-word templates (openWakeWord speech features, not audio), stored only as secret `voice_wake` like the profile, validated on load, deleted by **Forget my voice** and on a name change. Detection runs in main on this PC; logs carry distances only. Like Voice Match it only decides when Jarvis starts listening, never grants anything.
 - Voice Match is a convenience filter, not authentication: it only ever ignores phrases (wake by name, always-listening), never grants anything, and fails open (missing model or profile, model error). Tier rules and confirmations are unchanged; the UI says a recording of Sir's voice can pass.
 
 ### 16.4 On-device voice models (ADR-011)

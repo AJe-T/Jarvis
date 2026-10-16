@@ -36,7 +36,9 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
   await expect(page.getByRole('heading', { name: 'Your voice (Voice Match)' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Download \(102 MB\)$/ })).toBeVisible();
   await page.getByRole('radio', { name: /^Picovoice: “Jarvis” only/ }).click();
-  await page.getByRole('radio', { name: /^Recommended: “Jarvis”/ }).click();
+  // 2.24 (ADR-043): your own recorded "Hey Jarvis" is offered first.
+  await expect(page.getByRole('radio', { name: /^Best: your own “Hey Jarvis”/ })).toBeVisible();
+  await page.getByRole('radio', { name: /^“Jarvis” or “Hey Jarvis” by speech recognition/ }).click();
   await page.getByRole('radio', { name: 'Press to talk' }).click();
   // 2.20: a new voice mode offers a clean restart; not now.
   await expect(page.getByText('Restart Jarvis now?')).toBeVisible();

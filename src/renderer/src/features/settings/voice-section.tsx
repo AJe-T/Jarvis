@@ -116,6 +116,10 @@ export function VoiceSection(): React.JSX.Element {
             k="voice.greet"
             label={`Instant replies: “Yes, sir?” when woken and “On it, sir.” while ${name} works (no AI call). Off: say your request in the same breath as the name`}
           />
+          <SettingSwitch
+            k="voice.startupGreeting"
+            label={`Greet me when ${name} starts: the time and today's plan, then listen for my answer`}
+          />
           <SettingSwitch k="voice.sounds" label="Chime when listening starts and stops" />
         </Section>
         <Section title="Language and speed">

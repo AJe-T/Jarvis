@@ -46,9 +46,12 @@ import { STT_ENGINES, type SttEngineId } from '@shared/speech-engines';
 import { inference } from '../inference/client';
 import { createEnrolment } from './enrolment';
 import { cosine, decodeProfile } from './local/speaker';
+import { decodeTemplates, encodeTemplates } from './local/personal-wake';
 
 /** ADR-039: Sir's voice fingerprint, encrypted with the other secrets; never shown or sent. */
 export const VOICE_PROFILE_SECRET = 'voice_profile';
+/** ADR-043: his recorded "Hey <name>" as wake-word templates; also his voice, so a secret too. */
+export const WAKE_TEMPLATES_SECRET = 'voice_wake';
 /** How often a Voice Match rejection is explained (the log keeps every one). */
 const VOICE_MATCH_NOTICE_MS = 2 * 60_000;
 
@@ -176,7 +179,22 @@ export function realFactories(
         : createPvRecorder(deviceIndex, frameLength),
     echoCancelled: captureOn,
     wake: (sensitivity) => {
-      if (s.settings.get('voice.wake.provider') === 'openwakeword') return local.wake(sensitivity);
+      const engine = s.settings.get('voice.wake.provider');
+      if (engine === 'personal') {
+        const raw = s.secrets.get(WAKE_TEMPLATES_SECRET);
+        if (!raw)
+          throw new JarvisError(
+            'INVALID',
+            'no personal wake word',
+            `Record your voice first: Settings → Voice → Your voice (say “Hey ${s.settings.get('assistant.name')}” five times).`,
+          );
+        return local.personalWake(
+          sensitivity,
+          decodeTemplates(raw),
+          isDefaultName(s.settings.get('assistant.name')),
+        );
+      }
+      if (engine === 'openwakeword') return local.wake(sensitivity);
       const key = s.secrets.get('picovoice');
       if (!key)
         throw new JarvisError(
@@ -321,6 +339,8 @@ export function createVoiceSystem(
         action: 'settings:voice',
       });
     },
+    // A "Hey Jarvis" that almost woke him: the log shows how close it came (tune the sensitivity).
+    onNearMiss: (info) => logger.info(info, 'wake word near miss'),
   });
   const dictations = createDictationRepo(s.db);
   const routineTriggers = (): RoutineTriggers[] =>
@@ -379,12 +399,26 @@ export function createVoiceSystem(
       local.ready()
         ? local.transcribe(audio, s.settings.get('voice.stt.language'))
         : Promise.resolve(''),
+    wakeFeatures: (audio) => local.wakeFeatures(audio),
     name: () => s.settings.get('assistant.name'),
     save: (profile, r) => {
       s.secrets.set(VOICE_PROFILE_SECRET, profile);
       s.settings.set('voice.speaker.threshold', r.threshold);
       s.settings.set('voice.wake.learned', r.aliases);
       s.settings.set('voice.speaker.verify', true);
+    },
+    // ADR-043: the same five phrases become his wake word, used at once unless he chose Picovoice.
+    saveWake: (templates) => {
+      if (!templates) {
+        if (s.secrets.get(WAKE_TEMPLATES_SECRET)) s.secrets.delete(WAKE_TEMPLATES_SECRET);
+        if (s.settings.get('voice.wake.provider') === 'personal')
+          s.settings.set('voice.wake.provider', local.wakeReady() ? 'openwakeword' : 'name');
+        return;
+      }
+      s.secrets.set(WAKE_TEMPLATES_SECRET, encodeTemplates(templates));
+      if (s.settings.get('voice.wake.provider') === 'personal') void voice.applyMode();
+      else if (s.settings.get('voice.wake.provider') !== 'picovoice')
+        s.settings.set('voice.wake.provider', 'personal');
     },
   });
   s.confirmShowListeners.add((e) => voice.onConfirmShown(e));
@@ -402,6 +436,18 @@ export function createVoiceSystem(
     // Spellings learned for the old name would wake Jarvis on the wrong word.
     if (key === 'assistant.name' && s.settings.get('voice.wake.learned').length)
       s.settings.set('voice.wake.learned', []);
+    // The recorded "Hey <old name>" would only answer to the old name.
+    if (key === 'assistant.name' && s.secrets.get(WAKE_TEMPLATES_SECRET)) {
+      s.secrets.delete(WAKE_TEMPLATES_SECRET);
+      if (s.settings.get('voice.wake.provider') === 'personal') {
+        s.settings.set('voice.wake.provider', 'name');
+        s.emit('notify', {
+          level: 'info',
+          message: `New name: record your voice again (Settings → Voice → Your voice) so “Hey ${s.settings.get('assistant.name')}” wakes me instantly.`,
+          action: 'settings:voice',
+        });
+      }
+    }
     if (
       key === 'voice.mode' ||
       key === 'voice.wake.sensitivity' ||
@@ -419,7 +465,10 @@ export function createVoiceSystem(
           s.emit('notify', { level: 'warn', message: r.error, action: 'settings:voice' });
       });
     if (key === 'voice.stt.provider' || key === 'voice.stt.whisperModel') local.preload();
-    if (key.startsWith('voice.tts.')) clearSpeechCache();
+    if (key.startsWith('voice.tts.')) {
+      clearSpeechCache();
+      voice.warmLines();
+    }
   });
   const edge = createEdgeTts();
   const clipTranscribers = phraseTranscribers(s);
@@ -478,11 +527,15 @@ export function createVoiceSystem(
     voiceMatch: {
       enrolment,
       enrolled: (): boolean => !!s.secrets.get(VOICE_PROFILE_SECRET),
+      wakeTrained: (): boolean => !!s.secrets.get(WAKE_TEMPLATES_SECRET),
       forget(): void {
         enrolment.cancel();
         if (s.secrets.get(VOICE_PROFILE_SECRET)) s.secrets.delete(VOICE_PROFILE_SECRET);
+        if (s.secrets.get(WAKE_TEMPLATES_SECRET)) s.secrets.delete(WAKE_TEMPLATES_SECRET);
         s.settings.set('voice.speaker.verify', false);
         s.settings.set('voice.wake.learned', []);
+        if (s.settings.get('voice.wake.provider') === 'personal')
+          s.settings.set('voice.wake.provider', local.wakeReady() ? 'openwakeword' : 'name');
       },
     },
     local: {

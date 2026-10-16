@@ -81,6 +81,23 @@ export function isEcho(transcript: string, recentlySpoken: string): boolean {
   return longestSharedRun(heard, spoken) >= need;
 }
 
+/** Drops `spoken` from the start of the transcript ("Yes, sir? What time is it" → "What time is it"). */
+export function stripLeading(transcript: string, spoken: string): string {
+  const lead = words(spoken);
+  const tokens = transcript.trim().split(/\s+/);
+  let at = 0;
+  let matched = 0;
+  while (at < tokens.length && matched < lead.length) {
+    const w = words(tokens[at] ?? '');
+    if (w.length && w.join(' ') !== lead.slice(matched, matched + w.length).join(' ')) break;
+    matched += w.length;
+    at++;
+  }
+  return matched === lead.length && at < tokens.length
+    ? tokens.slice(at).join(' ')
+    : transcript.trim();
+}
+
 /** Longest run of consecutive words that appears in both lists. */
 function longestSharedRun(a: string[], b: string[]): number {
   let best = 0;

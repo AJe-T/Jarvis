@@ -159,7 +159,9 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
         onStop: () => {
           if (active !== rec) return;
           active = null;
-          command({ type: 'mic-stop' });
+          // No window, no open mic. Opening one just to stop it (at quit) failed and was logged as
+          // "capture window failed to load" in every session.
+          if (win && !win.isDestroyed()) command({ type: 'mic-stop' });
         },
       });
       return rec;

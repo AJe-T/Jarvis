@@ -150,8 +150,8 @@ export function VoiceEngines(): React.JSX.Element {
   const chosen = useDraftSetting('voice.wake.provider') ?? 'name';
   const name = useDraftSetting('assistant.name') ?? DEFAULT_NAME;
   const custom = !isDefaultName(name);
-  // The keyword engines only know "Jarvis": any other name is always spotted by Whisper.
-  const wake = custom ? 'name' : chosen;
+  // The keyword engines only know "Jarvis": any other name is spotted by Whisper, or by Sir's own voice.
+  const wake = custom && chosen !== 'personal' ? 'name' : chosen;
   const whisperModel = useDraftSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
   return (
     <>
@@ -164,8 +164,13 @@ export function VoiceEngines(): React.JSX.Element {
           label="Wake word engine"
           options={[
             {
+              value: 'personal',
+              title: `Best: your own “Hey ${name}”`,
+              body: `Record it five times in Your voice (below). Works for any name and any accent, instantly and on this PC. ${custom ? '' : 'The “Hey Jarvis” model listens too. '}Needs the small “Hey Jarvis” model download.`,
+            },
+            {
               value: 'name',
-              title: `Recommended: “${name}” or “Hey ${name}”`,
+              title: `“${name}” or “Hey ${name}” by speech recognition`,
               body: `Whisper on this PC listens for the name, and “${name}, open Notepad” works in one breath. Uses the on-device speech models below (base.en is quickest).`,
             },
             {
@@ -187,12 +192,12 @@ export function VoiceEngines(): React.JSX.Element {
           ]}
         />
         {wake === 'picovoice' && <SecretField name="picovoice" label="Picovoice AccessKey" />}
-        {wake === 'openwakeword' && (
+        {(wake === 'openwakeword' || wake === 'personal') && (
           <>
             <ModelDownload id="openwakeword-hey-jarvis" models={models} />
             <SettingInput
               k="voice.wake.sensitivity"
-              label="Sensitivity (0–1). Higher hears “Hey Jarvis” more easily but wakes by mistake more often; 0.6–0.7 suits most voices"
+              label={`Sensitivity (0–1). Higher hears “Hey ${wake === 'personal' ? name : 'Jarvis'}” more easily but wakes by mistake more often; 0.6–0.7 suits most voices`}
               type="number"
               step={0.05}
             />

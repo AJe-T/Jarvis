@@ -14,13 +14,14 @@ import {
   isEcho,
   isUnclear,
   mentionsName,
+  stripLeading,
   stripName,
   type Intent,
   type JudgeContext,
 } from './conversation';
 import type { QuickMatch } from './quick-commands';
 import type { ContinuousTranscriber, HeardSegment } from './local/continuous';
-import { Utterance } from './tts-pipeline';
+import { Utterance, warmSpeech } from './tts-pipeline';
 import { createLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
 import {
   rms,
@@ -109,6 +110,10 @@ const CONVERSATION_GAP_MS = 15 * 60_000;
 const ECHO_SETTLE_MS = 400;
 /** Listening starts after the wake greeting, or after this long if its playback is never reported. */
 const GREETING_MAX_MS = 3_000;
+/** A repeated wake word is ignored while the greeting plays, but no longer than this. */
+const GREETING_STALE_MS = 8_000;
+/** Stock lines are rendered ahead only for free voices: a paid cloud voice would bill each one. */
+const WARM_ENGINES = new Set(['edge', 'sapi', 'kokoro', 'piper', 'server']);
 /** A volunteered line (Claude Code, reminder) waits until Jarvis has been quiet this long. */
 const NOTICE_QUIET_MS = 10_000;
 const NOTICE_RETRY_MS = 3_000;
@@ -146,6 +151,8 @@ export function createVoiceController(d: VoiceDeps) {
     early: Int16Array[];
     /** Opened by itself after a spoken reply: no chime, gives up quietly. */
     followUp: boolean;
+    /** The wake greeting playing while this session listens (echo-cancelled mic). */
+    greeting?: string;
     /**
      * Dictation: collect everything said, then hand it over (no turn). 'app' types it into the app in
      * front after a pause or the hotkey; 'composer' streams it into Jarvis's message box, phone-keyboard
@@ -186,6 +193,9 @@ export function createVoiceController(d: VoiceDeps) {
   const playing = new Set<string>();
   const wakeLine = createLinePicker(WAKE_LINES);
   const workingLine = createLinePicker(WORKING_LINES);
+  /** The "Yes, sir?" playing before listening starts (no echo cancellation). */
+  let greeting: Utterance | null = null;
+  let greetingAt = 0;
   let fallbackWarned = false;
   const voiceTurns = new Map<string, Utterance>();
   const timings: {
@@ -212,27 +222,54 @@ export function createVoiceController(d: VoiceDeps) {
       return true;
     }
   }
-  /** Picovoice and openWakeWord only know "Jarvis"; any other name is spotted by Whisper. */
-  const spotsName = (): boolean =>
-    d.settings.get('voice.wake.provider') === 'name' ||
-    !isDefaultName(d.settings.get('assistant.name'));
+  /**
+   * Picovoice and openWakeWord only know "Jarvis"; any other name is spotted by Whisper, unless
+   * Sir recorded his own "Hey <name>" (ADR-043), which works for any name.
+   */
+  const spotsName = (): boolean => {
+    const engine = d.settings.get('voice.wake.provider');
+    if (engine === 'personal') return false;
+    return engine === 'name' || !isDefaultName(d.settings.get('assistant.name'));
+  };
   /** Whisper hears every phrase: always-listening, or wake mode waiting for the name. */
   const transcribing = (): boolean =>
     ambient !== null && !sleeping && (mode() === 'ambient' || (mode() === 'wake' && spotting));
 
   // ── TTS ─────────────────────────────────────────────────────────────────────────────────
+  const voiceOf = {
+    primary: () => d.factories[d.settings.get('voice.tts.provider')] ?? d.factories.edge,
+    voice: () => d.settings.get('voice.tts.voice'),
+    rate: () => d.settings.get('voice.tts.rate'),
+  };
+
+  /** The instant lines, rendered ahead of time (one warm-up at a time; a new one replaces it). */
+  let warming: AbortController | null = null;
+  function warmLines(): void {
+    warming?.abort();
+    if (mode() === 'off' || !d.settings.get('voice.greet')) return;
+    if (!WARM_ENGINES.has(d.settings.get('voice.tts.provider'))) return;
+    const ctl = new AbortController();
+    warming = ctl;
+    void (async () => {
+      for (const line of [...WAKE_LINES, ...WORKING_LINES]) {
+        if (ctl.signal.aborted) return;
+        await warmSpeech(voiceOf, line, ctl.signal);
+      }
+    })().catch((err: unknown) =>
+      log.warn({ err: errorMessage(err) }, 'could not prepare greetings'),
+    );
+  }
+
   function newUtterance(extractSpoken: boolean, id?: string, cache = false): Utterance {
     return new Utterance(
       {
-        primary: () => d.factories[d.settings.get('voice.tts.provider')] ?? d.factories.edge,
+        ...voiceOf,
         fallbacks: () =>
           d.settings.get('voice.tts.provider') === 'sapi'
             ? []
             : d.settings.get('voice.tts.provider') === 'edge'
               ? [d.factories.sapi]
               : [d.factories.edge, d.factories.sapi],
-        voice: () => d.settings.get('voice.tts.voice'),
-        rate: () => d.settings.get('voice.tts.rate'),
         emitAudio: (p) => d.emit('tts:audio', p),
         emitStop: (utteranceId) => d.emit('tts:stop', utteranceId ? { utteranceId } : {}),
         onFallback: (err) => {
@@ -275,10 +312,29 @@ export function createVoiceController(d: VoiceDeps) {
     return u;
   }
 
-  /** Woken: answer at once ("Yes, sir?"), with no model call, then listen for the request. */
+  /**
+   * Woken: answer at once ("Yes, sir?"), with no model call, and listen for the request. With
+   * echo cancellation the mic opens at the same moment (it doesn't hear the greeting), so words
+   * Sir says straight after the name aren't lost; without it, listening starts once it has played.
+   */
   function greetThenListen(): void {
+    // Saying the name again while Jarvis is already answering used to restart the greeting each
+    // time, so the mic never opened while Sir kept repeating "Hey Jarvis".
+    // A greeting whose playback is never reported (renderer reloaded) stops counting after a while,
+    // so the wake word can't stay ignored.
+    const greetingLive =
+      greeting && !greeting.aborted && Date.now() - greetingAt < GREETING_STALE_MS;
+    if (listening || greetingLive) return log.info('wake word repeated; already listening');
     if (!d.settings.get('voice.greet')) return void startListening(false);
-    const u = say(wakeLine(), true);
+    const line = wakeLine();
+    if (d.factories.echoCancelled?.()) {
+      void startListening(false, false, null, line); // synchronously LISTENING; say() leaves it so
+      say(line, true);
+      return;
+    }
+    const u = say(line, true);
+    greeting = u;
+    greetingAt = Date.now();
     let started = false;
     const listen = (): void => {
       // Stopped (kill switch, barge-in) or still audible: the playback report will start it.
@@ -476,10 +532,12 @@ export function createVoiceController(d: VoiceDeps) {
     isRetry: boolean,
     followUp = false,
     dictation: 'app' | 'composer' | null = null,
+    greetingLine?: string,
   ): Promise<void> {
     if (listening) return;
     stopSpeaking();
     sleeping = false;
+    greeting = null;
     ambient?.reset();
     const abort = new AbortController();
     listening = {
@@ -489,6 +547,7 @@ export function createVoiceController(d: VoiceDeps) {
       retried: isRetry,
       early: [],
       followUp,
+      ...(greetingLine ? { greeting: greetingLine } : {}),
       ...(dictation ? { dictation: { parts: [], target: dictation } } : {}),
     };
     const detail = followUp
@@ -650,8 +709,16 @@ export function createVoiceController(d: VoiceDeps) {
 
   async function onFinal(session: NonNullable<typeof listening>, text: string): Promise<void> {
     if (listening !== session) return;
-    const transcript = text.trim();
+    let transcript = text.trim();
     if (!transcript && !session.heard) return;
+    if (session.greeting) {
+      // The greeting leaking past echo cancellation is not Sir's request: listen again for it.
+      if (!transcript || isEcho(transcript, session.greeting)) {
+        endListening();
+        return void startListening(true);
+      }
+      transcript = stripLeading(transcript, session.greeting); // "Yes sir? What time is it"
+    }
     endListening();
     timings.finalAt = Date.now();
     if (timings.eosAt)
@@ -829,6 +896,7 @@ export function createVoiceController(d: VoiceDeps) {
   // ── turn integration ────────────────────────────────────────────────────────────────────
   d.orchestrator.onTurnStart((turn: TurnInfo) => {
     if (turn.mode !== 'voice' || mode() === 'off') return;
+    warming?.abort(); // the reply goes first; lines not rendered yet are kept on first use
     lastVoice = { conversationId: turn.conversationId, at: Date.now() };
     if (!ack || speaking !== ack) stopSpeaking();
     replyUtterances.add(turn.turnId);
@@ -1026,7 +1094,17 @@ export function createVoiceController(d: VoiceDeps) {
         ensureRecorder();
       } else if (!needRecorder()) releaseRecorder();
       if (d.state.get() === 'SLEEP') d.state.set('IDLE');
+      warmLines();
       return { ok: true };
+    },
+
+    /** A voice setting changed and the kept lines were dropped: render them again in the new voice. */
+    warmLines,
+
+    /** Startup hello (time and today's plan, no model call), then the mic opens for Sir's answer. */
+    welcome(text: string): void {
+      if (mode() === 'off' || conversing()) return;
+      afterSpeech(say(text), openFollowUp);
     },
 
     onKill(): void {
@@ -1038,6 +1116,7 @@ export function createVoiceController(d: VoiceDeps) {
     },
 
     shutdown(): void {
+      warming?.abort();
       cancelListening();
       stopSpeaking();
       notices.length = 0;

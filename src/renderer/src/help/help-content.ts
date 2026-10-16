@@ -340,9 +340,10 @@ export const HELP: Record<string, HelpEntry> = {
     title: 'Wake word',
     what: 'How Jarvis hears its name when you aren’t pressing anything.',
     how: [
-      'Your name (recommended): on-device Whisper listens for the assistant’s name, any name.',
-      'Keyword “Hey Jarvis”: lightest on the CPU but only hears “Hey Jarvis”.',
-      'Raise sensitivity (0.6–0.7) if it misses you; lower it if it wakes by itself.',
+      'Your own “Hey <name>” (best): record it five times in Your voice; any name, any accent, instant.',
+      'Your name by speech recognition: on-device Whisper listens for the assistant’s name, any name.',
+      'Keyword “Hey Jarvis”: lightest on the CPU but only hears “Hey Jarvis” and can miss accents.',
+      'Raise sensitivity (0.6–0.7) if it misses you; lower it if it wakes by itself. The log shows “wake word near miss” when it almost heard you.',
     ],
   },
   'section:Voice mode': {

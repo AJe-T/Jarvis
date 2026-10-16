@@ -81,6 +81,15 @@ describe('openWakeWord port (ADR-011)', () => {
     expect(calls.released).toBe(true);
   });
 
+  it('reports the best score of a "Hey Jarvis" that almost woke him, once', async () => {
+    const scores = [0.1, 0.35, 0.45, 0.4, 0.05, 0.05];
+    const { models } = fakeOww((call) => scores[call - 1] ?? 0);
+    const near: number[] = [];
+    const ww = createOpenWakeWord(models, 0.5, Date.now, (s) => near.push(s));
+    for (let i = 0; i < 15 + 5 + scores.length; i++) await ww.process(new Int16Array(OWW_CHUNK));
+    expect(near).toEqual([0.45]);
+  });
+
   it('maps Picovoice-style sensitivity to a bounded threshold', () => {
     expect(thresholdFor(0.6)).toBeCloseTo(0.5);
     expect(thresholdFor(1)).toBe(0.2);

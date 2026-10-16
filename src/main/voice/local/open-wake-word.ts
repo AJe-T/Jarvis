@@ -11,10 +11,13 @@ const MEL_CONTEXT = 160 * 3; // extra samples the melspectrogram model needs per
 const MEL_BINS = 32;
 const WINDOW = 76; // mel frames per embedding
 const FEATURES = 16; // embeddings per prediction
+export const EMBEDDING = 96;
 const MEL_MAX = 970; // ~10 s, as upstream
 const FEATURES_MAX = 120;
 const WARMUP_PREDICTIONS = 5; // upstream zeroes the first 5 predictions
-const DEBOUNCE_MS = 2000;
+export const DEBOUNCE_MS = 2000;
+/** Scores this close to the threshold are logged as near misses, so a missed wake shows up. */
+const NEAR_MISS = 0.6;
 
 /** The three ONNX models, behind a seam so the pipeline is testable without onnxruntime. */
 export interface OwwModels {
@@ -32,24 +35,13 @@ export function thresholdFor(sensitivity: number): number {
   return Math.min(0.9, Math.max(0.2, 1.1 - sensitivity));
 }
 
-export function createOpenWakeWord(
-  models: OwwModels,
-  threshold: number,
-  now: () => number = Date.now,
-): WakeWord & { scores: number[] } {
-  let pending = new Int16Array(0);
+/** Audio → one 96-float speech embedding per 80 ms chunk (the shared front half of openWakeWord). */
+export function createFeatureStream(models: Pick<OwwModels, 'mel' | 'embed'>) {
   let raw = new Float32Array(0); // last OWW_CHUNK + MEL_CONTEXT samples
   let mel: Float32Array[] = Array.from({ length: WINDOW }, () =>
     new Float32Array(MEL_BINS).fill(1),
   );
-  let features: Float32Array[] = [];
-  let predictions = 0;
-  let lastFire = -Infinity;
-  const scores: number[] = [];
-  let inflight: Promise<unknown> = Promise.resolve();
-  let released = false;
-
-  async function chunk(samples: Int16Array): Promise<boolean> {
+  return async (samples: Int16Array): Promise<Float32Array> => {
     const joined = new Float32Array(raw.length + samples.length);
     joined.set(raw);
     joined.set(Float32Array.from(samples), raw.length);
@@ -62,35 +54,36 @@ export function createOpenWakeWord(
 
     const window = new Float32Array(WINDOW * MEL_BINS);
     mel.slice(-WINDOW).forEach((row, i) => window.set(row, i * MEL_BINS));
-    features.push(await models.embed(window));
-    if (features.length > FEATURES_MAX) features = features.slice(-FEATURES_MAX);
-    if (features.length < FEATURES) return false;
-
-    const input = new Float32Array(FEATURES * 96);
-    features.slice(-FEATURES).forEach((f, i) => input.set(f, i * 96));
-    const score = predictions++ < WARMUP_PREDICTIONS ? 0 : await models.classify(input);
-    scores.push(score);
-    if (scores.length > 50) scores.shift();
-    if (score < threshold || now() - lastFire < DEBOUNCE_MS) return false;
-    lastFire = now();
-    return true;
-  }
-
-  return {
-    frameLength: OWW_CHUNK,
-    scores,
-    process(frame) {
-      if (released) return Promise.resolve(false);
-      const run = processFrame(frame);
-      inflight = run.catch(() => undefined);
-      return run;
-    },
-    /** Waits for a running inference: disposing ONNX sessions mid-run fails ("Session already disposed"). */
-    release: () => {
-      released = true;
-      void inflight.then(() => models.release());
-    },
+    return models.embed(window);
   };
+}
+
+/** The "hey jarvis" classifier over the last 16 embeddings, with upstream's warm-up. */
+export function createClassifier(models: Pick<OwwModels, 'classify'>) {
+  let features: Float32Array[] = [];
+  let predictions = 0;
+  return async (embedding: Float32Array): Promise<number> => {
+    features.push(embedding);
+    if (features.length > FEATURES_MAX) features = features.slice(-FEATURES_MAX);
+    if (features.length < FEATURES) return 0;
+    const input = new Float32Array(FEATURES * EMBEDDING);
+    features.slice(-FEATURES).forEach((f, i) => input.set(f, i * EMBEDDING));
+    return predictions++ < WARMUP_PREDICTIONS ? 0 : models.classify(input);
+  };
+}
+
+/**
+ * Re-cuts mic frames of any length into 80 ms chunks for `onChunk` (true = woken), one chunk at a
+ * time. release() waits for a running inference: disposing ONNX sessions mid-run fails ("Session
+ * already disposed").
+ */
+export function chunkedWake(
+  onChunk: (chunk: Int16Array) => Promise<boolean>,
+  releaseModels: () => void,
+): WakeWord {
+  let pending = new Int16Array(0);
+  let inflight: Promise<unknown> = Promise.resolve();
+  let released = false;
 
   async function processFrame(frame: Int16Array): Promise<boolean> {
     const all = new Int16Array(pending.length + frame.length);
@@ -99,8 +92,60 @@ export function createOpenWakeWord(
     let fired = false;
     let at = 0;
     for (; at + OWW_CHUNK <= all.length; at += OWW_CHUNK)
-      if (await chunk(all.subarray(at, at + OWW_CHUNK))) fired = true;
+      if (await onChunk(all.subarray(at, at + OWW_CHUNK))) fired = true;
     pending = all.slice(at);
     return fired;
   }
+
+  return {
+    frameLength: OWW_CHUNK,
+    process(frame) {
+      if (released) return Promise.resolve(false);
+      const run = processFrame(frame);
+      inflight = run.catch(() => undefined);
+      return run;
+    },
+    release: () => {
+      released = true;
+      void inflight.then(() => releaseModels());
+    },
+  };
+}
+
+/** Tracks the best score of each burst below the threshold and reports it once the burst ends. */
+export function nearMissTracker(threshold: number, report: (peak: number) => void) {
+  let peak = 0;
+  return (score: number, fired: boolean): void => {
+    if (fired) peak = 0;
+    else if (score >= threshold * NEAR_MISS) peak = Math.max(peak, score);
+    else if (peak > 0) {
+      report(peak);
+      peak = 0;
+    }
+  };
+}
+
+export function createOpenWakeWord(
+  models: OwwModels,
+  threshold: number,
+  now: () => number = Date.now,
+  onNearMiss?: (score: number) => void,
+): WakeWord & { scores: number[] } {
+  const features = createFeatureStream(models);
+  const classify = createClassifier(models);
+  const nearMiss = onNearMiss ? nearMissTracker(threshold, onNearMiss) : undefined;
+  let lastFire = -Infinity;
+  const scores: number[] = [];
+
+  const wake = chunkedWake(async (chunk) => {
+    const score = await classify(await features(chunk));
+    scores.push(score);
+    if (scores.length > 50) scores.shift();
+    const fired = score >= threshold && now() - lastFire >= DEBOUNCE_MS;
+    nearMiss?.(score, fired || score >= threshold);
+    if (!fired) return false;
+    lastFire = now();
+    return true;
+  }, models.release);
+  return Object.assign(wake, { scores });
 }

@@ -10,12 +10,19 @@ import {
   createFakeWake,
 } from '@main/voice/fakes';
 import { createVoiceSystem, realFactories } from '@main/voice/voice-system';
+import { WAKE_LINES, WORKING_LINES } from '@main/voice/greetings';
 import { idle, setupServices } from './helpers';
 
 function setupVoice(
   script: FakeScript | ((dir: string) => FakeScript),
   transcripts: string[],
-  opts: { edgeFails?: boolean; mode?: 'ptt' | 'wake'; sttStartMs?: number; greet?: boolean } = {},
+  opts: {
+    edgeFails?: boolean;
+    mode?: 'ptt' | 'wake';
+    sttStartMs?: number;
+    greet?: boolean;
+    echoCancelled?: boolean;
+  } = {},
 ) {
   const t = setupServices(script);
   t.services.settings.set('voice.mode', opts.mode ?? 'ptt');
@@ -28,7 +35,14 @@ function setupVoice(
   const edge = createFakeTts('edge', { fail: opts.edgeFails ?? false });
   const sapi = createFakeTts('sapi');
   const v = createVoiceSystem(t.services, {
-    factories: { recorder: (_d, n) => createFakeRecorder(n), wake: () => wake, stt, edge, sapi },
+    factories: {
+      recorder: (_d, n) => createFakeRecorder(n),
+      wake: () => wake,
+      stt,
+      edge,
+      sapi,
+      ...(opts.echoCancelled ? { echoCancelled: () => true } : {}),
+    },
     timeouts: { silenceMs: 300, maxListenMs: 3000 },
   });
   const states = (): string[] =>
@@ -105,17 +119,57 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     t.v.voice.shutdown();
   });
 
-  it('woken, Jarvis answers at once with no model call, then listens', async () => {
+  it('woken, Jarvis answers at once from lines rendered ahead (no model call, no synthesis), then listens', async () => {
+    const t = setupVoice({ rules: [] }, ['hello'], { mode: 'wake', greet: true });
+    await t.v.start();
+    await until(() => t.edge.spoken.length === WAKE_LINES.length + WORKING_LINES.length);
+    t.wake.trigger();
+    await until(() => t.audio().some((a) => a.last));
+    expect(t.edge.spoken).toHaveLength(WAKE_LINES.length + WORKING_LINES.length); // from the cache
+    // Not listening yet: without echo cancellation the microphone would hear the greeting.
+    expect(t.stt.sessions).toBe(0);
+    t.play();
+    await until(() => t.stt.sessions === 1);
+    t.v.voice.shutdown();
+  });
+
+  it('saying the wake word again while Jarvis greets does not start over (regression)', async () => {
     const t = setupVoice({ rules: [] }, ['hello'], { mode: 'wake', greet: true });
     await t.v.start();
     t.wake.trigger();
     await until(() => t.audio().some((a) => a.last));
-    expect(t.edge.spoken).toHaveLength(1);
-    expect(t.edge.spoken[0]).toMatch(/sir/i);
-    // Not listening yet: the microphone would hear the greeting.
-    expect(t.stt.sessions).toBe(0);
+    t.wake.trigger();
+    t.wake.trigger();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(new Set(t.audio().map((a) => a.utteranceId)).size).toBe(1);
+    expect(t.events.some((e) => e.event === 'tts:stop')).toBe(false);
     t.play();
     await until(() => t.stt.sessions === 1);
+    t.v.voice.shutdown();
+  });
+
+  it('with an echo-cancelled mic it listens while greeting; the greeting leaking through is not a request', async () => {
+    const t = setupVoice(
+      { rules: [{ match: 'hello', steps: [{ text: 'Hi, sir.' }] }] },
+      [
+        '', // what leaked past the echo canceller: speech with no words
+        'hello there',
+      ],
+      { mode: 'wake', greet: true, echoCancelled: true },
+    );
+    await t.v.start();
+    t.wake.trigger();
+    await until(() => t.stt.sessions === 1); // at once, before the greeting is played
+    expect(t.audio().length).toBeGreaterThan(0);
+    await until(() => t.stt.sessions === 2); // the empty phrase reopened listening
+    await until(() => t.services.conversations.list(5).length === 1);
+    await idle(t.services);
+    const said = t.services.conversations
+      .list(5)
+      .flatMap((c) => t.services.conversations.messages(c.id))
+      .filter((m) => m.role === 'user')
+      .map((m) => m.text_plain);
+    expect(said).toEqual(['hello there']);
     t.v.voice.shutdown();
   });
 
@@ -129,10 +183,26 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     t.v.voice.ptt();
     await until(() => t.services.conversations.list(5).length === 1);
     await idle(t.services);
-    await until(() => t.edge.spoken.length === 2);
-    expect(t.edge.spoken[1]).toBe('Sunny, sir.');
-    expect(t.edge.spoken[0]).toMatch(/sir\.$/);
+    await until(() => t.edge.spoken.includes('Sunny, sir.'));
+    const working = t.audio()[0]?.utteranceId;
+    expect(t.audio().some((a) => a.utteranceId !== working)).toBe(true); // the reply is its own utterance
     expect(t.events.some((e) => e.event === 'tts:stop')).toBe(false);
+  });
+
+  it('greets on start with the plan for today, then opens the mic for the answer', async () => {
+    const t = setupVoice({ rules: [] }, [], { mode: 'wake' });
+    t.services.settings.set('voice.followUpSeconds', 1);
+    await t.v.start();
+    t.v.voice.welcome('Good morning, sir. Your day is clear. What shall we do?');
+    await until(() => t.audio().some((a) => a.last));
+    t.play();
+    await until(() => t.stt.sessions === 1);
+    const listening = t.events.filter(
+      (e) =>
+        e.event === 'assistant:state' && (e.payload as { state: string }).state === 'LISTENING',
+    );
+    expect((listening.at(-1)?.payload as { detail?: string }).detail).toBe('follow-up');
+    t.v.voice.shutdown();
   });
 
   it('wake word survives the mode being re-applied while the mic is running (regression)', async () => {

@@ -22,10 +22,12 @@ import {
   PIPER_VOICE_IDS,
   STT_ENGINE_IDS,
   TTS_ENGINE_IDS,
+  WAKE_ENGINE_IDS,
   type LocalSttModelId,
   type PiperVoice,
   type SttEngineId,
   type TtsEngineId,
+  type WakeEngineId,
 } from './speech-engines';
 import { DEFAULT_PERSONA, PERSONA_IDS } from './personas';
 
@@ -140,11 +142,13 @@ export const SETTINGS = {
   'voice.stt.serverModel': { schema: serverName, default: 'whisper-1' },
   /**
    * picovoice = "Jarvis" (cloud key), openwakeword = "Hey Jarvis" (on-device model), name = any name Sir
-   * chose, spotted by on-device Whisper. The first two only know "Jarvis"; another name always uses 'name'.
+   * chose, spotted by on-device Whisper, personal = Sir's own recorded "Hey <name>" (ADR-043, any
+   * name, on-device). picovoice and openwakeword only know "Jarvis"; another name uses 'name' unless
+   * Sir trained his personal wake word.
    */
   'voice.wake.provider': {
-    schema: z.enum(['picovoice', 'openwakeword', 'name']),
-    default: 'name' as 'picovoice' | 'openwakeword' | 'name',
+    schema: z.enum(WAKE_ENGINE_IDS),
+    default: 'name' as WakeEngineId,
   },
   'voice.stt.language': { schema: z.string().min(2).max(10), default: 'en-IN' },
   /** ADR-038: on-device (Kokoro, Piper, Windows), cloud, or Sir's own server (shared/speech-engines.ts). */
@@ -230,6 +234,8 @@ export const SETTINGS = {
    * request is being worked on. Off = the wake word starts listening at once (say it all in one breath).
    */
   'voice.greet': { schema: z.boolean(), default: true },
+  /** When Jarvis starts: a spoken hello with the time and today's plan (no model call), then the mic opens. */
+  'voice.startupGreeting': { schema: z.boolean(), default: true },
   // Everyday tools (ideas from isair/jarvis).
   /** Home town for weather ("Hyderabad, India"); empty = ask. */
   'location.home': { schema: z.string().max(120), default: '' },
