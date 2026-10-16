@@ -1,15 +1,23 @@
 import type { McpManager } from '../../mcp/manager';
 import { KNOWN_SECRETS } from '@shared/types';
+import { CLOUD_PROVIDERS } from '@shared/llm-providers';
 import { MCP_PRESETS } from '@shared/mcp-presets';
+import { INTERNAL_SECRET_RE } from '../../settings/secrets';
 import type { McpServerInput } from '@shared/ipc-contract';
 import { JarvisError } from '../../errors';
 import { searchRegistry } from '../../mcp/registry';
 
-/** Keys owned by Jarvis or by a vetted preset; only official-trust servers may be bound to them. */
+/**
+ * Keys owned by Jarvis (incl. every AI provider's key and his own internal secrets) or by a vetted
+ * preset; only official-trust servers may be bound to them.
+ */
 const PROTECTED_SECRETS = new Set<string>([
   ...KNOWN_SECRETS,
+  ...CLOUD_PROVIDERS.map((p) => p.secret),
   ...MCP_PRESETS.flatMap((p) => (p.secrets ?? []).map((n) => n.name)),
 ]);
+export const isProtectedSecret = (name: string): boolean =>
+  PROTECTED_SECRETS.has(name) || INTERNAL_SECRET_RE.test(name);
 
 type SecretBinding = {
   trustLevel?: McpServerInput['trustLevel'] | undefined;
@@ -24,7 +32,7 @@ function secretNames(r: SecretBinding): string[] {
 /** Security.md §10: a community server can never be handed Sir's GitHub, Notion, Zapier… keys. */
 function guardSecrets(r: SecretBinding): void {
   if (r.trustLevel === 'official') return;
-  const taken = secretNames(r).find((n) => PROTECTED_SECRETS.has(n));
+  const taken = secretNames(r).find(isProtectedSecret);
   if (taken)
     throw new JarvisError(
       'POLICY_BLOCKED',

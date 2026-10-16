@@ -1,4 +1,12 @@
+import { z } from 'zod';
+import type { ModelListing } from '@shared/llm-providers';
 import { JarvisError } from '../errors';
+import { redact } from '../security/redact';
+
+const OpenAiModels = z.object({ data: z.array(z.object({ id: z.string() })).default([]) });
+const OllamaTags = z.object({
+  models: z.array(z.object({ name: z.string().optional(), model: z.string().optional() })),
+});
 import type { ToolCatalogEntry } from '../agent/agent-loop';
 import type { LlmClient, LlmMessage, LlmRequest, MessageParam } from './types';
 
@@ -224,7 +232,14 @@ export interface LocalLlmConfig {
    * A cloud provider instead of a server on this PC: its fixed address is allowed, every tool is
    * offered (big models cope), and calls are billed. Name and settings hint for messages.
    */
-  cloud?: { name(): string; allowedBaseUrls: readonly string[] };
+  cloud?: {
+    name(): string;
+    allowedBaseUrls: readonly string[];
+    /** Fixed model-list addresses for providers that don't use {baseUrl}/models. */
+    allowedModelUrls?: readonly string[];
+    /** How the provider lists its models (shared/llm-providers.ts); default 'openai'. */
+    listing?(): { kind: ModelListing; url?: string | undefined };
+  };
 }
 
 /** Only the catalogue's fixed HTTPS addresses (shared/llm-providers.ts), never one typed in. */
@@ -297,18 +312,76 @@ export function createLocalClient(
       );
   };
 
+  const listing = (): { kind: ModelListing; url?: string | undefined } =>
+    cloud?.listing?.() ?? { kind: 'openai' };
+
   async function listModels(): Promise<string[]> {
     needKey();
-    const base = checkUrl(cfg.baseUrl()).toString();
-    const res = await f(join(base, '/models'), {
+    const how = listing();
+    if (how.kind === 'manual')
+      throw new JarvisError(
+        'INVALID',
+        'no model list',
+        `${where()} doesn't publish a model list. Type the model id from its website.`,
+      );
+    // The Ollama list address must be one of the catalogue's fixed list addresses.
+    const url =
+      how.kind === 'ollama' && how.url
+        ? checkCloudUrl(how.url, cloud?.allowedModelUrls ?? []).toString()
+        : join(checkUrl(cfg.baseUrl()).toString(), '/models');
+    const res = await f(url, {
       headers: auth(),
       signal: AbortSignal.timeout(8000),
     }).catch((e: unknown) => {
       throw unreachable(String(e));
     });
     if (!res.ok) throw unreachable(`HTTP ${res.status}`);
-    const body = (await res.json()) as { data?: Array<{ id: string }> };
-    return (body.data ?? []).map((m) => m.id);
+    const parsed = (how.kind === 'ollama' ? OllamaTags : OpenAiModels).safeParse(
+      await res.json().catch(() => null),
+    );
+    if (!parsed.success) throw unreachable('model list was not the expected JSON');
+    const body = parsed.data;
+    return 'models' in body
+      ? body.models.map((m) => m.name ?? m.model ?? '').filter(Boolean)
+      : body.data.map((m) => m.id);
+  }
+
+  /** No model list to check against: one tiny, non-streamed request (max_tokens 1) instead. */
+  async function pingByRequest(model: string): Promise<void> {
+    const base = checkUrl(cfg.baseUrl()).toString();
+    const res = await f(join(base, '/chat/completions'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...auth() },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'Reply OK' }],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    }).catch((e: unknown) => {
+      throw unreachable(String(e));
+    });
+    if (res.ok) return;
+    // The body is the provider's text: some echo the request, so strip known secrets and the key.
+    const key = cfg.apiKey?.();
+    const raw = await res.text().catch(() => '');
+    const text = redact(key ? raw.split(key).join('[key]') : raw).slice(0, 200);
+    const s = res.status;
+    if (s === 401 || s === 403)
+      throw new JarvisError('LLM_AUTH', `test ${s}`, `${where()} rejected the API key.`);
+    if (s === 402 || s === 429 || s >= 500)
+      throw new JarvisError(
+        s === 429 ? 'LLM_OVERLOADED' : 'LLM_NETWORK',
+        `test ${s}: ${text}`,
+        s === 402
+          ? `${where()} says the account is out of credit (402).`
+          : `${where()} is busy or failing right now (${s}). Try again in a minute.`,
+      );
+    throw new JarvisError(
+      'INVALID',
+      `test ${s}: ${text}`,
+      `${where()} refused "${model}" (${s}): ${text}`,
+    );
   }
 
   return {
@@ -316,6 +389,10 @@ export function createLocalClient(
     async ping() {
       const model = cfg.model();
       if (!model) throw new JarvisError('INVALID', 'no model', settingsHint);
+      if (listing().kind === 'manual') {
+        needKey();
+        return pingByRequest(model);
+      }
       const models = await listModels();
       // Some providers list ids as "models/<id>" but take the bare id.
       if (!models.some((m) => m === model || m === `models/${model}`))

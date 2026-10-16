@@ -110,7 +110,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `llm.provider` | `api` / `subscription` / `local` / `cloud` | `api` | audited with value |
-| `llm.cloud.provider` | `openai` / `gemini` / `deepseek` / `xai` / `mistral` / `groq` / `openrouter` / `together` | `openai` | audited with value |
+| `llm.cloud.provider` | `openai` / `gemini` / `deepseek` / `xai` / `mistral` / `groq` / `openrouter` / `together` / `huggingface` / `vercel` / `requesty` / `deepinfra` / `fireworks` / `ollamacloud` | `openai` | audited with value |
 | `llm.cloud.models` | object | `{}` |  |
 | `llm.local.baseUrl` | string | `http://localhost:11434/v1` |  |
 | `llm.local.model` | string | `` |  |
@@ -226,9 +226,47 @@ Encrypted with Windows DPAPI (Electron safeStorage); the renderer only ever sees
 
 ## IPC channels
 
-- **Invoke** (renderer → main, request/response, Zod-validated both ways, 158): `chat:send`, `chat:cancel`, `chat:rewind`, `logs:tail`, `conversations:list`, `conversations:get`, `conversations:delete`, `conversations:context`, `conversations:search`, `conversations:compact`, `confirm:respond`, `settings:getAll`, `settings:set`, `secrets:set`, `secrets:delete`, `secrets:status`, `secrets:test`, `memory:list`, `memory:read`, `memory:search`, `memory:delete`, `memory:openInObsidian`, `memory:reviewList`, `memory:reviewResolve`, `memory:rebuildIndex`, `memory:importChats`, `mcp:list`, `mcp:add`, `mcp:update`, `mcp:remove`, `mcp:restart`, `mcp:registrySearch`, `voice:setMode`, `voice:mic`, `voice:compose`, `voice:setupLocal`, `voice:devices`, `voice:enrol`, `voice:profile`, `app:killSwitch`, `app:relaunch`, `app:info`, `app:openExternal`, `app:titleBar`, `app:pickFolder`, `artifacts:save`, `app:setMiniMode`, `usage:summary`, `usage:breakdown`, `llm:claudeCodeStatus`, `llm:localModels`, `llm:localTest`, `llm:cloudModels`, `llm:cloudTest`, `llm:cliStatus`, `llm:cliLogin`, `llm:cliTest`, `location:detect`, `system:stats`, `telegram:status`, `telegram:restart`, `copilot:capture`, `copilot:analyse`, `copilot:draft`, `copilot:quick`, `copilot:refine`, `copilot:fill`, `telegram:unpair`, `tasks:list`, `tasks:save`, `tasks:delete`, `tasks:runNow`, `skills:list`, `skills:read`, `skills:installFolder`, `skills:installGitHub`, `skills:remove`, `skills:setEnabled`, `dictation:history`, `dictation:clear`, `models:status`, `models:download`, `models:cancel`, `models:delete`, `llm:claudeCodeLogin`, `audit:list`, `audit:verify`, `audit:export`, `activity:list`, `routines:list`, `apps:dock`, `apps:timerAdd`, `apps:timerCancel`, `reminders:list`, `db:backups`, `db:backupNow`, `db:restore`, `onboarding:complete`, `computer:calibrate`, `app:openFolder`, `passwords:status`, `passwords:setup`, `passwords:unlock`, `passwords:lock`, `passwords:list`, `passwords:get`, `passwords:save`, `passwords:delete`, `passwords:copy`, `passwords:totp`, `passwords:changeMaster`, `spaces:list`, `spaces:create`, `spaces:update`, `spaces:delete`, `spaces:pages`, `spaces:read`, `spaces:write`, `spaces:createPage`, `spaces:renamePage`, `spaces:deletePage`, `spaces:open`, `memory:graph`, `remote:status`, `remote:pair`, `remote:revoke`, `remote:restart`, `whatsapp:status`, `whatsapp:restart`, `whatsapp:logout`, `planner:state`, `todos:save`, `todos:delete`, `todos:clearCompleted`, `todos:saveList`, `todos:deleteList`, `calendar:save`, `calendar:delete`, `calendar:saveCalendar`, `calendar:deleteCalendar`, `calendar:importIcs`, `calendar:exportIcs`, `mini:dragStart`, `mini:dragEnd`, `mini:tuck`, `mini:menu`, `mini:caption`, `npcs:list`, `npcs:create`, `npcs:update`, `npcs:delete`, `npcs:messages`, `npcs:send`, `npcs:clear`, `npcs:memory`, `npcs:meetings`, `npcs:startMeeting`, `npcs:stopMeeting`
+- **Invoke** (renderer → main, request/response, Zod-validated both ways, 159): `chat:send`, `chat:cancel`, `chat:rewind`, `logs:tail`, `conversations:list`, `conversations:get`, `conversations:delete`, `conversations:context`, `conversations:search`, `conversations:compact`, `confirm:respond`, `settings:getAll`, `settings:set`, `secrets:set`, `secrets:delete`, `secrets:status`, `secrets:test`, `memory:list`, `memory:read`, `memory:search`, `memory:delete`, `memory:openInObsidian`, `memory:reviewList`, `memory:reviewResolve`, `memory:rebuildIndex`, `memory:importChats`, `mcp:list`, `mcp:add`, `mcp:update`, `mcp:remove`, `mcp:restart`, `mcp:registrySearch`, `voice:setMode`, `voice:mic`, `voice:compose`, `voice:setupLocal`, `voice:devices`, `voice:enrol`, `voice:profile`, `app:killSwitch`, `app:relaunch`, `app:info`, `app:openExternal`, `app:titleBar`, `app:pickFolder`, `artifacts:save`, `app:setMiniMode`, `usage:summary`, `usage:breakdown`, `llm:claudeCodeStatus`, `llm:localModels`, `llm:localTest`, `llm:cloudModels`, `llm:cloudTest`, `llm:cliStatus`, `llm:agentClis`, `llm:cliLogin`, `llm:cliTest`, `location:detect`, `system:stats`, `telegram:status`, `telegram:restart`, `copilot:capture`, `copilot:analyse`, `copilot:draft`, `copilot:quick`, `copilot:refine`, `copilot:fill`, `telegram:unpair`, `tasks:list`, `tasks:save`, `tasks:delete`, `tasks:runNow`, `skills:list`, `skills:read`, `skills:installFolder`, `skills:installGitHub`, `skills:remove`, `skills:setEnabled`, `dictation:history`, `dictation:clear`, `models:status`, `models:download`, `models:cancel`, `models:delete`, `llm:claudeCodeLogin`, `audit:list`, `audit:verify`, `audit:export`, `activity:list`, `routines:list`, `apps:dock`, `apps:timerAdd`, `apps:timerCancel`, `reminders:list`, `db:backups`, `db:backupNow`, `db:restore`, `onboarding:complete`, `computer:calibrate`, `app:openFolder`, `passwords:status`, `passwords:setup`, `passwords:unlock`, `passwords:lock`, `passwords:list`, `passwords:get`, `passwords:save`, `passwords:delete`, `passwords:copy`, `passwords:totp`, `passwords:changeMaster`, `spaces:list`, `spaces:create`, `spaces:update`, `spaces:delete`, `spaces:pages`, `spaces:read`, `spaces:write`, `spaces:createPage`, `spaces:renamePage`, `spaces:deletePage`, `spaces:open`, `memory:graph`, `remote:status`, `remote:pair`, `remote:revoke`, `remote:restart`, `whatsapp:status`, `whatsapp:restart`, `whatsapp:logout`, `planner:state`, `todos:save`, `todos:delete`, `todos:clearCompleted`, `todos:saveList`, `todos:deleteList`, `calendar:save`, `calendar:delete`, `calendar:saveCalendar`, `calendar:deleteCalendar`, `calendar:importIcs`, `calendar:exportIcs`, `mini:dragStart`, `mini:dragEnd`, `mini:tuck`, `mini:menu`, `mini:caption`, `npcs:list`, `npcs:create`, `npcs:update`, `npcs:delete`, `npcs:messages`, `npcs:send`, `npcs:clear`, `npcs:memory`, `npcs:meetings`, `npcs:startMeeting`, `npcs:stopMeeting`
 - **Events** (main → renderer, 36): `assistant:state`, `assistant:mood`, `chat:delta`, `chat:message`, `tool:update`, `confirm:request`, `confirm:resolved`, `voice:level`, `music:level`, `voice:transcript`, `voice:compose`, `tts:audio`, `tts:stop`, `usage:update`, `models:progress`, `dictation:done`, `tasks:changed`, `copilot:captured`, `telegram:status`, `mcp:status`, `notify`, `conversation:updated`, `memory:changed`, `computer:active`, `nav:open`, `stage:panel`, `passwords:locked`, `remote:status`, `whatsapp:status`, `audio:decode`, `planner:changed`, `mini:layout`, `settings:changed`, `npc:message`, `npc:status`, `npc:meeting`
 - **Send** (renderer → main, fire-and-forget): `tts:playback`, `ui:activeConversation`, `audio:decoded`
+
+## AI providers and gateways (14)
+
+Fixed HTTPS addresses (`shared/llm-providers.ts`), never typed by Sir. Models: `openai` = GET {base}/models, `ollama` = Ollama's /api/tags, `manual` = no documented list (Test sends one 1-token request). None is live-tested without Sir's key; the full status matrix is [Integrations.md](Integrations.md).
+
+| Id | Provider | Kind | Address | Models | Tools | Secret | Docs checked |
+|---|---|---|---|---|---|---|---|
+| `openai` | OpenAI (ChatGPT models) | model-api | https://api.openai.com/v1 | openai | yes | `openai` | 2026-10-16 |
+| `gemini` | Google Gemini | model-api | https://generativelanguage.googleapis.com/v1beta/openai | openai | yes | `gemini` | 2026-10-16 |
+| `deepseek` | DeepSeek | model-api | https://api.deepseek.com | openai | yes | `deepseek` | 2026-10-16 |
+| `xai` | xAI Grok | model-api | https://api.x.ai/v1 | openai | yes | `xai` | 2026-10-16 |
+| `mistral` | Mistral | model-api | https://api.mistral.ai/v1 | openai | yes | `mistral` | 2026-10-16 |
+| `groq` | Groq (fast open models) | model-api | https://api.groq.com/openai/v1 | openai | per-model | `groq` | 2026-10-16 |
+| `openrouter` | OpenRouter (hundreds of models, one key) | gateway | https://openrouter.ai/api/v1 | openai | per-model | `openrouter` | 2026-10-16 |
+| `together` | Together AI | gateway | https://api.together.xyz/v1 | openai | per-model | `together` | 2026-10-16 |
+| `huggingface` | Hugging Face (Inference Providers) | gateway | https://router.huggingface.co/v1 | openai | per-model | `huggingface` | 2026-10-16 |
+| `vercel` | Vercel AI Gateway | gateway | https://ai-gateway.vercel.sh/v1 | openai | per-model | `vercel_ai` | 2026-10-16 |
+| `requesty` | Requesty (model router) | gateway | https://router.requesty.ai/v1 | openai | per-model | `requesty` | 2026-10-16 |
+| `deepinfra` | DeepInfra | gateway | https://api.deepinfra.com/v1/openai | manual | per-model | `deepinfra` | 2026-10-16 |
+| `fireworks` | Fireworks AI | gateway | https://api.fireworks.ai/inference/v1 | manual | per-model | `fireworks` | 2026-10-16 |
+| `ollamacloud` | Ollama cloud | gateway | https://ollama.com/v1 | ollama | per-model | `ollama_cloud` | 2026-10-16 |
+
+## Agent command-line apps (10)
+
+Found by file name only (`shared/agent-clis.ts`); `detected` ones are not used by Jarvis yet.
+
+| Id | App | Commands | Use | Docs checked |
+|---|---|---|---|---|
+| `claude` | Claude Code (Anthropic) | `claude` | main-brain | 2026-10-16 |
+| `codex` | Codex CLI (OpenAI) | `codex` | answer-brain | 2026-10-16 |
+| `antigravity` | Antigravity CLI (Google) | `agy` | answer-brain | 2026-10-16 |
+| `gemini` | Gemini CLI (Google) | `gemini` | detected | 2026-10-16 |
+| `copilot` | GitHub Copilot CLI (GitHub) | `copilot` | detected | 2026-10-16 |
+| `cursor` | Cursor CLI (Cursor) | `cursor-agent` | detected | 2026-10-16 |
+| `opencode` | OpenCode (SST) | `opencode` | detected | 2026-10-16 |
+| `aider` | Aider (Aider) | `aider` | detected | 2026-10-16 |
+| `goose` | Goose (Block / AAIF) | `goose` | detected | 2026-10-16 |
+| `kimi` | Kimi Code CLI (Moonshot AI) | `kimi` | detected | 2026-10-16 |
 
 ## Database migrations
 

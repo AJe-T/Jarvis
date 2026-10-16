@@ -16,6 +16,7 @@ import {
 import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
 import { BRAIN_IDS } from './llm-providers';
+import { AGENT_CLI_IDS } from './agent-clis';
 import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSchema } from './npcs';
 
 /** 'office', 'dm:<npc id>' or 'meeting:<meeting id>'. */
@@ -397,6 +398,24 @@ export const INVOKE = {
         installed: z.boolean(),
         signedIn: z.boolean().nullable(),
         installHint: z.string(),
+      }),
+    ),
+  ),
+  /** Coding agents / AI command-line apps found on this PC (llm/agent-clis.ts); files only, nothing run. */
+  'llm:agentClis': contract(
+    Empty,
+    z.array(
+      z.object({
+        id: z.enum(AGENT_CLI_IDS),
+        label: z.string(),
+        vendor: z.string(),
+        use: z.enum(['main-brain', 'answer-brain', 'detected']),
+        installed: z.boolean(),
+        path: z.string().nullable(),
+        version: z.string().nullable(),
+        install: z.string(),
+        docsUrl: z.string(),
+        note: z.string().nullable(),
       }),
     ),
   ),

@@ -1,6 +1,7 @@
 import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
 import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
+import { AgentClisCard } from './agent-clis-card';
 import { ConnectionPicker, LocalModelCard, SubscriptionApps } from './connection';
 import { ModelTreeView } from './model-tree-view';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
@@ -76,6 +77,12 @@ export function BrainSection(): React.JSX.Element {
           <SubscriptionApps />
         </Section>
       </div>
+      <Section
+        title="Coding agents on this PC"
+        description="AI command-line apps Jarvis knows about. He only looks for their files: nothing is run and no sign-in data is read. Ones marked “found only” will be wired in once their script mode is tested on this PC."
+      >
+        <AgentClisCard />
+      </Section>
       <Section
         title="Budget"
         description={

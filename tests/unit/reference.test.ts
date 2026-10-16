@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { EVENT_CHANNELS, INVOKE_CHANNELS, SEND_CHANNELS } from '@shared/ipc-channels';
 import { MAIN_ONLY_SETTINGS, SENSITIVE_SETTINGS, SETTINGS } from '@shared/settings';
 import { KNOWN_SECRETS } from '@shared/types';
+import { AGENT_CLIS } from '@shared/agent-clis';
+import { CLOUD_PROVIDERS } from '@shared/llm-providers';
 import { createResearchTool } from '@main/agent/research';
 import { createAutomation } from '@main/automation/automation';
 import { copilotTool, createCopilot } from '@main/copilot/copilot';
@@ -80,6 +82,15 @@ function buildReference(): string {
       return `| \`${f}\` | ${cell(first.replace(/^--\s*/, ''))} |`;
     });
 
+  const providers = CLOUD_PROVIDERS.map(
+    (p) =>
+      `| \`${p.id}\` | ${cell(p.label)} | ${p.category} | ${p.baseUrl} | ${p.models} | ${p.tools} | \`${p.secret}\` | ${p.checked} |`,
+  );
+  const agents = AGENT_CLIS.map(
+    (a) =>
+      `| \`${a.id}\` | ${cell(a.label)} (${cell(a.vendor)}) | ${a.commands.map((c) => `\`${c}\``).join(', ')} | ${a.use} | ${a.checked} |`,
+  );
+
   return `# JARVIS Reference (generated)
 
 > Generated from the code by \`npm run docs:reference\` (tests/unit/reference.test.ts fails when this file is stale). Do not edit by hand. The narrative guide is [BIBLE.md](BIBLE.md).
@@ -109,6 +120,22 @@ Encrypted with Windows DPAPI (Electron safeStorage); the renderer only ever sees
 - **Invoke** (renderer → main, request/response, Zod-validated both ways, ${INVOKE_CHANNELS.length}): ${INVOKE_CHANNELS.map((c) => `\`${c}\``).join(', ')}
 - **Events** (main → renderer, ${EVENT_CHANNELS.length}): ${EVENT_CHANNELS.map((c) => `\`${c}\``).join(', ')}
 - **Send** (renderer → main, fire-and-forget): ${SEND_CHANNELS.map((c) => `\`${c}\``).join(', ')}
+
+## AI providers and gateways (${providers.length})
+
+Fixed HTTPS addresses (\`shared/llm-providers.ts\`), never typed by Sir. Models: \`openai\` = GET {base}/models, \`ollama\` = Ollama's /api/tags, \`manual\` = no documented list (Test sends one 1-token request). None is live-tested without Sir's key; the full status matrix is [Integrations.md](Integrations.md).
+
+| Id | Provider | Kind | Address | Models | Tools | Secret | Docs checked |
+|---|---|---|---|---|---|---|---|
+${providers.join('\n')}
+
+## Agent command-line apps (${agents.length})
+
+Found by file name only (\`shared/agent-clis.ts\`); \`detected\` ones are not used by Jarvis yet.
+
+| Id | App | Commands | Use | Docs checked |
+|---|---|---|---|---|
+${agents.join('\n')}
 
 ## Database migrations
 

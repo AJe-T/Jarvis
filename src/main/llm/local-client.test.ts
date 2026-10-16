@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CLOUD_PROVIDERS, cloudProvider, type CloudProviderId } from '@shared/llm-providers';
 import {
   ThinkFilter,
   checkCloudUrl,
@@ -190,5 +191,129 @@ describe('cloud providers (OpenAI, Gemini, DeepSeek… through the same translat
     expect(urls.at(-1)).toBe(`${GEMINI}/chat/completions`);
     expect(msg.id.startsWith('cloud_')).toBe(true);
     expect(msg.usage.output_tokens).toBe(2);
+  });
+});
+
+describe('gateways: how each one lists its models (shared/llm-providers.ts)', () => {
+  const base = (id: CloudProviderId): string => cloudProvider(id).baseUrl;
+  const gateway = (
+    id: CloudProviderId,
+    respond: (url: string, init?: RequestInit) => Response,
+    seen: Array<{ url: string; body?: string }> = [],
+  ) => {
+    const p = cloudProvider(id);
+    return createLocalClient({
+      baseUrl: () => p.baseUrl,
+      model: () => 'some-model',
+      catalog: () => [],
+      apiKey: () => 'k',
+      cloud: {
+        name: () => p.label,
+        allowedBaseUrls: CLOUD_PROVIDERS.map((c) => c.baseUrl),
+        allowedModelUrls: ['https://ollama.com/api/tags'],
+        listing: () => ({ kind: p.models, url: p.modelsUrl }),
+      },
+      fetch: (async (url: string, init?: RequestInit) => {
+        seen.push({ url, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
+        return respond(url, init);
+      }) as typeof fetch,
+    });
+  };
+  const userMessage = (e: unknown): string => (e as { userMessage?: string }).userMessage ?? '';
+
+  it('every catalogue address is HTTPS and every id, secret and address is unique', () => {
+    for (const p of CLOUD_PROVIDERS) {
+      expect(p.baseUrl.startsWith('https://')).toBe(true);
+      expect(p.docsUrl.startsWith('https://')).toBe(true);
+      expect(p.models === 'ollama').toBe(Boolean((p as { modelsUrl?: string }).modelsUrl));
+    }
+    for (const k of ['id', 'secret', 'baseUrl'] as const)
+      expect(new Set(CLOUD_PROVIDERS.map((p) => p[k])).size).toBe(CLOUD_PROVIDERS.length);
+  });
+
+  it('a provider with no model list says so, and Test sends one 1-token request', async () => {
+    const seen: Array<{ url: string; body?: string }> = [];
+    const c = gateway('deepinfra', () => Response.json({ choices: [] }), seen);
+    expect(userMessage(await c.listModels().catch((e: unknown) => e))).toMatch(/model list/);
+    expect(seen).toHaveLength(0);
+    await expect(c.ping('', AbortSignal.timeout(1000))).resolves.toBeUndefined();
+    expect(seen[0]?.url).toBe(`${base('deepinfra')}/chat/completions`);
+    expect(JSON.parse(seen[0]?.body ?? '{}')).toMatchObject({ model: 'some-model', max_tokens: 1 });
+  });
+
+  it('the 1-token test reports a rejected key or a refused model', async () => {
+    const denied = gateway('fireworks', () => new Response('nope', { status: 401 }));
+    expect(
+      userMessage(await denied.ping('', AbortSignal.timeout(1000)).catch((e: unknown) => e)),
+    ).toMatch(/rejected the API key/);
+    const missing = gateway('fireworks', () => new Response('no such model', { status: 404 }));
+    expect(
+      userMessage(await missing.ping('', AbortSignal.timeout(1000)).catch((e: unknown) => e)),
+    ).toMatch(/refused "some-model"/);
+  });
+
+  it('never puts the key in the error, and names credit / busy failures', async () => {
+    const c = createLocalClient({
+      baseUrl: () => base('deepinfra'),
+      model: () => 'm',
+      catalog: () => [],
+      apiKey: () => 'k-secret-1',
+      cloud: {
+        name: () => 'DeepInfra',
+        allowedBaseUrls: [base('deepinfra')],
+        listing: () => ({ kind: 'manual' }),
+      },
+      fetch: (async () =>
+        new Response('Bearer k-secret-1 is wrong model', { status: 400 })),
+    });
+    const err = await c.ping('', AbortSignal.timeout(1000)).catch((e: unknown) => e);
+    expect(userMessage(err)).not.toContain('k-secret-1');
+    expect(String((err as Error).message)).not.toContain('k-secret-1');
+    const busy = gateway('fireworks', () => new Response('slow down', { status: 429 }));
+    expect(
+      userMessage(await busy.ping('', AbortSignal.timeout(1000)).catch((e: unknown) => e)),
+    ).toMatch(/busy/);
+    const broke = gateway('fireworks', () => new Response('', { status: 402 }));
+    expect(
+      userMessage(await broke.ping('', AbortSignal.timeout(1000)).catch((e: unknown) => e)),
+    ).toMatch(/credit/);
+  });
+
+  it('refuses a model-list address outside the catalogue, and a list that is not JSON', async () => {
+    const p = cloudProvider('ollamacloud');
+    const evil = createLocalClient({
+      baseUrl: () => p.baseUrl,
+      model: () => 'm',
+      catalog: () => [],
+      apiKey: () => 'k',
+      cloud: {
+        name: () => p.label,
+        allowedBaseUrls: [p.baseUrl],
+        allowedModelUrls: ['https://ollama.com/api/tags'],
+        listing: () => ({ kind: 'ollama', url: 'https://evil.example/api/tags' }),
+      },
+      fetch: (async () => Response.json({ models: [] })),
+    });
+    await expect(evil.listModels()).rejects.toThrow();
+    const html = gateway('huggingface', () => new Response('<html>captive portal</html>'));
+    expect(userMessage(await html.listModels().catch((e: unknown) => e))).toMatch(/reach/);
+  });
+
+  it("Ollama cloud's list comes from its fixed /api/tags address", async () => {
+    const seen: Array<{ url: string }> = [];
+    const c = gateway(
+      'ollamacloud',
+      () => Response.json({ models: [{ name: 'gpt-oss:120b' }, { model: 'qwen3:480b' }, {}] }),
+      seen,
+    );
+    expect(await c.listModels()).toEqual(['gpt-oss:120b', 'qwen3:480b']);
+    expect(seen[0]?.url).toBe('https://ollama.com/api/tags');
+  });
+
+  it('OpenAI-style gateways list from {baseUrl}/models', async () => {
+    const seen: Array<{ url: string }> = [];
+    const c = gateway('huggingface', () => Response.json({ data: [{ id: 'some-model' }] }), seen);
+    await expect(c.ping('', AbortSignal.timeout(1000))).resolves.toBeUndefined();
+    expect(seen[0]?.url).toBe(`${base('huggingface')}/models`);
   });
 });

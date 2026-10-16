@@ -4,6 +4,7 @@ import type { Services } from '../services';
 import { defineTool, fail, type Tool, type ToolOutput } from '../tools/types';
 import type { LoopResult, ToolRuntime, TurnContext } from './agent-loop';
 import { BRAIN_IDS, type BrainId } from '../llm/brains';
+import { CLOUD_PROVIDER_IDS } from '@shared/llm-providers';
 import { runOnBrain } from './brain-runner';
 
 /**
@@ -69,8 +70,7 @@ function verdict(r: LoopResult): string {
 export function createSubagentTool(s: Services): Tool {
   return defineTool({
     name: NAME,
-    description:
-      'Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", another provider API ("openai", "gemini", "deepseek", "xai", "mistral", "groq", "openrouter", "together"), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.',
+    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
     input: z.object({
       tasks: z.array(TaskSchema).min(1).max(MAX_TASKS),
       shared_context: z.string().max(8000).optional(),

@@ -3,6 +3,7 @@ import {
   CLOUD_PROVIDERS,
   cloudProvider,
   type BrainId,
+  type CloudProviderDef,
   type CloudProviderId,
 } from '@shared/llm-providers';
 import type { ToolCatalogEntry } from '../agent/agent-loop';
@@ -28,6 +29,9 @@ interface BrainDeps {
 }
 
 const ALLOWED = CLOUD_PROVIDERS.map((p) => p.baseUrl);
+const MODEL_URLS = CLOUD_PROVIDERS.flatMap((p: CloudProviderDef) =>
+  p.modelsUrl ? [p.modelsUrl] : [],
+);
 
 /** An OpenAI-compatible client for one cloud provider (`which` may follow a setting). */
 export function createCloudClient(deps: BrainDeps, which: () => CloudProviderId) {
@@ -37,7 +41,12 @@ export function createCloudClient(deps: BrainDeps, which: () => CloudProviderId)
     model: () => deps.settings.get('llm.cloud.models')[which()] ?? '',
     catalog: deps.catalog,
     apiKey: () => deps.secrets.get(p().secret),
-    cloud: { name: () => p().label, allowedBaseUrls: ALLOWED },
+    cloud: {
+      name: () => p().label,
+      allowedBaseUrls: ALLOWED,
+      allowedModelUrls: MODEL_URLS,
+      listing: () => ({ kind: p().models, url: p().modelsUrl }),
+    },
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
   });
 }

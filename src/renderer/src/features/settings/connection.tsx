@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import type { Res } from '@shared/ipc-contract';
 import { Button } from '../../components/ui/button';
@@ -189,13 +189,26 @@ export function CloudModelCard(): React.JSX.Element {
   const p = cloudProvider(id);
   const [models, setModels] = useState<string[]>([]);
   const [status, setStatus] = useState<{ ok: boolean; error?: string | undefined } | null>(null);
+  // Bumped on every provider change, so a slow list for the previous provider is dropped.
+  const seq = useRef(0);
   const refresh = useCallback(async () => {
+    const n = ++seq.current;
     const r = await call('llm:cloudModels', {});
+    if (n !== seq.current) return;
     setModels(r.models);
     setStatus(r.error ? { ok: false, error: r.error } : null);
   }, []);
   // The list comes from the saved provider: refresh once a change of provider is saved.
-  useEffect(() => void refresh(), [refresh, saved]);
+  // Providers without a model list ('manual') would only answer "type the id": don't ask.
+  useEffect(() => {
+    if (saved && cloudProvider(saved as CloudProviderId).models !== 'manual') {
+      void refresh();
+      return;
+    }
+    seq.current++;
+    setModels([]);
+    setStatus(null);
+  }, [refresh, saved]);
   const unsaved = saved !== id;
   return (
     <div className="flex flex-col gap-3 rounded-md border border-line p-3">
@@ -205,15 +218,25 @@ export function CloudModelCard(): React.JSX.Element {
           value={id}
           onChange={(e) => {
             void set('llm.cloud.provider', e.target.value as CloudProviderId);
+            seq.current++;
             setModels([]);
             setStatus(null);
           }}
           className="min-h-8 max-w-md rounded-md border border-line bg-surface-2 px-2 text-ink-100"
         >
-          {CLOUD_PROVIDERS.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-            </option>
+          {(
+            [
+              ['model-api', 'AI companies'],
+              ['gateway', 'Gateways (one key, many models)'],
+            ] as const
+          ).map(([cat, title]) => (
+            <optgroup key={cat} label={title}>
+              {CLOUD_PROVIDERS.filter((c) => c.category === cat).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </label>
@@ -222,7 +245,10 @@ export function CloudModelCard(): React.JSX.Element {
         name={p.secret}
         label={`${p.label} API key`}
         placeholder={p.keyHint}
-        onSaved={() => void refresh()}
+        onSaved={() => {
+          // The list is the saved provider's: only refresh when that is the one shown.
+          if (!unsaved && p.models !== 'manual') void refresh();
+        }}
       />
       <p className="text-xs text-ink-500">
         Get a key at{' '}
@@ -233,8 +259,17 @@ export function CloudModelCard(): React.JSX.Element {
         >
           {new URL(p.keysUrl).host}
         </button>
+        {' · '}
+        <button
+          type="button"
+          className="text-accent-300 underline"
+          onClick={() => void call('app:openExternal', { url: p.docsUrl })}
+        >
+          docs
+        </button>
         . A ChatGPT or Gemini app subscription is separate from API access.
       </p>
+      {p.note && <p className="text-xs text-ink-300">{p.note}</p>}
       <label className="flex flex-col gap-1 text-sm text-ink-100">
         Model
         <input
@@ -255,14 +290,19 @@ export function CloudModelCard(): React.JSX.Element {
         </datalist>
       </label>
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" disabled={unsaved} onClick={() => void refresh()}>
-          Refresh models
-        </Button>
+        {p.models !== 'manual' && (
+          <Button variant="ghost" disabled={unsaved} onClick={() => void refresh()}>
+            Refresh models
+          </Button>
+        )}
         <Button disabled={unsaved} onClick={() => void call('llm:cloudTest', {}).then(setStatus)}>
           Test
         </Button>
         {unsaved && (
           <span className="text-sm text-ink-300">Save to load this provider&apos;s models.</span>
+        )}
+        {!unsaved && p.models === 'manual' && (
+          <span className="text-sm text-ink-300">Test sends one 1-token request.</span>
         )}
         {status && (
           <span

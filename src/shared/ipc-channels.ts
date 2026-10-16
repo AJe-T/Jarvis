@@ -57,6 +57,7 @@ export const INVOKE_CHANNELS = [
   'llm:cloudModels',
   'llm:cloudTest',
   'llm:cliStatus',
+  'llm:agentClis',
   'llm:cliLogin',
   'llm:cliTest',
   'location:detect',

@@ -23,7 +23,7 @@ export interface SecretStore {
  * `devFallback` (dev builds only) lets ANTHROPIC_API_KEY from .env stand in for an unset key.
  */
 /** Secrets Jarvis creates for itself; Settings never shows any of their characters. */
-const INTERNAL = /^(remote_|whatsapp_|voice_)/;
+export const INTERNAL_SECRET_RE = /^(remote_|whatsapp_|voice_)/;
 
 export function createSecretStore(
   file: string,
@@ -85,7 +85,10 @@ export function createSecretStore(
       for (const name of new Set([...Object.keys(secrets), ...Object.keys(devFallback)])) {
         const v = secrets[name] ?? devFallback[name];
         // Internal secrets (phone remote certificate, device list, WhatsApp keys) show no characters.
-        if (v) out[name] = INTERNAL.test(name) ? { set: true } : { set: true, last4: v.slice(-4) };
+        if (v)
+          out[name] = INTERNAL_SECRET_RE.test(name)
+            ? { set: true }
+            : { set: true, last4: v.slice(-4) };
       }
       return out;
     },

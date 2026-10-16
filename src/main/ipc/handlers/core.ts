@@ -9,6 +9,7 @@ import { localDay } from '../../lib/util';
 import { toSummary } from '../../db/repos/conversations-repo';
 import { toUiToolCall } from '../../db/repos/tool-calls-repo';
 import { buildUiMessages } from '../../agent/ui-history';
+import { detectAgentClis } from '../../llm/agent-clis';
 import { claudeCodeStatus, openClaudeLogin } from '../../llm/claude-code';
 import { cliEnv } from '../../llm/cli-brains';
 import { monthStart } from '../../llm/usage-ledger';
@@ -209,6 +210,15 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
         };
       }),
     ),
+  );
+  handle('llm:agentClis', () =>
+    detectAgentClis({
+      known: {
+        claude: s.claudeCode.path(),
+        codex: s.brains.cli('chatgpt')?.find() ?? null,
+        antigravity: s.brains.cli('antigravity')?.find() ?? null,
+      },
+    }),
   );
   handle('llm:cliLogin', (req) => {
     const b = s.brains.cli(req.id);
