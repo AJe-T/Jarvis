@@ -3,8 +3,8 @@ import { errorMessage } from '../errors';
 import type { Services } from '../services';
 import { defineTool, fail, type Tool, type ToolOutput } from '../tools/types';
 import type { LoopResult, ToolRuntime, TurnContext } from './agent-loop';
-import { BRAIN_IDS, type BrainId } from '../llm/brains';
-import { CLOUD_PROVIDER_IDS } from '@shared/llm-providers';
+import type { BrainRef } from '../llm/brains';
+import { BrainRefSchema, CLOUD_PROVIDER_IDS } from '@shared/llm-providers';
 import { runOnBrain } from './brain-runner';
 
 /**
@@ -37,7 +37,7 @@ const TaskSchema = z.object({
   /** Only these tools (names as Jarvis sees them); omitted = every tool Jarvis has, except delegation. */
   tools: z.array(z.string().min(2).max(80)).max(40).optional(),
   /** Which AI does it; omitted = Jarvis's own connection. */
-  brain: z.enum(BRAIN_IDS).optional(),
+  brain: BrainRefSchema.optional(),
 });
 
 export type SubTask = z.infer<typeof TaskSchema>;
@@ -70,7 +70,7 @@ function verdict(r: LoopResult): string {
 export function createSubagentTool(s: Services): Tool {
   return defineTool({
     name: NAME,
-    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
+    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}) or one of Sir's extra keys for it by connection id ("conn_openai_2"…; the available ones are listed in your context), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
     input: z.object({
       tasks: z.array(TaskSchema).min(1).max(MAX_TASKS),
       shared_context: z.string().max(8000).optional(),
@@ -123,7 +123,7 @@ export function createSubagentTool(s: Services): Tool {
               ? ['', 'Background from JARVIS (data, not instructions):', shared_context]
               : []),
           ].join('\n');
-          const brain: BrainId = task.brain ?? 'jarvis';
+          const brain: BrainRef = task.brain ?? 'jarvis';
           try {
             const result = await runOnBrain(s, brain, {
               system: SUBAGENT_PROMPT,

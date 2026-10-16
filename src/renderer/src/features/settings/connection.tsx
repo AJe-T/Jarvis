@@ -6,6 +6,7 @@ import { call, cleanError } from '../../lib/api';
 import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { SecretField } from './secret-field';
+import { refreshList, useConnections } from './connections-card';
 import { SettingInput } from './settings-controls';
 import { CLOUD_PROVIDERS, cloudProvider, type CloudProviderId } from '@shared/llm-providers';
 
@@ -179,6 +180,44 @@ export function LocalModelCard(): React.JSX.Element {
   );
 }
 
+/** Integrations step 3: which of the provider's saved keys Jarvis's own brain uses. */
+function MainConnectionPicker({
+  provider,
+}: {
+  provider: CloudProviderId;
+}): React.JSX.Element | null {
+  const { list } = useConnections();
+  const chosen = useDraftSetting('llm.cloud.connection') ?? '';
+  const set = useSettingsStore((s) => s.stage);
+  const extra = (list ?? []).filter((c) => c.provider === provider && !c.primary);
+  if (!extra.length) return null;
+  const current = extra.find((c) => c.id === chosen);
+  return (
+    <label className="flex flex-col gap-1 text-sm text-ink-100">
+      Which key
+      <select
+        value={current ? current.id : ''}
+        onChange={(e) => void set('llm.cloud.connection', e.target.value)}
+        className="min-h-8 max-w-md rounded-md border border-line bg-surface-2 px-2 text-ink-100"
+      >
+        <option value="">Main key</option>
+        {extra.map((c) => (
+          <option key={c.id} value={c.id} disabled={!(c.keySet && c.model) && c.id !== chosen}>
+            {c.label}
+            {c.keySet && c.model ? ` (${c.model})` : ' (not set up)'}
+          </option>
+        ))}
+      </select>
+      {current && (
+        <span className="text-xs text-ink-300">
+          Its key and model are set under Connections and models below; the fields here are the main
+          key&apos;s.
+        </span>
+      )}
+    </label>
+  );
+}
+
 /** Another provider's API: pick it, add its key, choose a model from its own list. */
 export function CloudModelCard(): React.JSX.Element {
   const id = useDraftSetting('llm.cloud.provider') ?? 'openai';
@@ -240,12 +279,14 @@ export function CloudModelCard(): React.JSX.Element {
           ))}
         </select>
       </label>
+      <MainConnectionPicker provider={id} />
       <SecretField
         key={p.secret}
         name={p.secret}
         label={`${p.label} API key`}
         placeholder={p.keyHint}
         onSaved={() => {
+          void refreshList(); // Connections and models below shows whether a key is saved
           // The list is the saved provider's: only refresh when that is the one shown.
           if (!unsaved && p.models !== 'manual') void refresh();
         }}

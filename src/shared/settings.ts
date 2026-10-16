@@ -9,7 +9,7 @@ import {
   type KokoroVoice,
 } from './voices';
 import { DEFAULT_ORB_STYLE, ORB_STYLE_IDS } from './orb-styles';
-import { CLOUD_PROVIDER_IDS, type CloudProviderId } from './llm-providers';
+import { CLOUD_PROVIDER_IDS, CONNECTION_ID_RE, type CloudProviderId } from './llm-providers';
 import {
   AURA_VOICES,
   GROQ_STT_MODELS,
@@ -74,6 +74,14 @@ export const SETTINGS = {
   'llm.cloud.models': {
     schema: z.partialRecord(z.enum(CLOUD_PROVIDER_IDS), z.string().max(120)),
     default: {} as Partial<Record<CloudProviderId, string>>,
+  },
+  /**
+   * Integrations step 3: which of the provider's keys Jarvis's own brain uses (an extra
+   * connection, conn_<provider>_<n>); '' = the provider's own key.
+   */
+  'llm.cloud.connection': {
+    schema: z.union([z.literal(''), z.string().regex(CONNECTION_ID_RE)]),
+    default: '',
   },
   /** ADR-013: OpenAI-compatible server on this PC or the home network (Ollama, LM Studio). */
   'llm.local.baseUrl': { schema: z.string().url().max(200), default: 'http://localhost:11434/v1' },
@@ -435,6 +443,7 @@ export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   'files.allowedRoots',
   'llm.provider',
   'llm.cloud.provider', // where the whole conversation is sent
+  'llm.cloud.connection', // and with whose key
   // ADR-038: these decide where microphone audio and reply text are sent, so the audit keeps the value.
   'voice.stt.provider',
   'voice.tts.provider',

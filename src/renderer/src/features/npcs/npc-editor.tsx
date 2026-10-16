@@ -82,6 +82,7 @@ export function NpcEditor({
   onClose(): void;
 }): React.JSX.Element {
   const brains = useNpcStore((s) => s.brains);
+  const brainLabels = useNpcStore((s) => s.brainLabels);
   const tools = useNpcStore((s) => s.tools);
   const save = useNpcStore((s) => s.save);
   const [form, setForm] = useState<NpcInput | null>(npc ? toInput(npc) : null);
@@ -215,6 +216,18 @@ export function NpcEditor({
                   {BRAIN_IDS.map((b) => (
                     <option key={b} value={b} disabled={!brains.includes(b) && b !== form.brain}>
                       {BRAIN_LABELS[b]}
+                      {brains.includes(b) ? '' : ' (not set up)'}
+                    </option>
+                  ))}
+                  {/* Sir's extra keys (Settings → Brain → Connections) */}
+                  {[
+                    ...new Set([
+                      ...brains.filter((b) => b.startsWith('conn_')),
+                      ...(form.brain.startsWith('conn_') ? [form.brain] : []),
+                    ]),
+                  ].map((b) => (
+                    <option key={b} value={b} disabled={!brains.includes(b)}>
+                      {brainLabels[b] ?? b}
                       {brains.includes(b) ? '' : ' (not set up)'}
                     </option>
                   ))}

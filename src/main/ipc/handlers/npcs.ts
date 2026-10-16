@@ -12,6 +12,7 @@ export function registerNpcHandlers(s: Services, runtime: NpcRuntime, repo: NpcR
     npcs: repo.list(),
     states: runtime.states(),
     brains: s.brains.available(),
+    brainLabels: s.connections.extraLabels(),
     tools: s.registry
       .catalog()
       .filter((t) => !NOT_FOR_NPCS.test(t.name))

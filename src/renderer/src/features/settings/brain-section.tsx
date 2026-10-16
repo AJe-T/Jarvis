@@ -2,6 +2,7 @@ import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
 import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { AgentClisCard } from './agent-clis-card';
+import { ConnectionsCard } from './connections-card';
 import { ConnectionPicker, LocalModelCard, SubscriptionApps } from './connection';
 import { ModelTreeView } from './model-tree-view';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
@@ -54,6 +55,14 @@ export function BrainSection(): React.JSX.Element {
             </button>
             .
           </p>
+        </Section>
+      </div>
+      <div id="brain-connections" className="scroll-mt-4">
+        <Section
+          title="Connections and models"
+          description="Every AI provider key you saved, and more than one per provider if you like (work and personal). Each has its own model list: refresh it from the provider, star favourites, hide the ones you don't want. Keys stay encrypted on this PC."
+        >
+          <ConnectionsCard />
         </Section>
       </div>
       <Section title="Models" description="Model IDs can be changed without an app update.">

@@ -1,6 +1,6 @@
 import type { McpManager } from '../../mcp/manager';
 import { KNOWN_SECRETS } from '@shared/types';
-import { CLOUD_PROVIDERS } from '@shared/llm-providers';
+import { CLOUD_PROVIDERS, isConnectionSecret } from '@shared/llm-providers';
 import { MCP_PRESETS } from '@shared/mcp-presets';
 import { INTERNAL_SECRET_RE } from '../../settings/secrets';
 import type { McpServerInput } from '@shared/ipc-contract';
@@ -17,7 +17,7 @@ const PROTECTED_SECRETS = new Set<string>([
   ...MCP_PRESETS.flatMap((p) => (p.secrets ?? []).map((n) => n.name)),
 ]);
 export const isProtectedSecret = (name: string): boolean =>
-  PROTECTED_SECRETS.has(name) || INTERNAL_SECRET_RE.test(name);
+  PROTECTED_SECRETS.has(name) || INTERNAL_SECRET_RE.test(name) || isConnectionSecret(name);
 
 type SecretBinding = {
   trustLevel?: McpServerInput['trustLevel'] | undefined;

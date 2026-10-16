@@ -263,8 +263,7 @@ describe('gateways: how each one lists its models (shared/llm-providers.ts)', ()
         allowedBaseUrls: [base('deepinfra')],
         listing: () => ({ kind: 'manual' }),
       },
-      fetch: (async () =>
-        new Response('Bearer k-secret-1 is wrong model', { status: 400 })),
+      fetch: async () => new Response('Bearer k-secret-1 is wrong model', { status: 400 }),
     });
     const err = await c.ping('', AbortSignal.timeout(1000)).catch((e: unknown) => e);
     expect(userMessage(err)).not.toContain('k-secret-1');
@@ -292,7 +291,7 @@ describe('gateways: how each one lists its models (shared/llm-providers.ts)', ()
         allowedModelUrls: ['https://ollama.com/api/tags'],
         listing: () => ({ kind: 'ollama', url: 'https://evil.example/api/tags' }),
       },
-      fetch: (async () => Response.json({ models: [] })),
+      fetch: async () => Response.json({ models: [] }),
     });
     await expect(evil.listModels()).rejects.toThrow();
     const html = gateway('huggingface', () => new Response('<html>captive portal</html>'));

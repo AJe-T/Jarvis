@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Cloud AI providers and gateways Jarvis can use as its brain through their OpenAI-compatible chat
  * API (same translation as the local model, ADR-013). The addresses are fixed here, never typed by
@@ -237,6 +239,51 @@ export function cloudProvider(id: CloudProviderId): CloudProvider {
   return CLOUD_PROVIDERS.find((p) => p.id === id) ?? CLOUD_PROVIDERS[0];
 }
 
+// ── Connections (integrations step 3) ───────────────────────────────────────────────────────
+
+/**
+ * A saved key for one provider. Each provider's own key (secret = its `secret`) is the connection
+ * `conn_<provider>`; Sir may add more keys (a work account, a second plan) as `conn_<provider>_<n>`
+ * with secret `<secret>_<n>`.
+ */
+export const CONNECTION_ID_RE = /^conn_[a-z]{2,20}(_\d{1,2})?$/;
+export const MAX_CONNECTIONS_PER_PROVIDER = 5;
+export const defaultConnectionId = (p: CloudProviderId): string => `conn_${p}`;
+
+/** The secret name of a provider's n-th key (n ≥ 2); the first is the provider's own `secret`. */
+export const connectionSecret = (p: CloudProviderId, n: number): string =>
+  n <= 1 ? cloudProvider(p).secret : `${cloudProvider(p).secret}_${n}`;
+
+const EXTRA_SECRET_RE = new RegExp(
+  `^(${CLOUD_PROVIDERS.map((p) => p.secret).join('|')})_\\d{1,2}$`,
+);
+/** An extra connection's key (protected like the provider's own key, Security.md §10). */
+export const isConnectionSecret = (name: string): boolean => EXTRA_SECRET_RE.test(name);
+
+/** Where a model in the registry came from. */
+export type ModelSource = 'live' | 'manual' | 'cached';
+
+export interface ConnectionModel {
+  model: string;
+  source: ModelSource;
+  favourite: boolean;
+  enabled: boolean;
+  seenAt: string | null;
+}
+
+export interface AiConnection {
+  id: string;
+  provider: CloudProviderId;
+  label: string;
+  /** Secret name in secrets.bin (the key itself never leaves main). */
+  secret: string;
+  /** The provider's own key (cannot be removed, only cleared). */
+  primary: boolean;
+  model: string;
+  keySet: boolean;
+  models: ConnectionModel[];
+}
+
 /**
  * Every AI Jarvis can hand work to (delegate_task, NPCs): his own connection, the local model,
  * each cloud provider above, and Sir's ChatGPT / Google plans through their official apps.
@@ -260,3 +307,14 @@ export const BRAIN_LABELS: Record<BrainId, string> = {
   chatgpt: 'ChatGPT plan (Codex app)',
   antigravity: 'Gemini plan (Antigravity app)',
 };
+
+/** A brain by name, or one of Sir's extra connections by id (conn_openai_2). */
+export type BrainRef = BrainId | `conn_${string}`;
+
+/** A brain's display name; extra connections need their names from main (`extra`). */
+export const brainLabel = (b: BrainRef, extra: Record<string, string> = {}): string =>
+  (BRAIN_LABELS as Record<string, string>)[b] ?? extra[b] ?? b;
+export const BrainRefSchema = z.union([
+  z.enum(BRAIN_IDS),
+  z.custom<`conn_${string}`>((v) => typeof v === 'string' && CONNECTION_ID_RE.test(v)),
+]);

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BRAIN_IDS } from './llm-providers';
+import { BrainRefSchema } from './llm-providers';
 
 /**
  * NPCs (2.21): Sir's team of single-purpose agents, each with its own brief, AI, tools and memory.
@@ -33,7 +33,7 @@ export const NpcInputSchema = z.object({
   role: z.string().min(2).max(60),
   emoji: z.string().min(1).max(8),
   color: z.enum(NPC_COLORS),
-  brain: z.enum(BRAIN_IDS),
+  brain: BrainRefSchema,
   instructions: z.string().min(10).max(4000),
   tools: z.array(z.string().min(2).max(80)).max(30),
   enabled: z.boolean(),

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Res } from '@shared/ipc-contract';
-import type { BrainId } from '@shared/llm-providers';
+import type { BrainRef } from '@shared/llm-providers';
 import type { Npc, NpcInput, NpcMeeting, NpcMessage, NpcState } from '@shared/npcs';
 import { call, cleanError } from '../lib/api';
 import { useUiStore } from './ui-store';
@@ -16,7 +16,9 @@ export interface Bubble {
 interface NpcStoreState {
   npcs: Npc[];
   states: Record<string, NpcState>;
-  brains: BrainId[];
+  brains: BrainRef[];
+  /** Names of Sir's extra connections (conn_…). */
+  brainLabels: Record<string, string>;
   tools: ToolInfo[];
   loaded: boolean;
   channels: Record<string, NpcMessage[]>;
@@ -61,6 +63,7 @@ export const useNpcStore = create<NpcStoreState>((set, get) => ({
   npcs: [],
   states: {},
   brains: [],
+  brainLabels: {},
   tools: [],
   loaded: false,
   channels: {},
@@ -69,7 +72,15 @@ export const useNpcStore = create<NpcStoreState>((set, get) => ({
 
   async load() {
     const r = await guarded(call('npcs:list', {}));
-    if (r) set({ npcs: r.npcs, states: r.states, brains: r.brains, tools: r.tools, loaded: true });
+    if (r)
+      set({
+        npcs: r.npcs,
+        states: r.states,
+        brains: r.brains,
+        brainLabels: r.brainLabels,
+        tools: r.tools,
+        loaded: true,
+      });
   },
   async loadChannel(channel) {
     const msgs = await guarded(call('npcs:messages', { channel }));

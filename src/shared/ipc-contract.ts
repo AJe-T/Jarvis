@@ -15,13 +15,33 @@ import {
 } from './types';
 import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
-import { BRAIN_IDS } from './llm-providers';
+import { BrainRefSchema, CLOUD_PROVIDER_IDS, CONNECTION_ID_RE } from './llm-providers';
 import { AGENT_CLI_IDS } from './agent-clis';
 import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSchema } from './npcs';
 
 /** 'office', 'dm:<npc id>' or 'meeting:<meeting id>'. */
 const NpcChannel = z.string().regex(/^(office|dm:npc_[\w-]{1,40}|meeting:mtg_[\w-]{1,40})$/);
 const NpcId = z.string().regex(/^npc_[\w-]{1,40}$/);
+const ConnId = z.string().regex(CONNECTION_ID_RE);
+const Label = z.string().max(60);
+const AiConnectionSchema = z.object({
+  id: ConnId,
+  provider: z.enum(CLOUD_PROVIDER_IDS),
+  label: z.string(),
+  secret: z.string(),
+  primary: z.boolean(),
+  model: z.string(),
+  keySet: z.boolean(),
+  models: z.array(
+    z.object({
+      model: z.string(),
+      source: z.enum(['live', 'manual', 'cached']),
+      favourite: z.boolean(),
+      enabled: z.boolean(),
+      seenAt: z.string().nullable(),
+    }),
+  ),
+});
 import {
   CalendarId,
   CalendarSchema,
@@ -388,6 +408,29 @@ export const INVOKE = {
     z.object({ models: z.array(z.string()), error: z.string().optional() }),
   ),
   'llm:cloudTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
+  /** Integrations step 3: every connection (key) per provider and its model registry. Keys stay in main. */
+  'ai:connections': contract(Empty, z.array(AiConnectionSchema)),
+  'ai:connection': contract(
+    z.discriminatedUnion('action', [
+      z.object({ action: z.literal('add'), provider: z.enum(CLOUD_PROVIDER_IDS), label: Label }),
+      z.object({ action: z.literal('rename'), id: ConnId, label: Label }),
+      z.object({ action: z.literal('setModel'), id: ConnId, model: z.string().max(120) }),
+      z.object({ action: z.literal('remove'), id: ConnId }),
+      /** Fetch the provider's model list into the registry. */
+      z.object({ action: z.literal('refresh'), id: ConnId }),
+      z.object({ action: z.literal('test'), id: ConnId }),
+      z.object({ action: z.literal('addModel'), id: ConnId, model: z.string().min(1).max(120) }),
+      z.object({ action: z.literal('removeModel'), id: ConnId, model: z.string().max(120) }),
+      z.object({
+        action: z.literal('flags'),
+        id: ConnId,
+        model: z.string().max(120),
+        favourite: z.boolean().optional(),
+        enabled: z.boolean().optional(),
+      }),
+    ]),
+    z.object({ ok: z.boolean(), error: z.string().optional(), id: z.string().optional() }),
+  ),
   /** Sir's ChatGPT / Google plans through their official apps (llm/cli-brains.ts). */
   'llm:cliStatus': contract(
     Empty,
@@ -894,7 +937,9 @@ export const INVOKE = {
       npcs: z.array(NpcSchema),
       states: z.record(z.string(), z.enum(NPC_STATES)),
       /** Brains set up right now (the editor offers only these). */
-      brains: z.array(z.enum(BRAIN_IDS)),
+      brains: z.array(BrainRefSchema),
+      /** Names for Sir's extra connections (conn_...), which the brain list doesn't know. */
+      brainLabels: z.record(z.string(), z.string()),
       /** Jarvis's tools an NPC may be given (his policy still applies to every call). */
       tools: z.array(z.object({ name: z.string(), description: z.string() })),
     }),

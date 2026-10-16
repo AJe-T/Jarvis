@@ -239,6 +239,8 @@ export interface LocalLlmConfig {
     allowedModelUrls?: readonly string[];
     /** How the provider lists its models (shared/llm-providers.ts); default 'openai'. */
     listing?(): { kind: ModelListing; url?: string | undefined };
+    /** The connection id, carried in the message id so usage can be told apart per key. */
+    tag?(): string;
   };
 }
 
@@ -519,7 +521,9 @@ export function createLocalClient(
       });
       return {
         // The usage ledger reads "local_" as free; a cloud call is billed.
-        id: `${cloud ? 'cloud' : 'local'}_${Date.now()}`,
+        id: cloud
+          ? `cloud_${cloud.tag ? `${cloud.tag()}_` : ''}${Date.now()}`
+          : `local_${Date.now()}`,
         type: 'message',
         role: 'assistant',
         model,

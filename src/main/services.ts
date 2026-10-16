@@ -32,6 +32,7 @@ import { localDay } from './lib/util';
 import { createClaudeClient } from './llm/claude-client';
 import { createLocalClient } from './llm/local-client';
 import { createBrains, createCloudClient } from './llm/brains';
+import { createConnections } from './llm/connections';
 import { createCliBrains, type CliBrain, type CliBrainId } from './llm/cli-brains';
 import {
   createClaudeCodeClient,
@@ -287,13 +288,16 @@ export function createServices(opts: ServiceOptions) {
     },
   });
   // Another provider's API (OpenAI, Gemini, DeepSeek…), through the same OpenAI-style translation.
+  // Integrations step 3: several keys per provider and the models each offers.
+  const connections = createConnections({ db, settings, secrets });
   const brainDeps = {
     settings,
     secrets,
+    connections,
     catalog: () => registry.catalog(),
     ...(opts.fetch ? { fetch: opts.fetch } : {}),
   };
-  const llmCloud = createCloudClient(brainDeps, () => settings.get('llm.cloud.provider'));
+  const llmCloud = createCloudClient(brainDeps, () => connections.main());
   const pickLlm = (): LlmClient => {
     const p = settings.get('llm.provider');
     if (p === 'subscription') return llmSubscription;
@@ -596,6 +600,9 @@ export function createServices(opts: ServiceOptions) {
     llmApi,
     llmLocal,
     llmCloud,
+    connections,
+    /** A client for one connection (model lists and tests in Settings; no model needed to list). */
+    connectionClient: (id: string) => createCloudClient(brainDeps, () => id),
     brains,
     paidBudget,
     claudeCode,

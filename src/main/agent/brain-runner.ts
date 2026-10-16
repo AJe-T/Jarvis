@@ -1,5 +1,5 @@
 import { JarvisError } from '../errors';
-import type { BrainId } from '../llm/brains';
+import type { BrainRef } from '../llm/brains';
 import type { Services } from '../services';
 import { runAgentLoop, type LoopResult, type ToolRuntime, type TurnContext } from './agent-loop';
 import { pickModel } from './model-router';
@@ -18,7 +18,7 @@ export interface BrainJob {
  * One job on one brain (sub-agents, NPCs). Loop brains run Jarvis's agent loop, so every tool call
  * still goes through policy, confirmations and Activity; a subscription app gets the text only.
  */
-export async function runOnBrain(s: Services, brain: BrainId, job: BrainJob): Promise<LoopResult> {
+export async function runOnBrain(s: Services, brain: BrainRef, job: BrainJob): Promise<LoopResult> {
   const cli = s.brains.cli(brain);
   if (cli) {
     // Security.md §CLI brains: these apps can read files on this PC. Text from outside (a web
@@ -46,7 +46,7 @@ export async function runOnBrain(s: Services, brain: BrainId, job: BrainJob): Pr
       llm,
       tools: job.tools,
       // Another provider's API spends money whatever Jarvis's own connection is.
-      budget: brain === 'jarvis' || brain === 'local' ? s.budget : s.paidBudget,
+      budget: s.brains.paid(brain) ? s.paidBudget : s.budget,
       ledger: s.ledger,
       maxIterations: job.maxSteps,
       maxTokens: job.maxTokens,

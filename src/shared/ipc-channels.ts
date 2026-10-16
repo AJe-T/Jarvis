@@ -56,6 +56,8 @@ export const INVOKE_CHANNELS = [
   'llm:localTest',
   'llm:cloudModels',
   'llm:cloudTest',
+  'ai:connections',
+  'ai:connection',
   'llm:cliStatus',
   'llm:agentClis',
   'llm:cliLogin',

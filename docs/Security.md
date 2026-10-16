@@ -445,6 +445,15 @@ Decisions taken while building the policy layer; the code is the reference (`src
 | MCP secret binding | `isProtectedSecret` (handlers/mcp.ts) now also covers every AI provider's secret and Jarvis's internal `remote_` / `whatsapp_` / `voice_` secrets. Before v2.23 a community server could be bound to e.g. `openrouter` or `gemini` because only `KNOWN_SECRETS` were protected. |
 | Agent CLI detection (`llm/agent-clis.ts`) | Looks only for fixed command names (`shared/agent-clis.ts`) with `.exe` / `.cmd` in PATH folders and a few documented install folders. **Runs nothing**, reads no sign-in or credential files, and searches no other folders. The only file read is the npm package's `package.json` under `%APPDATA%\npm\node_modules`, and only when the found copy is the npm one; its version must match a strict semver pattern before it is shown. Paths go to the renderer (Settings) and are not secrets. Detected-only CLIs are never started. |
 
+### 16.12 AI integrations, step 3 (v2.25): several connections per provider
+
+| Surface | Control |
+|---|---|
+| Extra keys | Stored only in `secrets.bin` (DPAPI) as `<provider secret>_<n>` (n 2–99, at most 5 per provider); the DB (`ai_connections`) holds the secret's *name*, never the key. `secrets:status` shows them like other keys (set + last 4). Removing a connection deletes its secret. |
+| MCP secret binding | `isConnectionSecret` makes every `<provider secret>_<n>` protected too (`isProtectedSecret`), so a community MCP server can't be handed an extra AI key. |
+| Addresses | Unchanged: an extra connection uses its provider's fixed HTTPS address from `shared/llm-providers.ts`; no address is stored per connection. |
+| Input | Connection ids must match `CONNECTION_ID_RE` (IPC, settings, `delegate_task`, NPC brains); model ids `^[\w.:/@+-]{1,120}$`; labels ≤ 60 chars. `llm.cloud.connection` (which key Jarvis's own brain uses) is a sensitive setting (audited with its value) and only applies when it belongs to the chosen provider. |
+
 ### 16.9 Features added in v2.19 (ADR-042)
 
 | Surface | Control |

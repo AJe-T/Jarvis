@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { BookOpen, MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
 import clsx from 'clsx';
-import { BRAIN_LABELS } from '@shared/llm-providers';
+import { brainLabel } from '@shared/llm-providers';
 import { dmChannel, type Npc } from '@shared/npcs';
 import { Button, IconButton } from '../../components/ui/button';
 import { Switch } from '../../components/ui/field';
@@ -78,7 +78,9 @@ export function Dossier({
         <Switch checked={npc.enabled} onChange={() => void toggle(npc)} label="Switched on" />
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
           <dt className="text-ink-500">Brain</dt>
-          <dd className="text-ink-100">{BRAIN_LABELS[npc.brain]}</dd>
+          <dd className="text-ink-100">
+            {brainLabel(npc.brain, useNpcStore.getState().brainLabels)}
+          </dd>
           <dt className="text-ink-500">Tools</dt>
           <dd className="flex flex-wrap gap-1">
             {npc.tools.length === 0 && <span className="text-ink-500">none (talks only)</span>}
@@ -180,7 +182,8 @@ export function Roster({
                     <span className="truncate text-sm text-ink-300">{n.role}</span>
                   </span>
                   <span className="mt-0.5 block truncate text-xs text-ink-500">
-                    {BRAIN_LABELS[n.brain]} · {n.tools.length} tools · {STATE_LABEL[state]}
+                    {brainLabel(n.brain, useNpcStore.getState().brainLabels)} · {n.tools.length}{' '}
+                    tools · {STATE_LABEL[state]}
                   </span>
                 </button>
                 <span

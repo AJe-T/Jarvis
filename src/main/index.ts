@@ -16,6 +16,7 @@ import { addEventTarget, emit, onEmit } from './ipc/emit';
 import { registerCoreHandlers } from './ipc/handlers/core';
 import { registerMemoryHandlers, writeQuickFacts } from './ipc/handlers/memory';
 import { registerSafetyHandlers } from './ipc/handlers/safety';
+import { registerAiConnectionHandlers } from './ipc/handlers/ai-connections';
 import { registerPasswordHandlers } from './ipc/handlers/passwords';
 import { registerSpacesHandlers } from './ipc/handlers/spaces';
 import { registerPlannerHandlers } from './ipc/handlers/planner';
@@ -288,6 +289,7 @@ async function boot(): Promise<void> {
     },
   });
   registerSafetyHandlers(services);
+  registerAiConnectionHandlers(services);
   registerPasswordHandlers(services);
   registerMemoryHandlers(services, memory);
   // Spaces (Notion-style notebooks) live in the vault so memory search and the Brain graph see them.
