@@ -53,6 +53,17 @@ export const HELP: Record<string, HelpEntry> = {
     ],
     tips: ['Deleting moves pages to the vault’s .trash, so nothing is lost by accident.'],
   },
+  compare: {
+    title: 'Compare AIs',
+    what: 'Send one request to several AIs you have set up and see what each says: side by side, one checking another, or a chain where each builds on the last. They only answer: no tools, nothing on your PC changes.',
+    how: [
+      'Compare: 2–4 AIs answer the same prompt at the same time.',
+      'Review: the first AI answers, the second points out mistakes and gives a better version.',
+      'Chain: each stage gets your request plus the previous stage’s output and its own job (“check the facts”, “make it shorter”).',
+      'Every answer shows its model, time, tokens and an estimated cost. Stop cancels the rest. History keeps the last 50 runs on this PC.',
+      'Your prompt goes to every AI you pick, and each bills its own account: pick only the ones you want to see it.',
+    ],
+  },
   npcs: {
     title: 'NPCs',
     what: 'Your team of single-purpose agents (Marketing, Finance, Developers, Research…). Each has its own AI, tools and memory. Jarvis is their head: he gives them work, reads their memories and runs their meetings.',

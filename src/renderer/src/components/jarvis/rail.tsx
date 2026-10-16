@@ -4,6 +4,7 @@ import {
   Brain,
   CalendarDays,
   ChevronRight,
+  Columns3,
   FileText,
   KeyRound,
   LayoutGrid,
@@ -38,6 +39,7 @@ type Item = { view: View; label: string; Icon: typeof Brain };
 const WORKSPACE: Item[] = [
   { view: 'chat', label: 'Core', Icon: Orbit },
   { view: 'npcs', label: 'NPCs', Icon: UsersRound },
+  { view: 'compare', label: 'Compare AIs', Icon: Columns3 },
   { view: 'spaces', label: 'Spaces', Icon: LayoutGrid },
   { view: 'tasks', label: 'Tasks', Icon: ListChecks },
   { view: 'calendar', label: 'Calendar', Icon: CalendarDays },

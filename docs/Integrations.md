@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | v2.25 (steps 1–3 of the integrations plan) |
+| Status | v2.26 (steps 1–4 of the integrations plan) |
 | Generated part | Provider and agent tables in [REFERENCE.md](REFERENCE.md) (`npm run docs:reference`) |
 | Security | [Security.md](Security.md) §16.10–16.11 always wins |
 
@@ -43,6 +43,8 @@ All use `main/llm/local-client.ts` (Messages API ↔ OpenAI Chat Completions tra
 
 **Connections (v2.25).** Each provider can have up to five keys (`conn_<provider>` is the main key, `conn_<provider>_<n>` the extras), each with its own model registry in `ai_models` (live / typed / cached, favourite, enabled). Extra keys are brains for `delegate_task` and NPCs and can be Jarvis's own (`llm.cloud.connection`). Code: `main/llm/connections.ts`, `main/ipc/handlers/ai-connections.ts`, `renderer/.../settings/connections-card.tsx`.
 
+**Multi-AI runs (v2.26).** Sidebar → Compare AIs runs compare / review / chain over any ready brains (`main/agent/multi-run.ts`, migration 015). Model execution only (no tools); agent execution with tools stays in `delegate_task`. Fallback execution remains `llm.fallbackLocal` (opt-in); specialist routing is Jarvis choosing a `brain` in `delegate_task`. Neither switches models silently.
+
 **Capabilities.** Per provider only `tools` is recorded (`yes` or `per-model`). Images, audio, JSON mode, reasoning controls and context windows differ per model, and no reliable per-model source is wired yet, so they are **unknown**, not assumed. The translation sends images as `image_url`; a model that can't take them returns the provider's own error.
 
 **Pricing.** Only the Claude models have prices (Settings → `pricing`). Any other model is priced like the dearest Claude model so the budget errs safe: their cost in Usage is an over-estimate, not a bill. Add a model's real price to `pricing` to correct it. Live prices from the gateways that publish them (OpenRouter, Hugging Face, Vercel) come in step 5.
@@ -66,7 +68,7 @@ What is never done, whatever the app: reading browser cookies, scraping a chat w
 | 1 | Registry metadata, six gateways, manual-model Test, MCP secret-guard fix, generated tables | Done (v2.23) |
 | 2 | Agent CLI detection (files only) | Done (v2.23) |
 | 3 | Several connections per provider; model registry table (favourites, enabled, default, source: live / manual / cached) | Done (v2.25) |
-| 4 | Compare side by side, review mode, chains, execution history, cancel | |
+| 4 | Compare side by side, review mode, chains, execution history, cancel | Done (v2.26) |
 | 5 | Usage per provider, connection and model; local apart from cloud; live gateway prices; cost estimate and confirmation before multi-model runs | |
 | 6 | Wire detected CLIs one by one (headless mode tested on this PC), then optional Bedrock / Vertex / Azure | |
 

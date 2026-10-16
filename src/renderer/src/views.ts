@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { ConfirmDialog } from './components/jarvis/confirm-dialog';
 import { AppsView } from './features/apps/apps-view';
 import { NpcsView } from './features/npcs/npcs-view';
+import { CompareView } from './features/compare/compare-view';
 import { ConnectionsView } from './features/connections/connections-view';
 import { CopilotView } from './features/copilot/copilot-view';
 import { MemoryView } from './features/memory/memory-view';
@@ -35,6 +36,7 @@ export const EXTRA_VIEWS: Partial<Record<View, ComponentType>> = {
   skills: SkillsView,
   apps: AppsView,
   npcs: NpcsView,
+  compare: CompareView,
 };
 export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog];
 

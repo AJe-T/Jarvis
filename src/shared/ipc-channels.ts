@@ -56,6 +56,12 @@ export const INVOKE_CHANNELS = [
   'llm:localTest',
   'llm:cloudModels',
   'llm:cloudTest',
+  'runs:start',
+  'runs:cancel',
+  'runs:list',
+  'runs:remove',
+  'runs:clear',
+  'runs:brains',
   'ai:connections',
   'ai:connection',
   'llm:cliStatus',
@@ -202,6 +208,7 @@ export const EVENT_CHANNELS = [
   'settings:changed',
   'npc:message',
   'npc:status',
+  'runs:update',
   'npc:meeting',
 ] as const;
 export type EventChannel = (typeof EVENT_CHANNELS)[number];

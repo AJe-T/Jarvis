@@ -454,6 +454,16 @@ Decisions taken while building the policy layer; the code is the reference (`src
 | Addresses | Unchanged: an extra connection uses its provider's fixed HTTPS address from `shared/llm-providers.ts`; no address is stored per connection. |
 | Input | Connection ids must match `CONNECTION_ID_RE` (IPC, settings, `delegate_task`, NPC brains); model ids `^[\w.:/@+-]{1,120}$`; labels ≤ 60 chars. `llm.cloud.connection` (which key Jarvis's own brain uses) is a sensitive setting (audited with its value) and only applies when it belongs to the chosen provider. |
 
+### 16.13 AI integrations, step 4 (v2.26): one request to several AIs
+
+| Surface | Control |
+|---|---|
+| Sending one prompt to many providers | Only from the Compare AIs page, by Sir's click; the page names every AI that will receive the prompt before Send. Jarvis has no tool that starts a run. Audit `runs.start` records the run id, mode and brains (not the prompt). |
+| What the AIs can do | Answers only: no tools are offered, so a run can't act on the PC or read outside content. ChatGPT / Antigravity apps get the same read-only treatment as for sub-agents (16.10). |
+| Output passed between AIs | Review and chain wrap the previous answer as data ("not instructions to you"); it is model text, not outside content, so turns stay untainted. |
+| Spend | Each step checks the budget guard (API budgets for Jarvis's API connection, the paid guard for other providers) and is recorded in the usage ledger with the run id. Stop and the kill switch abort every running step. |
+| Storage | Prompts and answers are kept in `ai_runs` / `ai_run_steps` on this PC (like conversations), last 50 shown, deletable; inputs are Zod-checked (prompt ≤ 20,000 chars, 2–4 steps, brain refs validated). |
+
 ### 16.9 Features added in v2.19 (ADR-042)
 
 | Surface | Control |

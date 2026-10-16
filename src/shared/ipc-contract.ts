@@ -16,6 +16,7 @@ import {
 import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
 import { BrainRefSchema, CLOUD_PROVIDER_IDS, CONNECTION_ID_RE } from './llm-providers';
+import { RunRequestSchema, RunViewSchema } from './ai-runs';
 import { AGENT_CLI_IDS } from './agent-clis';
 import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSchema } from './npcs';
 
@@ -23,6 +24,7 @@ import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSche
 const NpcChannel = z.string().regex(/^(office|dm:npc_[\w-]{1,40}|meeting:mtg_[\w-]{1,40})$/);
 const NpcId = z.string().regex(/^npc_[\w-]{1,40}$/);
 const ConnId = z.string().regex(CONNECTION_ID_RE);
+const RunId = z.string().regex(/^run_[\w-]{1,40}$/);
 const Label = z.string().max(60);
 const AiConnectionSchema = z.object({
   id: ConnId,
@@ -408,6 +410,14 @@ export const INVOKE = {
     z.object({ models: z.array(z.string()), error: z.string().optional() }),
   ),
   'llm:cloudTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
+  /** Integrations step 4: one request to several AIs (shared/ai-runs.ts); updates come as runs:update. */
+  'runs:start': contract(RunRequestSchema, RunViewSchema),
+  'runs:cancel': contract(z.object({ id: RunId }), Ok),
+  'runs:list': contract(Empty, z.array(RunViewSchema)),
+  'runs:remove': contract(z.object({ id: RunId }), Ok),
+  'runs:clear': contract(Empty, z.object({ removed: z.number().int() })),
+  /** AIs that can take part right now, by name. */
+  'runs:brains': contract(Empty, z.array(z.object({ id: BrainRefSchema, label: z.string() }))),
   /** Integrations step 3: every connection (key) per provider and its model registry. Keys stay in main. */
   'ai:connections': contract(Empty, z.array(AiConnectionSchema)),
   'ai:connection': contract(
@@ -1051,6 +1061,8 @@ export const EVENTS = {
   'planner:changed': z.object({}),
   'npc:message': z.object({ message: NpcMessageSchema }),
   'npc:status': z.object({ npcId: z.string(), state: z.enum(NPC_STATES) }),
+  /** A multi-AI run changed (a step started, streamed text, finished). */
+  'runs:update': z.object({ run: RunViewSchema }),
   'npc:meeting': z.object({ meeting: NpcMeetingSchema }),
   'mini:layout': z.object({ side: z.enum(['left', 'right']), tucked: z.boolean() }),
   /** A setting changed in main (e.g. Jarvis switched his personality by voice); the UI follows. */

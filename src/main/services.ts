@@ -33,6 +33,7 @@ import { createClaudeClient } from './llm/claude-client';
 import { createLocalClient } from './llm/local-client';
 import { createBrains, createCloudClient } from './llm/brains';
 import { createConnections } from './llm/connections';
+import { createMultiRun } from './agent/multi-run';
 import { createCliBrains, type CliBrain, type CliBrainId } from './llm/cli-brains';
 import {
   createClaudeCodeClient,
@@ -319,6 +320,16 @@ export function createServices(opts: ServiceOptions) {
       ...(opts.isTest ? { exists: () => false } : {}),
     });
   const brains = createBrains({ ...brainDeps, jarvis: llm, local: llmLocal, cli });
+  // Integrations step 4: one request to several AIs, answers only.
+  const multiRun = createMultiRun({
+    db,
+    brains,
+    ledger,
+    budget,
+    paidBudget,
+    settings,
+    emit: opts.emit,
+  });
   const sdkLoop = createSdkLoop(claudeCode, {
     webSearchEnabled: () => settings.get('web.search.enabled'),
   });
@@ -568,6 +579,7 @@ export function createServices(opts: ServiceOptions) {
   // Security.md §11: the kill switch stops turns, denies pending confirmations and returns to IDLE.
   killSwitch.onKill((reason) => {
     orchestrator.cancel();
+    multiRun.cancelAll();
     broker.denyAll();
     state.set('IDLE');
     audit.append(
@@ -601,6 +613,7 @@ export function createServices(opts: ServiceOptions) {
     llmLocal,
     llmCloud,
     connections,
+    multiRun,
     /** A client for one connection (model lists and tests in Settings; no model needed to list). */
     connectionClient: (id: string) => createCloudClient(brainDeps, () => id),
     brains,
