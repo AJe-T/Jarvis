@@ -72,7 +72,10 @@ export const AGENT_CLIS = [
     install: 'npm install -g @google/gemini-cli',
     docsUrl: 'https://github.com/google-gemini/gemini-cli',
     use: 'detected',
-    checked: '2026-10-16',
+    // Tested on this PC 2026-10-17 (v0.40.1, `-p … --approval-mode plan`): Google refuses the
+    // personal sign-in ("no longer supported … migrate to Antigravity").
+    note: 'Google no longer accepts personal accounts here: use the Antigravity app for your plan, or the Gemini API key under Another AI.',
+    checked: '2026-10-17',
   },
   {
     id: 'copilot',
@@ -106,7 +109,10 @@ export const AGENT_CLIS = [
     install: 'npm install -g opencode-ai',
     docsUrl: 'https://opencode.ai/docs',
     use: 'detected',
-    checked: '2026-10-16',
+    // Tested on this PC 2026-10-17 (v1.14.48, `run --agent plan --pure --dir <empty>`): headless
+    // works, but it answered "Missing Authentication header" (its own provider sign-in) and exited 0.
+    note: 'Uses its own provider sign-in ("opencode auth login"). Jarvis will use it once it answers here; until then your keys work directly under Another AI.',
+    checked: '2026-10-17',
   },
   {
     id: 'aider',

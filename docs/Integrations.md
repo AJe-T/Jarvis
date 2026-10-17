@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | v2.27 (steps 1–5 of the integrations plan) |
+| Status | v2.27.1 (steps 1–5 done; step 6 checked) |
 | Generated part | Provider and agent tables in [REFERENCE.md](REFERENCE.md) (`npm run docs:reference`) |
 | Security | [Security.md](Security.md) §16.10–16.11 always wins |
 
@@ -56,7 +56,9 @@ All use `main/llm/local-client.ts` (Messages API ↔ OpenAI Chat Completions tra
 | Claude Code | Implemented | Jarvis's own connection on Sir's Claude plan. |
 | Codex CLI (ChatGPT plan) | Implemented | Answer-only brain `chatgpt`: `exec --sandbox read-only`, user config ignored. |
 | Antigravity CLI (Gemini plan) | Implemented | Answer-only brain `antigravity`: `--print`, no auto-approve. |
-| Gemini CLI, GitHub Copilot CLI, Cursor CLI, OpenCode, Aider, Goose | Detected only | Settings → Brain → Coding agents. |
+| Gemini CLI | Unsupported (personal accounts) | Tested 2026-10-17: Google refuses personal sign-in in Gemini CLI; use Antigravity or the Gemini API key. |
+| OpenCode | Detected only | Headless mode tested 2026-10-17; needs its own `opencode auth login` before it can be wired. |
+| GitHub Copilot CLI, Cursor CLI, Aider, Goose | Detected only | Not installed on this PC, so their script mode can't be tested yet. |
 | Kimi Code CLI | Detected only | Windows support not confirmed in its docs. |
 
 What is never done, whatever the app: reading browser cookies, scraping a chat website, copying a CLI's private credential files, searching folders for keys, or turning a website subscription into API access. A paid ChatGPT, Claude or Gemini website plan is reached only through that company's own app.
@@ -70,7 +72,9 @@ What is never done, whatever the app: reading browser cookies, scraping a chat w
 | 3 | Several connections per provider; model registry table (favourites, enabled, default, source: live / manual / cached) | Done (v2.25) |
 | 4 | Compare side by side, review mode, chains, execution history, cancel | Done (v2.26) |
 | 5 | Usage per provider, connection and model; local apart from cloud; live gateway prices; cost estimate and confirmation before multi-model runs | Done (v2.27) |
-| 6 | Wire detected CLIs one by one (headless mode tested on this PC), then optional Bedrock / Vertex / Azure | |
+| 6 | Wire detected CLIs one by one (headless mode tested on this PC), then optional Bedrock / Vertex / Azure | Checked (v2.27.1): nothing new could be wired yet; see below |
+
+**Step 6 findings (2026-10-17, this PC).** Installed: Gemini CLI 0.40.1, OpenCode 1.14.48, and only VS Code Insiders' Copilot bootstrapper (the real `@github/copilot` CLI isn't installed). Gemini CLI headless (`-p … --approval-mode plan`) is refused by Google for personal accounts ("migrate to Antigravity"), so it stays detected-only; the Antigravity brain covers the plan and the Gemini API covers keys. OpenCode headless (`run --agent plan --pure --dir <empty folder>`) starts, but its own provider sign-in is missing ("Missing Authentication header") and it exits 0 on that error, so a runner would also need to read its JSON events for errors; it gets wired once `opencode auth login` is done and a test answer comes back. Aider, Goose, Cursor and Kimi aren't installed. Bedrock, Vertex AI and Azure AI Foundry are not built: each needs its cloud account (AWS SigV4 keys, a Google service account, an Azure resource and Entra ID or key), none exists on this PC to test against, and every model they host is reachable through the existing keys or gateways.
 
 ## How to add an OpenAI-compatible provider
 
