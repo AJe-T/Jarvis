@@ -1,6 +1,7 @@
 import {
   RunRequestSchema,
   type RunMode,
+  type RunEstimate,
   type RunRequest,
   type RunStatus,
   type RunStepView,
@@ -15,7 +16,8 @@ import { newId } from '../lib/util';
 import { logger } from '../logging/logger';
 import type { Brains } from '../llm/brains';
 import type { BudgetGuard } from '../llm/budget-guard';
-import type { UsageLedger } from '../llm/usage-ledger';
+import { costOf, type UsageLedger } from '../llm/usage-ledger';
+import type { Connections } from '../llm/connections';
 import type { SettingsService } from '../settings/settings-service';
 import { pickModel } from './model-router';
 
@@ -94,6 +96,7 @@ export function createMultiRun(deps: {
   budget: BudgetGuard;
   paidBudget: BudgetGuard;
   settings: SettingsService;
+  connections: Connections;
   emit(event: 'runs:update', payload: EventPayload<'runs:update'>): void;
 }) {
   const { db, brains } = deps;
@@ -304,9 +307,88 @@ export function createMultiRun(deps: {
     push(id);
   }
 
+  /**
+   * Who pays for a brain's answer and at what price: Jarvis's own connection follows Settings →
+   * Models & AI; subscription apps and the Claude plan count against plans; this PC is free.
+   */
+  function pricing(
+    brain: BrainRef,
+    prompt: string,
+    later: boolean,
+  ): { kind: 'plan' | 'free' } | { models: string[]; source: string } {
+    if (brains.cli(brain)) return { kind: 'plan' };
+    if (brain === 'local') return { kind: 'free' };
+    if (brain === 'jarvis') {
+      const p = deps.settings.get('llm.provider');
+      if (p === 'subscription') return { kind: 'plan' };
+      if (p === 'local') return { kind: 'free' };
+      if (p === 'cloud') {
+        const conn = deps.connections.main();
+        return { models: [deps.connections.target(conn).model], source: conn };
+      }
+      // A later step's prompt holds another AI's answer, which may switch it to the deep model.
+      return {
+        models: later
+          ? [deps.settings.get('models.default'), deps.settings.get('models.deep')]
+          : [pickModel(deps.settings, { purpose: 'task', text: prompt })],
+        source: 'anthropic',
+      };
+    }
+    const conn = brain.startsWith('conn_') ? brain : `conn_${brain}`;
+    return { models: [deps.connections.target(conn).model], source: conn };
+  }
+
+  /** Room for the review / stage wording around the request and the previous answer. */
+  const TEMPLATE_TOKENS = 120;
+
+  /** The most a run may cost: every AI writing its longest answer, each stage reading the last. */
+  function estimate(raw: RunRequest): RunEstimate {
+    const req = RunRequestSchema.parse(raw);
+    const steps = req.steps.map((s, i): RunEstimate['steps'][number] => {
+      const later = req.mode !== 'compare' && i > 0;
+      const inputTokens =
+        tokensOf(SYSTEM) +
+        tokensOf(req.prompt) +
+        tokensOf(s.instruction) +
+        (later ? MAX_TOKENS + TEMPLATE_TOKENS : 0);
+      const label = brains.label(s.brain);
+      // A brain that isn't set up can't start; start() says so.
+      if (!brains.ready(s.brain))
+        return { brain: s.brain, label, inputTokens, maxUsd: 0, price: 'free' };
+      const p = pricing(s.brain, req.prompt, later);
+      if ('kind' in p) return { brain: s.brain, label, inputTokens, maxUsd: 0, price: p.kind };
+      const infos = p.models.map((m) => deps.ledger.priceInfo(m, p.source));
+      const info = infos.reduce((a, b) => (b.price.outPerMTok > a.price.outPerMTok ? b : a));
+      const maxUsd = costOf(info.price, {
+        input: inputTokens,
+        output: MAX_TOKENS,
+        cacheRead: 0,
+        cacheWrite: 0,
+      });
+      return {
+        brain: s.brain,
+        label,
+        inputTokens,
+        maxUsd,
+        price: info.kind,
+      };
+    });
+    const maxUsd = steps.reduce((a, s) => a + s.maxUsd, 0);
+    return {
+      maxUsd,
+      needsConfirm: maxUsd > 0 && maxUsd > deps.settings.get('budget.confirmRunUsd'),
+      steps,
+    };
+  }
+
   return {
-    /** Starts a run and returns it at once (steps queued); updates arrive as runs:update. */
-    start(raw: RunRequest): RunView {
+    estimate,
+
+    /**
+     * Starts a run and returns it at once; updates arrive as runs:update. A run that may cost more
+     * than Sir's confirm level needs `acceptUsd` (what he agreed to) at least as high as its estimate.
+     */
+    start(raw: RunRequest, acceptUsd?: number): RunView {
       const req = RunRequestSchema.parse(raw);
       const missing = req.steps.find((s) => !brains.ready(s.brain));
       if (missing)
@@ -314,6 +396,13 @@ export function createMultiRun(deps: {
           'INVALID',
           'brain not set up',
           `${brains.label(missing.brain)} is not set up (Settings → Brain).`,
+        );
+      const cost = estimate(req);
+      if (cost.needsConfirm && (acceptUsd ?? 0) < cost.maxUsd)
+        throw new JarvisError(
+          'INVALID',
+          'run cost not confirmed',
+          `This run may cost up to $${cost.maxUsd.toFixed(2)}. Confirm it first.`,
         );
       const id = newId('run_');
       const at = nowIso();

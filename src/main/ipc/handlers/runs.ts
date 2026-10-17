@@ -10,8 +10,9 @@ export function registerRunHandlers(s: Services): void {
       label: id === 'jarvis' ? 'Jarvis (main connection)' : s.brains.label(id),
     })),
   );
+  handle('runs:estimate', (req) => s.multiRun.estimate(req));
   handle('runs:start', (req) => {
-    const run = s.multiRun.start(req);
+    const run = s.multiRun.start(req.request, req.acceptUsd);
     // Which AIs got the prompt, not the prompt itself.
     s.audit.append('user', 'runs.start', {
       id: run.id,

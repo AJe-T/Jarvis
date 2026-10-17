@@ -109,6 +109,12 @@ export function BrainSection(): React.JSX.Element {
             type="number"
             step={0.1}
           />
+          <SettingInput
+            k="budget.confirmRunUsd"
+            label="Ask before a Compare AIs run that may cost over (USD, 0 = always)"
+            type="number"
+            step={0.05}
+          />
         </div>
       </Section>
       <Section

@@ -1,9 +1,42 @@
 import { z } from 'zod';
-import type { ModelListing } from '@shared/llm-providers';
+import type { LivePrice, ModelListing } from '@shared/llm-providers';
 import { JarvisError } from '../errors';
 import { redact } from '../security/redact';
 
-const OpenAiModels = z.object({ data: z.array(z.object({ id: z.string() })).default([]) });
+const OpenAiModels = z.object({
+  data: z.array(z.object({ id: z.string(), pricing: z.unknown().optional() })).default([]),
+});
+
+/** Most a real model charges per million tokens; anything above is a misread unit, not a price. */
+const MAX_PER_MTOK = 1000;
+
+/**
+ * Integrations step 5: a gateway's listed price (USD per token, as strings) → per million tokens.
+ * Null when the shape or the numbers don't look like a price (then Jarvis prices it as unknown).
+ */
+export function parsePrice(kind: 'openrouter' | 'vercel', pricing: unknown): LivePrice | null {
+  if (!pricing || typeof pricing !== 'object') return null;
+  const p = pricing as Record<string, unknown>;
+  const perM = (v: unknown, fallback?: number): number | null => {
+    if (v === undefined && fallback !== undefined) return fallback;
+    const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN;
+    if (!Number.isFinite(n) || n < 0) return null;
+    const m = Math.round(n * 1_000_000 * 1e6) / 1e6;
+    return m <= MAX_PER_MTOK ? m : null;
+  };
+  const input = perM(kind === 'openrouter' ? p['prompt'] : p['input']);
+  const output = perM(kind === 'openrouter' ? p['completion'] : p['output']);
+  if (input === null || output === null) return null;
+  const cacheRead = perM(p['input_cache_read'], input);
+  const cacheWrite = perM(p['input_cache_write'], input);
+  if (cacheRead === null || cacheWrite === null) return null;
+  return {
+    inPerMTok: input,
+    outPerMTok: output,
+    cacheReadPerMTok: cacheRead,
+    cacheWritePerMTok: cacheWrite,
+  };
+}
 const OllamaTags = z.object({
   models: z.array(z.object({ name: z.string().optional(), model: z.string().optional() })),
 });
@@ -238,7 +271,11 @@ export interface LocalLlmConfig {
     /** Fixed model-list addresses for providers that don't use {baseUrl}/models. */
     allowedModelUrls?: readonly string[];
     /** How the provider lists its models (shared/llm-providers.ts); default 'openai'. */
-    listing?(): { kind: ModelListing; url?: string | undefined };
+    listing?(): {
+      kind: ModelListing;
+      url?: string | undefined;
+      prices?: 'openrouter' | 'vercel' | undefined;
+    };
     /** The connection id, carried in the message id so usage can be told apart per key. */
     tag?(): string;
   };
@@ -282,9 +319,10 @@ export function checkLocalUrl(raw: string): URL {
 
 const join = (base: string, path: string): string => `${base.replace(/\/+$/, '')}${path}`;
 
-export function createLocalClient(
-  cfg: LocalLlmConfig,
-): LlmClient & { listModels(): Promise<string[]> } {
+export function createLocalClient(cfg: LocalLlmConfig): LlmClient & {
+  listModels(): Promise<string[]>;
+  listModelsDetailed(): Promise<Array<{ id: string; price: LivePrice | null }>>;
+} {
   const f = cfg.fetch ?? fetch;
   const cloud = cfg.cloud;
   const auth = (): Record<string, string> => {
@@ -314,10 +352,14 @@ export function createLocalClient(
       );
   };
 
-  const listing = (): { kind: ModelListing; url?: string | undefined } =>
-    cloud?.listing?.() ?? { kind: 'openai' };
+  const listing = (): {
+    kind: ModelListing;
+    url?: string | undefined;
+    prices?: 'openrouter' | 'vercel' | undefined;
+  } => cloud?.listing?.() ?? { kind: 'openai' };
 
-  async function listModels(): Promise<string[]> {
+  /** Model ids, and their prices where the gateway publishes them (integrations step 5). */
+  async function listModelsDetailed(): Promise<Array<{ id: string; price: LivePrice | null }>> {
     needKey();
     const how = listing();
     if (how.kind === 'manual')
@@ -343,10 +385,18 @@ export function createLocalClient(
     );
     if (!parsed.success) throw unreachable('model list was not the expected JSON');
     const body = parsed.data;
-    return 'models' in body
-      ? body.models.map((m) => m.name ?? m.model ?? '').filter(Boolean)
-      : body.data.map((m) => m.id);
+    if ('models' in body)
+      return body.models
+        .map((m) => ({ id: m.name ?? m.model ?? '', price: null }))
+        .filter((m) => m.id);
+    const prices = how.prices;
+    return body.data.map((m) => ({
+      id: m.id,
+      price: prices ? parsePrice(prices, m.pricing) : null,
+    }));
   }
+
+  const listModels = async (): Promise<string[]> => (await listModelsDetailed()).map((m) => m.id);
 
   /** No model list to check against: one tiny, non-streamed request (max_tokens 1) instead. */
   async function pingByRequest(model: string): Promise<void> {
@@ -388,6 +438,7 @@ export function createLocalClient(
 
   return {
     listModels,
+    listModelsDetailed,
     async ping() {
       const model = cfg.model();
       if (!model) throw new JarvisError('INVALID', 'no model', settingsHint);

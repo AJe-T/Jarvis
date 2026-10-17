@@ -4,7 +4,8 @@ import clsx from 'clsx';
 import { Copy, History, Plus, Square, Trash2, X } from 'lucide-react';
 import { MAX_RUN_STEPS, type RunMode, type RunStepView, type RunView } from '@shared/ai-runs';
 import type { BrainRef } from '@shared/llm-providers';
-import type { Res } from '@shared/ipc-contract';
+import type { Req, Res } from '@shared/ipc-contract';
+import { confirmAction } from '../../components/ui/confirm-modal';
 import { Button, IconButton } from '../../components/ui/button';
 import { PageBody, PageHeader } from '../../components/ui/page';
 import { Markdown } from '../../components/jarvis/chat-message';
@@ -180,10 +181,42 @@ function Composer({ brains }: { brains: Brain[] }): React.JSX.Element {
   const set = (i: number, patch: Partial<Pick>): void =>
     setPicks((ps) => ps.map((p, j) => (j === i ? { ...p, ...patch } : p)));
 
+  // What it may cost, refreshed as Sir edits (integrations step 5).
+  const key = JSON.stringify({ mode, prompt: prompt.trim() || '?', steps });
+  const [estimate, setEstimate] = useState<Res<'runs:estimate'> | null>(null);
+  useEffect(() => {
+    let current = true; // a slow answer for older text must not replace a newer one
+    const t = setTimeout(
+      () =>
+        void call('runs:estimate', JSON.parse(key) as Req<'runs:estimate'>)
+          .then((e) => current && setEstimate(e))
+          .catch(() => current && setEstimate(null)),
+      300,
+    );
+    return () => {
+      current = false;
+      clearTimeout(t);
+    };
+  }, [key]);
+
   async function send(): Promise<void> {
     setBusy(true);
     try {
-      const run = await call('runs:start', { mode, prompt, steps });
+      const cost = await call('runs:estimate', { mode, prompt, steps });
+      if (
+        cost.needsConfirm &&
+        !(await confirmAction({
+          title: `Spend up to $${cost.maxUsd.toFixed(2)}?`,
+          body: `If every AI writes its longest answer, this run costs up to $${cost.maxUsd.toFixed(2)} (estimate${cost.steps.some((s) => s.price === 'fallback') ? '; some prices are unknown and taken from the dearest Claude model' : ''}). Change the level in Settings → Brain → Budget.`,
+          actionLabel: 'Send',
+          destructive: false,
+        }))
+      )
+        return;
+      const run = await call('runs:start', {
+        request: { mode, prompt, steps },
+        ...(cost.needsConfirm ? { acceptUsd: cost.maxUsd } : {}),
+      });
       putRun(run);
       useRuns.setState({ shown: run.id });
     } catch (e) {
@@ -274,6 +307,17 @@ function Composer({ brains }: { brains: Brain[] }): React.JSX.Element {
         Your prompt goes to {names.join(', ')}. Each one sees it and bills its own account. Answers
         only: they have no tools.
       </p>
+      {estimate && (
+        <p className="text-xs text-ink-300" aria-live="polite">
+          {estimate.maxUsd > 0
+            ? `Up to $${estimate.maxUsd.toFixed(estimate.maxUsd < 0.01 ? 4 : 2)} if every AI writes its longest answer (estimate).`
+            : 'No per-use cost: plans and this PC only.'}
+          {estimate.steps.some((s) => s.price === 'fallback') &&
+            ' Some prices are unknown, so they are counted like the dearest Claude model.'}
+          {estimate.steps.some((s) => s.price === 'plan') &&
+            ' Plan apps count against your plan instead.'}
+        </p>
+      )}
       <Button
         variant="primary"
         className="self-start"

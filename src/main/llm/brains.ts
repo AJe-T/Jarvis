@@ -55,7 +55,7 @@ export function createCloudClient(deps: BrainDeps, connection: () => string) {
       },
       allowedBaseUrls: ALLOWED,
       allowedModelUrls: MODEL_URLS,
-      listing: () => ({ kind: p().models, url: p().modelsUrl }),
+      listing: () => ({ kind: p().models, url: p().modelsUrl, prices: p().prices }),
       tag: () => connection(),
     },
     ...(deps.fetch ? { fetch: deps.fetch } : {}),

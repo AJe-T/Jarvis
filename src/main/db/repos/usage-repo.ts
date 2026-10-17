@@ -25,14 +25,21 @@ export interface UsageEntry {
   cacheWriteTokens: number;
   estCostUsd: number;
   billing?: Billing;
+  /** Who answered (llm/usage-ledger.ts sourceOf); migration 016. */
+  source?: string;
+  /** Where the price came from: live, table, fallback, free. */
+  price?: string;
 }
+
+export type BreakdownBy = 'model' | 'purpose' | 'day' | 'source' | 'billing';
 
 export function createUsageRepo(db: Db) {
   return {
     insert(e: UsageEntry, at = new Date()): void {
       db.prepare(
         `INSERT INTO usage_ledger (id, ts, day, model, purpose, conversation_id, input_tokens, output_tokens,
-           cache_read_tokens, cache_write_tokens, est_cost_usd, billing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           cache_read_tokens, cache_write_tokens, est_cost_usd, billing, source, price)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         newId('u_'),
         at.toISOString(),
@@ -46,6 +53,8 @@ export function createUsageRepo(db: Db) {
         e.cacheWriteTokens,
         e.estCostUsd,
         e.billing ?? 'api',
+        e.source ?? null,
+        e.price ?? null,
       );
     },
 
@@ -71,12 +80,21 @@ export function createUsageRepo(db: Db) {
       return r.cost;
     },
 
-    breakdown(fromDay: string, toDay: string, by: 'model' | 'purpose' | 'day') {
-      const col = { model: 'model', purpose: 'purpose', day: 'day' }[by];
+    /** `estimated` = calls priced like the dearest model because the real price is unknown. */
+    breakdown(fromDay: string, toDay: string, by: BreakdownBy) {
+      // Fixed column expressions only (never from the request). Rows before migration 016 have no source.
+      const col = {
+        model: 'model',
+        purpose: 'purpose',
+        day: 'day',
+        source: "COALESCE(source, 'earlier')",
+        billing: 'billing',
+      }[by];
       return db
         .prepare(
           `SELECT ${col} AS key, SUM(est_cost_usd) AS costUsd,
-             SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens, COUNT(*) AS calls
+             SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens, COUNT(*) AS calls,
+             SUM(CASE WHEN price = 'fallback' THEN 1 ELSE 0 END) AS estimated
            FROM usage_ledger WHERE day BETWEEN ? AND ? GROUP BY ${col} ORDER BY ${by === 'day' ? 'key' : 'costUsd DESC'}`,
         )
         .all(fromDay, toDay) as Array<{
@@ -84,6 +102,7 @@ export function createUsageRepo(db: Db) {
         costUsd: number;
         tokens: number;
         calls: number;
+        estimated: number;
       }>;
     },
   };

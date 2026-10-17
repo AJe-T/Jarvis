@@ -18,6 +18,21 @@ import { pickModel } from '../../agent/model-router';
 import type { Services } from '../../services';
 import { isSafeExternalUrl } from '../../windows/hardening';
 import { handle } from '../handle';
+import { CLOUD_PROVIDERS, defaultConnectionId } from '@shared/llm-providers';
+
+/** Usage grouped by who answered: local apart from the cloud (integrations step 5). */
+const SOURCE_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic API key',
+  'claude-plan': 'Claude plan (subscription)',
+  local: 'This PC (local model, free)',
+  cloud: 'Another AI (connection not recorded)',
+  earlier: 'Earlier (before 2.27, not recorded)',
+};
+const BILLING_LABELS: Record<string, string> = {
+  api: 'Billed per use (API keys)',
+  subscription: 'Your Claude plan (not billed per use)',
+  local: 'This PC (free)',
+};
 
 /** Phase 1 channels: chat, conversations, settings, secrets, usage, app. */
 export interface CoreHooks {
@@ -268,7 +283,16 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
   handle('system:stats', () => sampleSystem());
   handle('usage:breakdown', (req) => {
     const day = localDay();
-    return s.usageRepo.breakdown(req.range === 'day' ? day : monthStart(day), day, req.by);
+    const rows = s.usageRepo.breakdown(req.range === 'day' ? day : monthStart(day), day, req.by);
+    const extra = s.connections.extraLabels();
+    const label = (key: string): string => {
+      if (req.by === 'billing') return BILLING_LABELS[key] ?? key;
+      if (req.by !== 'source') return key;
+      if (SOURCE_LABELS[key]) return SOURCE_LABELS[key];
+      const provider = CLOUD_PROVIDERS.find((p) => defaultConnectionId(p.id) === key);
+      return provider ? provider.label : (extra[key] ?? key);
+    };
+    return rows.map((r) => ({ ...r, key: String(r.key), label: label(String(r.key)) }));
   });
 
   handle('activity:list', (req) =>

@@ -174,8 +174,7 @@ function Status(): React.JSX.Element {
         { label: 'uplink', value: online ? 'Online' : 'Offline', hint: `v${version}` },
         {
           label: 'brain',
-          value:
-            PROVIDER_LABEL[provider],
+          value: PROVIDER_LABEL[provider],
           hint: model,
         },
         { label: 'voice', value: VOICE[voice] },

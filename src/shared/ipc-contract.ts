@@ -16,7 +16,7 @@ import {
 import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
 import { BrainRefSchema, CLOUD_PROVIDER_IDS, CONNECTION_ID_RE } from './llm-providers';
-import { RunRequestSchema, RunViewSchema } from './ai-runs';
+import { RunEstimateSchema, RunRequestSchema, RunViewSchema } from './ai-runs';
 import { AGENT_CLI_IDS } from './agent-clis';
 import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSchema } from './npcs';
 
@@ -41,6 +41,14 @@ const AiConnectionSchema = z.object({
       favourite: z.boolean(),
       enabled: z.boolean(),
       seenAt: z.string().nullable(),
+      price: z
+        .object({
+          inPerMTok: z.number(),
+          outPerMTok: z.number(),
+          cacheReadPerMTok: z.number(),
+          cacheWritePerMTok: z.number(),
+        })
+        .nullable(),
     }),
   ),
 });
@@ -230,9 +238,13 @@ const UsageSummary = z.object({
 });
 const BreakdownRow = z.object({
   key: z.string(),
+  /** Display name (connections and billing kinds); the key otherwise. */
+  label: z.string(),
   costUsd: z.number(),
   tokens: z.number(),
   calls: z.number(),
+  /** Calls whose real price is unknown (priced like the dearest model). */
+  estimated: z.number(),
 });
 
 const SpaceNameInput = z.string().trim().min(1).max(80);
@@ -411,7 +423,13 @@ export const INVOKE = {
   ),
   'llm:cloudTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
   /** Integrations step 4: one request to several AIs (shared/ai-runs.ts); updates come as runs:update. */
-  'runs:start': contract(RunRequestSchema, RunViewSchema),
+  /** What a run may cost at most, and whether Sir must confirm it (integrations step 5). */
+  'runs:estimate': contract(RunRequestSchema, RunEstimateSchema),
+  /** `acceptUsd`: the estimate Sir confirmed; needed when the estimate is over his confirm level. */
+  'runs:start': contract(
+    z.object({ request: RunRequestSchema, acceptUsd: z.number().min(0).max(1000).optional() }),
+    RunViewSchema,
+  ),
   'runs:cancel': contract(z.object({ id: RunId }), Ok),
   'runs:list': contract(Empty, z.array(RunViewSchema)),
   'runs:remove': contract(z.object({ id: RunId }), Ok),
@@ -675,7 +693,10 @@ export const INVOKE = {
   ),
   'usage:summary': contract(z.object({ range: z.enum(['day', 'month']) }), UsageSummary),
   'usage:breakdown': contract(
-    z.object({ range: z.enum(['day', 'month']), by: z.enum(['model', 'purpose', 'day']) }),
+    z.object({
+      range: z.enum(['day', 'month']),
+      by: z.enum(['model', 'purpose', 'day', 'source', 'billing']),
+    }),
     z.array(BreakdownRow),
   ),
   'audit:list': contract(

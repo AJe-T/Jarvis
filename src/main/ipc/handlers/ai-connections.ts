@@ -44,7 +44,7 @@ export function registerAiConnectionHandlers(s: Services): void {
             error: `${cloudProvider(c.provider).label} publishes no model list: add model ids by hand.`,
           };
         try {
-          s.connections.syncLive(req.id, await s.connectionClient(req.id).listModels());
+          s.connections.syncLive(req.id, await s.connectionClient(req.id).listModelsDetailed());
           return { ok: true };
         } catch (err) {
           return { ok: false, error: userError(err) };

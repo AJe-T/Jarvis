@@ -223,6 +223,8 @@ export function createServices(opts: ServiceOptions) {
       const p = settings.get('llm.provider');
       return p === 'cloud' ? 'api' : p;
     },
+    // Gateways' own listed prices (connections is created below; called only after start-up).
+    livePrice: (conn, model) => connections.livePrice(conn, model),
     onUpdate: (u) => {
       opts.emit('usage:update', {
         dayCostUsd: u.dayCostUsd,
@@ -328,6 +330,7 @@ export function createServices(opts: ServiceOptions) {
     budget,
     paidBudget,
     settings,
+    connections,
     emit: opts.emit,
   });
   const sdkLoop = createSdkLoop(claudeCode, {

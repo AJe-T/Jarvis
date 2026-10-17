@@ -3,14 +3,22 @@ import type { Res } from '@shared/ipc-contract';
 import { call } from '../../lib/api';
 
 type Range = 'day' | 'month';
-type By = 'model' | 'purpose' | 'day';
+type By = 'model' | 'purpose' | 'day' | 'source' | 'billing';
+
+const BY_LABEL: Record<By, string> = {
+  source: 'Connection',
+  billing: 'Cloud / plan / this PC',
+  model: 'Model',
+  purpose: 'Purpose',
+  day: 'Day',
+};
 
 const usd = (n: number): string => `$${n.toFixed(n < 1 ? 4 : 2)}`;
 
 /** Activity → Usage: today/month spend against the budget, and where the money went. */
 export function UsagePanel(): React.JSX.Element {
   const [range, setRange] = useState<Range>('month');
-  const [by, setBy] = useState<By>('model');
+  const [by, setBy] = useState<By>('source');
   const [summary, setSummary] = useState<Res<'usage:summary'> | null>(null);
   const [rows, setRows] = useState<Res<'usage:breakdown'>>([]);
 
@@ -32,12 +40,7 @@ export function UsagePanel(): React.JSX.Element {
           options={{ day: 'Today', month: 'This month' }}
           onChange={setRange}
         />
-        <Select<By>
-          label="Group by"
-          value={by}
-          options={{ model: 'Model', purpose: 'Purpose', day: 'Day' }}
-          onChange={setBy}
-        />
+        <Select<By> label="Group by" value={by} options={BY_LABEL} onChange={setBy} />
       </div>
 
       {summary && (
@@ -80,12 +83,15 @@ export function UsagePanel(): React.JSX.Element {
 
       {summary?.plan && <PlanGauges plan={summary.plan} />}
 
+      <p className="text-xs text-ink-500">
+        Costs are estimates from token counts and prices (the provider&apos;s own list where it
+        publishes one, else Settings → pricing), not bills. Local models are free; plan apps count
+        against their plan.
+      </p>
       <table className="w-full text-left text-sm tabular">
         <thead className="text-ink-500">
           <tr>
-            <th className="py-1 pr-3 font-medium">
-              {by === 'day' ? 'Day' : by === 'model' ? 'Model' : 'Purpose'}
-            </th>
+            <th className="py-1 pr-3 font-medium">{BY_LABEL[by]}</th>
             <th className="py-1 pr-3 font-medium">Calls</th>
             <th className="py-1 pr-3 font-medium">Tokens</th>
             <th className="py-1 font-medium">Cost</th>
@@ -101,7 +107,17 @@ export function UsagePanel(): React.JSX.Element {
           )}
           {rows.map((r) => (
             <tr key={r.key} className="border-t border-line">
-              <td className="py-1.5 pr-3 text-ink-100">{r.key}</td>
+              <td className="py-1.5 pr-3 text-ink-100">
+                {r.label}
+                {r.estimated > 0 && (
+                  <span
+                    className="ml-1 text-xs text-lamp-400"
+                    title="Price unknown: counted like the dearest Claude model (an over-estimate). Add it in Settings → pricing."
+                  >
+                    ({r.estimated} at a guessed price)
+                  </span>
+                )}
+              </td>
               <td className="py-1.5 pr-3 text-ink-300">{r.calls}</td>
               <td className="py-1.5 pr-3 text-ink-300">{r.tokens.toLocaleString()}</td>
               <td className="py-1.5">

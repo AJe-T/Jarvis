@@ -104,6 +104,14 @@ function ModelRow({
           {m.model}
         </span>
       </label>
+      {m.price && (
+        <span
+          className="text-xs text-ink-500 tabular"
+          title="USD per million tokens, input / output, as the provider lists it"
+        >
+          ${m.price.inPerMTok} / ${m.price.outPerMTok}
+        </span>
+      )}
       <span title={s.hint} className={clsx('text-xs', s.tone)}>
         {s.label}
       </span>

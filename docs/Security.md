@@ -464,6 +464,14 @@ Decisions taken while building the policy layer; the code is the reference (`src
 | Spend | Each step checks the budget guard (API budgets for Jarvis's API connection, the paid guard for other providers) and is recorded in the usage ledger with the run id. Stop and the kill switch abort every running step. |
 | Storage | Prompts and answers are kept in `ai_runs` / `ai_run_steps` on this PC (like conversations), last 50 shown, deletable; inputs are Zod-checked (prompt ≤ 20,000 chars, 2–4 steps, brain refs validated). |
 
+### 16.14 AI integrations, step 5 (v2.27): usage and prices
+
+| Surface | Control |
+|---|---|
+| Live prices | Read only from the model list Jarvis already fetches with Sir's key from the fixed catalogue address (no new host). Values are parsed defensively (`parsePrice`): non-numbers, negatives and anything above $1,000 per million tokens are dropped. Sir's own `pricing` table always wins. |
+| Spend confirmation | Main computes the run estimate itself and refuses `runs:start` over `budget.confirmRunUsd` unless the request carries an `acceptUsd` at least that high (the renderer sends it only after Sir clicks Send in the confirmation). |
+| Usage rows | Hold the connection id and price kind, never keys or prompt text. |
+
 ### 16.9 Features added in v2.19 (ADR-042)
 
 | Surface | Control |

@@ -95,6 +95,8 @@ export const SETTINGS = {
   'budget.dailyUsd': { schema: z.number().min(0).max(1000), default: 2 },
   'budget.monthlyUsd': { schema: z.number().min(0).max(10000), default: 30 },
   /** One automation run is stopped once it has cost this much (API-equivalent on the subscription); 0 = no cap. */
+  /** Integrations step 5: a Compare AIs run that may cost more than this asks first (0 = always ask). */
+  'budget.confirmRunUsd': { schema: z.number().min(0).max(100), default: 0.05 },
   'budget.automationRunUsd': { schema: z.number().min(0).max(100), default: 0.5 },
   'budget.perTurnInputTokens': { schema: z.number().int().min(1000), default: 200_000 },
   // Prices from platform.claude.com/docs/en/about-claude/pricing (checked 2026-10-06). Editable in Settings.

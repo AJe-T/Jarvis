@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | v2.26 (steps 1–4 of the integrations plan) |
+| Status | v2.27 (steps 1–5 of the integrations plan) |
 | Generated part | Provider and agent tables in [REFERENCE.md](REFERENCE.md) (`npm run docs:reference`) |
 | Security | [Security.md](Security.md) §16.10–16.11 always wins |
 
@@ -47,7 +47,7 @@ All use `main/llm/local-client.ts` (Messages API ↔ OpenAI Chat Completions tra
 
 **Capabilities.** Per provider only `tools` is recorded (`yes` or `per-model`). Images, audio, JSON mode, reasoning controls and context windows differ per model, and no reliable per-model source is wired yet, so they are **unknown**, not assumed. The translation sends images as `image_url`; a model that can't take them returns the provider's own error.
 
-**Pricing.** Only the Claude models have prices (Settings → `pricing`). Any other model is priced like the dearest Claude model so the budget errs safe: their cost in Usage is an over-estimate, not a bill. Add a model's real price to `pricing` to correct it. Live prices from the gateways that publish them (OpenRouter, Hugging Face, Vercel) come in step 5.
+**Pricing.** Only the Claude models have prices (Settings → `pricing`). Any other model is priced like the dearest Claude model so the budget errs safe: their cost in Usage is an over-estimate, not a bill. Add a model's real price to `pricing` to correct it. **v2.27:** OpenRouter (`pricing.prompt/completion`) and Vercel AI Gateway (`pricing.input/output`, both plus `input_cache_read/_write`, USD per token as strings; docs checked 2026-10-17) publish prices in their model list; **Refresh models** stores them per connection and the ledger uses them when `pricing` has no entry for that model (order: Sir's table, the gateway's list, the dearest model). A listed price above $1,000 per million tokens or not a number is ignored. Hugging Face's router lists per-provider prices but their unit is not documented, so it is not used. Each usage row records who answered (`source`: Anthropic key, Claude plan, this PC, or the connection) and where its price came from; Activity → Usage groups by connection or by cloud / plan / this PC and marks calls priced by guess. Compare AIs shows the most a run may cost (every AI writing its longest answer) and asks above `budget.confirmRunUsd` (default $0.05); main refuses an unconfirmed run over that level. Provider-side billing and a plan's remaining quota are not read (no official interface).
 
 ## Subscriptions and command-line apps
 
@@ -69,7 +69,7 @@ What is never done, whatever the app: reading browser cookies, scraping a chat w
 | 2 | Agent CLI detection (files only) | Done (v2.23) |
 | 3 | Several connections per provider; model registry table (favourites, enabled, default, source: live / manual / cached) | Done (v2.25) |
 | 4 | Compare side by side, review mode, chains, execution history, cancel | Done (v2.26) |
-| 5 | Usage per provider, connection and model; local apart from cloud; live gateway prices; cost estimate and confirmation before multi-model runs | |
+| 5 | Usage per provider, connection and model; local apart from cloud; live gateway prices; cost estimate and confirmation before multi-model runs | Done (v2.27) |
 | 6 | Wire detected CLIs one by one (headless mode tested on this PC), then optional Bedrock / Vertex / Azure | |
 
 ## How to add an OpenAI-compatible provider

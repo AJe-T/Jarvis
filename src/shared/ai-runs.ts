@@ -27,6 +27,27 @@ export const RunRequestSchema = z
   });
 export type RunRequest = z.input<typeof RunRequestSchema>;
 
+/**
+ * Integrations step 5: what a run may cost before it starts. `maxUsd` assumes every AI writes its
+ * longest answer (so it is an upper bound); 'fallback' = the price is unknown and taken from the
+ * dearest Claude model; 'plan' / 'free' = not billed per use (subscription app, this PC).
+ */
+export const RunEstimateSchema = z.object({
+  maxUsd: z.number(),
+  /** Above Settings → Brain → "Ask before a Compare AIs run over": Sir must confirm. */
+  needsConfirm: z.boolean(),
+  steps: z.array(
+    z.object({
+      brain: BrainRefSchema,
+      label: z.string(),
+      inputTokens: z.number(),
+      maxUsd: z.number(),
+      price: z.enum(['live', 'table', 'fallback', 'plan', 'free']),
+    }),
+  ),
+});
+export type RunEstimate = z.infer<typeof RunEstimateSchema>;
+
 export type RunStatus = 'running' | 'done' | 'partial' | 'failed' | 'cancelled';
 export type StepStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 

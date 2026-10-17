@@ -56,6 +56,7 @@ export const INVOKE_CHANNELS = [
   'llm:localTest',
   'llm:cloudModels',
   'llm:cloudTest',
+  'runs:estimate',
   'runs:start',
   'runs:cancel',
   'runs:list',

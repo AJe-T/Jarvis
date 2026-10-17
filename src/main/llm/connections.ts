@@ -8,6 +8,7 @@ import {
   type AiConnection,
   type CloudProviderId,
   type ConnectionModel,
+  type LivePrice,
   type ModelSource,
 } from '@shared/llm-providers';
 import type { Db } from '../db/connection';
@@ -36,7 +37,21 @@ interface ModelRow {
   favourite: number;
   enabled: number;
   seen_at: string | null;
+  in_per_mtok: number | null;
+  out_per_mtok: number | null;
+  cache_read_per_mtok: number | null;
+  cache_write_per_mtok: number | null;
 }
+
+const priceOf = (m: ModelRow): LivePrice | null =>
+  m.in_per_mtok === null || m.out_per_mtok === null
+    ? null
+    : {
+        inPerMTok: m.in_per_mtok,
+        outPerMTok: m.out_per_mtok,
+        cacheReadPerMTok: m.cache_read_per_mtok ?? m.in_per_mtok,
+        cacheWritePerMTok: m.cache_write_per_mtok ?? m.in_per_mtok,
+      };
 
 const MAX_LABEL = 60;
 /** CONNECTION_ID_RE allows two digits. */
@@ -92,9 +107,7 @@ export function createConnections(deps: {
 
   function models(id: string): ConnectionModel[] {
     const rows = db
-      .prepare(
-        'SELECT model, source, favourite, enabled, seen_at FROM ai_models WHERE connection_id = ? ORDER BY favourite DESC, model',
-      )
+      .prepare('SELECT * FROM ai_models WHERE connection_id = ? ORDER BY favourite DESC, model')
       .all(id) as unknown as ModelRow[];
     return rows.map((m) => ({
       model: m.model,
@@ -102,6 +115,7 @@ export function createConnections(deps: {
       favourite: m.favourite === 1,
       enabled: m.enabled === 1,
       seenAt: m.seen_at,
+      price: priceOf(m),
     }));
   }
 
@@ -224,21 +238,43 @@ export function createConnections(deps: {
      * A fresh model list: listed models become 'live', models listed before but not now become
      * 'cached' (kept, so a favourite isn't lost while a provider hiccups); typed ones stay 'manual'.
      */
-    syncLive(id: string, listed: string[]): ConnectionModel[] {
+    syncLive(
+      id: string,
+      listed: Array<string | { id: string; price: LivePrice | null }>,
+    ): ConnectionModel[] {
       const r = row(id);
-      const ids = [...new Set(listed.map((m) => m.trim()).filter((m) => MODEL_RE.test(m)))];
+      const byId = new Map<string, LivePrice | null>();
+      for (const m of listed) {
+        const entry = typeof m === 'string' ? { id: m, price: null } : m;
+        const key = entry.id.trim();
+        if (MODEL_RE.test(key) && !byId.has(key)) byId.set(key, entry.price);
+      }
       const at = now();
       db.exec('BEGIN');
       try {
         db.prepare(
           "UPDATE ai_models SET source = 'cached' WHERE connection_id = ? AND source = 'live'",
         ).run(r.id);
+        // A listed price replaces the old one; a gateway that stops listing it leaves it unknown.
         const upsert = db.prepare(
-          `INSERT INTO ai_models (connection_id, model, source, seen_at) VALUES (?, ?, 'live', ?)
+          `INSERT INTO ai_models (connection_id, model, source, seen_at, in_per_mtok, out_per_mtok,
+             cache_read_per_mtok, cache_write_per_mtok) VALUES (?, ?, 'live', ?, ?, ?, ?, ?)
            ON CONFLICT (connection_id, model) DO UPDATE SET seen_at = excluded.seen_at,
-             source = CASE WHEN source = 'manual' THEN 'manual' ELSE 'live' END`,
+             source = CASE WHEN source = 'manual' THEN 'manual' ELSE 'live' END,
+             in_per_mtok = excluded.in_per_mtok, out_per_mtok = excluded.out_per_mtok,
+             cache_read_per_mtok = excluded.cache_read_per_mtok,
+             cache_write_per_mtok = excluded.cache_write_per_mtok`,
         );
-        for (const m of ids) upsert.run(r.id, m, at);
+        for (const [m, p] of byId)
+          upsert.run(
+            r.id,
+            m,
+            at,
+            p?.inPerMTok ?? null,
+            p?.outPerMTok ?? null,
+            p?.cacheReadPerMTok ?? null,
+            p?.cacheWritePerMTok ?? null,
+          );
         db.exec('COMMIT');
       } catch (err) {
         db.exec('ROLLBACK');
@@ -288,6 +324,14 @@ export function createConnections(deps: {
       // Only a key that is set up: an empty one would fail every turn instead of using the main key.
       if (r?.provider === provider && r.model && secrets.get(r.secret)) return r.id;
       return defaultConnectionId(provider);
+    },
+
+    /** The gateway's own price for this model on this connection, when it published one. */
+    livePrice(id: string, model: string): LivePrice | null {
+      const m = db
+        .prepare('SELECT * FROM ai_models WHERE connection_id = ? AND model = ?')
+        .get(id, model) as ModelRow | undefined;
+      return m ? priceOf(m) : null;
     },
 
     /** Names of Sir's extra keys, removed ones too (an NPC may still name one). */

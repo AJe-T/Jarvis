@@ -31,6 +31,12 @@ export interface CloudProviderDef {
   modelsUrl?: string;
   /** Tool calling: 'yes' when every chat model takes tools, 'per-model' on gateways. */
   tools: 'yes' | 'per-model';
+  /**
+   * Integrations step 5: the model list also carries prices, in this gateway's documented shape
+   * (USD per token as strings). ⚠️ Checked 2026-10-17: OpenRouter `pricing.prompt/completion`,
+   * Vercel AI Gateway `pricing.input/output`, both with `input_cache_read/_write`.
+   */
+  prices?: 'openrouter' | 'vercel';
   /** Date the docs were checked. */
   checked: string;
   /** Shown under the key field when the provider needs something special. */
@@ -126,6 +132,7 @@ export const CLOUD_PROVIDERS = [
     keysUrl: 'https://openrouter.ai/keys',
     docsUrl: 'https://openrouter.ai/docs/api-reference/overview',
     models: 'openai',
+    prices: 'openrouter',
     tools: 'per-model',
     checked: '2026-10-16',
   },
@@ -167,6 +174,7 @@ export const CLOUD_PROVIDERS = [
     keysUrl: 'https://vercel.com/docs/ai-gateway/authentication',
     docsUrl: 'https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions',
     models: 'openai',
+    prices: 'vercel',
     tools: 'per-model',
     checked: '2026-10-16',
   },
@@ -263,12 +271,22 @@ export const isConnectionSecret = (name: string): boolean => EXTRA_SECRET_RE.tes
 /** Where a model in the registry came from. */
 export type ModelSource = 'live' | 'manual' | 'cached';
 
+/** USD per million tokens, as the provider listed it (integrations step 5). */
+export interface LivePrice {
+  inPerMTok: number;
+  outPerMTok: number;
+  cacheReadPerMTok: number;
+  cacheWritePerMTok: number;
+}
+
 export interface ConnectionModel {
   model: string;
   source: ModelSource;
   favourite: boolean;
   enabled: boolean;
   seenAt: string | null;
+  /** Only for gateways that publish prices; null = unknown. */
+  price: LivePrice | null;
 }
 
 export interface AiConnection {

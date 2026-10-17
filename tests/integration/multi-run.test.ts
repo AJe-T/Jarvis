@@ -26,6 +26,7 @@ function setup(rules: Parameters<typeof setupServices>[0] = { rules: [] }) {
   const t = setupServices(rules, { fetch: api.fetch });
   t.services.secrets.set('openai', 'sk-test-1234');
   t.services.connections.setModel('conn_openai', 'gpt-5');
+  t.services.settings.set('budget.confirmRunUsd', 100); // cost confirmation has its own test
   const updates = (): RunView[] =>
     t.events
       .filter((e) => e.event === 'runs:update')
@@ -110,6 +111,40 @@ describe('multi-AI runs (integrations step 4)', () => {
     expect(done.steps[0]?.error).toMatch(/500/);
   });
 
+  it('estimates the most a run may cost and refuses an unconfirmed one over the confirm level', () => {
+    const t = setup();
+    t.services.settings.set('budget.confirmRunUsd', 0.01);
+    // A gateway's listed price is used once the model list carried one.
+    t.services.connections.syncLive('conn_openai', [
+      {
+        id: 'gpt-5',
+        price: { inPerMTok: 1, outPerMTok: 10, cacheReadPerMTok: 0.1, cacheWritePerMTok: 1 },
+      },
+    ]);
+    const req = {
+      mode: 'chain' as const,
+      prompt: 'x'.repeat(4000),
+      steps: [{ brain: 'openai' as const }, { brain: 'openai' as const }],
+    };
+    const est = t.services.multiRun.estimate(req);
+    expect(est.steps.map((s) => s.price)).toEqual(['live', 'live']);
+    // Stage 2 also reads stage 1's longest answer.
+    expect(est.steps[1]?.inputTokens).toBeGreaterThan((est.steps[0]?.inputTokens ?? 0) + 3999);
+    expect(est.maxUsd).toBeCloseTo(est.steps[0]!.maxUsd + est.steps[1]!.maxUsd);
+    expect(est.needsConfirm).toBe(true);
+    expect(() => t.services.multiRun.start(req)).toThrow('run cost not confirmed');
+    expect(() => t.services.multiRun.start(req, est.maxUsd / 2)).toThrow('run cost not confirmed');
+    expect(t.services.multiRun.start(req, est.maxUsd).status).toBe('running');
+    // This PC and plan apps cost nothing per use.
+    t.services.settings.set('llm.local.model', 'qwen3:8b');
+    const local = t.services.multiRun.estimate({
+      mode: 'compare',
+      prompt: 'hi',
+      steps: [{ brain: 'local' }, { brain: 'local' }],
+    });
+    expect(local).toMatchObject({ maxUsd: 0, needsConfirm: false });
+  });
+
   it('refuses AIs that are not set up, and bad requests', () => {
     const t = setup();
     expect(() =>
@@ -155,6 +190,7 @@ describe('multi-AI runs (integrations step 4)', () => {
       budget: t.services.budget,
       paidBudget: t.services.paidBudget,
       settings: t.services.settings,
+      connections: t.services.connections,
       emit: () => undefined,
     });
     expect(again.get('run_old')?.status).toBe('cancelled');
