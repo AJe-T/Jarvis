@@ -36,8 +36,10 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
   await expect(page.getByRole('heading', { name: 'Your voice (Voice Match)' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Download \(102 MB\)$/ })).toBeVisible();
   await page.getByRole('radio', { name: /^Picovoice: “Jarvis” only/ }).click();
-  // 2.24 (ADR-043): your own recorded "Hey Jarvis" is offered first.
-  await expect(page.getByRole('radio', { name: /^Best: your own “Hey Jarvis”/ })).toBeVisible();
+  // 2.28 (ADR-044): the instant wake word is offered first; your own recording (ADR-043) next.
+  await page.getByRole('radio', { name: /^Best: instant “Hey Jarvis”/ }).click();
+  await expect(page.getByRole('button', { name: /^Download \(18 MB\)$/ })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /^Your own recorded “Hey Jarvis”/ })).toBeVisible();
   await page
     .getByRole('radio', { name: /^“Jarvis” or “Hey Jarvis” by speech recognition/ })
     .click();
