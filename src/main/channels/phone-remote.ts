@@ -62,7 +62,8 @@ export function lanAddresses(): string[] {
 
 /** Self-signed certificate made by Windows (New-SelfSignedCertificate), exported to a PFX. */
 const PS_MAKE_CERT = `
-$names = @(($P.ips | ForEach-Object { "IPAddress=$_" }) + @("DNS=$($P.host)", 'DNS=localhost'))
+# @() keeps a single address a list; otherwise + glues the names into one string.
+$names = @(@($P.ips | ForEach-Object { "IPAddress=$_" }) + @("DNS=$($P.host)", 'DNS=localhost'))
 $ext = '2.5.29.17={text}' + ($names -join '&')
 $cert = New-SelfSignedCertificate -Subject 'CN=Jarvis Phone Remote' -TextExtension @($ext) -CertStoreLocation 'Cert:\\CurrentUser\\My' -KeyExportPolicy Exportable -KeyAlgorithm RSA -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName 'Jarvis phone remote'
 $pw = ConvertTo-SecureString -String ([string]$P.pass) -AsPlainText -Force
