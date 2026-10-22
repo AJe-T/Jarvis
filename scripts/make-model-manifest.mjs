@@ -222,7 +222,8 @@ if (!keep('kokoro-82m')) {
   };
 }
 
-// Kept entries (and hand-pinned ones: MiniLM, Laya's ONNX export, ADR-027) stay exactly as they are.
+// Kept entries (and hand-pinned ones: MiniLM, Laya's ONNX export, ADR-027, and the keyword spotter's
+// sherpa-onnx release archive, ADR-044) stay exactly as they are.
 for (const [id, m] of Object.entries(existing)) models[id] ??= m;
 
 writeFileSync(OUT, `${JSON.stringify(models, null, 2)}\n`);

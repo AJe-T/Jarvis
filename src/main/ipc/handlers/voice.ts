@@ -54,6 +54,7 @@ export function registerVoiceHandlers(
           phrases: ENROL_PHRASES,
           threshold: r.threshold,
           wakeWord: r.wakeWord,
+          spotterLevel: r.spotterLevel,
         });
         return { ok: true as const, ...r };
       }
@@ -77,10 +78,13 @@ export function registerVoiceHandlers(
   handle('voice:setupLocal', () => {
     s.audit.append('user', 'voice.setupLocal', {});
     void (async () => {
-      for (const id of ['silero-vad', 'whisper-base.en'] as const)
+      for (const id of ['silero-vad', 'whisper-base.en', 'kws-zipformer-en'] as const)
         if (!models.installed(id)) await models.download(id);
       s.settings.set('voice.stt.whisperModel', 'whisper-base.en');
       s.settings.set('voice.stt.provider', 'whisper');
+      // ADR-044: the instant wake word replaces the slower Whisper name spotting.
+      if (s.settings.get('voice.wake.provider') === 'name')
+        s.settings.set('voice.wake.provider', 'spotter');
       local.changed();
       s.emit('notify', {
         level: 'info',

@@ -30,6 +30,8 @@ bundled third-party assets and separately-run components whose licences require 
 | Cua Driver (optional, **not bundled**; Sir installs it, Jarvis runs `cua-driver mcp` as a separate process) | https://github.com/trycua/cua | MIT | Desktop-control MCP connection |
 | @huggingface/transformers 4.3.1 | https://github.com/huggingface/transformers.js | Apache-2.0 | Runs Whisper |
 | onnxruntime-node 1.30.0 | https://github.com/microsoft/onnxruntime | MIT | Runs the voice models |
+| sherpa-onnx-node 1.13.8 (with sherpa-onnx-win-x64 and its bundled onnxruntime 1.28.2) | https://github.com/k2-fsa/sherpa-onnx | Apache-2.0 (onnxruntime: MIT) | Runs the instant wake word (ADR-044) |
+| Keyword-spotting model sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01 (downloaded on demand) | https://github.com/k2-fsa/sherpa-onnx/releases/tag/kws-models | Apache-2.0 | Instant "Hey <name>" wake word |
 | Picovoice Porcupine built-in keyword "Jarvis" | https://github.com/Picovoice/porcupine | Apache-2.0 | Wake word |
 | Baileys 7.0.0-rc14 (npm `baileys`) | https://github.com/WhiskeySockets/Baileys | MIT | WhatsApp channel (linked device) |
 | Tiptap 3.32.0 (@tiptap/react, core, pm, starter-kit, markdown, extension-list, extension-table, extensions) and ProseMirror | https://github.com/ueberdosis/tiptap | MIT | Spaces page editor (2.8) |

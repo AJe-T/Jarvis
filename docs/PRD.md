@@ -178,7 +178,7 @@ All are implemented; details and how-tos in [BIBLE.md](BIBLE.md) §3, decisions 
 | Area | Requirement | Priority |
 |---|---|---|
 | F7 Connections | Choose API key, Claude subscription (personal use, via Sir's Claude Code) or a local OpenAI-compatible model | P0 |
-| F8 On-device voice | Whisper STT and openWakeWord "Hey Jarvis" as alternatives to Deepgram/Picovoice; pinned, verified downloads | P1 |
+| F8 On-device voice | Whisper STT, the instant "Hey <name>" keyword spotter (any name, ADR-044) and openWakeWord "Hey Jarvis" as alternatives to Deepgram/Picovoice; pinned, verified downloads | P1 |
 | F9 Conversational voice | Follow-up window, conversation continuity, echo rejection, unclear-speech retry, no cancel on false wake, always-listening mode with intent judge | P0 |
 | F10 Dictation | Hotkey → speech → cleaned text pasted into any app; dictionary; history | P1 |
 | F11 Everyday tools | Weather (Open-Meteo), home town, meal log, look at screen, read web pages | P1 |

@@ -224,11 +224,12 @@ export function createVoiceController(d: VoiceDeps) {
   }
   /**
    * Picovoice and openWakeWord only know "Jarvis"; any other name is spotted by Whisper, unless
-   * Sir recorded his own "Hey <name>" (ADR-043), which works for any name.
+   * Sir recorded his own "Hey <name>" (ADR-043) or uses the keyword spotter (ADR-044), which both
+   * work for any name.
    */
   const spotsName = (): boolean => {
     const engine = d.settings.get('voice.wake.provider');
-    if (engine === 'personal') return false;
+    if (engine === 'personal' || engine === 'spotter') return false;
     return engine === 'name' || !isDefaultName(d.settings.get('assistant.name'));
   };
   /** Whisper hears every phrase: always-listening, or wake mode waiting for the name. */

@@ -41,7 +41,7 @@ function Progress({ done, total }: { done: number; total: number }): React.JSX.E
  */
 export function VoiceProfile(): React.JSX.Element {
   const name = useDraftSetting('assistant.name') ?? DEFAULT_NAME;
-  const wakeEngine = useSetting('voice.wake.provider') ?? 'name';
+  const wakeEngine = useSetting('voice.wake.provider') ?? 'spotter';
   const learned = useSetting('voice.wake.learned') ?? [];
   const toast = useUiStore((s) => s.toast);
   const models = useModels();
@@ -74,9 +74,14 @@ export function VoiceProfile(): React.JSX.Element {
         const also = f.aliases?.length
           ? ` and also hears “${f.aliases.join('”, “')}” as the name`
           : '';
-        const wake = f.wakeWord
-          ? ` Your “Hey ${name}” is now the wake word too (Wake word engine: Your own voice).`
-          : '';
+        const wake =
+          wakeEngine === 'spotter'
+            ? f.spotterLevel
+              ? ` The instant wake word is tuned to how you say “Hey ${name}”.`
+              : ''
+            : f.wakeWord
+              ? ` Your “Hey ${name}” is now the wake word too (Wake word engine: Your own voice).`
+              : '';
         toast({
           level: 'info',
           message: `Voice Match is on. ${name} now answers your voice${also}.${wake}`,
@@ -189,7 +194,7 @@ export function VoiceProfile(): React.JSX.Element {
           </div>
         </>
       )}
-      {wakeEngine !== 'name' && wakeEngine !== 'personal' && (
+      {wakeEngine !== 'name' && wakeEngine !== 'personal' && wakeEngine !== 'spotter' && (
         <p className="text-sm text-lamp-400">
           Voice Match checks phrases heard by the “{name}” wake word (by name) and Always listening.
           The keyword engines above don’t pass it their audio.

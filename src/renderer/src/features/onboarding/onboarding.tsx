@@ -34,7 +34,7 @@ export function Onboarding(): React.JSX.Element {
   const toast = useUiStore((s) => s.toast);
   const models = useModels();
   const sttEngine = useSetting('voice.stt.provider') ?? 'deepgram';
-  const wakeEngine = useSetting('voice.wake.provider') ?? 'picovoice';
+  const wakeEngine = useSetting('voice.wake.provider') ?? 'spotter';
   const whisperModel = useSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
   const sttKey = STT_ENGINES.find((e) => e.id === sttEngine)?.key;
   // On-device: the model is downloaded. Deepgram streams. The rest also need the voice detector.
@@ -46,7 +46,9 @@ export function Onboarding(): React.JSX.Element {
   const wakeReady =
     wakeEngine === 'picovoice'
       ? Boolean(secrets['picovoice']?.set)
-      : Boolean(models.status?.['openwakeword-hey-jarvis']?.installed);
+      : wakeEngine === 'spotter'
+        ? Boolean(models.status?.['kws-zipformer-en']?.installed)
+        : Boolean(models.status?.['openwakeword-hey-jarvis']?.installed);
   const voiceReady = {
     ptt: sttReady,
     wake: sttReady && wakeReady,

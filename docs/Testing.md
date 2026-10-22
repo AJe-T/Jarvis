@@ -208,7 +208,10 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run check:contrast
+      # ADR-044: also downloads the keyword-spotter model (18 MB) and runs it next to onnxruntime-node.
       - run: npm test -- --coverage
+        env:
+          JARVIS_SPOTTER_REAL: '1'
       - run: npm run build
       - run: npm run test:e2e
       - run: npm audit --omit=dev --audit-level=high
@@ -241,7 +244,9 @@ Evals are **not** run in CI (cost + secrets); run them locally before tagging a 
 |---|---|
 | `src/main/agent/sdk-loop.test.ts`, `src/main/llm/claude-code.test.ts`, `tests/integration/phase8.test.ts` | Subscription connection: isolation options, MCP tool calls with real tool_use ids, taint, errors, end-to-end confirmed tool turn (fake Claude Code over real in-memory MCP) |
 | `src/main/llm/local-client.test.ts`, `tests/integration/local-llm.test.ts` | Local model adapter: message/tool translation, `<think>` filter, URL restriction, SSE tool turn through a fake Ollama |
-| `src/main/voice/local/local-voice.test.ts`, `tests/integration/local-voice.real.test.ts` | Model store integrity, openWakeWord pipeline, VAD segmentation; opt-in real-model wake → Whisper → chat run |
+| `src/main/voice/local/local-voice.test.ts`, `tests/integration/local-voice.real.test.ts` | Model store integrity (archived models too), openWakeWord pipeline, VAD segmentation; opt-in real-model wake → Whisper → chat run |
+| `src/main/lib/bzip2.test.ts`, `src/main/lib/tar.test.ts` | bzip2 decoding against fixtures from the reference bzip2 (multi-block, runs, joined streams, CRC and truncation errors); tar entries, long names, pax paths, checksums, early stop |
+| `src/main/voice/local/word-pieces.test.ts`, `spotter.test.ts`, `tests/integration/spotter.real.test.ts` | Word-piece speller, wake phrases, thresholds, debounce, Voice Match calibration; in CI the real keyword spotter downloaded through the model store, beside onnxruntime-node (ADR-044) |
 | `src/main/voice/conversation.test.ts`, `tests/integration/voice-conversation.test.ts`, `tests/integration/phase4.test.ts` | Echo/unclear/name detection, rolling buffer, follow-ups, continuity, no cancel on false wake, always-listening + judge, dictation, mic-loop regression (recorder replaced mid-read) |
 | `src/main/voice/dictation.test.ts` | Filler removal, dictionary |
 | `tests/integration/everyday.test.ts`, `tests/integration/research.test.ts` | Weather, meals, look_at_screen, fetch_web_page guards, deep research loop |

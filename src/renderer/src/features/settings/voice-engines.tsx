@@ -147,11 +147,11 @@ function localWhisperReady(models: ReturnType<typeof useModels>, id: string): bo
 /** ADR-011: pick cloud or on-device engines for the wake word and for speech-to-text, independently. */
 export function VoiceEngines(): React.JSX.Element {
   const models = useModels();
-  const chosen = useDraftSetting('voice.wake.provider') ?? 'name';
+  const chosen = useDraftSetting('voice.wake.provider') ?? 'spotter';
   const name = useDraftSetting('assistant.name') ?? DEFAULT_NAME;
   const custom = !isDefaultName(name);
-  // The keyword engines only know "Jarvis": any other name is spotted by Whisper, or by Sir's own voice.
-  const wake = custom && chosen !== 'personal' ? 'name' : chosen;
+  // The keyword models only know "Jarvis": any other name is spotted by the spotter, Whisper or Sir's own voice.
+  const wake = custom && chosen !== 'personal' && chosen !== 'spotter' ? 'name' : chosen;
   const whisperModel = useDraftSetting('voice.stt.whisperModel') ?? 'whisper-small.en';
   return (
     <>
@@ -164,14 +164,19 @@ export function VoiceEngines(): React.JSX.Element {
           label="Wake word engine"
           options={[
             {
+              value: 'spotter',
+              title: `Best: instant “Hey ${name}”`,
+              body: `Wakes about a third of a second after you say “Hey ${name}”${name.replace(/[^\p{L}]/gu, '').length >= 5 ? ` or just “${name}”` : ''}, for any name, with no training, using 1–2 % of the CPU. Say it all in one breath: “Hey ${name}, open Notepad”. Recording your voice (below) tunes it to your accent. Needs an 18 MB download, once.`,
+            },
+            {
               value: 'personal',
-              title: `Best: your own “Hey ${name}”`,
-              body: `Record it five times in Your voice (below). Works for any name and any accent, instantly and on this PC. ${custom ? '' : 'The “Hey Jarvis” model listens too. '}Needs the small “Hey Jarvis” model download.`,
+              title: `Your own recorded “Hey ${name}”`,
+              body: `Record it five times in Your voice (below). Works for any name and any accent, on this PC. ${custom ? '' : 'The “Hey Jarvis” model listens too. '}Needs the small “Hey Jarvis” model download.`,
             },
             {
               value: 'name',
               title: `“${name}” or “Hey ${name}” by speech recognition`,
-              body: `Whisper on this PC listens for the name, and “${name}, open Notepad” works in one breath. Uses the on-device speech models below (base.en is quickest).`,
+              body: `Whisper on this PC transcribes every phrase and looks for the name, so it waits for you to pause and then for Whisper: slower than the instant wake word. Uses the on-device speech models below (Moonshine or base.en is quickest).`,
             },
             {
               value: 'openwakeword',
@@ -192,6 +197,17 @@ export function VoiceEngines(): React.JSX.Element {
           ]}
         />
         {wake === 'picovoice' && <SecretField name="picovoice" label="Picovoice AccessKey" />}
+        {wake === 'spotter' && (
+          <>
+            <ModelDownload id="kws-zipformer-en" models={models} />
+            <SettingInput
+              k="voice.wake.sensitivity"
+              label={`Sensitivity (0–1). Higher hears “Hey ${name}” more easily but wakes by mistake more often; 0.6 suits most voices`}
+              type="number"
+              step={0.05}
+            />
+          </>
+        )}
         {(wake === 'openwakeword' || wake === 'personal') && (
           <>
             <ModelDownload id="openwakeword-hey-jarvis" models={models} />
@@ -208,7 +224,7 @@ export function VoiceEngines(): React.JSX.Element {
             models.status?.['silero-vad']?.installed && localWhisperReady(models, whisperModel)
           ) && (
             <p role="alert" className="text-sm text-lamp-400">
-              Needs the on-device speech models: use “Set up free on-device speech” below (about 80
+              Needs the on-device speech models: use “Set up free on-device speech” below (about 100
               MB, once).
             </p>
           )}
@@ -323,8 +339,8 @@ function SpeechToText({ models }: { models: ReturnType<typeof useModels> }): Rea
             <span className="block font-semibold text-ink-100">
               No key? Use free on-device speech
             </span>
-            One click downloads Whisper base.en (about 80 MB, once). Private, offline, and words
-            appear as you speak when you dictate.
+            One click downloads Whisper base.en and the instant wake word (about 100 MB, once).
+            Private, offline, and words appear as you speak when you dictate.
           </span>
           <Button
             variant="primary"

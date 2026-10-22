@@ -11,7 +11,10 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run check:contrast
+      # ADR-044: also downloads the keyword-spotter model (18 MB) and runs it next to onnxruntime-node.
       - run: npm test -- --coverage
+        env:
+          JARVIS_SPOTTER_REAL: '1'
       - run: npm run build
       - run: npm run test:e2e
       - run: npm audit --omit=dev --audit-level=high
