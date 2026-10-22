@@ -27,6 +27,21 @@ function killTree(pid: number | undefined): void {
 }
 
 /**
+ * Child environment for powershell.exe. PSModulePath is dropped: one inherited from PowerShell 7
+ * (a pwsh terminal, CI) points Windows PowerShell 5.1 at pwsh's modules, so built-ins like PKI
+ * (the Cert: drive) fail to load. Without it, 5.1 rebuilds its own default path.
+ */
+export function psEnv(
+  base: NodeJS.ProcessEnv,
+  params?: Record<string, unknown>,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(base)) if (k.toLowerCase() !== 'psmodulepath') env[k] = v;
+  env['JARVIS_PS_PARAMS'] = params ? JSON.stringify(params) : '';
+  return env;
+}
+
+/**
  * Security.md §5.2 / Code-style.md §4.4: PowerShell via execFile + -EncodedCommand (UTF-16LE base64).
  * Never exec(), never string-built command lines. Runs as the current standard user.
  */
@@ -47,7 +62,7 @@ export function runPowerShell(script: string, opts: PsOptions = {}): Promise<PsR
         windowsHide: true,
         timeout: timeoutMs,
         maxBuffer: 8 * 1024 * 1024,
-        env: { ...process.env, JARVIS_PS_PARAMS: opts.params ? JSON.stringify(opts.params) : '' },
+        env: psEnv(process.env, opts.params),
       },
       (err, stdout, stderr) => {
         opts.signal?.removeEventListener('abort', onAbort);
