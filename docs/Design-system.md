@@ -221,7 +221,8 @@ mode, spend) form a "Readouts" group (they replaced the status bar). Composer at
 bottom, max 672px.
 
 **Comms log:** the conversation, secondary to the orb: a 400–460px column beside the stage
-(overlay sheet below 1200px) that opens when a conversation starts and is toggled from the header.
+(overlay sheet below 1200px, starting under the 48px core header so the header's toggles stay
+reachable) that opens when a conversation starts and is toggled from the header.
 It lists finished messages (Sir: magenta right edge; Jarvis: cyan left edge) and, while a turn
 runs, its tool cards and a three-dot "replying" mark. The reply text itself streams only under the
 orb, so it is never on screen twice.

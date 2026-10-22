@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "productName": "Jarvis",
-  "version": "2.28.0",
+  "version": "2.28.1",
   "private": true,
   "description": "JARVIS: voice-first AI assistant for Windows",
   "main": "./out/main/index.js",
