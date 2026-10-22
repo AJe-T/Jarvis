@@ -24,7 +24,7 @@ JARVIS is a **voice-first personal assistant for Windows**, built as an Electron
 
 ## 2. Quick start
 
-1. **Install:** run `dist\Jarvis-Setup-<version>.exe` (or `npm ci` then `npm run dev` from source; in VS Code terminals first run `Remove-Item Env:ELECTRON_RUN_AS_NODE`).
+1. **Install:** run `dist\Jarvis-Setup-<version>.exe`, or download it from GitHub without building: **Actions** → latest green **ci** run → **Artifacts** → **Jarvis-Setup** (a zip with the `.exe`; built on every push, kept 30 days) (or `npm ci` then `npm run dev` from source; in VS Code terminals first run `Remove-Item Env:ELECTRON_RUN_AS_NODE`).
 2. **Onboarding (5 steps):**
    - Welcome.
    - Brain: choose a **connection** (API key, Claude subscription, or local model; §3.1).
@@ -784,6 +784,7 @@ If `laya:install` reports a mismatch, this export differs from the pinned one (f
 | 2.9 | **No more lag:** on-device models (Whisper, Kokoro, Laya) moved to their own low-priority process; idle orb at 30 fps. **Apps:** Jarvis Browser and Jarvis Terminal (own windows), Timers with stopwatch, Scratchpad, System monitor. **Fast commands** with no AI call (rules + Laya). **REA** for "build it like app X" in Claude Code sessions and as a connection. **Reply copilot** fixes (reads the chat behind Jarvis, pastes by window handle, group chats) plus quick replies, rewrite/translate and remembered contacts. **Automations:** once, monthly and at-start schedules, templates, last result, duplicate. **Seven new orb styles** (six removed). A **?** help button on every page and main section |
 | 2.12 | Ideas from LibreChat, Open-LLM-VTuber, camofox-browser and HyperFrames (§3.5e): **artifacts** in chat (live HTML, SVG, Mermaid in a sandbox), **context meter and /compact**, **search all chats**, **import ChatGPT / Claude history**, **sub-agents**, **Jarvis drives his own browser**, **YouTube transcripts**, **mood-tinted orb**, **interrupt without headphones** (echo-cancelled mic), **look through the camera**, **make videos** with HyperFrames |
 | 2.11 | Ideas from five agent platforms (Paperclip, Munder Difflin, Octop, invisible_dots, Open Dots; ideas only, no code copied): Claude Code sessions in **their own git worktree**; a **circuit breaker** that stops an agent retrying a failing action or failing over and over; automations get a **per-run spending cap** and **switch themselves off** after 3 failures in a row |
+| 2.27.2 | **Installer from GitHub:** every push builds `Jarvis-Setup-<version>.exe` on GitHub's Windows machine and attaches it to the ci run (Artifacts → Jarvis-Setup), so no PC is needed to build |
 | 2.27.1 | Coding agents re-checked on this PC: Gemini CLI marked as refusing personal accounts (use Antigravity or a Gemini key), OpenCode noted as needing its own sign-in before Jarvis can use it |
 | 2.27 | **Usage per connection** (integrations step 5): who answered each call (Anthropic key, Claude plan, this PC, each connection), live prices from OpenRouter and Vercel AI Gateway, calls at a guessed price marked, and Compare AIs shows its most possible cost and asks above a level you set |
 | 2.26 | **Compare AIs** (integrations step 4): one request to several AIs, side by side, one reviewing another, or a chain; live answers with model, time, tokens and cost; Stop; run history |

@@ -15,3 +15,11 @@ jobs:
       - run: npm run build
       - run: npm run test:e2e
       - run: npm audit --omit=dev --audit-level=high
+      # Windows installer for every push; download it from the run's Artifacts section.
+      - run: npm run dist -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-Setup
+          path: dist/Jarvis-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30

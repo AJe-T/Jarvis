@@ -207,11 +207,21 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run check:contrast
       - run: npm test -- --coverage
       - run: npm run build
       - run: npm run test:e2e
       - run: npm audit --omit=dev --audit-level=high
+      - run: npm run dist -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-Setup
+          path: dist/Jarvis-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30
 ```
+
+Every push that passes builds the Windows installer and attaches it to the run as the **Jarvis-Setup** artifact (kept 30 days). `--publish never` stops electron-builder from trying to upload a GitHub release.
 
 Evals are **not** run in CI (cost + secrets); run them locally before tagging a phase.
 
