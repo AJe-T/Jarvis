@@ -42,7 +42,7 @@ import {
   windowsTranscriber,
 } from './stt/cloud-stt';
 import type { Transcriber } from './local/whisper';
-import { STT_ENGINES, type SttEngineId } from '@shared/speech-engines';
+import { STT_ENGINES, type SttEngineId, type WakeEngineId } from '@shared/speech-engines';
 import { inference } from '../inference/client';
 import { createEnrolment } from './enrolment';
 import { cosine, decodeProfile } from './local/speaker';
@@ -159,7 +159,7 @@ export function realFactories(
         throw new JarvisError(
           'INVALID',
           'no speech engine',
-          `Speech needs a one-time setup: Settings → Voice → "Set up free on-device speech" (about 80 MB, works offline), or add a ${info?.keyLabel ?? 'key'}.`,
+          `Speech needs a one-time setup: Settings → Voice → "Set up free on-device speech" (about 100 MB, works offline), or add a ${info?.keyLabel ?? 'key'}.`,
         );
       if (engine === 'deepgram') return deepgram.start(o);
       if (!local.vadReady())
@@ -180,6 +180,12 @@ export function realFactories(
     echoCancelled: captureOn,
     wake: (sensitivity) => {
       const engine = s.settings.get('voice.wake.provider');
+      if (engine === 'spotter')
+        return local.spotterWake(
+          sensitivity,
+          s.settings.get('assistant.name'),
+          s.settings.get('voice.wake.learned'),
+        );
       if (engine === 'personal') {
         const raw = s.secrets.get(WAKE_TEMPLATES_SECRET);
         if (!raw)
@@ -255,7 +261,7 @@ export function realFactories(
         throw new JarvisError(
           'INVALID',
           'whisper not downloaded',
-          'Listening for a name needs the free on-device speech models: Settings → Voice → "Set up free on-device speech" (about 80 MB, once).',
+          'Listening for a name needs the free on-device speech models: Settings → Voice → "Set up free on-device speech" (about 100 MB, once).',
         );
       return local.ambient(handlers);
     },
@@ -341,7 +347,15 @@ export function createVoiceSystem(
     },
     // A "Hey Jarvis" that almost woke him: the log shows how close it came (tune the sensitivity).
     onNearMiss: (info) => logger.info(info, 'wake word near miss'),
+    onSpotted: (info) => logger.info(info, 'wake word heard'),
   });
+  /** After the personal wake word goes away: the instant spotter when downloaded (any name). */
+  const fallbackWake = (): WakeEngineId =>
+    local.spotterReady()
+      ? 'spotter'
+      : local.wakeReady() && isDefaultName(s.settings.get('assistant.name'))
+        ? 'openwakeword'
+        : 'name';
   const dictations = createDictationRepo(s.db);
   const routineTriggers = (): RoutineTriggers[] =>
     (
@@ -400,11 +414,14 @@ export function createVoiceSystem(
         ? local.transcribe(audio, s.settings.get('voice.stt.language'))
         : Promise.resolve(''),
     wakeFeatures: (audio) => local.wakeFeatures(audio),
+    spotterLevel: (audio) => local.spotterLevel(audio, s.settings.get('assistant.name')),
+    endCalibration: () => local.endCalibration(),
     name: () => s.settings.get('assistant.name'),
     save: (profile, r) => {
       s.secrets.set(VOICE_PROFILE_SECRET, profile);
       s.settings.set('voice.speaker.threshold', r.threshold);
       s.settings.set('voice.wake.learned', r.aliases);
+      s.settings.set('voice.wake.spotterLevel', r.spotterLevel);
       s.settings.set('voice.speaker.verify', true);
     },
     // ADR-043: the same five phrases become his wake word, used at once unless he chose Picovoice.
@@ -412,12 +429,14 @@ export function createVoiceSystem(
       if (!templates) {
         if (s.secrets.get(WAKE_TEMPLATES_SECRET)) s.secrets.delete(WAKE_TEMPLATES_SECRET);
         if (s.settings.get('voice.wake.provider') === 'personal')
-          s.settings.set('voice.wake.provider', local.wakeReady() ? 'openwakeword' : 'name');
+          s.settings.set('voice.wake.provider', fallbackWake());
         return;
       }
       s.secrets.set(WAKE_TEMPLATES_SECRET, encodeTemplates(templates));
-      if (s.settings.get('voice.wake.provider') === 'personal') void voice.applyMode();
-      else if (s.settings.get('voice.wake.provider') !== 'picovoice')
+      const engine = s.settings.get('voice.wake.provider');
+      if (engine === 'personal') void voice.applyMode();
+      // The spotter (ADR-044) stays: the recordings just calibrated it. Picovoice is Sir's pick.
+      else if (engine !== 'picovoice' && engine !== 'spotter')
         s.settings.set('voice.wake.provider', 'personal');
     },
   });
@@ -436,11 +455,14 @@ export function createVoiceSystem(
     // Spellings learned for the old name would wake Jarvis on the wrong word.
     if (key === 'assistant.name' && s.settings.get('voice.wake.learned').length)
       s.settings.set('voice.wake.learned', []);
+    // So is a spotter level calibrated on "Hey <old name>".
+    if (key === 'assistant.name' && s.settings.get('voice.wake.spotterLevel') > 0)
+      s.settings.set('voice.wake.spotterLevel', 0);
     // The recorded "Hey <old name>" would only answer to the old name.
     if (key === 'assistant.name' && s.secrets.get(WAKE_TEMPLATES_SECRET)) {
       s.secrets.delete(WAKE_TEMPLATES_SECRET);
       if (s.settings.get('voice.wake.provider') === 'personal') {
-        s.settings.set('voice.wake.provider', 'name');
+        s.settings.set('voice.wake.provider', local.spotterReady() ? 'spotter' : 'name');
         s.emit('notify', {
           level: 'info',
           message: `New name: record your voice again (Settings → Voice → Your voice) so “Hey ${s.settings.get('assistant.name')}” wakes me instantly.`,
@@ -452,6 +474,8 @@ export function createVoiceSystem(
       key === 'voice.mode' ||
       key === 'voice.wake.sensitivity' ||
       key === 'voice.wake.provider' ||
+      key === 'voice.wake.spotterLevel' ||
+      key === 'voice.wake.learned' ||
       key === 'voice.stt.provider' ||
       key === 'voice.stt.whisperModel' ||
       key === 'voice.deviceIndex' ||
@@ -534,8 +558,9 @@ export function createVoiceSystem(
         if (s.secrets.get(WAKE_TEMPLATES_SECRET)) s.secrets.delete(WAKE_TEMPLATES_SECRET);
         s.settings.set('voice.speaker.verify', false);
         s.settings.set('voice.wake.learned', []);
+        s.settings.set('voice.wake.spotterLevel', 0);
         if (s.settings.get('voice.wake.provider') === 'personal')
-          s.settings.set('voice.wake.provider', local.wakeReady() ? 'openwakeword' : 'name');
+          s.settings.set('voice.wake.provider', fallbackWake());
       },
     },
     local: {

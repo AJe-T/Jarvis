@@ -652,6 +652,8 @@ export const INVOKE = {
       scores: z.array(z.number()).optional(),
       /** ADR-043: the phrases also became the personal wake word. */
       wakeWord: z.boolean().optional(),
+      /** ADR-044: the keyword-spotter level the phrases pass at (0 = not calibrated). */
+      spotterLevel: z.number().optional(),
     }),
   ),
   'voice:profile': contract(

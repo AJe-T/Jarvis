@@ -284,7 +284,8 @@ function CommsLog({ onClose }: { onClose(): void }): React.JSX.Element {
       aria-label="Conversation"
       style={width ? ({ '--log-w': `${width}px` } as React.CSSProperties) : undefined}
       className={clsx(
-        'relative flex w-full min-w-0 flex-col border-l border-line bg-app max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:max-w-md max-lg:shadow-pop lg:max-w-[calc(100%-360px)] lg:shrink-0',
+        // Below 1200px a sheet that starts under the core header, so its toggles stay reachable.
+        'relative flex w-full min-w-0 flex-col border-l border-line bg-app max-lg:absolute max-lg:top-12 max-lg:bottom-0 max-lg:right-0 max-lg:z-20 max-lg:max-w-md max-lg:shadow-pop lg:max-w-[calc(100%-360px)] lg:shrink-0',
         width ? 'lg:w-(--log-w)' : 'lg:w-100 xl:w-115',
       )}
     >

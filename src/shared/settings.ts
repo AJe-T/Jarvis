@@ -151,14 +151,15 @@ export const SETTINGS = {
   'voice.stt.serverUrl': { schema: speechServer, default: 'http://localhost:8000/v1' },
   'voice.stt.serverModel': { schema: serverName, default: 'whisper-1' },
   /**
+   * spotter = "Hey <name>" by on-device keyword spotting (ADR-044, any name, instant, the default),
    * picovoice = "Jarvis" (cloud key), openwakeword = "Hey Jarvis" (on-device model), name = any name Sir
    * chose, spotted by on-device Whisper, personal = Sir's own recorded "Hey <name>" (ADR-043, any
    * name, on-device). picovoice and openwakeword only know "Jarvis"; another name uses 'name' unless
-   * Sir trained his personal wake word.
+   * Sir trained his personal wake word or chose the spotter.
    */
   'voice.wake.provider': {
     schema: z.enum(WAKE_ENGINE_IDS),
-    default: 'name' as WakeEngineId,
+    default: 'spotter' as WakeEngineId,
   },
   'voice.stt.language': { schema: z.string().min(2).max(10), default: 'en-IN' },
   /** ADR-038: on-device (Kokoro, Piper, Windows), cloud, or Sir's own server (shared/speech-engines.ts). */
@@ -222,6 +223,8 @@ export const SETTINGS = {
     default: [] as string[],
   },
   'voice.wake.sensitivity': { schema: z.number().min(0).max(1), default: 0.6 },
+  /** ADR-044: the keyword-spotter level Sir's own "Hey <name>" recordings pass at (0 = not calibrated). */
+  'voice.wake.spotterLevel': { schema: z.number().min(0).max(0.5), default: 0 },
   /** ADR-012: seconds after a spoken reply during which Sir can follow up without the wake word (0 = off). */
   'voice.followUpSeconds': { schema: z.number().min(0).max(30), default: 6 },
   /** Pause (ms) that ends Sir's turn. Too short cuts him off mid-sentence. */

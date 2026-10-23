@@ -382,6 +382,9 @@ describe('voice engine selection (ADR-011)', () => {
     const signal = new AbortController().signal;
     const start = () => f.stt.start({ sampleRate: 16000, language: 'en-IN', signal });
 
+    // ADR-044: the default engine is the instant wake word, which needs its model.
+    await expect(f.wake(0.6)).rejects.toMatchObject({ userMessage: /instant wake-word model/ });
+    s.settings.set('voice.wake.provider', 'picovoice');
     let err: unknown;
     try {
       void f.wake(0.6);

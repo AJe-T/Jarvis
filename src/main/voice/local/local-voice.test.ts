@@ -9,6 +9,7 @@ import { createModelStore, MODEL_IDS, type ModelId, type Progress } from './mode
 import type { Vad } from './onnx';
 import { createOpenWakeWord, OWW_CHUNK, thresholdFor, type OwwModels } from './open-wake-word';
 import { cleanTranscript } from './whisper';
+import { MODEL_TAR_BZ2 } from '../../lib/bzip2-fixture';
 
 // ── openWakeWord pipeline ──────────────────────────────────────────────────────────────────
 function fakeOww(scoreAt: (call: number) => number) {
@@ -262,6 +263,75 @@ describe('model store (pinned downloads)', () => {
     expect(progress.at(-1)?.error).toMatch(/integrity/);
   });
 
+  // ADR-044: a model published only as a .tar.bz2 (the keyword spotter).
+  function archiveStore(root: string, archive: Buffer, files: Record<string, string>) {
+    const m = manifestWith({}) as Record<ModelId, Record<string, unknown>>;
+    m['kws-zipformer-en'] = {
+      archive: {
+        url: 'https://models.example/kws-test.tar.bz2',
+        sha256: createHash('sha256').update(Buffer.from(MODEL_TAR_BZ2, 'base64')).digest('hex'),
+        size: Buffer.from(MODEL_TAR_BZ2, 'base64').length,
+        root: 'kws-test',
+      },
+      files: Object.entries(files).map(([path, content]) => ({
+        path,
+        url: null,
+        sha256: sha(content),
+        size: Buffer.byteLength(content),
+      })),
+    };
+    const fetched: string[] = [];
+    const store = createModelStore({
+      root,
+      onProgress: () => undefined,
+      manifest: m as never,
+      fetch: (async (url: string) => {
+        fetched.push(url);
+        return new Response(archive);
+      }) as typeof fetch,
+    });
+    return { store, fetched };
+  }
+
+  it('unpacks only the pinned files of an archived model, checking each one', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jarvis-models-'));
+    const { store, fetched } = archiveStore(root, Buffer.from(MODEL_TAR_BZ2, 'base64'), {
+      'enc.onnx': 'ENCODER-BYTES',
+      'tokens.txt': 'TOKENS',
+    });
+    expect(store.status()['kws-zipformer-en'].sizeBytes).toBe(
+      Buffer.from(MODEL_TAR_BZ2, 'base64').length,
+    );
+    await store.download('kws-zipformer-en');
+    expect(fetched).toEqual(['https://models.example/kws-test.tar.bz2']);
+    expect(store.installed('kws-zipformer-en')).toBe(true);
+    // The archive itself and the files nobody asked for are gone.
+    expect(readdirSync(store.dir('kws-zipformer-en')).sort()).toEqual(['enc.onnx', 'tokens.txt']);
+  });
+
+  it('rejects a tampered archive, and an unpacked file that does not match its pin', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jarvis-models-'));
+    const tampered = Buffer.from(MODEL_TAR_BZ2, 'base64');
+    tampered[60] = (tampered[60] as number) ^ 1;
+    const a = archiveStore(root, tampered, { 'enc.onnx': 'ENCODER-BYTES' });
+    await expect(a.store.download('kws-zipformer-en')).rejects.toMatchObject({
+      userMessage: /integrity check/,
+    });
+    expect(readdirSync(a.store.dir('kws-zipformer-en'))).toEqual([]);
+
+    const b = archiveStore(
+      mkdtempSync(join(tmpdir(), 'jarvis-models-')),
+      Buffer.from(MODEL_TAR_BZ2, 'base64'),
+      {
+        'enc.onnx': 'SOMETHING-ELSE',
+      },
+    );
+    await expect(b.store.download('kws-zipformer-en')).rejects.toMatchObject({
+      userMessage: /enc\.onnx failed its integrity check/,
+    });
+    expect(b.store.installed('kws-zipformer-en')).toBe(false);
+  });
+
   it('local engines explain what to download when a model is missing', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jarvis-models-'));
     const store = createModelStore({ root, onProgress: () => undefined });
@@ -272,6 +342,11 @@ describe('model store (pinned downloads)', () => {
     await expect(local.wake(0.6)).rejects.toMatchObject({
       userMessage: /Hey Jarvis" wake-word model/,
     });
+    await expect(local.spotterWake(0.6, 'Jarvis', [])).rejects.toMatchObject({
+      userMessage: /instant wake-word model/,
+    });
+    expect(local.spotterReady()).toBe(false);
+    await expect(local.spotterLevel(new Float32Array(16000), 'Jarvis')).resolves.toBeNull();
     await expect(
       local.stt.start({ sampleRate: 16000, language: 'en', signal: new AbortController().signal }),
     ).rejects.toMatchObject({ userMessage: /Download the Whisper model/ });

@@ -93,4 +93,23 @@ describe('Voice Match enrolment (ADR-039)', () => {
     for (let i = 0; i < ENROL_PHRASES; i++) await plain.e.sample();
     expect(plain.e.finish().wakeWord).toBe(false);
   });
+
+  it('ADR-044: calibrates the keyword spotter from the same phrases', async () => {
+    const levels = [0.5, 0.35, 0.45, 0.1, 0.4];
+    const endCalibration = vi.fn();
+    const { e } = setup({ spotterLevel: async () => levels.shift() ?? 0, endCalibration });
+    for (let i = 0; i < ENROL_PHRASES; i++) await e.sample();
+    expect(e.finish().spotterLevel).toBe(0.35); // the one weak take (0.1) is forgiven
+    expect(endCalibration).toHaveBeenCalledOnce();
+    // Without the spotter model (or with a phrase it failed on): not calibrated.
+    const none = setup({ spotterLevel: async () => null });
+    for (let i = 0; i < ENROL_PHRASES; i++) await none.e.sample();
+    expect(none.e.finish().spotterLevel).toBe(0);
+    let n = 0;
+    const mixed = setup({
+      spotterLevel: async () => (n++ === 2 ? Promise.reject(new Error('busy')) : 0.4),
+    });
+    for (let i = 0; i < ENROL_PHRASES; i++) await mixed.e.sample();
+    expect(mixed.e.finish().spotterLevel).toBe(0);
+  });
 });

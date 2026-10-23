@@ -30,7 +30,13 @@ export interface EngineInfo<Id extends string> extends EngineFacts {
 // ── Wake word ──────────────────────────────────────────────────────────────────────────────────
 
 /** Settings → Voice wake-word engines (settings.ts 'voice.wake.provider'; ADR-011, ADR-043). */
-export const WAKE_ENGINE_IDS = ['picovoice', 'openwakeword', 'name', 'personal'] as const;
+export const WAKE_ENGINE_IDS = [
+  'spotter',
+  'picovoice',
+  'openwakeword',
+  'name',
+  'personal',
+] as const;
 export type WakeEngineId = (typeof WAKE_ENGINE_IDS)[number];
 
 // ── Speech to text ─────────────────────────────────────────────────────────────────────────────
@@ -537,6 +543,7 @@ export const LOCAL_MODEL_IDS = [
   ...LOCAL_STT_MODEL_IDS,
   ...PIPER_VOICE_IDS,
   'openwakeword-hey-jarvis',
+  'kws-zipformer-en',
   'silero-vad',
   'minilm-embed',
   'minilm-rerank',

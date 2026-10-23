@@ -13,6 +13,15 @@ import type { ModelId, ModelStore } from './model-store';
 import { loadOwwModels, loadSileroVad, type Vad } from './onnx';
 import { createOpenWakeWord, thresholdFor, type OwwModels } from './open-wake-word';
 import {
+  createCalibrator,
+  createSpotterWake,
+  keywordsText,
+  loadSpotterModel,
+  spotterThreshold,
+  wakePhrases,
+  type SpotterModel,
+} from './spotter';
+import {
   createPersonalWake,
   phraseFeatures,
   type PhraseFeatures,
@@ -68,11 +77,18 @@ export function watchSpeed(t: Transcriber, onSlow: () => void, now = Date.now): 
 export function createLocalEngines(
   store: ModelStore,
   settings: SettingsService,
-  hooks: { onSlow?(): void; onNearMiss?(info: Record<string, unknown>): void } = {},
+  hooks: {
+    onSlow?(): void;
+    onNearMiss?(info: Record<string, unknown>): void;
+    onSpotted?(info: Record<string, unknown>): void;
+  } = {},
 ) {
   let vad: Promise<Vad> | null = null;
   let whisper: { id: ModelId; model: Promise<Transcriber> } | null = null;
   let featureModels: Promise<OwwModels> | null = null;
+  let spotterModel: Promise<SpotterModel> | null = null;
+  /** Voice Match calibration of the spotter (ADR-044), only while enrolling. */
+  let calibrator: { name: string; cal: ReturnType<typeof createCalibrator> } | null = null;
 
   /** A fresh set of the openWakeWord models (each wake engine owns and releases its own). */
   function owwModels(): Promise<OwwModels> {
@@ -85,6 +101,16 @@ export function createLocalEngines(
   function remember<T>(p: Promise<T>, forget: () => void): Promise<T> {
     p.catch(forget);
     return p;
+  }
+
+  /** The keyword spotter's model, loaded once and kept (a few MB). */
+  function spotter(): Promise<SpotterModel> {
+    if (!store.installed('kws-zipformer-en'))
+      return Promise.reject(notReady('instant wake-word model'));
+    spotterModel ??= remember(loadSpotterModel(store.dir('kws-zipformer-en')), () => {
+      spotterModel = null;
+    });
+    return spotterModel;
   }
 
   function transcriber(): Promise<Transcriber> {
@@ -157,6 +183,33 @@ export function createLocalEngines(
             threshold: round2(threshold),
           }),
       });
+    },
+    /**
+     * ADR-044: "Hey <name>" (and the bare name, and spellings learned while enrolling) by keyword
+     * spotting. Sir's calibrated level can only make it more eager for his voice.
+     */
+    async spotterWake(sensitivity: number, name: string, learned: string[]): Promise<WakeWord> {
+      const model = await spotter();
+      const threshold = spotterThreshold(sensitivity, settings.get('voice.wake.spotterLevel'));
+      const engine = await model.open(
+        keywordsText(wakePhrases(name, learned), model.pieces, threshold),
+      );
+      return createSpotterWake(engine, {
+        onHeard: (phrase) => hooks.onSpotted?.({ phrase, threshold }),
+      });
+    },
+    /** The instant wake word's model is downloaded. */
+    spotterReady: (): boolean => store.installed('kws-zipformer-en'),
+    /** Enrolment: the strictest spotter level one "Hey <name>" passes (null without the model). */
+    async spotterLevel(audio: Float32Array, name: string): Promise<number | null> {
+      if (!store.installed('kws-zipformer-en')) return null;
+      if (calibrator?.name !== name)
+        calibrator = { name, cal: createCalibrator(await spotter(), wakePhrases(name)) };
+      return calibrator.cal.level(audio);
+    },
+    /** Enrolment is over: drop the calibration spotters (one per level). */
+    endCalibration(): void {
+      calibrator = null;
     },
     /** The wake-word model is downloaded (needed for the personal wake word too). */
     wakeReady: (): boolean => store.installed('openwakeword-hey-jarvis'),

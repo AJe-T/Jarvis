@@ -3,6 +3,7 @@ import { JarvisError } from '../errors';
 import { GREETING, mentionsName } from './conversation';
 import { buildProfile, encodeProfile } from './local/speaker';
 import { buildTemplates, type PhraseFeatures, type WakeTemplates } from './local/personal-wake';
+import { calibratedLevel } from './local/spotter';
 
 /**
  * ADR-039 Voice Match enrolment, like "Say 'Hey Google'" on a phone: Sir says "Hey <name>" a few
@@ -46,6 +47,8 @@ export interface EnrolmentResult {
   scores: number[];
   /** ADR-043: the phrases also became Sir's personal wake word. */
   wakeWord: boolean;
+  /** ADR-044: the keyword-spotter level his phrases pass at (0 = not calibrated). */
+  spotterLevel: number;
 }
 
 export function createEnrolment(deps: {
@@ -57,6 +60,10 @@ export function createEnrolment(deps: {
   transcribe?(audio: Float32Array): Promise<string>;
   /** ADR-043: the phrase as wake-word features; null when the wake-word model isn't downloaded. */
   wakeFeatures?(audio: Float32Array): Promise<PhraseFeatures | null>;
+  /** ADR-044: the strictest spotter level the phrase passes; null without the spotter model. */
+  spotterLevel?(audio: Float32Array): Promise<number | null>;
+  /** The session is over: calibration spotters can go. */
+  endCalibration?(): void;
   /** null = no usable wake-word templates this time: drop any older ones. */
   saveWake?(templates: WakeTemplates | null): void;
   name(): string;
@@ -66,6 +73,7 @@ export function createEnrolment(deps: {
   let embeddings: Float32Array[] = [];
   let heard: string[] = [];
   let wake: PhraseFeatures[] = [];
+  let levels: number[] = [];
   let busy = false;
 
   return {
@@ -89,14 +97,16 @@ export function createEnrolment(deps: {
             'phrase too short',
             `I didn't catch that. Say “Hey ${deps.name()}” clearly, a little closer to the mic.`,
           );
-        const [embedding, text, features] = await Promise.all([
+        const [embedding, text, features, level] = await Promise.all([
           deps.embed(audio),
           deps.transcribe ? deps.transcribe(audio).catch(() => '') : Promise.resolve(''),
           deps.wakeFeatures ? deps.wakeFeatures(audio).catch(() => null) : Promise.resolve(null),
+          deps.spotterLevel ? deps.spotterLevel(audio).catch(() => null) : Promise.resolve(null),
         ]);
         embeddings = [...embeddings, embedding];
         heard = [...heard, text];
         if (features) wake = [...wake, features];
+        if (level !== null) levels = [...levels, level];
         return { count: embeddings.length, heard: text };
       } finally {
         busy = false;
@@ -118,6 +128,8 @@ export function createEnrolment(deps: {
         aliases: learnAliases(heard, deps.name()),
         scores: built.scores.map((s) => Math.round(s * 100) / 100),
         wakeWord: templates !== null,
+        // Calibrated only when every phrase went through the spotter (a mix would skew it).
+        spotterLevel: levels.length === embeddings.length ? calibratedLevel(levels) : 0,
       };
       deps.save(encodeProfile(built.centroid, embeddings.length, (deps.now ?? Date.now)()), result);
       // null: old templates (an earlier recording) must not outlive the new profile.
@@ -125,6 +137,8 @@ export function createEnrolment(deps: {
       embeddings = [];
       heard = [];
       wake = [];
+      levels = [];
+      deps.endCalibration?.();
       return result;
     },
 
@@ -132,6 +146,8 @@ export function createEnrolment(deps: {
       embeddings = [];
       heard = [];
       wake = [];
+      levels = [];
+      deps.endCalibration?.();
     },
   };
 }

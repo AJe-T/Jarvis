@@ -305,7 +305,7 @@ jarvis/
 |---|---|---|
 | `llm/claude-code.ts`, `agent/sdk-loop.ts` | Claude subscription connection | Claude Code runs the loop; Jarvis tools served over an in-process MCP server whose handlers call the normal executor (ADR-010) |
 | `llm/local-client.ts` | Local model connection | Messages API ⇄ OpenAI chat/completions adapter; the normal `runAgentLoop` is reused (ADR-013) |
-| `voice/local/*` | On-device voice | ONNX Runtime: Whisper (transformers.js), openWakeWord port, Silero VAD, pinned model store (ADR-011) |
+| `voice/local/*` | On-device voice | ONNX Runtime: Whisper (transformers.js), openWakeWord port, Silero VAD, pinned model store (ADR-011); keyword-spotter wake word on sherpa-onnx with our word-piece speller (ADR-044) |
 | `voice/conversation.ts`, `voice/local/continuous.ts` | Conversational voice | Echo / unclear / name detection, rolling transcript, intent judge, always-listening segmenter (ADR-012) |
 | `voice/dictation.ts` | Dictation | Text clean-up, dictionary, history; the controller owns the mic |
 | `tools/everyday/*` | Everyday tools | Weather, meals, look_at_screen, fetch_web_page |
