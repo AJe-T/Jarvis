@@ -1,14 +1,15 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, Plus, Search } from 'lucide-react';
 import clsx from 'clsx';
 import {
+  LIVE_STRATEGIES,
   ROUTING_STRATEGIES,
   type PoolModel,
   type PoolSnapshot,
   type PoolTier,
-  type RoutingStrategy,
 } from '@shared/free-pool';
 import { IconButton } from '../../components/ui/button';
+import type { PoolActions } from './router-view';
 import {
   FilterChip,
   Meter,
@@ -22,30 +23,24 @@ import {
   fmtTokens,
 } from './parts';
 
-const CONTEXT_STEPS = [
-  { id: 0, label: 'Any context' },
-  { id: 32, label: '32K+' },
-  { id: 128, label: '128K+' },
-  { id: 1000, label: '1M+' },
-] as const;
-
 /** Models: strategy, filters and the ranked model table with every route under each model. */
-export function ModelsTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
-  const [strategy, setStrategy] = useState<RoutingStrategy>(snap.strategy);
-  const [models, setModels] = useState<PoolModel[]>(snap.models);
+export function ModelsTab({
+  snap,
+  actions,
+}: {
+  snap: PoolSnapshot;
+  actions: PoolActions;
+}): React.JSX.Element {
+  const { strategy, models } = snap;
   const [query, setQuery] = useState('');
   const [tools, setTools] = useState(false);
   const [vision, setVision] = useState(false);
-  const [minContext, setMinContext] = useState<number>(0);
   const [tier, setTier] = useState<PoolTier | 0>(0);
   const [open, setOpen] = useState<string | null>(null);
   const active = ROUTING_STRATEGIES.find((s) => s.id === strategy);
 
-  const ranked = useMemo(
-    () => (strategy === 'priority' ? models : [...models].sort((a, b) => b.score - a.score)),
-    [models, strategy],
-  );
-  const shown = ranked.filter(
+  // Main already sends the models in the order requests would go.
+  const shown = models.filter(
     (m) =>
       (!query ||
         `${m.label} ${m.maker} ${m.routes.map((r) => r.providerId).join(' ')}`
@@ -53,19 +48,10 @@ export function ModelsTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
           .includes(query.toLowerCase())) &&
       (!tools || m.tools) &&
       (!vision || m.vision) &&
-      m.contextK >= minContext &&
       (!tier || m.routes.some((r) => r.tier === tier)),
   );
 
-  const move = (id: string, by: -1 | 1): void =>
-    setModels((list) => {
-      const i = list.findIndex((m) => m.id === id);
-      const j = i + by;
-      if (i < 0 || j < 0 || j >= list.length) return list;
-      const next = [...list];
-      [next[i], next[j]] = [next[j] as PoolModel, next[i] as PoolModel];
-      return next;
-    });
+  const move = (id: string, by: -1 | 1): void => actions.model({ model: id, move: by });
 
   return (
     <div className="flex flex-col gap-4">
@@ -74,7 +60,10 @@ export function ModelsTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
           label="Routing strategy"
           options={ROUTING_STRATEGIES}
           value={strategy}
-          onChange={setStrategy}
+          onChange={(v) => {
+            if ((LIVE_STRATEGIES as readonly string[]).includes(v))
+              actions.settings({ strategy: v as (typeof LIVE_STRATEGIES)[number] });
+          }}
         />
         <p className="text-sm text-ink-300">
           {strategy === 'priority'
@@ -105,11 +94,6 @@ export function ModelsTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
         <FilterChip active={vision} onClick={() => setVision((v) => !v)}>
           Vision
         </FilterChip>
-        {CONTEXT_STEPS.map((c) => (
-          <FilterChip key={c.id} active={minContext === c.id} onClick={() => setMinContext(c.id)}>
-            {c.label}
-          </FilterChip>
-        ))}
         {([0, 2, 3] as const).map((t) => (
           <FilterChip key={t} active={tier === t} onClick={() => setTier(t)}>
             {t === 0 ? 'All tiers' : `Tier ${t}`}
@@ -198,12 +182,14 @@ export function ModelsTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
                       <span className="tag bg-neutral-tint text-ink-300">
                         {m.routes.length} route{m.routes.length === 1 ? '' : 's'}
                       </span>
-                      <span className="tag bg-neutral-tint text-ink-300">
-                        {fmtTokens(m.monthlyTokens)}/mo
-                      </span>
-                      <span className="tag bg-neutral-tint text-ink-300">
-                        {m.contextK >= 1000 ? `${m.contextK / 1000}M` : `${m.contextK}K`} ctx
-                      </span>
+                      {m.maker && (
+                        <span className="tag bg-neutral-tint text-ink-300">{m.maker}</span>
+                      )}
+                      {m.usedTokens > 0 && (
+                        <span className="tag bg-neutral-tint text-ink-300">
+                          {fmtTokens(m.usedTokens)} this month
+                        </span>
+                      )}
                       {m.tools && (
                         <span className="tag bg-accent-tint text-accent-tag-ink">Tools</span>
                       )}
@@ -228,11 +214,7 @@ export function ModelsTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
                     <Toggle
                       label={`Use ${m.label}`}
                       checked={m.enabled}
-                      onChange={(on) =>
-                        setModels((list) =>
-                          list.map((x) => (x.id === m.id ? { ...x, enabled: on } : x)),
-                        )
-                      }
+                      onChange={(on) => actions.model({ model: m.id, enabled: on })}
                     />
                   </td>
                 </tr>
@@ -242,7 +224,9 @@ export function ModelsTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
             {shown.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-sm text-ink-300">
-                  No model matches these filters.
+                  {models.length === 0
+                    ? 'No free models yet. Add a key on Providers & keys, then pick its model in Settings → Models & AI (starred models join too).'
+                    : 'No model matches these filters.'}
                 </td>
               </tr>
             )}
@@ -250,7 +234,10 @@ export function ModelsTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
         </table>
       </div>
 
-      <RoutingOptions />
+      <RoutingOptions
+        retryEmpty={snap.retryEmpty}
+        onRetryEmpty={(on) => actions.settings({ retryEmpty: on })}
+      />
     </div>
   );
 }
@@ -304,28 +291,28 @@ function RouteRows({ snap, model }: { snap: PoolSnapshot; model: PoolModel }): R
   );
 }
 
-function RoutingOptions(): React.JSX.Element {
-  const [stripThinking, setStripThinking] = useState(true);
-  const [retryEmpty, setRetryEmpty] = useState(true);
+function RoutingOptions({
+  retryEmpty,
+  onRetryEmpty,
+}: {
+  retryEmpty: boolean;
+  onRetryEmpty: (on: boolean) => void;
+}): React.JSX.Element {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel title="Answer clean-up">
         <div>
           <SettingRow
             title="Hide the model's thinking text"
-            detail="Some free models write their reasoning inside <think> tags. Jarvis keeps only the answer."
+            detail="Some free models write their reasoning inside <think> tags. Jarvis always keeps only the answer."
           >
-            <Toggle
-              label="Hide thinking text"
-              checked={stripThinking}
-              onChange={setStripThinking}
-            />
+            <Toggle label="Hide thinking text (always on)" checked disabled />
           </SettingRow>
           <SettingRow
             title="Retry empty answers on the next model"
             detail="A model that returns nothing (ran out of room while thinking) counts as a miss, not an answer."
           >
-            <Toggle label="Retry empty answers" checked={retryEmpty} onChange={setRetryEmpty} />
+            <Toggle label="Retry empty answers" checked={retryEmpty} onChange={onRetryEmpty} />
           </SettingRow>
         </div>
       </Panel>

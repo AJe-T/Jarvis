@@ -15,6 +15,7 @@ import type { SettingsService } from '../settings/settings-service';
 import type { CliBrain, CliBrainId } from './cli-brains';
 import type { Connections } from './connections';
 import { createLocalClient } from './local-client';
+import type { FreePool } from './pool/pool';
 import type { LlmClient } from './types';
 
 /**
@@ -69,7 +70,13 @@ const isConnection = (id: BrainRef): id is `conn_${string}` => CONNECTION_ID_RE.
 const isCloud = (id: BrainRef): id is CloudProviderId => CLOUD_PROVIDERS.some((p) => p.id === id);
 
 export function createBrains(
-  deps: BrainDeps & { jarvis: LlmClient; local: LlmClient; cli: Record<CliBrainId, CliBrain> },
+  deps: BrainDeps & {
+    jarvis: LlmClient;
+    local: LlmClient;
+    cli: Record<CliBrainId, CliBrain>;
+    /** AI Router: 'free' (sub-agents go through agent/brain-runner.ts, which checks privacy). */
+    pool: Pick<FreePool, 'ready' | 'session'>;
+  },
 ) {
   const clouds = new Map<string, LlmClient>();
   /** A provider name means its own key; a conn_ id one of Sir's keys. */
@@ -79,6 +86,7 @@ export function createBrains(
   function ready(id: BrainRef): boolean {
     if (id === 'jarvis') return true;
     if (id === 'local') return deps.settings.get('llm.local.model') !== '';
+    if (id === 'free') return deps.pool.ready();
     if (isCliBrain(id)) return deps.cli[id].find() !== null;
     const conn = connectionOf(id);
     if (!conn) return false;
@@ -93,6 +101,7 @@ export function createBrains(
   function label(id: BrainRef): string {
     if (id === 'jarvis') return 'Jarvis';
     if (id === 'local') return 'local model';
+    if (id === 'free') return 'Free AI pool';
     if (isCliBrain(id)) return deps.cli[id].label;
     if (isCloud(id)) return cloudProvider(id).label;
     try {
@@ -124,6 +133,8 @@ export function createBrains(
       if (!ready(id) || isCliBrain(id)) return null;
       if (id === 'jarvis') return deps.jarvis;
       if (id === 'local') return deps.local;
+      // Compare AIs: Sir picked the pool himself for a prompt he typed (answers only, no tools).
+      if (id === 'free') return deps.pool.session({ id: `run_${Date.now()}`, task: 'Compare AIs' });
       const conn = connectionOf(id) as string;
       let c = clouds.get(conn);
       if (!c) {

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | v2.27.1 (steps 1–5 done; step 6 checked) |
+| Status | v2.30 (steps 1–5 done; step 6 checked; AI Router Phase 1 done) |
 | Generated part | Provider and agent tables in [REFERENCE.md](REFERENCE.md) (`npm run docs:reference`) |
 | Security | [Security.md](Security.md) §16.10–16.11 always wins |
 
@@ -35,6 +35,9 @@ All use `main/llm/local-client.ts` (Messages API ↔ OpenAI Chat Completions tra
 | Fireworks AI | Partial | Same as DeepInfra; ids look like `accounts/fireworks/models/…`. |
 | Ollama cloud | Partial | Chat via `ollama.com/v1`; list via `ollama.com/api/tags` (docs say cloud ids come from there). `/v1/models` on the cloud is undocumented, so not used. |
 | Local (Ollama, LM Studio, llama.cpp, FreeLLMAPI) | Implemented | Loopback / private network only (`checkLocalUrl`). One server at a time. |
+| Cerebras | Implemented (2.30) | `api.cerebras.ai/v1`, tools per model. Free Trial: 5 RPM, 30K TPM, 1M TPD (docs checked 2026-10-27). |
+| NVIDIA NIM | Implemented (2.30) | `integrate.api.nvidia.com/v1`. The docs show chat completions but not the model list path: if Refresh models fails, type the id from build.nvidia.com. |
+| Cloudflare Workers AI | Planned | OpenAI-compatible, but the address contains Sir's account id (`/accounts/{id}/ai/v1`); needs a fixed-address design that validates the id before it can join. |
 | OpenCode Zen / Console | Planned (maybe) | Mixed formats: chat completions only for some models, Responses / Anthropic / Gemini formats for others, and the model list lives under a different prefix. Needs a per-model format router. |
 | Amazon Bedrock, Google Vertex AI, Azure AI Foundry | Planned (optional) | Need cloud sign-in (AWS SigV4, Google service accounts, Entra ID), not a simple key. |
 | GitHub Models | Unsupported | Retired by GitHub (docs checked 2026-10-16). |
@@ -42,6 +45,8 @@ All use `main/llm/local-client.ts` (Messages API ↔ OpenAI Chat Completions tra
 | Custom public endpoint (address typed by Sir) | Unsupported (decision) | Would let a whole conversation go to any host. Cloud addresses stay fixed in code. |
 
 **Connections (v2.25).** Each provider can have up to five keys (`conn_<provider>` is the main key, `conn_<provider>_<n>` the extras), each with its own model registry in `ai_models` (live / typed / cached, favourite, enabled). Extra keys are brains for `delegate_task` and NPCs and can be Jarvis's own (`llm.cloud.connection`). Code: `main/llm/connections.ts`, `main/ipc/handlers/ai-connections.ts`, `renderer/.../settings/connections-card.tsx`.
+
+**AI Router (v2.29 layout, v2.30 Phase 1; ADR-045).** Brain `free` = the free pool: every key of a provider in `FREE_PROVIDERS` (`shared/free-pool.ts`: Gemini, Groq, Cerebras, OpenRouter, NVIDIA, Mistral), with its chosen model and starred models. `main/llm/pool/` (router: pure ranking; pool: attempts, learning, tier-3 question; snapshot: the page), `pool_calls` (migration 017), IPC `pool:*`, Sidebar → AI Router. Private turns are refused in `agent/brain-runner.ts` (Security.md §16.15). Phases 2–4 are drawn on the page with a Phase tag.
 
 **Multi-AI runs (v2.26).** Sidebar → Compare AIs runs compare / review / chain over any ready brains (`main/agent/multi-run.ts`, migration 015). Model execution only (no tools); agent execution with tools stays in `delegate_task`. Fallback execution remains `llm.fallbackLocal` (opt-in); specialist routing is Jarvis choosing a `brain` in `delegate_task`. Neither switches models silently.
 

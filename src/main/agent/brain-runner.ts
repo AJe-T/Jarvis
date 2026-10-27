@@ -1,8 +1,30 @@
+import { POOL_TOOLS, privateSourceOf } from '@shared/free-pool';
 import { JarvisError } from '../errors';
 import type { BrainRef } from '../llm/brains';
+import type { Trail } from '../llm/pool/pool';
+import { providerName } from '../llm/pool/snapshot';
+import { findSensitive } from '../security/redact';
 import type { Services } from '../services';
 import { runAgentLoop, type LoopResult, type ToolRuntime, type TurnContext } from './agent-loop';
 import { pickModel } from './model-router';
+
+/** A tool runtime that only offers, and only runs, the allowed tools. */
+export function restrictTools(base: ToolRuntime, allowed: (name: string) => boolean): ToolRuntime {
+  return {
+    definitions: () => base.definitions().filter((d) => allowed((d as { name: string }).name)),
+    catalog: () => (base.catalog?.() ?? []).filter((t) => allowed(t.name)),
+    isBatchToolset: () => false,
+    execute: (block, ctx) =>
+      allowed(block.name)
+        ? base.execute(block, ctx)
+        : Promise.resolve({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            is_error: true,
+            content: `${block.name} is not available to this sub-agent.`,
+          }),
+  };
+}
 
 export interface BrainJob {
   system: string;
@@ -32,6 +54,7 @@ export async function runOnBrain(s: Services, brain: BrainRef, job: BrainJob): P
     const text = await cli.run(`${job.system}\n\n---\n\n${job.prompt}`, job.turn.signal);
     return { outcome: 'end_turn', text, citations: [], iterations: 1 };
   }
+  if (brain === 'free') return runOnPool(s, job);
   const llm = s.brains.get(brain);
   if (!llm)
     throw new JarvisError(
@@ -59,4 +82,83 @@ export async function runOnBrain(s: Services, brain: BrainRef, job: BrainJob): P
     },
     { onText: () => undefined, persist: () => undefined },
   );
+}
+
+/**
+ * AI Router (Security.md §16.15): the free pool gets only work with none of Sir's private data.
+ * Checked here in code, not left to the AI: a conversation that read a private source (in any
+ * turn, or in a call still running beside this one) is refused, a prompt that carries a key,
+ * password or card is refused, and the pool's sub-agent gets only public lookup tools.
+ */
+async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
+  const why =
+    job.turn.taint.privateSource ??
+    job.turn.taint.privateData ??
+    privateInConversation(s, job.turn.conversationId) ??
+    (findSensitive(`${job.system}\n${job.prompt}`).length ? 'private data in the task' : null);
+  if (why)
+    throw new JarvisError(
+      'POLICY_BLOCKED',
+      'private data for the free pool',
+      `Free AIs never get Sir's private data (this task involves ${why}). Do it yourself, or use the local model.`,
+    );
+  if (!s.pool.ready())
+    throw new JarvisError(
+      'INVALID',
+      'free pool not ready',
+      'The free AI pool has no key yet (AI Router → Providers & keys), or it is switched off.',
+    );
+  const title = job.prompt.split('\n')[0]?.slice(0, 120) ?? '';
+  const llm = s.pool.session({
+    id: `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    task: title,
+  });
+  const tools = restrictTools(job.tools, (name) => POOL_TOOLS.has(name));
+  const result = await runAgentLoop(
+    {
+      llm,
+      tools,
+      budget: s.budget,
+      ledger: s.ledger,
+      maxIterations: job.maxSteps,
+      maxTokens: job.maxTokens,
+    },
+    job.turn,
+    {
+      model: 'pool',
+      system: [{ type: 'text', text: job.system }],
+      messages: [{ role: 'user', content: job.prompt }],
+    },
+    { onText: () => undefined, persist: () => undefined },
+  );
+  return { ...result, text: `${result.text}\n\n${trailLine(llm.trail)}` };
+}
+
+/**
+ * The first private source this conversation touched, in any turn or in a tool call running
+ * right now beside the delegation (tool_calls rows exist before the tool runs).
+ */
+function privateInConversation(s: Services, conversationId: string): string | null {
+  const rows = s.db
+    .prepare(
+      "SELECT DISTINCT tool_name, source FROM tool_calls WHERE conversation_id = ? AND status IN ('pending', 'running', 'success')",
+    )
+    .all(conversationId) as Array<{ tool_name: string; source: string }>;
+  for (const r of rows) {
+    const found = privateSourceOf({ name: r.tool_name, source: r.source });
+    if (found) return `${found} earlier in this conversation`;
+  }
+  return null;
+}
+
+/** "(Free pool: answered by Cerebras · gpt-oss-120b; tried Groq: rate limited.)" */
+export function trailLine(trail: Trail): string {
+  const done = trail.attempts.filter((a) => a.ok).at(-1);
+  const failed = trail.attempts.filter((a) => !a.ok);
+  const tried = failed.length
+    ? `; tried ${failed.map((f) => `${providerName(f.provider)}: ${f.reason ?? 'failed'}`).join(', ')}`
+    : '';
+  return done
+    ? `(Free pool: answered by ${providerName(done.provider)} · ${done.model}${tried}.)`
+    : `(Free pool${tried}.)`;
 }

@@ -75,8 +75,10 @@ export const HELP: Record<string, HelpEntry> = {
       'The tier depends on who receives your text, not the model: Gemini through Google is tier 2, Gemini through an unknown relay is tier 3.',
     ],
     tips: [
-      'Version 2.29 shows the layout with sample numbers; the pool starts working in Phase 1.',
+      'A key’s chosen model joins the pool, and so does every model you star for it in Settings → Models & AI.',
+      'Delegation, Abilities and Analytics are drawn now and start working in Phases 2–4.',
     ],
+    say: ['Use the free pool to summarise these three pages', 'Ask a free AI to translate this into Hindi'],
   },
   npcs: {
     title: 'NPCs',

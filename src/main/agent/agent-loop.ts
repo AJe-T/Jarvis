@@ -26,8 +26,16 @@ export interface TurnContext {
    * text that tried to instruct the AI (security/injection-scan.ts); from then on every action asks.
    * `privateData` names private data a tool returned (a key, password, card…); from then on actions
    * that reach outside the PC ask, so it can't be sent out unseen.
+   * `privateSource` names the first of Sir's private sources the turn read (memory, files, the
+   * screen…, shared/free-pool.ts); such a turn never goes to the free pool (Security.md §16.15).
    */
-  taint: { tainted: boolean; source?: string; injection?: string; privateData?: string };
+  taint: {
+    tainted: boolean;
+    source?: string;
+    injection?: string;
+    privateData?: string;
+    privateSource?: string;
+  };
 }
 
 /** What the loop needs from the tool system (implemented by tools/executor in Phase 2). */

@@ -37,6 +37,8 @@ const CONNECTION_IN_ID = /^cloud_(conn_[a-z]{2,20}(?:_\d{1,2})?)_\d+$/;
  * message id, llm/brains.ts), the Claude plan, or Anthropic's API.
  */
 export function sourceOf(messageId: string | undefined, billing: Billing): string {
+  // AI Router: free tiers, not billed (llm/pool/pool.ts gives its answers "pool_" ids).
+  if (messageId?.startsWith('pool_')) return 'pool';
   if (messageId?.startsWith('local_') || billing === 'local') return 'local';
   const conn = messageId ? CONNECTION_IN_ID.exec(messageId)?.[1] : undefined;
   if (conn) return conn;
@@ -109,11 +111,12 @@ export function createUsageLedger(deps: {
       const searches = u.server_tool_use?.web_search_requests ?? 0;
       // A local-model answer (also a fallback while the API is chosen) is free: local-client ids start "local_".
       // Another provider's API ("cloud_") is pay-per-use whichever connection is Jarvis's own.
-      const billing = message.id?.startsWith('local_')
-        ? 'local'
-        : message.id?.startsWith('cloud_')
-          ? 'api'
-          : (deps.billing?.() ?? 'api');
+      const billing =
+        message.id?.startsWith('local_') || message.id?.startsWith('pool_')
+          ? 'local'
+          : message.id?.startsWith('cloud_')
+            ? 'api'
+            : (deps.billing?.() ?? 'api');
       // ADR-013: a model on Sir's own machine costs nothing per call.
       const source = sourceOf(message.id, billing);
       const info = billing === 'local' ? null : priceInfo(message.model, source);

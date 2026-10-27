@@ -123,6 +123,33 @@ export const CLOUD_PROVIDERS = [
     checked: '2026-10-16',
   },
   {
+    id: 'cerebras',
+    label: 'Cerebras (very fast open models)',
+    category: 'model-api',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    secret: 'cerebras',
+    keyHint: 'csk-…',
+    keysUrl: 'https://cloud.cerebras.ai',
+    docsUrl: 'https://inference-docs.cerebras.ai/resources/openai',
+    models: 'openai',
+    tools: 'per-model',
+    checked: '2026-10-27',
+  },
+  {
+    id: 'nvidia',
+    label: 'NVIDIA NIM (free hosted models)',
+    category: 'model-api',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    secret: 'nvidia',
+    keyHint: 'nvapi-…',
+    keysUrl: 'https://build.nvidia.com',
+    docsUrl: 'https://docs.api.nvidia.com/nim/reference/llm-apis',
+    models: 'openai',
+    tools: 'per-model',
+    checked: '2026-10-27',
+    note: 'The docs show POST /v1/chat/completions; if Refresh models fails, type the model id from build.nvidia.com.',
+  },
+  {
     id: 'openrouter',
     label: 'OpenRouter (hundreds of models, one key)',
     category: 'gateway',
@@ -309,6 +336,8 @@ export interface AiConnection {
 export const BRAIN_IDS = [
   'jarvis',
   'local',
+  // AI Router (2.30): the free pool, non-private work only (Security.md §16.15).
+  'free',
   ...CLOUD_PROVIDER_IDS,
   'chatgpt',
   'antigravity',
@@ -318,6 +347,7 @@ export type BrainId = (typeof BRAIN_IDS)[number];
 export const BRAIN_LABELS: Record<BrainId, string> = {
   jarvis: 'Jarvis (main connection)',
   local: 'Local model',
+  free: 'Free AI pool',
   ...(Object.fromEntries(CLOUD_PROVIDERS.map((p) => [p.id, p.label])) as Record<
     CloudProviderId,
     string

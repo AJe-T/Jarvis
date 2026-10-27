@@ -317,7 +317,7 @@ export function createMultiRun(deps: {
     later: boolean,
   ): { kind: 'plan' | 'free' } | { models: string[]; source: string } {
     if (brains.cli(brain)) return { kind: 'plan' };
-    if (brain === 'local') return { kind: 'free' };
+    if (brain === 'local' || brain === 'free') return { kind: 'free' };
     if (brain === 'jarvis') {
       const p = deps.settings.get('llm.provider');
       if (p === 'subscription') return { kind: 'plan' };

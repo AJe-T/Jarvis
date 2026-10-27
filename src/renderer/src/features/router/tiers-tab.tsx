@@ -12,8 +12,13 @@ const TIER_RULE: Record<PoolTier, string> = {
 };
 
 /** Tiers & privacy: who sits in which tier, the locked private-data rule, the tier-3 question. */
-export function TiersTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
-  const [askTier3, setAskTier3] = useState<'ask' | 'never'>('ask');
+export function TiersTab({
+  snap,
+  onChange,
+}: {
+  snap: PoolSnapshot;
+  onChange: (patch: { tier3: 'ask' | 'never' }) => void;
+}): React.JSX.Element {
   const [preview, setPreview] = useState(false);
   const members: Record<PoolTier, Array<{ id: string; label: string }>> = {
     1: [
@@ -83,8 +88,8 @@ export function TiersTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
         >
           <select
             aria-label="Third-party AIs"
-            value={askTier3}
-            onChange={(e) => setAskTier3(e.target.value as 'ask' | 'never')}
+            value={snap.tier3}
+            onChange={(e) => onChange({ tier3: e.target.value as 'ask' | 'never' })}
             className="min-h-9 rounded-sm border border-line bg-surface-1 px-2 text-sm text-ink-100"
           >
             <option value="ask">Ask me each time</option>
@@ -98,21 +103,25 @@ export function TiersTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
         </div>
       </Panel>
 
-      <Tier3Question open={preview} onClose={() => setPreview(false)} />
+      <Tier3Question open={preview} soonestMin={12} preview onAnswer={() => setPreview(false)} />
     </div>
   );
 }
 
-/** The pop-up Jarvis shows before the first tier-3 request (Phase 1 drives it from main). */
+/** Asked before the first tier-3 request (main sends pool:ask; tier3-host.tsx shows it). */
 export function Tier3Question({
   open,
-  onClose,
+  soonestMin,
+  preview,
+  onAnswer,
 }: {
   open: boolean;
-  onClose: () => void;
+  soonestMin: number | null;
+  preview?: boolean;
+  onAnswer: (a: 'once' | 'session' | 'no') => void;
 }): React.JSX.Element {
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog.Root open={open} onOpenChange={(o) => !o && onAnswer('no')}>
       <Dialog.Portal>
         <Dialog.Overlay className="scrim fade-in fixed inset-0 z-40" />
         <Dialog.Content
@@ -124,23 +133,23 @@ export function Tier3Question({
             Use third-party AIs?
           </Dialog.Title>
           <Dialog.Description className="mt-2 text-sm text-ink-300">
-            Claude&apos;s limit is used up and all trusted free AIs are busy (soonest back in about
-            12 minutes). Third-party AIs are run by small, unknown companies that can read what is
-            sent to them.
+            Every trusted free AI is busy or out of today&apos;s limit
+            {soonestMin ? ` (soonest back in about ${soonestMin} min)` : ''}. Third-party AIs are
+            run by small, unknown companies that can read what is sent to them.
           </Dialog.Description>
           <p className="mt-3 flex items-start gap-2 rounded-sm bg-surface-2 p-3 text-sm text-ink-100">
             <Lock size={14} aria-hidden className="mt-0.5 shrink-0 text-ok-400" />
-            Private work never goes to them, even if you say yes: it waits, or your local model
-            answers.
+            Private work never goes to them, even if you say yes: only tasks without your memory,
+            files, screen or messages ever reach the free pool.
           </p>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <Button onClick={onClose}>No, wait</Button>
-            <Button onClick={onClose}>Until Jarvis restarts</Button>
-            <Button variant="primary" onClick={onClose}>
+            <Button onClick={() => onAnswer('no')}>No, wait</Button>
+            <Button onClick={() => onAnswer('session')}>Until Jarvis restarts</Button>
+            <Button variant="primary" onClick={() => onAnswer('once')}>
               Just this once
             </Button>
           </div>
-          <p className="mt-3 text-xs text-ink-500">Preview: no request is sent.</p>
+          {preview && <p className="mt-3 text-xs text-ink-500">Preview: no request is sent.</p>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

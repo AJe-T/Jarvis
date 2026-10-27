@@ -1,14 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import clsx from 'clsx';
-import type { PoolPhase } from '@shared/free-pool';
+import { RefreshCw } from 'lucide-react';
+import type { PoolPhase, PoolSnapshot } from '@shared/free-pool';
+import type { Req } from '@shared/ipc-contract';
+import { IconButton } from '../../components/ui/button';
 import { PageBody, PageHeader } from '../../components/ui/page';
+import { call, cleanError } from '../../lib/api';
+import { useUiStore } from '../../stores/ui-store';
 import { AbilitiesTab } from './abilities-tab';
 import { AnalyticsTab } from './analytics-tab';
 import { DelegationTab } from './delegation-tab';
 import { ModelsTab } from './models-tab';
 import { OverviewTab } from './overview-tab';
 import { PreviewBanner, Toggle } from './parts';
-import { previewSnapshot } from './preview';
 import { ProvidersTab } from './providers-tab';
 import { TiersTab } from './tiers-tab';
 
@@ -24,26 +28,57 @@ const TABS = [
 
 type Tab = (typeof TABS)[number]['id'];
 
+/** What every tab can change: each call returns the new snapshot. */
+export interface PoolActions {
+  settings(patch: Req<'pool:settings'>): void;
+  provider(patch: Req<'pool:setProvider'>): void;
+  model(patch: Req<'pool:setModel'>): void;
+  checkKeys(): Promise<void>;
+  reload(): void;
+}
+
 /** Sidebar → AI Router: the free-AI pool as one module (FreeLLMAPI-style dashboard). */
 export function RouterView(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('overview');
-  // Step 0: sample data. Phase 1 swaps this for call('pool:snapshot').
-  const snap = useMemo(() => previewSnapshot(), []);
-  const [enabled, setEnabled] = useState(snap.enabled);
+  const [snap, setSnap] = useState<PoolSnapshot | null>(null);
+  const toast = useUiStore((s) => s.toast);
+
+  const run = useCallback(
+    (p: Promise<PoolSnapshot>): Promise<void> =>
+      p.then(setSnap).catch((e: unknown) => toast({ level: 'error', message: cleanError(e) })),
+    [toast],
+  );
+  const reload = useCallback(() => void run(call('pool:snapshot', {})), [run]);
+  useEffect(reload, [reload]);
+
+  const actions: PoolActions = {
+    settings: (patch) => void run(call('pool:settings', patch)),
+    provider: (patch) => void run(call('pool:setProvider', patch)),
+    model: (patch) => void run(call('pool:setModel', patch)),
+    checkKeys: () => run(call('pool:checkKeys', {})),
+    reload,
+  };
+
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <PageHeader title="AI Router" help="router">
+        <IconButton label="Refresh" tipSide="bottom" onClick={reload}>
+          <RefreshCw size={16} />
+        </IconButton>
         <label className="flex items-center gap-2 text-sm text-ink-300">
           Free pool
-          <Toggle label="Free pool on" checked={enabled} onChange={setEnabled} />
+          <Toggle
+            label="Free pool on"
+            checked={snap?.enabled ?? false}
+            {...(snap ? { onChange: (on: boolean) => actions.settings({ enabled: on }) } : {})}
+          />
         </label>
       </PageHeader>
       <PageBody className="flex max-w-6xl flex-col gap-4">
-        {snap.preview && (
+        {snap?.preview && (
           <PreviewBanner>
-            <span className="font-medium">Preview.</span> This is the layout of every AI Router
-            feature. Numbers are samples and nothing is saved or sent yet. Parts marked{' '}
-            <span className="font-code">Phase N</span> start working in that phase.
+            <span className="font-medium">Preview.</span> Numbers are samples and nothing is saved
+            or sent.
           </PreviewBanner>
         )}
         <div
@@ -77,13 +112,19 @@ export function RouterView(): React.JSX.Element {
           ))}
         </div>
         <div id="router-panel" role="tabpanel" aria-labelledby={`router-tab-${tab}`}>
-          {tab === 'overview' && <OverviewTab snap={snap} />}
-          {tab === 'models' && <ModelsTab snap={snap} />}
-          {tab === 'providers' && <ProvidersTab snap={snap} />}
-          {tab === 'tiers' && <TiersTab snap={snap} />}
-          {tab === 'delegation' && <DelegationTab />}
-          {tab === 'abilities' && <AbilitiesTab />}
-          {tab === 'analytics' && <AnalyticsTab snap={snap} />}
+          {!snap ? (
+            <span className="skeleton block h-40 w-full" aria-hidden />
+          ) : (
+            <>
+              {tab === 'overview' && <OverviewTab snap={snap} />}
+              {tab === 'models' && <ModelsTab snap={snap} actions={actions} />}
+              {tab === 'providers' && <ProvidersTab snap={snap} actions={actions} />}
+              {tab === 'tiers' && <TiersTab snap={snap} onChange={actions.settings} />}
+              {tab === 'delegation' && <DelegationTab />}
+              {tab === 'abilities' && <AbilitiesTab />}
+              {tab === 'analytics' && <AnalyticsTab snap={snap} />}
+            </>
+          )}
         </div>
       </PageBody>
     </div>

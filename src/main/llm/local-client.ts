@@ -261,6 +261,8 @@ export interface LocalLlmConfig {
   /** Optional Bearer key, for servers that want one (e.g. FreeLLMAPI's unified key). */
   apiKey?(): string | undefined;
   fetch?: typeof fetch;
+  /** Sees each chat reply's status and headers (the AI Router learns limits from them). */
+  observe?(r: { status: number; headers: Headers }): void;
   /**
    * A cloud provider instead of a server on this PC: its fixed address is allowed, every tool is
    * offered (big models cope), and calls are billed. Name and settings hint for messages.
@@ -487,6 +489,7 @@ export function createLocalClient(cfg: LocalLlmConfig): LlmClient & {
         if (opts.signal.aborted) throw e;
         throw unreachable(String(e));
       });
+      cfg.observe?.({ status: res.status, headers: res.headers });
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => '');
         throw new JarvisError(

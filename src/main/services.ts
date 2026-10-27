@@ -44,6 +44,8 @@ import {
 import { createFakeClaude, loadFakeScript } from './llm/fake-claude';
 import type { LlmClient } from './llm/types';
 import { createUsageLedger } from './llm/usage-ledger';
+import { createFreePool, type Tier3Answer } from './llm/pool/pool';
+import { randomUUID } from 'node:crypto';
 import { logger } from './logging/logger';
 import { createScheduler } from './scheduler/scheduler';
 import { createAuditLog } from './security/audit';
@@ -321,7 +323,44 @@ export function createServices(opts: ServiceOptions) {
       workDir: join(opts.userData, 'cli-brains'),
       ...(opts.isTest ? { exists: () => false } : {}),
     });
-  const brains = createBrains({ ...brainDeps, jarvis: llm, local: llmLocal, cli });
+  // AI Router (2.30): the free pool behind the "free" brain; tier 3 only after Sir says yes.
+  const tier3Pending = new Map<string, (a: Tier3Answer) => void>();
+  const pool = createFreePool({
+    db,
+    settings,
+    secrets,
+    connections,
+    catalog: () => registry.catalog(),
+    ask: (q) =>
+      new Promise<Tier3Answer>((resolve) => {
+        const requestId = randomUUID();
+        const timer = setTimeout(() => finish('no'), 120_000);
+        function finish(a: Tier3Answer): void {
+          clearTimeout(timer);
+          tier3Pending.delete(requestId);
+          resolve(a);
+        }
+        tier3Pending.set(requestId, finish);
+        opts.emit('pool:ask', { requestId, soonestMin: q.soonestMin });
+      }),
+    claudePrice: () => ledger.priceFor(settings.get('models.default')),
+    ...(opts.fetch ? { fetch: opts.fetch } : {}),
+  });
+  const answerTier3 = (requestId: string, answer: Tier3Answer): void => {
+    tier3Pending.get(requestId)?.(answer);
+  };
+  if (!opts.isTest) {
+    // Key checks every `pool.checkHours` hours (a model-list call per key, no tokens).
+    let lastCheck = 0;
+    const timer = setInterval(() => {
+      const hours = settings.get('pool.checkHours');
+      if (!hours || Date.now() - lastCheck < hours * 3_600_000) return;
+      lastCheck = Date.now();
+      void pool.checkKeys().catch(() => undefined);
+    }, 15 * 60_000);
+    timer.unref?.();
+  }
+  const brains = createBrains({ ...brainDeps, jarvis: llm, local: llmLocal, cli, pool });
   // Integrations step 4: one request to several AIs, answers only.
   const multiRun = createMultiRun({
     db,
@@ -620,6 +659,8 @@ export function createServices(opts: ServiceOptions) {
     /** A client for one connection (model lists and tests in Settings; no model needed to list). */
     connectionClient: (id: string) => createCloudClient(brainDeps, () => id),
     brains,
+    pool,
+    answerTier3,
     paidBudget,
     claudeCode,
     planLimits,

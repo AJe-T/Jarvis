@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { errorMessage } from '../errors';
+import { JarvisError, errorMessage } from '../errors';
 import type { Services } from '../services';
 import { defineTool, fail, type Tool, type ToolOutput } from '../tools/types';
-import type { LoopResult, ToolRuntime, TurnContext } from './agent-loop';
+import type { LoopResult, TurnContext } from './agent-loop';
 import type { BrainRef } from '../llm/brains';
 import { BrainRefSchema, CLOUD_PROVIDER_IDS } from '@shared/llm-providers';
-import { runOnBrain } from './brain-runner';
+import { restrictTools, runOnBrain } from './brain-runner';
 
 /**
  * delegate_task (idea from LibreChat's subagents): Jarvis hands 1–4 self-contained jobs to
@@ -42,23 +42,7 @@ const TaskSchema = z.object({
 
 export type SubTask = z.infer<typeof TaskSchema>;
 
-/** A tool runtime that only offers, and only runs, the allowed tools. */
-export function restrictTools(base: ToolRuntime, allowed: (name: string) => boolean): ToolRuntime {
-  return {
-    definitions: () => base.definitions().filter((d) => allowed((d as { name: string }).name)),
-    catalog: () => (base.catalog?.() ?? []).filter((t) => allowed(t.name)),
-    isBatchToolset: () => false,
-    execute: (block, ctx) =>
-      allowed(block.name)
-        ? base.execute(block, ctx)
-        : Promise.resolve({
-            type: 'tool_result',
-            tool_use_id: block.id,
-            is_error: true,
-            content: `${block.name} is not available to this sub-agent.`,
-          }),
-  };
-}
+export { restrictTools };
 
 function verdict(r: LoopResult): string {
   if (r.outcome === 'aborted') return 'stopped';
@@ -70,7 +54,7 @@ function verdict(r: LoopResult): string {
 export function createSubagentTool(s: Services): Tool {
   return defineTool({
     name: NAME,
-    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}) or one of Sir's extra keys for it by connection id ("conn_openai_2"…; the available ones are listed in your context), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
+    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", "free" (the free AI pool: costs nothing, so prefer it for heavy work with none of Sir's private data in it — summaries, drafts, translations, reading public web pages; it is refused once this turn has read his memory, files, screen, passwords, clipboard or messages, and it gets only public lookup tools; never write Sir's personal details — names, addresses, health, money, anything from his memory — into a free task), another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}) or one of Sir's extra keys for it by connection id ("conn_openai_2"…; the available ones are listed in your context), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
     input: z.object({
       tasks: z.array(TaskSchema).min(1).max(MAX_TASKS),
       shared_context: z.string().max(8000).optional(),
@@ -113,7 +97,12 @@ export function createSubagentTool(s: Services): Tool {
             mode: 'text',
             purpose: 'task',
             signal: ctx.signal,
-            taint: { tainted: ctx.tainted, ...(ctx.tainted ? { source: 'the conversation' } : {}) },
+            taint: {
+              tainted: ctx.tainted,
+              ...(ctx.tainted ? { source: 'the conversation' } : {}),
+              // ...and if Jarvis already read Sir's private data, the free pool is closed to them too.
+              ...(ctx.private ? { privateSource: ctx.private } : {}),
+            },
           };
           const prompt = [
             `Task ${i + 1} of ${tasks.length}: ${task.title}`,
@@ -139,7 +128,8 @@ export function createSubagentTool(s: Services): Tool {
               task,
               brain,
               status: 'failed',
-              text: `It stopped with an error: ${errorMessage(err)}`,
+              // The sentence written for people says why (and what to do); the code text doesn't.
+              text: `It stopped with an error: ${err instanceof JarvisError && err.userMessage ? err.userMessage : errorMessage(err)}`,
               turn,
             };
           }

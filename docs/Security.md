@@ -474,6 +474,20 @@ Decisions taken while building the policy layer; the code is the reference (`src
 | Spend confirmation | Main computes the run estimate itself and refuses `runs:start` over `budget.confirmRunUsd` unless the request carries an `acceptUsd` at least that high (the renderer sends it only after Sir clicks Send in the confirmation). |
 | Usage rows | Hold the connection id and price kind, never keys or prompt text. |
 
+### 16.15 AI Router: the free pool (v2.30, ADR-045)
+
+Free tiers of other companies answer sub-tasks Claude hands to brain `free`. Tiers are by **who receives the text**: 1 = Claude and the local model, 2 = trusted free providers, 3 = third-party relays.
+
+| Surface | Control |
+|---|---|
+| Private data | Checked in code, never left to the AI (`agent/brain-runner.ts` `runOnPool`). A turn that read a private source is refused: the executor marks `taint.privateSource` when a tool in `PRIVATE_TOOLS` (memory, vault, planner, files, screen, camera, passwords, clipboard, messages, location) or any non-native (MCP) tool returns successfully, and sub-agents inherit the mark. The conversation is checked too: any private tool call in an earlier turn, or still pending/running beside the delegation (`tool_calls` rows exist before a tool runs), refuses. `taint.privateData` (keys, passwords, cards found in tool output) refuses, and so does a task whose own text holds a secret (`findSensitive`). NPCs always count as private (their vault memory and the team chat), so `free` is not offered as an NPC brain. The pool's sub-agent gets only an allowlist of public lookup tools (`POOL_TOOLS`: time, weather, currency, dictionary, distance, market price, Wikipedia, web page, feed, YouTube transcript), so a tool added later stays out until checked. No setting turns this off. Residual risk: Claude could still copy something he knows from his own context into a task's text; the `delegate_task` description forbids it and secrets are caught by `findSensitive`, but plain personal facts can't be detected in code. |
+| Addresses | Only the catalogue's fixed HTTPS base URLs (`CLOUD_PROVIDERS`, `checkCloudUrl`); Cerebras and NVIDIA NIM added, checked 2026-10-27. Cloudflare Workers AI is not added: its address contains Sir's account id, which would make the address partly typed by Sir. |
+| Keys | Same DPAPI secrets as the provider's connections (`conn_<provider>`, up to 5). The page shows only the last four characters, like Settings. `.env` import parses in main, drops non-key values, never logs or audits values (audit: provider names only), and the renderer clears the box after saving. |
+| Tier 3 | Only after every tier-2 route is skipped or failed, only with `pool.tier3 = ask`, and only after Sir answers the `pool:ask` question (2 min, then "no"); "Until Jarvis restarts" lives in memory only. Private turns never reach the pool, so they can't reach tier 3. Every answer is audited (`pool.tier3`). |
+| Visibility | No silent switching: every pool answer ends with `(Free pool: answered by <provider> · <model>; tried …)`, and the AI Router page lists the last answers with the trail. |
+| Records | `pool_calls` (migration 017) holds who was asked, status, a redacted reason, time and token counts: never prompts, answers or keys. Kept 31 days. |
+| Cost | Pool answers carry `pool_` ids: billed as free (`source = pool`), so they never touch the Claude budget. |
+
 ### 16.9 Features added in v2.19 (ADR-042)
 
 | Surface | Control |

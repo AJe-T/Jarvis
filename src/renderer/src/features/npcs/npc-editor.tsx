@@ -213,7 +213,8 @@ export function NpcEditor({
                   onChange={(e) => set('brain', e.target.value as NpcInput['brain'])}
                   className="min-h-9 rounded-sm border border-line bg-surface-1 px-2 text-sm text-ink-100"
                 >
-                  {BRAIN_IDS.map((b) => (
+                  {/* The free pool never gets an NPC's memory or team chat (Security.md §16.15). */}
+                  {BRAIN_IDS.filter((b) => b !== 'free').map((b) => (
                     <option key={b} value={b} disabled={!brains.includes(b) && b !== form.brain}>
                       {BRAIN_LABELS[b]}
                       {brains.includes(b) ? '' : ' (not set up)'}

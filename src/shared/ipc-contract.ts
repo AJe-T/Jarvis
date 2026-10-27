@@ -17,6 +17,7 @@ import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
 import { BrainRefSchema, CLOUD_PROVIDER_IDS, CONNECTION_ID_RE } from './llm-providers';
 import { RunEstimateSchema, RunRequestSchema, RunViewSchema } from './ai-runs';
+import { LIVE_STRATEGIES, PoolSnapshotSchema } from './free-pool';
 import { AGENT_CLI_IDS } from './agent-clis';
 import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSchema } from './npcs';
 
@@ -436,6 +437,52 @@ export const INVOKE = {
   'runs:clear': contract(Empty, z.object({ removed: z.number().int() })),
   /** AIs that can take part right now, by name. */
   'runs:brains': contract(Empty, z.array(z.object({ id: BrainRefSchema, label: z.string() }))),
+  /** AI Router (2.30): the free pool's live state (no prompts, no answers, no keys). */
+  'pool:snapshot': contract(Empty, PoolSnapshotSchema),
+  'pool:setProvider': contract(
+    z.object({
+      id: z.enum(CLOUD_PROVIDER_IDS),
+      enabled: z.boolean().optional(),
+      tier: z.union([z.literal(2), z.literal(3)]).optional(),
+    }),
+    PoolSnapshotSchema,
+  ),
+  /** Switch a model on/off, or move it one place in the Priority order. */
+  'pool:setModel': contract(
+    z.object({
+      model: z.string().min(1).max(200),
+      enabled: z.boolean().optional(),
+      move: z.union([z.literal(-1), z.literal(1)]).optional(),
+    }),
+    PoolSnapshotSchema,
+  ),
+  'pool:settings': contract(
+    z.object({
+      enabled: z.boolean().optional(),
+      strategy: z.enum(LIVE_STRATEGIES).optional(),
+      tier3: z.enum(['ask', 'never']).optional(),
+      keyOrder: z.enum(['roomiest', 'turns']).optional(),
+      checkHours: z.number().int().min(0).max(24).optional(),
+      retryEmpty: z.boolean().optional(),
+    }),
+    PoolSnapshotSchema,
+  ),
+  /** One model-list call per key; clears pauses caused by a key that now works. */
+  'pool:checkKeys': contract(Empty, PoolSnapshotSchema),
+  /** .env paste: `apply: false` only says what was found (names, never values). */
+  'pool:importEnv': contract(
+    z.object({ text: z.string().max(50_000), apply: z.boolean() }),
+    z.object({
+      found: z.array(z.object({ name: z.string(), provider: z.string() })),
+      saved: z.array(z.object({ provider: z.string(), connectionId: z.string() })),
+      skipped: z.array(z.object({ provider: z.string(), reason: z.string() })),
+    }),
+  ),
+  /** Sir's answer to "Use third-party AIs?" (pool:ask). */
+  'pool:answer': contract(
+    z.object({ requestId: z.string().uuid(), answer: z.enum(['once', 'session', 'no']) }),
+    Ok,
+  ),
   /** Integrations step 3: every connection (key) per provider and its model registry. Keys stay in main. */
   'ai:connections': contract(Empty, z.array(AiConnectionSchema)),
   'ai:connection': contract(
@@ -1086,6 +1133,8 @@ export const EVENTS = {
   'npc:status': z.object({ npcId: z.string(), state: z.enum(NPC_STATES) }),
   /** A multi-AI run changed (a step started, streamed text, finished). */
   'runs:update': z.object({ run: RunViewSchema }),
+  /** AI Router: tiers 1 and 2 are out of limits; may a third-party AI answer? (pool:answer). */
+  'pool:ask': z.object({ requestId: z.string(), soonestMin: z.number().nullable() }),
   'npc:meeting': z.object({ meeting: NpcMeetingSchema }),
   'mini:layout': z.object({ side: z.enum(['left', 'right']), tucked: z.boolean() }),
   /** A setting changed in main (e.g. Jarvis switched his personality by voice); the UI follows. */

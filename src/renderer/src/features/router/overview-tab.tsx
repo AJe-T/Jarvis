@@ -46,8 +46,8 @@ export function OverviewTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element
             title="Trusted free"
             who={`${t2.length} providers · ${t2Keys} keys`}
             rule="Heavy but harmless work: summaries, drafts, translations, research reading."
-            status={snap.enabled ? 'Answering' : 'Off'}
-            live={snap.enabled}
+            status={!snap.enabled ? 'Switched off' : t2Keys ? 'Ready' : 'No key yet'}
+            live={snap.enabled && t2Keys > 0}
           />
           <Arrow />
           <TierCard
@@ -95,9 +95,9 @@ export function OverviewTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element
           >
             <Lock size={16} aria-hidden className="mt-0.5 shrink-0 text-lamp-400" />
             <p className="text-ink-300">
-              <span className="font-medium text-ink-100">All free AIs are busy.</span> 7 routes
-              checked: 5 rate limited, 2 with no key. Soonest reset in about 2 minutes. Claude will
-              answer this one.
+              <span className="font-medium text-ink-100">Example:</span> “All free AIs are busy: 7
+              routes checked (5 rate limited or paused, 2 out of today’s limit). Soonest back in
+              about 2 min. Claude can do this one instead.”
             </p>
           </div>
           <p className="text-xs text-ink-500">
@@ -109,6 +109,12 @@ export function OverviewTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element
 
       <Panel title="Last answers from the pool" aside="every reply says who answered">
         <ul className="flex flex-col divide-y divide-line-subtle">
+          {snap.recent.length === 0 && (
+            <li className="text-sm text-ink-300">
+              Nothing yet. Claude hands the free pool heavy, non-private sub-tasks; you can also ask
+              “use the free pool to summarise …”.
+            </li>
+          )}
           {snap.recent.map((a) => (
             <li key={a.id} className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -199,6 +205,8 @@ function TierCard({
 function BudgetPanel({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
   const total = snap.models.reduce((n, m) => n + m.monthlyTokens, 0);
   const used = snap.models.reduce((n, m) => n + m.usedTokens, 0);
+  // Most free tiers publish daily caps, not monthly ones: then the bar shares out what was used.
+  const scale = Math.max(total, used, 1);
   const palette = [
     'var(--accent-500)',
     'var(--neon-magenta)',
@@ -211,12 +219,11 @@ function BudgetPanel({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
   ];
   return (
     <Panel
-      title="Monthly free-token budget"
+      title="Free tokens this month"
       aside={
         <>
-          <span className="font-medium text-ink-100">{fmtTokens(total - used)}</span> left ·{' '}
-          {Math.round(((total - used) / Math.max(total, 1)) * 100)}% of {fmtTokens(total)} ·{' '}
           <span className="font-medium text-ink-100">{fmtTokens(used)}</span> used
+          {total > 0 && ` of ${fmtTokens(total)} known monthly allowance`}
         </>
       }
     >
@@ -229,7 +236,7 @@ function BudgetPanel({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
           <span
             key={m.id}
             style={{
-              width: `${(m.usedTokens / Math.max(total, 1)) * 100}%`,
+              width: `${(m.usedTokens / scale) * 100}%`,
               background: palette[i % palette.length],
             }}
           />
@@ -245,7 +252,8 @@ function BudgetPanel({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
             />
             <span className="min-w-0 flex-1 truncate text-ink-100">{m.label}</span>
             <span className="font-code text-xs text-ink-500 tabular-nums">
-              {fmtTokens(m.usedTokens)} / {fmtTokens(m.monthlyTokens)}
+              {fmtTokens(m.usedTokens)}
+              {m.monthlyTokens > 0 && ` / ${fmtTokens(m.monthlyTokens)}`}
             </span>
           </li>
         ))}

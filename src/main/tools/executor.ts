@@ -1,3 +1,4 @@
+import { privateSourceOf } from '@shared/free-pool';
 import type { EventPayload } from '@shared/ipc-contract';
 import type { UiToolCall } from '@shared/types';
 import type { ToolRuntime, TurnContext } from '../agent/agent-loop';
@@ -95,6 +96,7 @@ async function runWithTimeout(
         conversationId: ctx.conversationId,
         turnId: ctx.turnId,
         tainted: ctx.taint.tainted,
+        private: ctx.taint.privateSource ?? ctx.taint.privateData,
         logger,
       }),
       timeout,
@@ -296,6 +298,8 @@ ${savedNote(saved)}`;
       const found = findSensitive(plain);
       if (found.length)
         ctx.taint.privateData ??= `private data (${found.join(', ')}) from ${tool.name}`;
+      const privateSource = privateSourceOf(tool);
+      if (privateSource) ctx.taint.privateSource ??= privateSource;
     }
     if (untrusted) {
       ctx.taint.tainted = true;

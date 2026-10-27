@@ -7,6 +7,8 @@ export interface ToolContext {
   conversationId: string;
   turnId: string;
   tainted: boolean;
+  /** The turn already read Sir's private data (memory, files, screen…): never for the free pool. */
+  private?: string | undefined;
   logger: Logger;
 }
 

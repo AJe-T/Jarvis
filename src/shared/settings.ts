@@ -10,6 +10,7 @@ import {
 } from './voices';
 import { DEFAULT_ORB_STYLE, ORB_STYLE_IDS } from './orb-styles';
 import { CLOUD_PROVIDER_IDS, CONNECTION_ID_RE, type CloudProviderId } from './llm-providers';
+import { ROUTING_STRATEGY_IDS, type RoutingStrategy } from './free-pool';
 import {
   AURA_VOICES,
   GROQ_STT_MODELS,
@@ -88,6 +89,39 @@ export const SETTINGS = {
   'llm.local.model': { schema: z.string().max(120), default: '' },
   /** API connection only: when Claude is busy or unreachable, the local model answers instead (idea from ruflo's provider failover). */
   'llm.fallbackLocal': { schema: z.boolean(), default: false },
+  /** AI Router (2.30): the free pool Jarvis can hand non-private sub-tasks to (brain "free"). */
+  'pool.enabled': { schema: z.boolean(), default: true },
+  'pool.strategy': { schema: z.enum(ROUTING_STRATEGY_IDS), default: 'balanced' as RoutingStrategy },
+  /** When tiers 1 and 2 are out of limits: ask Sir before a third-party AI, or never use one. */
+  'pool.tier3': { schema: z.enum(['ask', 'never']), default: 'ask' as 'ask' | 'never' },
+  /** Per provider: switched off, or moved between tier 2 and 3. */
+  'pool.providers': {
+    schema: z.record(
+      z.string().max(40),
+      z.object({
+        enabled: z.boolean().optional(),
+        tier: z.union([z.literal(2), z.literal(3)]).optional(),
+      }),
+    ),
+    default: {} as Record<string, { enabled?: boolean; tier?: 2 | 3 }>,
+  },
+  /** Per model id (every provider serving it): switched off, and its place in the Priority order. */
+  'pool.models': {
+    schema: z.record(
+      z.string().max(200),
+      z.object({ enabled: z.boolean().optional(), order: z.number().int().optional() }),
+    ),
+    default: {} as Record<string, { enabled?: boolean; order?: number }>,
+  },
+  /** With several keys for one provider: the one with most room left first, or take turns. */
+  'pool.keyOrder': {
+    schema: z.enum(['roomiest', 'turns']),
+    default: 'roomiest' as 'roomiest' | 'turns',
+  },
+  /** Hours between automatic key checks (0 = only when Sir clicks Check all keys). */
+  'pool.checkHours': { schema: z.number().int().min(0).max(24), default: 6 },
+  /** A model that answers with nothing counts as a miss and the next one is tried. */
+  'pool.retryEmpty': { schema: z.boolean(), default: true },
   'models.default': { schema: modelId, default: 'claude-sonnet-5-5' },
   'models.deep': { schema: modelId, default: 'claude-opus-5-5' },
   'models.fast': { schema: modelId, default: 'claude-haiku-4-5-20251001' },

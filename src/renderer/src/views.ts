@@ -4,6 +4,7 @@ import { AppsView } from './features/apps/apps-view';
 import { NpcsView } from './features/npcs/npcs-view';
 import { CompareView } from './features/compare/compare-view';
 import { RouterView } from './features/router/router-view';
+import { Tier3Host, useTier3 } from './features/router/tier3-host';
 import { ConnectionsView } from './features/connections/connections-view';
 import { CopilotView } from './features/copilot/copilot-view';
 import { MemoryView } from './features/memory/memory-view';
@@ -40,7 +41,7 @@ export const EXTRA_VIEWS: Partial<Record<View, ComponentType>> = {
   compare: CompareView,
   router: RouterView,
 };
-export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog];
+export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog, Tier3Host];
 
 registerBridge((on) => [
   on('confirm:request', (p) => useConfirmStore.getState().show(p)),
@@ -48,6 +49,7 @@ registerBridge((on) => [
   on('memory:changed', () => useMemoryStore.getState().bump()),
   on('stage:panel', (p) => useStageStore.getState().show(p.panel)),
   on('planner:changed', () => void usePlannerStore.getState().refresh()),
+  on('pool:ask', (p) => useTier3.setState({ ask: p })),
   on('npc:message', (p) => useNpcStore.getState().onMessage(p.message)),
   on('npc:status', (p) => useNpcStore.getState().onStatus(p.npcId, p.state)),
   on('npc:meeting', (p) => useNpcStore.getState().onMeeting(p.meeting)),

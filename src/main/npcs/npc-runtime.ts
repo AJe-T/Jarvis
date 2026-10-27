@@ -172,7 +172,13 @@ export function createNpcRuntime(deps: {
       mode: 'text',
       purpose: 'task',
       signal: abort.signal,
-      taint: { tainted, ...(tainted ? { source } : {}) },
+      // An NPC always works from its vault memory and the team chat: never for the free pool
+      // (Security.md §16.15).
+      taint: {
+        tainted,
+        ...(tainted ? { source } : {}),
+        privateSource: 'its memory and the team chat',
+      },
     };
   }
 

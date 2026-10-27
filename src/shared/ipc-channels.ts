@@ -63,6 +63,13 @@ export const INVOKE_CHANNELS = [
   'runs:remove',
   'runs:clear',
   'runs:brains',
+  'pool:snapshot',
+  'pool:setProvider',
+  'pool:setModel',
+  'pool:settings',
+  'pool:checkKeys',
+  'pool:importEnv',
+  'pool:answer',
   'ai:connections',
   'ai:connection',
   'llm:cliStatus',
@@ -210,6 +217,7 @@ export const EVENT_CHANNELS = [
   'npc:message',
   'npc:status',
   'runs:update',
+  'pool:ask',
   'npc:meeting',
 ] as const;
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
