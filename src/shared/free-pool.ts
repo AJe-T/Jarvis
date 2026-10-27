@@ -40,8 +40,75 @@ export const ROUTING_STRATEGY_IDS = ROUTING_STRATEGIES.map((s) => s.id) as [
   ...RoutingStrategy[],
 ];
 export type RoutingStrategy = (typeof ROUTING_STRATEGIES)[number]['id'];
-/** Strategies Phase 1 can run; the others are drawn but disabled. */
-export const LIVE_STRATEGIES = ['priority', 'balanced'] as const;
+/** Phase 4 (2.34): every strategy runs. Kept for the IPC schema. */
+export const LIVE_STRATEGIES = ROUTING_STRATEGY_IDS;
+
+/** How much each strategy cares about reliability, speed and smarts (each set sums to 1). */
+export const ScoreWeightsSchema = z.object({
+  reliability: z.number().min(0).max(1),
+  speed: z.number().min(0).max(1),
+  smarts: z.number().min(0).max(1),
+});
+export type ScoreWeights = z.infer<typeof ScoreWeightsSchema>;
+export const STRATEGY_WEIGHTS: Record<
+  Exclude<RoutingStrategy, 'priority' | 'custom'>,
+  ScoreWeights
+> = {
+  balanced: { reliability: 0.5, speed: 0.25, smarts: 0.25 },
+  smartest: { reliability: 0.35, speed: 0.1, smarts: 0.55 },
+  fastest: { reliability: 0.35, speed: 0.55, smarts: 0.1 },
+  reliable: { reliability: 0.7, speed: 0.15, smarts: 0.15 },
+};
+
+/** A named order of models for one kind of job ("Coding", "Vision"): Phase 4 named chains. */
+export const PoolChainSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(30)
+    .regex(/^[\p{L}\p{N} _-]+$/u),
+  models: z.array(z.string().min(1).max(200)).max(30),
+});
+export type PoolChain = z.infer<typeof PoolChainSchema>;
+export const MAX_CHAINS = 8;
+
+export const ANALYTICS_RANGES = ['24h', '7d', '30d', '90d'] as const;
+export type AnalyticsRange = (typeof ANALYTICS_RANGES)[number];
+
+/** AI Router → Analytics (Phase 4): read from pool_calls (kept 92 days; never the text). */
+export const PoolAnalyticsSchema = z.object({
+  range: z.enum(ANALYTICS_RANGES),
+  buckets: z.array(
+    z.object({ label: z.string(), ok: z.number(), fail: z.number(), tokens: z.number() }),
+  ),
+  totals: z.object({
+    requests: z.number(),
+    successRate: z.number(),
+    tokensIn: z.number(),
+    tokensOut: z.number(),
+    avgMs: z.number(),
+    p95Ms: z.number(),
+    savedUsd: z.number(),
+  }),
+  providers: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      requests: z.number(),
+      successRate: z.number(),
+      avgMs: z.number(),
+      /** "runs out around 19:40 at this pace", "plenty left today"… */
+      outlook: z.string(),
+      /** 0..1 of today's tightest known daily cap, or null when none is known. */
+      usedToday: z.number().nullable(),
+    }),
+  ),
+  models: z.array(
+    z.object({ id: z.string(), requests: z.number(), successRate: z.number(), tokens: z.number() }),
+  ),
+});
+export type PoolAnalytics = z.infer<typeof PoolAnalyticsSchema>;
 
 /** Per-minute / per-day request and token caps (undefined = not published, learned from 429s). */
 export const PoolLimitsSchema = z.object({
@@ -373,7 +440,7 @@ export const ABILITY_KEYS = Object.keys(PoolAbilitySettingsSchema.shape) as Arra
 export interface SearchProviderDef {
   id: 'tavily' | 'brave' | 'exa' | 'firecrawl' | 'linkup';
   name: string;
-  /** DPAPI secret name (Providers & keys → Free search keys). */
+  /** DPAPI secret name (API keys → Free search keys). */
   secret: string;
   /** ⚠️ Free allowance as the provider states it (checked date below). */
   free: string;
@@ -478,6 +545,11 @@ export const PoolSnapshotSchema = z.object({
   retryEmpty: z.boolean(),
   delegation: PoolDelegationSchema,
   abilities: PoolAbilitiesSchema,
+  /** Phase 4 routing settings. */
+  weights: ScoreWeightsSchema,
+  learn: z.boolean(),
+  shrink: z.boolean(),
+  chains: z.array(PoolChainSchema),
   providers: z.array(PoolProviderSchema),
   models: z.array(PoolModelSchema),
   recent: z.array(PoolAnswerSchema),

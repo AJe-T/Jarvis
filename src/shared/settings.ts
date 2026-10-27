@@ -15,7 +15,14 @@ import {
   CONNECTION_ID_RE,
   type CloudProviderId,
 } from './llm-providers';
-import { ROUTING_STRATEGY_IDS, type RoutingStrategy } from './free-pool';
+import {
+  MAX_CHAINS,
+  PoolChainSchema,
+  ROUTING_STRATEGY_IDS,
+  ScoreWeightsSchema,
+  type PoolChain,
+  type RoutingStrategy,
+} from './free-pool';
 import {
   AURA_VOICES,
   GROQ_STT_MODELS,
@@ -135,6 +142,20 @@ export const SETTINGS = {
   },
   /** Hours between automatic key checks (0 = only when Sir clicks Check all keys). */
   'pool.checkHours': { schema: z.number().int().min(0).max(24), default: 6 },
+  /** Phase 4 (2.34): the Custom strategy's weights. */
+  'pool.weights': {
+    schema: ScoreWeightsSchema,
+    default: { reliability: 0.5, speed: 0.25, smarts: 0.25 },
+  },
+  /** Scores learn from the last week of answers, newer days counting more (half-life 2 days). */
+  'pool.learn': { schema: z.boolean(), default: true },
+  /** Free AIs get older tool output and repeated text trimmed, to fit their small limits. */
+  'pool.shrink': { schema: z.boolean(), default: true },
+  /** Named chains: an order of models for one kind of job (delegate_task "chain"). */
+  'pool.chains': {
+    schema: z.array(PoolChainSchema).max(MAX_CHAINS),
+    default: [] as PoolChain[],
+  },
   /** A model that answers with nothing counts as a miss and the next one is tried. */
   'pool.retryEmpty': { schema: z.boolean(), default: true },
   /** AI Router Phase 2 (2.32, Security.md §16.15): Claude may hand heavy non-private sub-tasks to brain "free". */

@@ -69,6 +69,9 @@ export function registerPoolHandlers(s: Services): void {
       const v = req.delegation?.[k];
       if (v !== undefined) s.settings.set(`pool.delegation.${k}`, v);
     }
+    if (req.weights) s.settings.set('pool.weights', req.weights);
+    if (req.learn !== undefined) s.settings.set('pool.learn', req.learn);
+    if (req.shrink !== undefined) s.settings.set('pool.shrink', req.shrink);
     for (const k of ABILITY_KEYS) {
       const v = req.abilities?.[k];
       if (v === undefined) continue;
@@ -152,6 +155,25 @@ export function registerPoolHandlers(s: Services): void {
     s.pool.custom.remove(req.id);
     s.audit.append('user', 'pool.custom_remove', { id: req.id });
     return s.pool.snapshot();
+  });
+
+  handle('pool:setChains', (req) => {
+    const names = req.chains.map((c) => c.name.trim().toLowerCase());
+    if (new Set(names).size !== names.length)
+      throw new JarvisError('INVALID', 'duplicate chain', 'Two chains have the same name.');
+    s.settings.set(
+      'pool.chains',
+      req.chains.map((c) => ({ name: c.name.trim(), models: [...new Set(c.models)] })),
+    );
+    return s.pool.snapshot();
+  });
+
+  handle('pool:analytics', (req) => s.pool.analytics(req.range));
+
+  handle('pool:testModel', async (req) => {
+    const out = await s.pool.testModel(req.model);
+    s.audit.append('user', 'pool.test_model', { model: req.model, doors: out.length });
+    return out;
   });
 
   // Sir typed the prompt himself; it still passes the private-data check (keys, cards, passwords).

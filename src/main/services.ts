@@ -631,7 +631,11 @@ export function createServices(opts: ServiceOptions) {
         dayShare(ledger, settings) >= BUDGET_SHARE
           ? `today's Claude budget is over 80% used: hand every heavy job with none of Sir's private data to brain "free"`
           : '';
-      return [slots.providers.integrations(), line, tight].filter(Boolean).join('; ');
+      const chains = others.includes('free') ? settings.get('pool.chains') : [];
+      const chainLine = chains.length
+        ? `free-pool chains for delegate_task "chain": ${chains.map((c) => c.name).join(', ')}`
+        : '';
+      return [slots.providers.integrations(), line, chainLine, tight].filter(Boolean).join('; ');
     },
     allowedRoots: () => settings.get('files.allowedRoots'),
     screenCount: () => slots.providers.screenCount(),

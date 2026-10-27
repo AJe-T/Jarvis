@@ -53,7 +53,7 @@ export function TiersTab({
         ))}
       </div>
       <p className="text-xs text-ink-500">
-        Move a provider between tier 2 and tier 3 on the Providers &amp; keys tab. The tier follows
+        Move a provider between tier 2 and tier 3 on the API keys tab. The tier follows
         the provider, not the model: Gemini through Google is tier 2, Gemini through an unknown
         relay is tier 3.
       </p>

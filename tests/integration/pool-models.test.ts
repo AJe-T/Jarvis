@@ -126,9 +126,9 @@ describe('a key pasted into a connection name', () => {
   it('is refused, and one saved before is replaced by the default name', () => {
     const t = setup();
     const s = t.services;
-    expect(() =>
-      s.connections.add('groq', 'gsk_Fake0Test1Key2Value3Abc4Def5Ghi6Jkl7Mno8'),
-    ).toThrow(/key in a connection name/);
+    expect(() => s.connections.add('groq', 'gsk_Fake0Test1Key2Value3Abc4Def5Ghi6Jkl7Mno8')).toThrow(
+      /key in a connection name/,
+    );
     expect(() =>
       s.connections.rename(t.groq.id, 'gsk_Fake0Test1Key2Value3Abc4Def5Ghi6Jkl7Mno8'),
     ).toThrow(/key in a connection name/);

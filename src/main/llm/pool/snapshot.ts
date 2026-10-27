@@ -7,6 +7,7 @@ import {
   type PoolProvider,
   type PoolSnapshot,
   ABILITY_KEYS,
+  STRATEGY_WEIGHTS,
   DELEGATION_KEYS,
   type PoolAbilities,
   type PoolAbilitySettings,
@@ -19,7 +20,8 @@ import type { SettingsService } from '../../settings/settings-service';
 import type { CustomProvider } from './custom';
 import { fusionLineup } from './fusion';
 import {
-  balancedScore,
+  weightedScore,
+  weightsOf,
   modelMeta,
   rankRoutes,
   reliabilityOf,
@@ -114,10 +116,13 @@ export function buildSnapshot(x: {
   const order = rankRoutes(
     x.routes,
     { tools: false, vision: false, tiers: [2, 3] },
-    strategy === 'priority' ? 'priority' : 'balanced',
+    strategy,
     settings.get('pool.keyOrder'),
     now,
+    settings.get('pool.weights'),
   );
+  // The score column shows the active strategy's score (Priority: Balanced, for comparison).
+  const weights = weightsOf(strategy, settings.get('pool.weights')) ?? STRATEGY_WEIGHTS.balanced;
   const ordered = [...order.ranked, ...order.skipped.map((s) => s.route)];
   const byModel = new Map<string, RouteState[]>();
   for (const r of ordered) byModel.set(r.model, [...(byModel.get(r.model) ?? []), r]);
@@ -172,7 +177,7 @@ export function buildSnapshot(x: {
       reliability: measured ? Math.round(reliabilityOf(stats) * 100) : 0,
       speed: stats.tokPerSec > 0 ? Math.round(speedOf(stats) * 100) : 0,
       intelligence: SIZE_PCT[meta.size],
-      score: measured ? Math.max(...rs.map(balancedScore)) : 0,
+      score: measured ? Math.max(...rs.map((r) => weightedScore(r, weights))) : 0,
       enabled: rs.some((r) => r.enabled),
       routes: rs.map((r) => ({
         providerId: r.provider,
@@ -251,6 +256,10 @@ export function buildSnapshot(x: {
     delegation: Object.fromEntries(
       DELEGATION_KEYS.map((k) => [k, settings.get(`pool.delegation.${k}`)]),
     ) as PoolDelegation,
+    weights: settings.get('pool.weights'),
+    learn: settings.get('pool.learn'),
+    shrink: settings.get('pool.shrink'),
+    chains: settings.get('pool.chains'),
     abilities: {
       settings: Object.fromEntries(
         ABILITY_KEYS.map((k) => [k, settings.get(`pool.abilities.${k}`)]),

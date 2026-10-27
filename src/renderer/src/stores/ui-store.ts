@@ -33,6 +33,8 @@ export interface Toast {
 interface UiState {
   view: View;
   settingsSection: string;
+  /** AI Router tab to open (go('router', tab)); the view clears it once used. */
+  routerTab: string | null;
   /** Spaces view target: "Space" or "Space/Page"; null = the Spaces dashboard. */
   spaceTarget: string | null;
   activityOpen: boolean;
@@ -75,6 +77,7 @@ function writeRailHidden(hidden: boolean): void {
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'chat',
   settingsSection: 'brain',
+  routerTab: null,
   spaceTarget: null,
   // §5.1: the conversation log owns the right edge of Core now, so activity starts closed.
   activityOpen: false,
@@ -89,7 +92,9 @@ export const useUiStore = create<UiState>((set, get) => ({
     set(
       view === 'spaces'
         ? { view, spaceTarget: section ?? null }
-        : { view, ...(section ? { settingsSection: section } : {}) },
+        : view === 'router'
+          ? { view, routerTab: section ?? null }
+          : { view, ...(section ? { settingsSection: section } : {}) },
     );
   },
   toggleActivity: () => set({ activityOpen: !get().activityOpen }),

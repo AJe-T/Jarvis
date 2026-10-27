@@ -1,14 +1,22 @@
 import { AlertTriangle, ArrowRight, Brain, Cloud, Lock, ShieldAlert, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import type { PoolSnapshot, PoolTier } from '@shared/free-pool';
+import { AiMap } from './ai-map';
+import type { RouterTab } from './ai-map-model';
 import { Panel, ProviderDot, StatTile, TierTag, fmtAgo, fmtIn, fmtTokens } from './parts';
 
 function providerLabel(s: PoolSnapshot, id: string): string {
   return s.providers.find((p) => p.id === id)?.label ?? id;
 }
 
-/** Overview: how the three tiers stand right now, today's numbers, the last answers. */
-export function OverviewTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element {
+/** Overview: today's numbers, the map of every AI, how the tiers stand, the last answers. */
+export function OverviewTab({
+  snap,
+  onOpen,
+}: {
+  snap: PoolSnapshot;
+  onOpen: (tab: RouterTab) => void;
+}): React.JSX.Element {
   const t2 = snap.providers.filter((p) => p.tier === 2 && p.enabled);
   const t2Keys = t2.reduce((n, p) => n + p.keys.length, 0);
   const t3 = snap.providers.filter((p) => p.tier === 3);
@@ -28,6 +36,10 @@ export function OverviewTab({ snap }: { snap: PoolSnapshot }): React.JSX.Element
           hint="what Claude would have cost"
         />
       </div>
+
+      <Panel title="Your AI map" aside="Click any box to change it">
+        <AiMap snap={snap} onOpen={onOpen} />
+      </Panel>
 
       <Panel title="Who answers what" aside="Tier = who receives your text, not the model name">
         <ol className="grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">

@@ -1,4 +1,10 @@
-import type { ModelSize, PoolLimits, RoutingStrategy } from '@shared/free-pool';
+import {
+  STRATEGY_WEIGHTS,
+  type ModelSize,
+  type PoolLimits,
+  type RoutingStrategy,
+  type ScoreWeights,
+} from '@shared/free-pool';
 
 /**
  * AI Router Phase 1: which free routes to try, in what order. Pure, so it is tested without a
@@ -28,16 +34,20 @@ export interface RouteState {
   vision: boolean | null;
   /** Epoch ms of the last attempt (for "take turns" key order). */
   lastUsed: number;
+  /** Context window in tokens where the provider's model list says; undefined = unknown. */
+  context?: number | undefined;
 }
 
 export interface Needs {
   tools: boolean;
   vision: boolean;
   tiers: ReadonlyArray<2 | 3>;
+  /** Rough size of the request (prompt + room for the answer); a route known to be smaller is skipped. */
+  tokens?: number;
 }
 
 export type SkipReason =
-  'off' | 'tier' | 'cooling' | 'rpm' | 'rpd' | 'tpm' | 'tpd' | 'tools' | 'vision';
+  'off' | 'tier' | 'cooling' | 'rpm' | 'rpd' | 'tpm' | 'tpd' | 'tools' | 'vision' | 'context';
 
 export interface Ranked {
   ranked: RouteState[];
@@ -65,6 +75,7 @@ function skipReason(r: RouteState, needs: Needs, now: number): SkipReason | null
   if (r.limits.tpd && r.used.tpd >= r.limits.tpd) return 'tpd';
   if (needs.tools && r.tools === false) return 'tools';
   if (needs.vision && r.vision === false) return 'vision';
+  if (needs.tokens && r.context && needs.tokens > r.context) return 'context';
   return null;
 }
 
@@ -89,12 +100,23 @@ export function headroomFactor(used: number): number {
   return left >= 0.2 ? 1 : 0.1 + 0.9 * (left / 0.2);
 }
 
-export function balancedScore(r: RouteState): number {
+/** Phase 4: a strategy's weighted score (reliability, speed, smarts), shrunk near a route's caps. */
+export function weightedScore(r: RouteState, w: ScoreWeights): number {
+  const sum = w.reliability + w.speed + w.smarts || 1;
   const base =
-    0.5 * reliabilityOf(r.stats) +
-    0.25 * speedOf(r.stats) +
-    0.25 * SIZE_SCORE[modelMeta(r.model).size];
+    (w.reliability * reliabilityOf(r.stats) +
+      w.speed * speedOf(r.stats) +
+      w.smarts * SIZE_SCORE[modelMeta(r.model).size]) /
+    sum;
   return base * headroomFactor(usedFraction(r));
+}
+
+export const balancedScore = (r: RouteState): number => weightedScore(r, STRATEGY_WEIGHTS.balanced);
+
+/** The weights a strategy ranks by (Custom: Sir's own); null for Priority (his order). */
+export function weightsOf(strategy: RoutingStrategy, custom: ScoreWeights): ScoreWeights | null {
+  if (strategy === 'priority') return null;
+  return strategy === 'custom' ? custom : STRATEGY_WEIGHTS[strategy];
 }
 
 export function rankRoutes(
@@ -103,6 +125,7 @@ export function rankRoutes(
   strategy: RoutingStrategy,
   keyOrder: 'roomiest' | 'turns',
   now: number,
+  custom: ScoreWeights = STRATEGY_WEIGHTS.balanced,
 ): Ranked {
   const skipped: Ranked['skipped'] = [];
   const ok: RouteState[] = [];
@@ -115,10 +138,12 @@ export function rankRoutes(
   const keyTie = (a: RouteState, b: RouteState): number =>
     keyOrder === 'turns' ? a.lastUsed - b.lastUsed : usedFraction(a) - usedFraction(b);
   const tierFirst = (a: RouteState, b: RouteState): number => a.tier - b.tier;
-  const ranked =
-    strategy === 'priority'
-      ? ok.sort((a, b) => tierFirst(a, b) || a.order - b.order || keyTie(a, b))
-      : ok.sort((a, b) => tierFirst(a, b) || balancedScore(b) - balancedScore(a) || keyTie(a, b));
+  const w = weightsOf(strategy, custom);
+  const ranked = w
+    ? ok.sort(
+        (a, b) => tierFirst(a, b) || weightedScore(b, w) - weightedScore(a, w) || keyTie(a, b),
+      )
+    : ok.sort((a, b) => tierFirst(a, b) || a.order - b.order || keyTie(a, b));
   return { ranked, skipped };
 }
 
@@ -132,6 +157,7 @@ const WHY_GROUP: Record<SkipReason, string> = {
   tier: 'third-party (not allowed)',
   tools: 'can’t use tools',
   vision: 'can’t see pictures',
+  context: 'too small for this request',
 };
 
 /** "All free AIs are busy: 7 routes checked (5 rate limited…). Soonest back in about 2 min." */
@@ -147,7 +173,7 @@ export function summarizeExhaustion(
   }
   if (failed) groups.set('failed just now', failed);
   const total = skipped.length + failed;
-  if (total === 0) return 'No free AI is set up yet: add a key on AI Router → Providers & keys.';
+  if (total === 0) return 'No free AI is set up yet: add a key on AI Router → API keys.';
   const parts = [...groups.entries()].map(([g, n]) => `${n} ${g}`).join(', ');
   const soonest = skipped
     .map((s) => s.route.coolingUntil ?? 0)

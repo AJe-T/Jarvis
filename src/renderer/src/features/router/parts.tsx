@@ -3,7 +3,7 @@ import * as RadixSwitch from '@radix-ui/react-switch';
 import clsx from 'clsx';
 import { Eye } from 'lucide-react';
 import type { KeyHealth, PoolPhase, PoolTier } from '@shared/free-pool';
-import { PROVIDER_COLORS } from '../settings/model-tree';
+import { PROVIDER_COLORS } from './colors';
 
 /** Building blocks shared by the AI Router tabs. */
 

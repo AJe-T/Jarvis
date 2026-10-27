@@ -142,3 +142,52 @@ describe('free pool router', () => {
     expect(modelMeta('deepseek-v3-671b').size).toBe('frontier');
   });
 });
+
+describe('Phase 4 strategies', () => {
+  // Three routes, each best at one thing.
+  const big = route({
+    key: 'big',
+    model: 'deepseek-v3.1-671b',
+    stats: { ok: 6, fail: 4, avgMs: 4000, tokPerSec: 15 },
+  });
+  const fast = route({
+    key: 'fast',
+    model: 'llama-3.1-8b-instant',
+    stats: { ok: 6, fail: 4, avgMs: 300, tokPerSec: 400 },
+  });
+  const steady = route({
+    key: 'steady',
+    model: 'gemma-3-27b',
+    stats: { ok: 60, fail: 0, avgMs: 2000, tokPerSec: 30 },
+  });
+  const first = (
+    strategy: Parameters<typeof rankRoutes>[2],
+    w?: Parameters<typeof rankRoutes>[5],
+  ) => rankRoutes([big, fast, steady], ALL, strategy, 'roomiest', NOW, w).ranked[0]?.key;
+
+  it('Smartest, Fastest and Most reliable each put their own kind first', () => {
+    expect(first('smartest')).toBe('big');
+    expect(first('fastest')).toBe('fast');
+    expect(first('reliable')).toBe('steady');
+  });
+
+  it('Custom ranks by Sir’s own weights', () => {
+    expect(first('custom', { reliability: 0, speed: 1, smarts: 0 })).toBe('fast');
+    expect(first('custom', { reliability: 0, speed: 0, smarts: 1 })).toBe('big');
+  });
+
+  it('skips a model whose known context is smaller than the request', () => {
+    const small = route({ key: 'small', context: 8192 });
+    const roomy = route({ key: 'roomy', context: 131072 });
+    const unknown = route({ key: 'unknown' });
+    const r = rankRoutes(
+      [small, roomy, unknown],
+      { ...ALL, tokens: 20_000 },
+      'balanced',
+      'roomiest',
+      NOW,
+    );
+    expect(r.ranked.map((x) => x.key).sort()).toEqual(['roomy', 'unknown']);
+    expect(r.skipped).toEqual([{ route: small, why: 'context' }]);
+  });
+});

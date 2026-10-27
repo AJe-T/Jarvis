@@ -121,13 +121,13 @@ export function createFusion(deps: {
   const now = (): number => deps.now?.() ?? Date.now();
 
   function lineup(): ReturnType<typeof pickLineup> {
-    const live = deps.settings.get('pool.strategy') === 'priority' ? 'priority' : 'balanced';
     const { ranked } = rankRoutes(
       deps.pool.routes(),
       { tools: false, vision: false, tiers: [2] },
-      live,
+      deps.settings.get('pool.strategy'),
       deps.settings.get('pool.keyOrder'),
       now(),
+      deps.settings.get('pool.weights'),
     );
     return pickLineup(ranked);
   }

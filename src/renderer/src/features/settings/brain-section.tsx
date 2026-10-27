@@ -1,26 +1,44 @@
 import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
+import { useUiStore } from '../../stores/ui-store';
 import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { AgentClisCard } from './agent-clis-card';
 import { ConnectionsCard } from './connections-card';
 import { ConnectionPicker, LocalModelCard, SubscriptionApps } from './connection';
-import { ModelTreeView } from './model-tree-view';
+import { AiMap } from '../router/ai-map';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
 
+/**
+ * Settings → Models & AI. The same parts make up AI Router → Main brain and API keys, so a change
+ * made in either place is the same setting.
+ */
 export function BrainSection(): React.JSX.Element {
-  const day = useSettingsStore((s) => s.dayCostUsd);
-  const month = useSettingsStore((s) => s.monthCostUsd);
+  const go = useUiStore((s) => s.go);
+  return (
+    <>
+      <Section
+        title="Your AI map"
+        description="Every AI Jarvis can use, and the models each one runs. AI Router has all of this too, in tabs: Main brain, API keys and the free pool."
+      >
+        <AiMap onOpen={(tab) => go('router', tab)} />
+      </Section>
+      <BrainConnection />
+      <ApiKeysSection />
+      <ClaudeModels />
+      <OtherAis />
+      <BudgetSection />
+      <FastCommands />
+    </>
+  );
+}
+
+/** Who answers Sir: Claude by key or plan, the local model, or another provider. */
+export function BrainConnection(): React.JSX.Element {
   const provider = useDraftSetting('llm.provider');
   const subscription = provider === 'subscription';
   const fallbackLocal = useDraftSetting('llm.fallbackLocal') === true;
   return (
     <>
-      <Section
-        title="Your AI tree"
-        description="Jarvis at the top; every AI he can use hangs below it, with the models each one runs. The main brain answers you; helpers take sub-tasks; the fallback steps in when Claude is down. Click a branch to change it."
-      >
-        <ModelTreeView />
-      </Section>
       <div id="brain-connection" className="scroll-mt-4">
         <Section
           title="Connection"
@@ -57,15 +75,34 @@ export function BrainSection(): React.JSX.Element {
           </p>
         </Section>
       </div>
+    </>
+  );
+}
+
+/** Every provider key (several per provider allowed) and each key's model list. */
+export function ApiKeysSection(): React.JSX.Element {
+  return (
+    <>
       <div id="brain-connections" className="scroll-mt-4">
         <Section
-          title="Connections and models"
+          title="API keys and their models"
           description="Every AI provider key you saved, and more than one per provider if you like (work and personal). Each has its own model list: refresh it from the provider, star favourites, hide the ones you don't want. Keys stay encrypted on this PC."
         >
           <ConnectionsCard />
         </Section>
       </div>
-      <Section title="Models" description="Model IDs can be changed without an app update.">
+    </>
+  );
+}
+
+/** Claude's model for each job. */
+export function ClaudeModels(): React.JSX.Element {
+  return (
+    <>
+      <Section
+        title="Claude's models"
+        description="Which Claude model does each job. Model IDs can be changed without an app update."
+      >
         <div className="grid max-w-xl gap-4">
           <SettingInput k="models.default" label="Default (conversation)" />
           <SettingInput k="models.deep" label="Deep thinking (“think hard”, “plan”)" />
@@ -76,8 +113,19 @@ export function BrainSection(): React.JSX.Element {
             hint="Must support the computer-use toolset (Sonnet or Opus 5.5)."
           />
         </div>
-        <SettingSwitch k="web.search.enabled" label="Allow web search (billed per search)" />
+        <SettingSwitch
+          k="web.search.enabled"
+          label="Allow Claude's web search (billed per search; free search goes first)"
+        />
       </Section>
+    </>
+  );
+}
+
+/** Plans Sir already pays for, and coding agents found on this PC. */
+export function OtherAis(): React.JSX.Element {
+  return (
+    <>
       <div id="brain-subscriptions" className="scroll-mt-4">
         <Section
           title="Your AI subscriptions"
@@ -92,6 +140,16 @@ export function BrainSection(): React.JSX.Element {
       >
         <AgentClisCard />
       </Section>
+    </>
+  );
+}
+
+export function BudgetSection(): React.JSX.Element {
+  const day = useSettingsStore((s) => s.dayCostUsd);
+  const month = useSettingsStore((s) => s.monthCostUsd);
+  const subscription = useDraftSetting('llm.provider') === 'subscription';
+  return (
+    <>
       <Section
         title="Budget"
         description={
@@ -117,6 +175,13 @@ export function BrainSection(): React.JSX.Element {
           />
         </div>
       </Section>
+    </>
+  );
+}
+
+export function FastCommands(): React.JSX.Element {
+  return (
+    <>
       <Section
         title="Fast commands"
         description="Plain PC commands, typed or spoken (“open Spotify”, “volume 30”, “next song”, “mute”, “lock my PC”), run straight away with no Claude call: instant and free. With Laya installed, loosely worded ones (“ugh, skip this song”) work too, understood on this PC. Anything else goes to Claude as usual."

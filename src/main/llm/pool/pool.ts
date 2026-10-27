@@ -4,7 +4,9 @@ import {
   isCustomProvider,
   isFreeChatModel,
   routeKey,
+  type AnalyticsRange,
   type PoolAbilities,
+  type PoolAnalytics,
   type PoolLimits,
   type PoolSnapshot,
 } from '@shared/free-pool';
@@ -35,6 +37,8 @@ import {
 } from './custom';
 import { rankRoutes, summarizeExhaustion, type RouteState } from './router';
 import { buildSnapshot, providerName } from './snapshot';
+import { estimateTokens, shrinkRequest } from './shrink';
+import { buildAnalytics } from './analytics';
 
 /**
  * AI Router Phase 1 (Security.md §16.15): the free pool behind the "free" brain. Tries tier-2
@@ -142,13 +146,19 @@ export interface PoolJob {
   handover?: (req: LlmRequest) => LlmRequest;
   /** Fusion: narrows or reorders the ranked routes (one provider per drafter, the judge's pick). */
   pick?: (ranked: RouteState[]) => RouteState[];
+  /** Phase 4: a named chain (`pool.chains`): its models go first, in its order. */
+  chain?: string;
 }
+
+/** Days of request records kept (Analytics shows up to 90). */
+export const KEEP_DAYS = 92;
+/** Learned scores: a day's results count half as much every this many days. */
+const HALF_LIFE_DAYS = 2;
 
 const MAX_ATTEMPTS = 6;
 /** No new attempt starts after this long (the first always may). */
 const TIME_BUDGET_MS = 45_000;
 const ALLOWED = CLOUD_PROVIDERS.map((p) => p.baseUrl);
-const KEEP_DAYS = 31;
 /** 429 without a hint: 1 min, then 5, then 30. */
 const LADDER_MS = [60_000, 300_000, 1_800_000];
 
@@ -228,6 +238,7 @@ export function createFreePool(deps: PoolDeps) {
     tier: 2 | 3;
     enabled: boolean;
     limits: PoolLimits;
+    context?: number | undefined;
   }> {
     const account = settings.get('llm.cloud.cloudflareAccount');
     const builtIn = poolConnections()
@@ -239,6 +250,7 @@ export function createFreePool(deps: PoolDeps) {
           connectionId: c.id,
           provider: c.provider,
           model,
+          context: c.models.find((m) => m.model === model)?.context ?? undefined,
           // Groq reports its caps per model, so learned limits are kept per route.
           limits: {
             ...freeProvider(c.provider)?.limits,
@@ -268,13 +280,7 @@ export function createFreePool(deps: PoolDeps) {
       const key = routeKey(id, model);
       const ms = modelSettings(model);
       const where = 'FROM pool_calls WHERE connection_id = ? AND model = ?';
-      const stats = db
-        .prepare(
-          `SELECT SUM(ok) AS ok, SUM(1 - ok) AS fail, AVG(CASE WHEN ok = 1 THEN ms END) AS ms,
-                  SUM(CASE WHEN ok = 1 THEN output_tokens END) AS outTok,
-                  SUM(CASE WHEN ok = 1 THEN ms END) AS okMs ${where} AND at >= ?`,
-        )
-        .get(id, model, weekAgo) as Record<string, number | null>;
+      const stats = weekStats(id, model, weekAgo, t);
       // A route pause and a whole-key pause (bad key, server down) can both apply: the later wins.
       const pauses = [cooling.get(key), cooling.get(id)].filter((p) => p && p.until > t);
       const cool = pauses.sort((a, b) => (b?.until ?? 0) - (a?.until ?? 0))[0];
@@ -305,18 +311,61 @@ export function createFreePool(deps: PoolDeps) {
           ),
         },
         ...(cool && cool.until > t ? { coolingUntil: cool.until, coolingReason: cool.reason } : {}),
-        stats: {
-          ok: stats['ok'] ?? 0,
-          fail: stats['fail'] ?? 0,
-          avgMs: stats['ms'] ?? 0,
-          tokPerSec:
-            stats['okMs'] && stats['outTok'] ? (stats['outTok'] / stats['okMs']) * 1000 : 0,
-        },
+        stats,
         tools: capsNow.tools ?? null,
         vision: capsNow.vision ?? null,
         lastUsed: lastUsed.get(key) ?? 0,
+        ...(s.context ? { context: s.context } : {}),
       };
     });
+  }
+
+  /**
+   * The last week of one route's results. With `pool.learn` (Phase 4) each day counts half as
+   * much every two days, so a model that got better (or worse) moves in the ranking quickly.
+   */
+  function weekStats(id: string, model: string, since: string, t: number): RouteState['stats'] {
+    const rows = db
+      .prepare(
+        `SELECT day, SUM(ok) AS ok, SUM(1 - ok) AS fail, SUM(CASE WHEN ok = 1 THEN ms END) AS okMs,
+                SUM(CASE WHEN ok = 1 THEN output_tokens END) AS outTok
+         FROM pool_calls WHERE connection_id = ? AND model = ? AND at >= ? GROUP BY day`,
+      )
+      .all(id, model, since) as Array<{
+      day: string;
+      ok: number;
+      fail: number;
+      okMs: number | null;
+      outTok: number | null;
+    }>;
+    const learn = settings.get('pool.learn');
+    const today = Date.parse(utcDay(t));
+    const s = { ok: 0, fail: 0, okMs: 0, outTok: 0 };
+    for (const r of rows) {
+      const age = (today - Date.parse(r.day)) / 86_400_000;
+      const w = learn ? 0.5 ** (age / HALF_LIFE_DAYS) : 1;
+      s.ok += w * r.ok;
+      s.fail += w * r.fail;
+      s.okMs += w * (r.okMs ?? 0);
+      s.outTok += w * (r.outTok ?? 0);
+    }
+    return {
+      ok: s.ok,
+      fail: s.fail,
+      avgMs: s.ok ? s.okMs / s.ok : 0,
+      tokPerSec: s.okMs && s.outTok ? (s.outTok / s.okMs) * 1000 : 0,
+    };
+  }
+
+  /** A named chain's models first, in its order; every other route after them, as ranked. */
+  function byChain(ranked: RouteState[], name: string | undefined): RouteState[] {
+    if (!name) return ranked;
+    const chain = settings
+      .get('pool.chains')
+      .find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
+    if (!chain) return ranked;
+    const first = chain.models.flatMap((m) => ranked.filter((r) => r.model === m));
+    return [...first, ...ranked.filter((r) => !chain.models.includes(r.model))];
   }
 
   /** Where a route (or key) sends its requests: a catalogue address or one of Sir's own. */
@@ -612,22 +661,24 @@ export function createFreePool(deps: PoolDeps) {
         let failed = 0;
         let tried = 0;
         let lastSkipped: ReturnType<typeof rankRoutes>['skipped'] = [];
-        // Phase 1 runs Priority and Balanced; later strategies fall back to Balanced.
-        const live = settings.get('pool.strategy') === 'priority' ? 'priority' : 'balanced';
+        // Phase 4: older tool output and repeats trimmed for small free limits (tier 3 gets the question only).
+        const small = settings.get('pool.shrink') ? shrinkRequest(req) : req;
+        const tokens = estimateTokens(small);
         const prev = job.sticky ? lastRoute.get(job.sticky) : undefined;
         const before = prev && prev.until > now() ? prev.key : undefined;
         for (const tier of job.tiers ?? ([2, 3] as const)) {
           const all = routes();
           // Tier 3 gets the question only (no tools, no pictures), so it never needs either.
-          const needs = tier === 3 ? { tools: false, vision: false } : needsOf(req);
+          const needs = tier === 3 ? { tools: false, vision: false } : { ...needsOf(req), tokens };
           const { ranked, skipped } = rankRoutes(
             all,
             { ...needs, tiers: [tier] },
-            live,
+            settings.get('pool.strategy'),
             settings.get('pool.keyOrder'),
             now(),
+            settings.get('pool.weights'),
           );
-          const picked = job.pick ? job.pick(ranked) : ranked;
+          const picked = byChain(job.pick ? job.pick(ranked) : ranked, job.chain);
           if (tier === 3) {
             // Only ask when a third-party route could actually take this request.
             if (picked.length === 0) break;
@@ -654,7 +705,7 @@ export function createFreePool(deps: PoolDeps) {
             tried += 1;
             // Tier 3 never gets the note: questionOnly takes the current question from req.
             const switched = before && r.key !== before && r.tier === 2;
-            const sent = switched && job.handover ? job.handover(req) : req;
+            const sent = switched && job.handover ? job.handover(small) : small;
             const res = await attempt(r, sent, opts, job, trail);
             if ('msg' in res) {
               if (job.sticky) lastRoute.set(job.sticky, { key: r.key, until: now() + STICKY_MS });
@@ -732,7 +783,7 @@ export function createFreePool(deps: PoolDeps) {
         }),
       );
     },
-    /** Sir's own providers (AI Router → Providers & keys → Add custom provider). */
+    /** Sir's own providers (AI Router → API keys → Add custom provider). */
     custom: deps.custom,
     /** "Test" before saving: the checks of `add`, then a one-token "Reply OK" (nothing else is sent). */
     async testCustom(input: CustomInput): Promise<void> {
@@ -752,6 +803,54 @@ export function createFreePool(deps: PoolDeps) {
     },
     /** Forget pauses (Sir fixed a key, or wants to retry now). */
     clearCooldowns: (): void => cooling.clear(),
+    /** AI Router → Analytics (Phase 4). */
+    analytics: (range: AnalyticsRange): PoolAnalytics =>
+      buildAnalytics({
+        db,
+        range,
+        now: now(),
+        routes: routes(),
+        label: (id) =>
+          isCustomProvider(id) ? (deps.custom.find(id)?.name ?? id) : providerName(id),
+        claudeCost: (input, output) =>
+          costOf(deps.claudePrice(), { input, output, cacheRead: 0, cacheWrite: 0 }),
+      }),
+    /**
+     * Models tab → Test: a one-line "Reply with OK" to every tier-2 door of one model (a real
+     * request, recorded and learned from like any other; tier 3 is never tested without asking).
+     */
+    async testModel(
+      model: string,
+    ): Promise<
+      Array<{ provider: string; name: string; ok: boolean; ms: number; reason?: string }>
+    > {
+      const doors = routes().filter((r) => r.model === model && r.tier === 2);
+      return Promise.all(
+        doors.map(async (r) => {
+          const trail: Trail = { attempts: [] };
+          const t0 = now();
+          await attempt(
+            r,
+            {
+              model: 'pool',
+              max_tokens: 16,
+              messages: [{ role: 'user', content: 'Reply with the single word OK.' }],
+            },
+            { signal: AbortSignal.timeout(30_000) },
+            { id: `test_${t0}`, task: 'Model test' },
+            trail,
+          );
+          const a = trail.attempts[0];
+          return {
+            provider: r.provider,
+            name: a?.name ?? providerName(r.provider),
+            ok: a?.ok ?? false,
+            ms: now() - t0,
+            ...(a?.reason ? { reason: a.reason } : {}),
+          };
+        }),
+      );
+    },
     providers: FREE_PROVIDERS,
   };
 }

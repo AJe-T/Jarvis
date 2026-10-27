@@ -288,15 +288,16 @@ export function ConnectionsCard(): React.JSX.Element {
   const [open, setOpen] = useState<string | null>(null);
   const [provider, setProvider] = useState<CloudProviderId>('openai');
   const [label, setLabel] = useState('');
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const toast = useUiStore((st) => st.toast);
   if (!list) return <span className="skeleton block h-16 w-full" aria-hidden />;
   const shown = list.filter((c) => c.keySet || !c.primary || c.id === open);
   const count = list.filter((c) => c.provider === provider).length;
   return (
     <div className="flex flex-col gap-3">
       {shown.length === 0 && (
-        <p className="text-sm text-ink-300">
-          No AI provider keys yet. Add one below or in Connection above.
-        </p>
+        <p className="text-sm text-ink-300">No AI provider keys yet. Add one below.</p>
       )}
       <ul className="flex flex-col gap-2">
         {shown.map((c) => (
@@ -328,47 +329,101 @@ export function ConnectionsCard(): React.JSX.Element {
         ))}
       </ul>
       <form
-        className="flex flex-wrap items-end gap-2"
+        className="flex flex-col gap-3 rounded-md border border-dashed border-line p-3"
+        aria-label="Add an API key"
         onSubmit={(e) => {
           e.preventDefault();
-          void act({ action: 'add', provider, label }).then((r) => {
-            if (r.ok && r.id) setOpen(r.id);
-            setLabel('');
-          });
+          if (!key.trim()) return;
+          setBusy(true);
+          // The provider's own slot first (unless Sir named the key); otherwise an extra connection.
+          const main = list.find((c) => c.provider === provider && c.primary);
+          const target =
+            main && !main.keySet && !label.trim()
+              ? Promise.resolve({ ok: true, id: main.id })
+              : act({ action: 'add', provider, label });
+          void target
+            .then(async (r) => {
+              const id = r.ok ? r.id : undefined;
+              const conn = useList.getState().list?.find((c) => c.id === id);
+              if (!id || !conn) return;
+              await call('secrets:set', { name: conn.secret, value: key.trim() });
+              // Fetch its model list now, so its models show up straight away.
+              const listed = await act({ action: 'refresh', id });
+              setKey('');
+              setLabel('');
+              setOpen(id);
+              toast({
+                level: listed.ok ? 'info' : 'warn',
+                message: listed.ok
+                  ? `${cloudProvider(provider).label}: key saved and its models loaded.`
+                  : `Key saved, but its model list didn't load: ${listed.error ?? 'try Refresh'}.`,
+              });
+            })
+            .catch((err: unknown) => toast({ level: 'error', message: cleanError(err) }))
+            .finally(() => setBusy(false));
         }}
       >
-        <label className="flex flex-col gap-1 text-sm text-ink-100">
-          Add a connection
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value as CloudProviderId)}
-            className="min-h-8 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
+        <span className="text-sm font-semibold text-ink-100">Add an API key</span>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-sm text-ink-100">
+            Provider
+            <select
+              aria-label="Provider"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as CloudProviderId)}
+              className="min-h-9 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
+            >
+              {CLOUD_PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-64 flex-1 flex-col gap-1 text-sm text-ink-100">
+            API key
+            <input
+              type="password"
+              aria-label="API key"
+              autoComplete="off"
+              spellCheck={false}
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="Paste the key here"
+              className="min-h-9 rounded-md border border-line bg-surface-2 px-2 font-code text-ink-100"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-ink-100">
+            Name (optional, not the key)
+            <input
+              aria-label="Name (optional, not the key)"
+              value={label}
+              maxLength={60}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Work account"
+              className="min-h-9 w-48 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
+            />
+          </label>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy || !key.trim() || count >= MAX_CONNECTIONS_PER_PROVIDER}
           >
-            {CLOUD_PROVIDERS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-ink-100">
-          Name
-          <input
-            value={label}
-            maxLength={60}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Work account"
-            className="min-h-8 w-48 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
-          />
-        </label>
-        <Button type="submit" disabled={count >= MAX_CONNECTIONS_PER_PROVIDER}>
-          Add key
-        </Button>
+            {busy ? 'Saving…' : 'Save and load models'}
+          </Button>
+        </div>
         {count >= MAX_CONNECTIONS_PER_PROVIDER && (
           <span className="text-sm text-ink-300">
             At most {MAX_CONNECTIONS_PER_PROVIDER} keys per provider.
           </span>
         )}
+        <button
+          type="button"
+          className="self-start text-xs text-accent-300 underline-offset-2 hover:underline"
+          onClick={() => void call('app:openExternal', { url: cloudProvider(provider).keysUrl })}
+        >
+          Where do I get a {cloudProvider(provider).label} key?
+        </button>
       </form>
       <p className="text-xs text-ink-500">
         Extra keys show up as their own AI for sub-agents and NPCs. Each one is billed on its own

@@ -26,7 +26,7 @@ export function AbilitiesTab({
 }: {
   snap: PoolSnapshot;
   actions: PoolActions;
-  /** Opens Providers & keys, where the search keys go. */
+  /** Opens API keys, where the search keys go. */
   onKeys: () => void;
 }): React.JSX.Element {
   const a = snap.abilities;
@@ -105,7 +105,7 @@ function SearchPanel({
           className="text-accent-300 underline-offset-2 hover:underline"
           onClick={onKeys}
         >
-          Add keys on Providers &amp; keys
+          Add keys on API keys
         </button>
         .
       </p>
@@ -274,7 +274,7 @@ function FusionPanel({
         </div>
       ) : (
         <p className="text-sm text-ink-500">
-          Needs keys from at least two free providers (Providers &amp; keys).
+          Needs keys from at least two free providers (API keys).
         </p>
       )}
       <p className="text-xs text-ink-500">

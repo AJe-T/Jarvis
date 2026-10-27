@@ -44,7 +44,7 @@ function summary(p: PoolProvider): { health: KeyHealth; text: string } {
   return { health: 'healthy', text: `${p.keys.length} healthy` };
 }
 
-/** Providers & keys: every provider in its tier, its keys and their health (FreeLLMAPI Keys page). */
+/** API keys: every provider in its tier, its keys and their health (FreeLLMAPI Keys page). */
 export function ProvidersTab({
   snap,
   actions,
@@ -58,9 +58,12 @@ export function ProvidersTab({
   const [importing, setImporting] = useState(false);
   const [adding, setAdding] = useState(false);
   const [checking, setChecking] = useState(false);
-  const go = useUiStore((s) => s.go);
   const keyCount = snap.providers.reduce((n, p) => n + p.keys.length, 0);
-  const addKey = (): void => go('settings', 'brain');
+  // The key list sits at the top of this tab (API keys).
+  const addKey = (): void =>
+    document
+      .getElementById('brain-connections')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const shown = snap.providers.filter((p) => {
     if (query && !p.label.toLowerCase().includes(query.toLowerCase())) return false;
@@ -202,7 +205,7 @@ export function ProvidersTab({
           </SettingRow>
           <SettingRow
             title="Keys per provider"
-            detail="Add or remove keys and pick each key's model in Settings → Models & AI. Keys are encrypted on this PC; only their last four characters are ever shown."
+            detail="Add or remove keys and pick each key's model at the top of this tab. Keys are encrypted on this PC; only their last four characters are ever shown."
           >
             <span className="font-code text-sm text-ink-100">
               up to {MAX_CONNECTIONS_PER_PROVIDER}
@@ -328,7 +331,7 @@ function ProviderRow({
         <div className="flex flex-col gap-2 border-t border-line-subtle px-4 py-3">
           {p.keys.length === 0 && (
             <p className="text-sm text-ink-300">
-              No key for {p.label} yet. Add one in Settings → Models & AI, or import a .env file.
+              No key for {p.label} yet. Add one at the top of this tab, or import a .env file.
             </p>
           )}
           {p.keys.map((k) => (
@@ -463,7 +466,7 @@ function ImportPanel({ onDone }: { onDone: () => void }): React.JSX.Element {
           {result.skipped.length
             ? `; skipped ${result.skipped.map((s) => `${s.provider} (${s.reason})`).join(', ')}`
             : ''}
-          . Pick a model for any new key in Settings → Models & AI.
+          . A new free key joins the pool with all its free chat models.
         </p>
       )}
       <div className="flex flex-wrap gap-2">

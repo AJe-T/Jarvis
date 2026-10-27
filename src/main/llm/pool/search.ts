@@ -288,7 +288,7 @@ export function createFreeSearchTool(deps: {
           );
         if (err instanceof SearchExhaustedError)
           throw new ToolError(
-            `The free searches are used up or not set up (${err.tried.map((t) => `${t.name}: ${t.reason}`).join(', ') || 'no search key in AI Router → Providers & keys'}). Use web_search instead.`,
+            `The free searches are used up or not set up (${err.tried.map((t) => `${t.name}: ${t.reason}`).join(', ') || 'no search key in AI Router → API keys'}). Use web_search instead.`,
           );
         throw err;
       }

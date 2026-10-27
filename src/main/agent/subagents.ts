@@ -39,6 +39,8 @@ const TaskSchema = z.object({
   tools: z.array(z.string().min(2).max(80)).max(40).optional(),
   /** Which AI does it; omitted = Jarvis's own connection. */
   brain: BrainRefSchema.optional(),
+  /** Brain "free" only: a named chain from AI Router → Models ("Coding", "Vision"…). */
+  chain: z.string().trim().min(1).max(30).optional(),
 });
 
 export type SubTask = z.infer<typeof TaskSchema>;
@@ -55,7 +57,7 @@ function verdict(r: LoopResult): string {
 export function createSubagentTool(s: Services): Tool {
   return defineTool({
     name: NAME,
-    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", "free" (the free AI pool: costs nothing, so USE IT for heavy work with none of Sir's private data in it — summarising or translating public text, first drafts, reading several public web pages — instead of doing it yourself, and ask it for a short report so only that comes back; it is refused once this conversation has read his memory, files, screen, passwords, clipboard or messages, and it gets only public lookup tools; never write Sir's personal details — names, addresses, health, money, anything from his memory — into a free task; if every free AI is busy, you do the task automatically and the report says so), "fusion" (same rules as "free", but 2–3 free AIs draft and a judge writes one answer; no tools: use it for a hard question or a careful piece of writing with no private data), another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}) or one of Sir's extra keys for it by connection id ("conn_openai_2"…; the available ones are listed in your context), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
+    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", "free" (the free AI pool: costs nothing, so USE IT for heavy work with none of Sir's private data in it — summarising or translating public text, first drafts, reading several public web pages — instead of doing it yourself, and ask it for a short report so only that comes back; it is refused once this conversation has read his memory, files, screen, passwords, clipboard or messages, and it gets only public lookup tools; never write Sir's personal details — names, addresses, health, money, anything from his memory — into a free task; if every free AI is busy, you do the task automatically and the report says so), a free task may name a "chain" (an order of free models Sir set up for a kind of job, listed in your context), "fusion" (same rules as "free", but 2–3 free AIs draft and a judge writes one answer; no tools: use it for a hard question or a careful piece of writing with no private data), another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}) or one of Sir's extra keys for it by connection id ("conn_openai_2"…; the available ones are listed in your context), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
     input: z.object({
       tasks: z.array(TaskSchema).min(1).max(MAX_TASKS),
       shared_context: z.string().max(8000).optional(),
@@ -128,6 +130,7 @@ export function createSubagentTool(s: Services): Tool {
             maxSteps: max_steps,
             maxTokens: REPORT_TOKENS,
             turn,
+            ...(task.chain ? { chain: task.chain } : {}),
           };
           try {
             const result = await runOnBrain(s, brain, job);

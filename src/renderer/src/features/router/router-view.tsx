@@ -1,38 +1,45 @@
 import { useCallback, useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { RefreshCw } from 'lucide-react';
-import type { PoolPhase, PoolSnapshot } from '@shared/free-pool';
+import type { PoolSnapshot } from '@shared/free-pool';
 import type { Req } from '@shared/ipc-contract';
 import { IconButton } from '../../components/ui/button';
 import { PageBody, PageHeader } from '../../components/ui/page';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
+import { SaveBar } from '../settings/save-bar';
 import { AbilitiesTab } from './abilities-tab';
+import type { RouterTab } from './ai-map-model';
+import { BrainTab, KeysTab } from './brain-tabs';
 import { AnalyticsTab } from './analytics-tab';
 import { DelegationTab } from './delegation-tab';
 import { ModelsTab } from './models-tab';
 import { OverviewTab } from './overview-tab';
 import { PreviewBanner, Toggle } from './parts';
-import { ProvidersTab } from './providers-tab';
 import { TiersTab } from './tiers-tab';
 
+/** Who answers you, then your keys, then the free pool's own pages. */
 const TABS = [
-  { id: 'overview', label: 'Overview', phase: 1 },
-  { id: 'models', label: 'Models', phase: 1 },
-  { id: 'providers', label: 'Providers & keys', phase: 1 },
-  { id: 'tiers', label: 'Tiers & privacy', phase: 1 },
-  { id: 'delegation', label: 'Delegation', phase: 2 },
-  { id: 'abilities', label: 'Abilities', phase: 3 },
-  { id: 'analytics', label: 'Analytics', phase: 4 },
-] as const satisfies ReadonlyArray<{ id: string; label: string; phase: PoolPhase }>;
+  { id: 'overview', label: 'Overview' },
+  { id: 'brain', label: 'Main brain' },
+  { id: 'keys', label: 'API keys' },
+  { id: 'models', label: 'Free models' },
+  { id: 'tiers', label: 'Tiers & privacy' },
+  { id: 'delegation', label: 'Delegation' },
+  { id: 'abilities', label: 'Abilities' },
+  { id: 'analytics', label: 'Analytics' },
+] as const satisfies ReadonlyArray<{ id: RouterTab; label: string }>;
 
-type Tab = (typeof TABS)[number]['id'];
+type Tab = RouterTab;
+const isTab = (t: string | null): t is Tab => TABS.some((x) => x.id === t);
 
 /** What every tab can change: each call returns the new snapshot. */
 export interface PoolActions {
   settings(patch: Req<'pool:settings'>): void;
   provider(patch: Req<'pool:setProvider'>): void;
   model(patch: Req<'pool:setModel'>): void;
+  /** Phase 4 named chains: the whole list. */
+  chains(chains: Req<'pool:setChains'>['chains']): void;
   checkKeys(): Promise<void>;
   /** Sir's own tier-3 provider; true once saved (main checked it). */
   addCustom(input: Req<'pool:addCustom'>): Promise<boolean>;
@@ -42,7 +49,14 @@ export interface PoolActions {
 
 /** Sidebar → AI Router: the free-AI pool as one module (FreeLLMAPI-style dashboard). */
 export function RouterView(): React.JSX.Element {
-  const [tab, setTab] = useState<Tab>('overview');
+  const wanted = useUiStore((s) => s.routerTab);
+  const [tab, setTab] = useState<Tab>(isTab(wanted) ? wanted : 'overview');
+  // go('router', 'keys') from elsewhere (Settings, a toast) opens that tab.
+  useEffect(() => {
+    if (!isTab(wanted)) return;
+    setTab(wanted);
+    useUiStore.setState({ routerTab: null });
+  }, [wanted]);
   const [snap, setSnap] = useState<PoolSnapshot | null>(null);
   const toast = useUiStore((s) => s.toast);
 
@@ -52,12 +66,14 @@ export function RouterView(): React.JSX.Element {
     [toast],
   );
   const reload = useCallback(() => void run(call('pool:snapshot', {})), [run]);
-  useEffect(reload, [reload]);
+  // Fresh numbers on every tab: a key saved on API keys shows up on Free models and the map.
+  useEffect(reload, [reload, tab]);
 
   const actions: PoolActions = {
     settings: (patch) => void run(call('pool:settings', patch)),
     provider: (patch) => void run(call('pool:setProvider', patch)),
     model: (patch) => void run(call('pool:setModel', patch)),
+    chains: (chains) => void run(call('pool:setChains', { chains })),
     checkKeys: () => run(call('pool:checkKeys', {})),
     addCustom: (input) =>
       call('pool:addCustom', input)
@@ -117,11 +133,6 @@ export function RouterView(): React.JSX.Element {
               )}
             >
               {t.label}
-              {t.phase > 3 && (
-                <span className="font-code text-3xs text-ink-500" aria-label={`Phase ${t.phase}`}>
-                  P{t.phase}
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -130,9 +141,10 @@ export function RouterView(): React.JSX.Element {
             <span className="skeleton block h-40 w-full" aria-hidden />
           ) : (
             <>
-              {tab === 'overview' && <OverviewTab snap={snap} />}
+              {tab === 'overview' && <OverviewTab snap={snap} onOpen={setTab} />}
+              {tab === 'brain' && <BrainTab />}
+              {tab === 'keys' && <KeysTab snap={snap} actions={actions} />}
               {tab === 'models' && <ModelsTab snap={snap} actions={actions} />}
-              {tab === 'providers' && <ProvidersTab snap={snap} actions={actions} />}
               {tab === 'tiers' && <TiersTab snap={snap} onChange={actions.settings} />}
               {tab === 'delegation' && (
                 <DelegationTab
@@ -141,13 +153,15 @@ export function RouterView(): React.JSX.Element {
                 />
               )}
               {tab === 'abilities' && (
-                <AbilitiesTab snap={snap} actions={actions} onKeys={() => setTab('providers')} />
+                <AbilitiesTab snap={snap} actions={actions} onKeys={() => setTab('keys')} />
               )}
-              {tab === 'analytics' && <AnalyticsTab snap={snap} />}
+              {tab === 'analytics' && <AnalyticsTab />}
             </>
           )}
         </div>
       </PageBody>
+      {/* Main brain and API keys edit settings: the same save bar as Settings. */}
+      <SaveBar />
     </div>
   );
 }

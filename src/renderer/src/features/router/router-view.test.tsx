@@ -14,12 +14,40 @@ const settings = vi.fn(async (patch: Record<string, unknown>) => ({
 }));
 const setModel = vi.fn(async () => ({ ...previewSnapshot(0), preview: false }));
 
+const EMPTY: Record<string, unknown> = {
+  'secrets:status': {},
+  'pool:analytics': {
+    range: '7d',
+    buckets: [],
+    totals: {
+      requests: 0,
+      successRate: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      avgMs: 0,
+      p95Ms: 0,
+      savedUsd: 0,
+    },
+    providers: [],
+    models: [],
+  },
+};
+
+const mocks = (): Record<string, unknown> => ({
+  'pool:snapshot': snapshot,
+  'pool:settings': settings,
+  'pool:setModel': setModel,
+});
+
 beforeEach(() => {
   snapshot.mockClear();
   settings.mockClear();
   setModel.mockClear();
   (window as unknown as { jarvis: unknown }).jarvis = {
-    call: { 'pool:snapshot': snapshot, 'pool:settings': settings, 'pool:setModel': setModel },
+    // Every other channel (the map's keys, the Main brain tab's settings) answers empty.
+    call: new Proxy(mocks(), {
+      get: (o, k: string): unknown => o[k] ?? (async () => EMPTY[k] ?? []),
+    }),
     on: () => () => undefined,
     send: {},
   };
@@ -53,19 +81,22 @@ describe('sample snapshot', () => {
 });
 
 describe('RouterView', () => {
-  it('loads the live snapshot and shows all seven tabs, no preview banner', async () => {
+  it('loads the live snapshot and shows all eight tabs, no preview banner', async () => {
     await renderView();
     expect(snapshot).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Numbers are samples/)).toBeNull();
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
       'Overview',
-      'Models',
-      'Providers & keys',
+      'Main brain',
+      'API keys',
+      'Free models',
       'Tiers & privacy',
       'Delegation',
       'Abilities',
-      'AnalyticsP4',
+      'Analytics',
     ]);
+    // The AI map is on the Overview, drawn at full size.
+    expect(screen.getByRole('img', { name: /Jarvis's AI map/ })).toBeTruthy();
   });
 
   it('renders every tab without crashing', async () => {
@@ -138,7 +169,7 @@ describe('RouterView', () => {
 
   it('filters models, shows a model’s routes, and sends strategy and on/off to main', async () => {
     await renderView();
-    fireEvent.click(screen.getByRole('tab', { name: 'Models' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Free models' }));
     fireEvent.change(screen.getByPlaceholderText('Search models or providers…'), {
       target: { value: 'gemini 2.5' },
     });
@@ -149,5 +180,42 @@ describe('RouterView', () => {
     expect(settings).toHaveBeenCalledWith({ strategy: 'priority' });
     fireEvent.click(screen.getByRole('switch', { name: 'Use Gemini 2.5 Flash' }));
     expect(setModel).toHaveBeenCalledWith({ model: 'gemini-2.5-flash', enabled: false });
+  });
+
+  it('Phase 4: every strategy, learning, shrinking and chains reach main', async () => {
+    const chains = vi.fn(async () => ({ ...previewSnapshot(0), preview: false }));
+    (window as unknown as { jarvis: { call: Record<string, unknown> } }).jarvis.call[
+      'pool:setChains'
+    ] = chains;
+    await renderView();
+    fireEvent.click(screen.getByRole('tab', { name: 'Free models' }));
+    for (const [label, id] of [
+      ['Smartest', 'smartest'],
+      ['Fastest', 'fastest'],
+      ['Most reliable', 'reliable'],
+      ['Custom', 'custom'],
+    ] as const) {
+      fireEvent.click(screen.getByRole('radio', { name: label }));
+      expect(settings).toHaveBeenCalledWith({ strategy: id });
+    }
+    fireEvent.click(screen.getByRole('switch', { name: 'Learn from real answers' }));
+    expect(settings).toHaveBeenCalledWith({ learn: false });
+    fireEvent.click(screen.getByRole('switch', { name: 'Shrink long prompts' }));
+    expect(settings).toHaveBeenCalledWith({ shrink: false });
+    fireEvent.change(screen.getByLabelText('New chain name'), { target: { value: 'Coding' } });
+    fireEvent.click(screen.getByRole('button', { name: /New chain/ }));
+    expect(chains).toHaveBeenCalledWith({ chains: [{ name: 'Coding', models: [] }] });
+  });
+
+  it('the Main brain and API keys tabs hold what Settings → Models & AI holds', async () => {
+    await renderView();
+    fireEvent.click(screen.getByRole('tab', { name: 'Main brain' }));
+    expect(screen.getByText('The brain that answers you')).toBeTruthy();
+    expect(screen.getByText("Claude's models")).toBeTruthy();
+    expect(screen.getByText('Budget')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'API keys' }));
+    expect(screen.getByText('All your API keys')).toBeTruthy();
+    expect(screen.getByText('API keys and their models')).toBeTruthy();
+    expect(screen.getByText('Free search keys')).toBeTruthy();
   });
 });

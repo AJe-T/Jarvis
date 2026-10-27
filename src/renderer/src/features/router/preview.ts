@@ -137,6 +137,10 @@ export function previewSnapshot(now = Date.now()): PoolSnapshot {
       fallback: true,
       budgetAware: true,
     },
+    weights: { reliability: 0.5, speed: 0.25, smarts: 0.25 },
+    learn: true,
+    shrink: true,
+    chains: [],
     abilities: {
       settings: {
         search: true,

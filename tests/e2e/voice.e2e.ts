@@ -21,7 +21,7 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
   await onboard(page);
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: 'Voice' }).click();
+  await page.getByRole('button', { name: 'Voice', exact: true }).click();
   // ADR-011: on-device engines show what they need (downloads aren't started in tests).
   await page.getByRole('radio', { name: /Keyword model: “Hey Jarvis” only/ }).click();
   await expect(page.getByRole('button', { name: /^Download \(4 MB\)$/ })).toBeVisible();

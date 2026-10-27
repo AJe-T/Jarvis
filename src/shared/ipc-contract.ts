@@ -22,6 +22,11 @@ import {
   LIVE_STRATEGIES,
   PoolAbilitySettingsSchema,
   PoolDelegationSchema,
+  ANALYTICS_RANGES,
+  MAX_CHAINS,
+  PoolAnalyticsSchema,
+  PoolChainSchema,
+  ScoreWeightsSchema,
   IMAGE_SIZES,
   PoolSnapshotSchema,
 } from './free-pool';
@@ -483,8 +488,30 @@ export const INVOKE = {
       retryEmpty: z.boolean().optional(),
       delegation: PoolDelegationSchema.partial().optional(),
       abilities: PoolAbilitySettingsSchema.partial().optional(),
+      weights: ScoreWeightsSchema.optional(),
+      learn: z.boolean().optional(),
+      shrink: z.boolean().optional(),
     }),
     PoolSnapshotSchema,
+  ),
+  /** Phase 4 named chains: the whole list, replaced at once. */
+  'pool:setChains': contract(
+    z.object({ chains: z.array(PoolChainSchema).max(MAX_CHAINS) }),
+    PoolSnapshotSchema,
+  ),
+  'pool:analytics': contract(z.object({ range: z.enum(ANALYTICS_RANGES) }), PoolAnalyticsSchema),
+  /** One "Reply with OK" to each tier-2 door of a model. */
+  'pool:testModel': contract(
+    z.object({ model: z.string().min(1).max(200) }),
+    z.array(
+      z.object({
+        provider: z.string(),
+        name: z.string(),
+        ok: z.boolean(),
+        ms: z.number(),
+        reason: z.string().optional(),
+      }),
+    ),
   ),
   /**
    * AI Router → Abilities → Generate (Sir's click). Main checks the prompt for private data, asks

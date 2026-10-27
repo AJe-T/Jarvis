@@ -36,6 +36,8 @@ export interface BrainJob {
   maxSteps: number;
   maxTokens: number;
   turn: TurnContext;
+  /** Brain "free": a named chain's models go first (AI Router Phase 4). */
+  chain?: string;
 }
 
 /**
@@ -105,7 +107,7 @@ async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
     throw new JarvisError(
       'INVALID',
       'free pool not ready',
-      'The free AI pool has no key yet (AI Router → Providers & keys), or it is switched off.',
+      'The free AI pool has no key yet (AI Router → API keys), or it is switched off.',
     );
   const title = job.prompt.split('\n')[0]?.slice(0, 120) ?? '';
   const llm = s.pool.session({
@@ -113,6 +115,7 @@ async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
     task: title,
     // Delegations in one chat keep the same model (a sub-task is self-contained: no hand-over note).
     sticky: job.turn.conversationId,
+    ...(job.chain ? { chain: job.chain } : {}),
   });
   const tools = restrictTools(job.tools, (name) => POOL_TOOLS.has(name));
   // A third-party answer is outside content, like a web page: what Jarvis does after reading it

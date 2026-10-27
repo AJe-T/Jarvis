@@ -85,7 +85,7 @@ export function createImages(deps: {
         tier: cf.tier ?? 2,
         ready: (cf.enabled ?? true) && account !== '' && Boolean(cfKey()),
         sizes: ['square'],
-        note: 'Your Cloudflare key and Account ID (Providers & keys). Square pictures, about 170 a day free.',
+        note: 'Your Cloudflare key and Account ID (API keys). Square pictures, about 170 a day free.',
       },
       {
         id: 'pollinations',
@@ -244,7 +244,7 @@ export function createImages(deps: {
       tried.length
         ? `No free image model could make it (${tried.join(', ')}).`
         : size === 'square'
-          ? 'No free image model is set up: add a Cloudflare key and Account ID (AI Router → Providers & keys), or allow third-party AIs.'
+          ? 'No free image model is set up: add a Cloudflare key and Account ID (AI Router → API keys), or allow third-party AIs.'
           : 'Wide and tall pictures come only from Pollinations, a third party: allow third-party AIs on AI Router → Tiers & privacy.',
     );
   }
