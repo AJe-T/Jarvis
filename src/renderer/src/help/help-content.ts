@@ -64,6 +64,20 @@ export const HELP: Record<string, HelpEntry> = {
       'Your prompt goes to every AI you pick, and each bills its own account: pick only the ones you want to see it.',
     ],
   },
+  router: {
+    title: 'AI Router',
+    what: 'Free AI models from many providers, pooled into one helper that Claude can hand work to. Three tiers: tier 1 is Claude and your local model (gets everything, including private data), tier 2 is trusted free providers (non-private work only), tier 3 is third-party relays (last resort, only after you say yes, never private data).',
+    how: [
+      'Overview: who is answering, today’s numbers, paused routes and the last answers with what was tried first.',
+      'Models: pick how requests are routed, filter by tools, vision or context size, and open a model to see every provider that serves it and its limits.',
+      'Providers & keys: switch providers on or off, move them between tier 2 and tier 3, see each key’s health and how much of today’s limit it has used.',
+      'Tiers & privacy: the private-data rule (always on) and what happens when tiers 1 and 2 run out.',
+      'The tier depends on who receives your text, not the model: Gemini through Google is tier 2, Gemini through an unknown relay is tier 3.',
+    ],
+    tips: [
+      'Version 2.29 shows the layout with sample numbers; the pool starts working in Phase 1.',
+    ],
+  },
   npcs: {
     title: 'NPCs',
     what: 'Your team of single-purpose agents (Marketing, Finance, Developers, Research…). Each has its own AI, tools and memory. Jarvis is their head: he gives them work, reads their memories and runs their meetings.',

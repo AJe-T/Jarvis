@@ -34,7 +34,8 @@ export interface TreeInput {
   apps: Array<{ id: string; label: string }>;
 }
 
-const COLORS: Record<string, string> = {
+/** Brand colours for provider dots (also used by the AI Router page). */
+export const PROVIDER_COLORS: Record<string, string> = {
   claude: '#d97757',
   openai: '#10a37f',
   gemini: '#4285f4',
@@ -53,6 +54,11 @@ const COLORS: Record<string, string> = {
   local: '#22d3ee',
   chatgpt: '#10a37f',
   antigravity: '#fbbc04',
+  cerebras: '#f15a29',
+  cloudflare: '#f6821f',
+  nvidia: '#76b900',
+  pollinations: '#a3a3a3',
+  aihorde: '#a3a3a3',
 };
 
 export function buildBranches(t: TreeInput): { on: TreeBranch[]; off: TreeBranch[] } {
@@ -61,7 +67,7 @@ export function buildBranches(t: TreeInput): { on: TreeBranch[]; off: TreeBranch
   all.push({
     id: 'claude',
     label: t.provider === 'subscription' ? 'Claude (your plan)' : 'Claude',
-    color: COLORS.claude ?? '#d97757',
+    color: PROVIDER_COLORS.claude ?? '#d97757',
     role: 'main',
     anchor: 'connection',
     enabled: t.provider === 'subscription' || (t.provider === 'api' && !!t.secrets.anthropic),
@@ -80,7 +86,7 @@ export function buildBranches(t: TreeInput): { on: TreeBranch[]; off: TreeBranch
     all.push({
       id: p.id,
       label: p.label.replace(/\s*\(.*\)$/, ''),
-      color: COLORS[p.id] ?? '#94a3b8',
+      color: PROVIDER_COLORS[p.id] ?? '#94a3b8',
       role: main ? 'main' : 'helper',
       anchor: 'connection',
       enabled: !!t.secrets[p.secret] && (main || model !== ''),
@@ -91,7 +97,7 @@ export function buildBranches(t: TreeInput): { on: TreeBranch[]; off: TreeBranch
   all.push({
     id: 'local',
     label: 'Local model',
-    color: COLORS.local ?? '#22d3ee',
+    color: PROVIDER_COLORS.local ?? '#22d3ee',
     role: localMain ? 'main' : 'fallback',
     anchor: 'connection',
     enabled: t.localModel !== '' && (localMain || (t.provider === 'api' && t.fallbackLocal)),
@@ -103,7 +109,7 @@ export function buildBranches(t: TreeInput): { on: TreeBranch[]; off: TreeBranch
     all.push({
       id: a.id,
       label: a.label,
-      color: COLORS[a.id] ?? '#94a3b8',
+      color: PROVIDER_COLORS[a.id] ?? '#94a3b8',
       role: 'helper',
       anchor: 'subscriptions',
       enabled: true,
