@@ -244,7 +244,7 @@ export function createAppTools(deps: {
           return fail('Give the ref of the control (from a snapshot), like e12.');
         const info = await resolve(i, ctx.signal);
         if (!info) return fail(notFound(i));
-        // A saved step was judged by its remembered name; if the live control commits something
+        // A saved step was judged by its remembered name if the live control commits something
         // that name didn't show, stop rather than click without asking.
         if (
           !i.ref &&
