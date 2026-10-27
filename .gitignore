@@ -17,3 +17,6 @@ tests/evals/results/*.json
 
 # Claude Code conversation logs (conversations/RULES.md is committed)
 conversations/20*.md
+
+# graphify knowledge graph (local, rebuild with /graphify . --update)
+graphify-out/
