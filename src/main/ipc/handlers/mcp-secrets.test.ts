@@ -12,6 +12,10 @@ describe('MCP secret binding guard (Security.md §10)', () => {
       expect(isProtectedSecret(n)).toBe(true);
   });
 
+  it("protects the keys of Sir's own AI Router providers", () => {
+    expect(isProtectedSecret('custom_ai_1')).toBe(true);
+  });
+
   it("leaves a server's own new key free to bind", () => {
     expect(isProtectedSecret('my_weather_key')).toBe(false);
   });

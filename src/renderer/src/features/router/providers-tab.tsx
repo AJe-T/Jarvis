@@ -8,12 +8,14 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  Trash2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { KeyHealth, PoolProvider, PoolSnapshot, PoolTier } from '@shared/free-pool';
 import { ENV_KEY_NAMES } from '@shared/free-pool';
 import type { Res } from '@shared/ipc-contract';
-import { MAX_CONNECTIONS_PER_PROVIDER, type CloudProviderId } from '@shared/llm-providers';
+import { MAX_CONNECTIONS_PER_PROVIDER } from '@shared/llm-providers';
+import { confirmAction } from '../../components/ui/confirm-modal';
 import { Button, IconButton } from '../../components/ui/button';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
@@ -53,6 +55,7 @@ export function ProvidersTab({
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [checking, setChecking] = useState(false);
   const go = useUiStore((s) => s.go);
   const keyCount = snap.providers.reduce((n, p) => n + p.keys.length, 0);
@@ -108,10 +111,15 @@ export function ProvidersTab({
         <Button onClick={() => setImporting((v) => !v)} aria-expanded={importing}>
           <FileUp size={14} aria-hidden /> Import from .env
         </Button>
+        <Button onClick={() => setAdding((v) => !v)} aria-expanded={adding}>
+          <Plus size={14} aria-hidden /> Add custom provider
+        </Button>
         <Button variant="primary" onClick={addKey}>
           <Plus size={14} aria-hidden /> Add key
         </Button>
       </div>
+
+      {adding && <CustomPanel actions={actions} onDone={() => setAdding(false)} />}
 
       {importing && (
         <ImportPanel
@@ -141,8 +149,16 @@ export function ProvidersTab({
                 provider={p}
                 open={open === p.id}
                 onToggleOpen={() => setOpen(open === p.id ? null : p.id)}
-                onChange={(patch) => actions.provider({ id: p.id as CloudProviderId, ...patch })}
+                onChange={(patch) => actions.provider({ id: p.id, ...patch })}
                 onAddKey={addKey}
+                onRemove={() =>
+                  void confirmAction({
+                    title: `Remove ${p.label}?`,
+                    body: 'Its key is deleted from this PC. To change its address, remove it and add it again.',
+                    actionLabel: 'Remove',
+                    destructive: true,
+                  }).then((yes) => yes && actions.removeCustom(p.id))
+                }
               />
             ))}
           </section>
@@ -203,12 +219,14 @@ function ProviderRow({
   onToggleOpen,
   onChange,
   onAddKey,
+  onRemove,
 }: {
   provider: PoolProvider;
   open: boolean;
   onToggleOpen: () => void;
   onChange: (patch: { enabled?: boolean; tier?: 2 | 3 }) => void;
   onAddKey: () => void;
+  onRemove: () => void;
 }): React.JSX.Element {
   const s = summary(p);
   return (
@@ -234,20 +252,26 @@ function ProviderRow({
             <span className="text-xs text-ink-500">no key yet</span>
           )}
         </button>
-        <label className="flex items-center gap-2 text-xs text-ink-500">
-          Tier
-          <select
-            value={p.tier}
-            onChange={(e) => onChange({ tier: Number(e.target.value) as 2 | 3 })}
-            className="min-h-8 rounded-sm border border-line bg-surface-1 px-2 text-sm text-ink-100"
-          >
-            {([2, 3] as const satisfies readonly PoolTier[]).map((t) => (
-              <option key={t} value={t}>
-                {t} · {TIER_NAME[t]}
-              </option>
-            ))}
-          </select>
-        </label>
+        {p.custom ? (
+          <span className="text-xs text-ink-500" title="Your own providers always stay in tier 3">
+            Tier 3 · fixed
+          </span>
+        ) : (
+          <label className="flex items-center gap-2 text-xs text-ink-500">
+            Tier
+            <select
+              value={p.tier}
+              onChange={(e) => onChange({ tier: Number(e.target.value) as 2 | 3 })}
+              className="min-h-8 rounded-sm border border-line bg-surface-1 px-2 text-sm text-ink-100"
+            >
+              {([2, 3] as const satisfies readonly PoolTier[]).map((t) => (
+                <option key={t} value={t}>
+                  {t} · {TIER_NAME[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <IconButton label={open ? 'Hide keys' : 'Show keys'} onClick={onToggleOpen}>
           {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </IconButton>
@@ -265,7 +289,7 @@ function ProviderRow({
               className="flex flex-wrap items-center gap-3 rounded-sm bg-surface-2 px-3 py-2 text-sm"
             >
               <span className="text-ink-100">{k.label}</span>
-              <span className="font-code text-ink-300">•••• {k.hint}</span>
+              {k.hint && <span className="font-code text-ink-300">•••• {k.hint}</span>}
               <HealthDot health={k.health} />
               <span className="flex items-center gap-2 text-xs text-ink-500">
                 {k.requestsToday} today
@@ -294,24 +318,37 @@ function ProviderRow({
               </span>
             </div>
           ))}
+          {p.custom && (
+            <p className="font-code text-xs text-ink-300">
+              {p.custom.host} · {p.custom.model}
+            </p>
+          )}
           <p className="text-xs text-ink-500">{p.note}</p>
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-accent-300 underline-offset-2 hover:underline"
-              onClick={() => void call('app:openExternal', { url: p.docsUrl })}
-            >
-              Free-tier limits (official docs, checked {p.checked}){' '}
-              <ExternalLink size={12} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-accent-300 underline-offset-2 hover:underline"
-              onClick={onAddKey}
-            >
-              <Settings2 size={12} aria-hidden /> Keys and models in Settings
-            </button>
-          </div>
+          {p.custom ? (
+            <div>
+              <Button variant="ghost" onClick={onRemove}>
+                <Trash2 size={14} aria-hidden /> Remove
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-accent-300 underline-offset-2 hover:underline"
+                onClick={() => void call('app:openExternal', { url: p.docsUrl })}
+              >
+                Free-tier limits (official docs, checked {p.checked}){' '}
+                <ExternalLink size={12} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-accent-300 underline-offset-2 hover:underline"
+                onClick={onAddKey}
+              >
+                <Settings2 size={12} aria-hidden /> Keys and models in Settings
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -389,6 +426,116 @@ function ImportPanel({ onDone }: { onDone: () => void }): React.JSX.Element {
           Save {found?.length ?? 0} key{found?.length === 1 ? '' : 's'}
         </Button>
         {result && <Button onClick={onDone}>Done</Button>}
+      </div>
+    </Panel>
+  );
+}
+
+const EMPTY_CUSTOM = { name: '', baseUrl: '', model: '', apiKey: '' };
+
+/**
+ * ADR-045: one of Sir's own OpenAI-compatible providers, always tier 3. Main checks the address
+ * (HTTPS, a public host name, where it resolves) and keeps it fixed; the key goes straight to DPAPI.
+ */
+function CustomPanel({
+  actions,
+  onDone,
+}: {
+  actions: PoolActions;
+  onDone: () => void;
+}): React.JSX.Element {
+  const [form, setForm] = useState(EMPTY_CUSTOM);
+  const [busy, setBusy] = useState(false);
+  const [test, setTest] = useState<Res<'pool:testCustom'> | null>(null);
+  const input = {
+    name: form.name.trim(),
+    baseUrl: form.baseUrl.trim(),
+    model: form.model.trim(),
+    ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
+  };
+  const ready = Boolean(input.name && input.baseUrl.length >= 9 && input.model);
+  const field = (k: keyof typeof EMPTY_CUSTOM) => ({
+    value: form[k],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+      setForm({ ...form, [k]: e.target.value });
+      setTest(null);
+    },
+    spellCheck: false,
+    className:
+      'min-h-9 rounded-sm border border-line bg-surface-1 px-3 font-code text-sm text-ink-100',
+  });
+
+  return (
+    <Panel title="Add a custom provider (tier 3)">
+      <p className="text-sm text-ink-300">
+        Any service with an OpenAI-compatible API, for basic questions with nothing private in them.
+        It always stays in tier 3: it gets only the question itself, only after you say yes, and
+        Jarvis treats its answer like a web page. Jarvis has not checked it; you are trusting it.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-sm text-ink-100">
+          Name
+          <input {...field('name')} maxLength={40} placeholder="Pollinations" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-ink-100">
+          Model
+          <input {...field('model')} maxLength={120} placeholder="openai" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-ink-100 sm:col-span-2">
+          Address (OpenAI-compatible base URL, https only)
+          <input
+            {...field('baseUrl')}
+            maxLength={200}
+            placeholder="https://gen.pollinations.ai/v1"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-ink-100 sm:col-span-2">
+          API key (optional)
+          <input {...field('apiKey')} type="password" autoComplete="off" maxLength={500} />
+        </label>
+      </div>
+      <p className="text-xs text-ink-500">
+        The address can&apos;t be changed after saving (remove and add again). Addresses on this PC
+        or your home network, and bare IP addresses, are refused.
+      </p>
+      {test && (
+        <p role="status" className={clsx('text-sm', test.ok ? 'text-ok-400' : 'text-alarm-500')}>
+          {test.ok ? 'It answered. You can save it.' : test.error}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          disabled={busy || !ready}
+          onClick={() => {
+            setBusy(true);
+            void call('pool:testCustom', input)
+              .then(setTest)
+              .catch((e: unknown) => setTest({ ok: false, error: cleanError(e) }))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {busy ? 'Working…' : 'Test'}
+        </Button>
+        <Button
+          variant="primary"
+          disabled={busy || !ready}
+          onClick={() => {
+            setBusy(true);
+            void actions
+              .addCustom(input)
+              .then((saved) => {
+                if (!saved) return;
+                setForm(EMPTY_CUSTOM); // the key leaves the renderer as soon as it is saved
+                onDone();
+              })
+              .finally(() => setBusy(false));
+          }}
+        >
+          Save
+        </Button>
+        <Button variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
       </div>
     </Panel>
   );

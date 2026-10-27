@@ -1,11 +1,18 @@
 import {
   FREE_PROVIDERS,
   freeProvider,
+  isCustomProvider,
   routeKey,
   type PoolLimits,
   type PoolSnapshot,
 } from '@shared/free-pool';
-import { CLOUD_PROVIDERS, cloudProvider, type CloudProviderId } from '@shared/llm-providers';
+import {
+  CLOUD_PROVIDERS,
+  cloudProvider,
+  providerBaseUrl,
+  type CloudProviderId,
+  type ModelListing,
+} from '@shared/llm-providers';
 import type { Price } from '@shared/settings';
 import type { ToolCatalogEntry } from '../../agent/agent-loop';
 import type { Db } from '../../db/connection';
@@ -14,11 +21,18 @@ import { redact } from '../../security/redact';
 import type { SecretStore } from '../../settings/secrets';
 import type { SettingsService } from '../../settings/settings-service';
 import type { Connections } from '../connections';
-import { createLocalClient } from '../local-client';
+import { cloudBaseUrl, createLocalClient } from '../local-client';
 import type { LlmClient, LlmMessage, LlmRequest, StreamOptions } from '../types';
 import { costOf } from '../usage-ledger';
+import {
+  checkCustom,
+  guardedFetch,
+  type CustomInput,
+  type CustomProviders,
+  type Lookup,
+} from './custom';
 import { rankRoutes, summarizeExhaustion, type RouteState } from './router';
-import { buildSnapshot } from './snapshot';
+import { buildSnapshot, providerName } from './snapshot';
 
 /**
  * AI Router Phase 1 (Security.md §16.15): the free pool behind the "free" brain. Tries tier-2
@@ -34,18 +48,72 @@ export interface PoolDeps {
   settings: SettingsService;
   secrets: Pick<SecretStore, 'get'>;
   connections: Connections;
+  /** Sir's own providers, always tier 3 (custom.ts). */
+  custom: CustomProviders;
   catalog(): ToolCatalogEntry[];
-  /** Sir's answer to "Use third-party AIs?" (2 min, then "no"). */
-  ask(q: { soonestMin: number | null }): Promise<Tier3Answer>;
+  /** Sir's answer to "Use third-party AIs?" (2 min, then "no"); `everyTime` hides "until restart". */
+  ask(q: { soonestMin: number | null; everyTime: boolean }): Promise<Tier3Answer>;
   /** Claude's price per token, to show what the pool saved. */
   claudePrice(): Price;
   fetch?: typeof fetch;
+  /** Tests: DNS answers for custom providers' hosts. */
+  lookup?: Lookup;
   now?: () => number;
 }
 
 /** A sub-task's record of what was tried (shown in the reply and on the AI Router page). */
 export interface Trail {
-  attempts: Array<{ provider: string; model: string; ok: boolean; reason?: string }>;
+  attempts: Array<{
+    provider: string;
+    /** Display name (a custom provider's is Sir's own). */
+    name: string;
+    model: string;
+    tier: 2 | 3;
+    ok: boolean;
+    reason?: string;
+  }>;
+}
+
+/** Where one route's requests go and how (built-in catalogue address, or Sir's own). */
+interface Target {
+  name: string;
+  baseUrl: string;
+  allowed: readonly string[];
+  key: string | undefined;
+  listing: ModelListing;
+  custom: boolean;
+}
+
+/** Tier 3 is told only that it answers a question: no persona, nothing about Sir. */
+const TIER3_SYSTEM = 'Answer the question clearly and briefly.';
+
+/**
+ * Security.md §16.15: a tier-3 route gets the task itself and nothing else: no system prompt, no
+ * earlier turns or tool results, no pictures, no tools. The first user message is the job's task:
+ * pool sessions always start from one (brain-runner.ts, Compare AIs).
+ */
+export function questionOnly(req: LlmRequest): LlmRequest {
+  const first = req.messages.find((m) => m.role === 'user');
+  const text = !first
+    ? ''
+    : typeof first.content === 'string'
+      ? first.content
+      : first.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n');
+  return {
+    model: req.model,
+    max_tokens: req.max_tokens,
+    system: TIER3_SYSTEM,
+    messages: [{ role: 'user', content: text }],
+  };
+}
+
+/** A tier-3 answer is text only: a tool call it made up anyway is dropped. */
+function answerOnly(msg: LlmMessage): LlmMessage {
+  return {
+    ...msg,
+    content: msg.content.filter((b) => b.type !== 'tool_use'),
+    stop_reason: msg.stop_reason === 'tool_use' ? 'end_turn' : msg.stop_reason,
+  };
 }
 
 const MAX_ATTEMPTS = 6;
@@ -85,7 +153,9 @@ export function createFreePool(deps: PoolDeps) {
 
   const providerSettings = (id: string): { enabled: boolean; tier: 2 | 3 } => {
     const o = settings.get('pool.providers')[id] ?? {};
-    return { enabled: o.enabled ?? true, tier: o.tier ?? freeProvider(id)?.tier ?? 2 };
+    // Sir's own providers are tier 3 whatever a setting says.
+    const tier = isCustomProvider(id) ? 3 : (o.tier ?? freeProvider(id)?.tier ?? 2);
+    return { enabled: o.enabled ?? true, tier };
   };
   const modelSettings = (model: string): { enabled: boolean; order: number } => {
     const o = settings.get('pool.models')[model] ?? {};
@@ -111,69 +181,152 @@ export function createFreePool(deps: PoolDeps) {
   const count = (sql: string, ...args: Array<string | number>): number =>
     (db.prepare(sql).get(...args) as { n: number | null }).n ?? 0;
 
+  /** Every (key, model) pair the pool may ask: the free providers' keys, then Sir's own providers. */
+  function seats(): Array<{
+    connectionId: string;
+    provider: string;
+    model: string;
+    tier: 2 | 3;
+    enabled: boolean;
+    limits: PoolLimits;
+  }> {
+    const account = settings.get('llm.cloud.cloudflareAccount');
+    const builtIn = poolConnections()
+      // Cloudflare's address needs Sir's Account ID first.
+      .filter((c) => providerBaseUrl(cloudProvider(c.provider), account) !== '')
+      .flatMap((c) => {
+        const prov = providerSettings(c.provider);
+        const limits = { ...freeProvider(c.provider)?.limits, ...learnedLimits.get(c.id) };
+        return c.poolModels.map((model) => ({
+          connectionId: c.id,
+          provider: c.provider,
+          model,
+          limits,
+          ...prov,
+        }));
+      });
+    const mine = deps.custom.list().map((c) => ({
+      connectionId: c.id,
+      provider: c.id,
+      model: c.model,
+      limits: { ...learnedLimits.get(c.id) },
+      ...providerSettings(c.id),
+    }));
+    return [...builtIn, ...mine];
+  }
+
   function routes(): RouteState[] {
     const t = now();
     const minuteAgo = new Date(t - 60_000).toISOString();
     const weekAgo = new Date(t - 7 * 86_400_000).toISOString();
     const day = utcDay(t);
-    return poolConnections().flatMap((c) => {
-      const prov = providerSettings(c.provider);
-      const def = freeProvider(c.provider);
-      return c.poolModels.map((model): RouteState => {
-        const key = routeKey(c.id, model);
-        const ms = modelSettings(model);
-        const where = 'FROM pool_calls WHERE connection_id = ? AND model = ?';
-        const stats = db
-          .prepare(
-            `SELECT SUM(ok) AS ok, SUM(1 - ok) AS fail, AVG(CASE WHEN ok = 1 THEN ms END) AS ms,
-                    SUM(CASE WHEN ok = 1 THEN output_tokens END) AS outTok,
-                    SUM(CASE WHEN ok = 1 THEN ms END) AS okMs ${where} AND at >= ?`,
-          )
-          .get(c.id, model, weekAgo) as Record<string, number | null>;
-        // A route pause and a whole-key pause (bad key, server down) can both apply: the later wins.
-        const pauses = [cooling.get(key), cooling.get(c.id)].filter((p) => p && p.until > t);
-        const cool = pauses.sort((a, b) => (b?.until ?? 0) - (a?.until ?? 0))[0];
-        const capsNow = caps.get(key) ?? {};
-        return {
-          key,
-          connectionId: c.id,
-          provider: c.provider,
-          model,
-          tier: prov.tier,
-          enabled: prov.enabled && ms.enabled,
-          order: ms.order,
-          limits: { ...def?.limits, ...learnedLimits.get(c.id) },
-          used: {
-            rpm: count(`SELECT COUNT(*) AS n ${where} AND at >= ?`, c.id, model, minuteAgo),
-            rpd: count(`SELECT COUNT(*) AS n ${where} AND day = ?`, c.id, model, day),
-            tpm: count(
-              `SELECT SUM(input_tokens + output_tokens) AS n ${where} AND at >= ?`,
-              c.id,
-              model,
-              minuteAgo,
-            ),
-            tpd: count(
-              `SELECT SUM(input_tokens + output_tokens) AS n ${where} AND day = ?`,
-              c.id,
-              model,
-              day,
-            ),
-          },
-          ...(cool && cool.until > t
-            ? { coolingUntil: cool.until, coolingReason: cool.reason }
-            : {}),
-          stats: {
-            ok: stats['ok'] ?? 0,
-            fail: stats['fail'] ?? 0,
-            avgMs: stats['ms'] ?? 0,
-            tokPerSec:
-              stats['okMs'] && stats['outTok'] ? (stats['outTok'] / stats['okMs']) * 1000 : 0,
-          },
-          tools: capsNow.tools ?? null,
-          vision: capsNow.vision ?? null,
-          lastUsed: lastUsed.get(key) ?? 0,
-        };
-      });
+    return seats().map((s): RouteState => {
+      const { connectionId: id, model } = s;
+      const key = routeKey(id, model);
+      const ms = modelSettings(model);
+      const where = 'FROM pool_calls WHERE connection_id = ? AND model = ?';
+      const stats = db
+        .prepare(
+          `SELECT SUM(ok) AS ok, SUM(1 - ok) AS fail, AVG(CASE WHEN ok = 1 THEN ms END) AS ms,
+                  SUM(CASE WHEN ok = 1 THEN output_tokens END) AS outTok,
+                  SUM(CASE WHEN ok = 1 THEN ms END) AS okMs ${where} AND at >= ?`,
+        )
+        .get(id, model, weekAgo) as Record<string, number | null>;
+      // A route pause and a whole-key pause (bad key, server down) can both apply: the later wins.
+      const pauses = [cooling.get(key), cooling.get(id)].filter((p) => p && p.until > t);
+      const cool = pauses.sort((a, b) => (b?.until ?? 0) - (a?.until ?? 0))[0];
+      const capsNow = caps.get(key) ?? {};
+      return {
+        key,
+        connectionId: id,
+        provider: s.provider,
+        model,
+        tier: s.tier,
+        enabled: s.enabled && ms.enabled,
+        order: ms.order,
+        limits: s.limits,
+        used: {
+          rpm: count(`SELECT COUNT(*) AS n ${where} AND at >= ?`, id, model, minuteAgo),
+          rpd: count(`SELECT COUNT(*) AS n ${where} AND day = ?`, id, model, day),
+          tpm: count(
+            `SELECT SUM(input_tokens + output_tokens) AS n ${where} AND at >= ?`,
+            id,
+            model,
+            minuteAgo,
+          ),
+          tpd: count(
+            `SELECT SUM(input_tokens + output_tokens) AS n ${where} AND day = ?`,
+            id,
+            model,
+            day,
+          ),
+        },
+        ...(cool && cool.until > t ? { coolingUntil: cool.until, coolingReason: cool.reason } : {}),
+        stats: {
+          ok: stats['ok'] ?? 0,
+          fail: stats['fail'] ?? 0,
+          avgMs: stats['ms'] ?? 0,
+          tokPerSec:
+            stats['okMs'] && stats['outTok'] ? (stats['outTok'] / stats['okMs']) * 1000 : 0,
+        },
+        tools: capsNow.tools ?? null,
+        vision: capsNow.vision ?? null,
+        lastUsed: lastUsed.get(key) ?? 0,
+      };
+    });
+  }
+
+  /** Where a route (or key) sends its requests: a catalogue address or one of Sir's own. */
+  function targetOf(connectionId: string, provider: string): Target {
+    if (isCustomProvider(provider)) {
+      const c = deps.custom.find(connectionId);
+      if (!c)
+        throw new JarvisError(
+          'NOT_FOUND',
+          `no custom provider ${connectionId}`,
+          'That provider was removed.',
+        );
+      return {
+        name: c.name,
+        baseUrl: c.baseUrl,
+        allowed: [c.baseUrl],
+        key: deps.secrets.get(c.secret),
+        listing: 'manual',
+        custom: true,
+      };
+    }
+    const p = cloudProvider(provider as CloudProviderId);
+    return {
+      name: p.label,
+      baseUrl: cloudBaseUrl(p, settings.get('llm.cloud.cloudflareAccount')),
+      allowed: ALLOWED,
+      key: deps.secrets.get(deps.connections.target(connectionId).secret),
+      listing: p.models,
+      custom: false,
+    };
+  }
+
+  const baseFetch = (): typeof fetch => deps.fetch ?? fetch;
+
+  function clientFor(
+    t: Target,
+    model: string,
+    observe?: (o: { status: number; headers: Headers }) => void,
+  ) {
+    return createLocalClient({
+      baseUrl: () => t.baseUrl,
+      model: () => model,
+      catalog: deps.catalog,
+      apiKey: () => t.key,
+      cloud: {
+        name: () => t.name,
+        allowedBaseUrls: t.allowed,
+        listing: () => ({ kind: t.listing }),
+        ...(t.custom ? { keyOptional: true } : {}),
+      },
+      ...(observe ? { observe } : {}),
+      // Sir's own hosts: DNS re-checked on every call, no redirects (custom.ts).
+      fetch: t.custom ? guardedFetch(baseFetch(), deps.lookup) : baseFetch(),
     });
   }
 
@@ -293,28 +446,25 @@ export function createFreePool(deps: PoolDeps) {
     job: { id: string; task: string },
     trail: Trail,
   ): Promise<{ msg: LlmMessage } | { streamed: boolean; error: unknown }> {
-    const target = deps.connections.target(r.connectionId);
-    const p = cloudProvider(r.provider as CloudProviderId);
     let status: number | undefined;
     let headers: Headers | undefined;
-    const client = createLocalClient({
-      baseUrl: () => p.baseUrl,
-      model: () => r.model,
-      catalog: deps.catalog,
-      apiKey: () => deps.secrets.get(target.secret),
-      cloud: { name: () => p.label, allowedBaseUrls: ALLOWED },
-      observe: (o) => {
-        status = o.status;
-        headers = o.headers;
-        learnHeaders(r.connectionId, o.headers);
-      },
-      ...(deps.fetch ? { fetch: deps.fetch } : {}),
+    let target: Target;
+    try {
+      target = targetOf(r.connectionId, r.provider);
+    } catch (error) {
+      return { streamed: false, error }; // removed meanwhile: the next route is tried
+    }
+    const client = clientFor(target, r.model, (o) => {
+      status = o.status;
+      headers = o.headers;
+      learnHeaders(r.connectionId, o.headers);
     });
+    const name = target.custom ? target.name : providerName(r.provider);
     let streamed = false;
     const onText = opts.onText;
     const started = now();
     try {
-      const msg = await client.stream(req, {
+      const raw = await client.stream(r.tier === 3 ? questionOnly(req) : req, {
         ...opts,
         ...(onText
           ? {
@@ -325,6 +475,7 @@ export function createFreePool(deps: PoolDeps) {
             }
           : {}),
       });
+      const msg = r.tier === 3 ? answerOnly(raw) : raw;
       const empty = !msg.content.some(
         (b) => (b.type === 'text' && b.text.trim()) || b.type === 'tool_use',
       );
@@ -339,7 +490,9 @@ export function createFreePool(deps: PoolDeps) {
         });
         trail.attempts.push({
           provider: r.provider,
+          name,
           model: r.model,
+          tier: r.tier,
           ok: false,
           reason: 'empty answer',
         });
@@ -358,7 +511,7 @@ export function createFreePool(deps: PoolDeps) {
       });
       health.set(r.connectionId, { health: 'healthy', at: new Date(now()).toISOString() });
       cooling.delete(r.key); // a good answer resets the 429 ladder
-      trail.attempts.push({ provider: r.provider, model: r.model, ok: true });
+      trail.attempts.push({ provider: r.provider, name, model: r.model, tier: r.tier, ok: true });
       // "pool_" ids are free in the usage ledger (source "pool").
       return { msg: { ...msg, id: `pool_${r.connectionId}_${now()}` } };
     } catch (error) {
@@ -377,7 +530,14 @@ export function createFreePool(deps: PoolDeps) {
         reason,
         ms: now() - started,
       });
-      trail.attempts.push({ provider: r.provider, model: r.model, ok: false, reason });
+      trail.attempts.push({
+        provider: r.provider,
+        name,
+        model: r.model,
+        tier: r.tier,
+        ok: false,
+        reason,
+      });
       return { streamed, error };
     }
   }
@@ -397,9 +557,11 @@ export function createFreePool(deps: PoolDeps) {
         const live = settings.get('pool.strategy') === 'priority' ? 'priority' : 'balanced';
         for (const tier of [2, 3] as const) {
           const all = routes();
+          // Tier 3 gets the question only (no tools, no pictures), so it never needs either.
+          const needs = tier === 3 ? { tools: false, vision: false } : needsOf(req);
           const { ranked, skipped } = rankRoutes(
             all,
-            { ...needsOf(req), tiers: [tier] },
+            { ...needs, tiers: [tier] },
             live,
             settings.get('pool.keyOrder'),
             now(),
@@ -408,16 +570,18 @@ export function createFreePool(deps: PoolDeps) {
             if (settings.get('pool.tier3') === 'never') break;
             // Only ask when a third-party route could actually take this request.
             if (ranked.length === 0) break;
-            if (!tier3ForSession) {
+            const everyTime = settings.get('pool.tier3EveryTime');
+            if (!tier3ForSession || everyTime) {
               const soon = lastSkipped
                 .map((s) => s.route.coolingUntil ?? 0)
                 .filter((x) => x > now())
                 .sort((a, b) => a - b)[0];
               const answer = await deps.ask({
                 soonestMin: soon ? Math.max(1, Math.round((soon - now()) / 60_000)) : null,
+                everyTime,
               });
               if (answer === 'no') break;
-              if (answer === 'session') tier3ForSession = true;
+              if (answer === 'session' && !everyTime) tier3ForSession = true;
             }
           }
           lastSkipped = [...lastSkipped, ...skipped.filter((s) => s.why !== 'tier')];
@@ -443,9 +607,10 @@ export function createFreePool(deps: PoolDeps) {
   return {
     session,
     routes,
-    /** Ready = switched on and at least one tier-2 route set up. */
+    /** Ready = switched on and a tier-2 route set up, or a tier-3 one Jarvis may ask about. */
     ready: (): boolean =>
-      settings.get('pool.enabled') && routes().some((r) => r.tier === 2 && r.enabled),
+      settings.get('pool.enabled') &&
+      routes().some((r) => r.enabled && (r.tier === 2 || settings.get('pool.tier3') === 'ask')),
     snapshot: (): PoolSnapshot =>
       buildSnapshot({
         db,
@@ -453,41 +618,63 @@ export function createFreePool(deps: PoolDeps) {
         secrets: deps.secrets,
         routes: routes(),
         connections: poolConnections(),
+        custom: deps.custom.list(),
         health,
         cooling,
         now: now(),
         claudeCost: (input, output) =>
           costOf(deps.claudePrice(), { input, output, cacheRead: 0, cacheWrite: 0 }),
       }),
-    /** Key check: one model-list call per key (no tokens used). */
+    /**
+     * Key check: one model-list call per key (no tokens used); providers without a list (Cloudflare,
+     * Sir's own) get a one-token "Reply OK" instead.
+     */
     async checkKeys(): Promise<void> {
+      const keys = [
+        ...poolConnections().map((c) => ({
+          id: c.id,
+          provider: c.provider,
+          model: c.model,
+        })),
+        ...deps.custom.list().map((c) => ({ id: c.id, provider: c.id, model: c.model })),
+      ];
       await Promise.all(
-        poolConnections().map(async (c) => {
-          const p = cloudProvider(c.provider);
-          const client = createLocalClient({
-            baseUrl: () => p.baseUrl,
-            model: () => c.model,
-            catalog: deps.catalog,
-            apiKey: () => deps.secrets.get(c.secret),
-            cloud: {
-              name: () => p.label,
-              allowedBaseUrls: ALLOWED,
-              listing: () => ({ kind: p.models }),
-            },
-            ...(deps.fetch ? { fetch: deps.fetch } : {}),
-          });
+        keys.map(async (c) => {
           const at = new Date(now()).toISOString();
           try {
-            if (p.models === 'manual') await client.ping(c.model, AbortSignal.timeout(20_000));
+            const t = targetOf(c.id, c.provider);
+            const client = clientFor(t, c.model);
+            if (t.listing === 'manual') await client.ping(c.model, AbortSignal.timeout(20_000));
             else await client.listModels();
             health.set(c.id, { health: 'healthy', at });
             if (cooling.get(c.id)?.reason === 'key rejected') cooling.delete(c.id);
           } catch (err) {
-            const auth = err instanceof JarvisError && err.code === 'LLM_AUTH';
-            health.set(c.id, { health: auth ? 'issue' : 'healthy', at });
+            // A rejected key, or (Cloudflare) no Account ID yet: both need Sir.
+            const needsSir =
+              err instanceof JarvisError &&
+              (err.code === 'LLM_AUTH' || err.message === 'no account id');
+            health.set(c.id, { health: needsSir ? 'issue' : 'healthy', at });
           }
         }),
       );
+    },
+    /** Sir's own providers (AI Router → Providers & keys → Add custom provider). */
+    custom: deps.custom,
+    /** "Test" before saving: the checks of `add`, then a one-token "Reply OK" (nothing else is sent). */
+    async testCustom(input: CustomInput): Promise<void> {
+      const f = await checkCustom(input, deps.lookup);
+      const key = input.apiKey?.trim();
+      await clientFor(
+        {
+          name: f.name,
+          baseUrl: f.baseUrl,
+          allowed: [f.baseUrl],
+          key: key || undefined,
+          listing: 'manual',
+          custom: true,
+        },
+        f.model,
+      ).ping(f.model, AbortSignal.timeout(20_000));
     },
     /** Forget pauses (Sir fixed a key, or wants to retry now). */
     clearCooldowns: (): void => cooling.clear(),

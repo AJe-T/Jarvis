@@ -14,7 +14,7 @@ import type { SecretStore } from '../settings/secrets';
 import type { SettingsService } from '../settings/settings-service';
 import type { CliBrain, CliBrainId } from './cli-brains';
 import type { Connections } from './connections';
-import { createLocalClient } from './local-client';
+import { cloudBaseUrl, createLocalClient } from './local-client';
 import type { FreePool } from './pool/pool';
 import type { LlmClient } from './types';
 
@@ -45,7 +45,7 @@ export function createCloudClient(deps: BrainDeps, connection: () => string) {
   const target = () => deps.connections.target(connection());
   const p = () => cloudProvider(target().provider);
   return createLocalClient({
-    baseUrl: () => p().baseUrl,
+    baseUrl: () => cloudBaseUrl(p(), deps.settings.get('llm.cloud.cloudflareAccount')),
     model: () => target().model,
     catalog: deps.catalog,
     apiKey: () => deps.secrets.get(target().secret),

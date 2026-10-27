@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import clsx from 'clsx';
 import { ChevronDown, ChevronRight, Star, Trash2 } from 'lucide-react';
 import {
+  ACCOUNT_SLOT,
   CLOUD_PROVIDERS,
   MAX_CONNECTIONS_PER_PROVIDER,
   cloudProvider,
@@ -15,6 +16,7 @@ import { Button, IconButton } from '../../components/ui/button';
 import { confirmAction } from '../../components/ui/confirm-modal';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
+import { SettingInput } from './settings-controls';
 import { SecretField } from './secret-field';
 
 const SOURCE: Record<ConnectionModel['source'], { label: string; hint: string; tone: string }> = {
@@ -139,6 +141,20 @@ function ModelRow({
   );
 }
 
+/**
+ * ADR-045: Cloudflare's address holds Sir's Account ID. Main accepts exactly 32 lowercase hex
+ * characters (the setting's schema) and puts it into the fixed address itself.
+ */
+export function AccountIdField(): React.JSX.Element {
+  return (
+    <SettingInput
+      k="llm.cloud.cloudflareAccount"
+      label="Cloudflare Account ID"
+      hint="32 letters and digits, from dash.cloudflare.com → Workers AI. Used for every Cloudflare key."
+    />
+  );
+}
+
 function ConnectionPanel({
   conn,
   act,
@@ -166,6 +182,7 @@ function ConnectionPanel({
         onSaved={() => void refreshList()}
       />
       {p.note && <p className="text-xs text-ink-300">{p.note}</p>}
+      {p.baseUrl.includes(ACCOUNT_SLOT) && <AccountIdField />}
       <div className="flex flex-wrap items-center gap-2">
         {p.models !== 'manual' && (
           <Button

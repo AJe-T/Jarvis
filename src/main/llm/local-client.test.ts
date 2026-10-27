@@ -3,6 +3,7 @@ import { CLOUD_PROVIDERS, cloudProvider, type CloudProviderId } from '@shared/ll
 import {
   ThinkFilter,
   checkCloudUrl,
+  cloudBaseUrl,
   checkLocalUrl,
   createLocalClient,
   selectTools,
@@ -173,6 +174,21 @@ describe('cloud providers (OpenAI, Gemini, DeepSeek… through the same translat
       }) as typeof fetch,
     });
   const req = { model: 'x', max_tokens: 100, messages: [{ role: 'user' as const, content: 'hi' }] };
+
+  it('fills only a 32-hex Account ID into the Cloudflare address (ADR-045)', () => {
+    const all = CLOUD_PROVIDERS.map((c) => c.baseUrl);
+    const cf = (id: string): string => `https://api.cloudflare.com/client/v4/accounts/${id}/ai/v1`;
+    expect(() => checkCloudUrl(cf('0123456789abcdef0123456789abcdef'), all)).not.toThrow();
+    for (const bad of ['{account_id}', '0123456789ABCDEF0123456789ABCDEF', 'x/../../evil', ''])
+      expect(() => checkCloudUrl(cf(bad), all)).toThrow();
+    let err: unknown;
+    try {
+      cloudBaseUrl(cloudProvider('cloudflare'), '');
+    } catch (e) {
+      err = e;
+    }
+    expect((err as { userMessage?: string }).userMessage).toMatch(/Account ID/);
+  });
 
   it('only talks to the catalogue address, and needs a key', async () => {
     expect(() => checkCloudUrl('https://evil.example/v1', [GEMINI])).toThrow();

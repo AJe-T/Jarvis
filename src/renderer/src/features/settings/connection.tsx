@@ -6,9 +6,14 @@ import { call, cleanError } from '../../lib/api';
 import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { SecretField } from './secret-field';
-import { refreshList, useConnections } from './connections-card';
+import { AccountIdField, refreshList, useConnections } from './connections-card';
 import { SettingInput } from './settings-controls';
-import { CLOUD_PROVIDERS, cloudProvider, type CloudProviderId } from '@shared/llm-providers';
+import {
+  ACCOUNT_SLOT,
+  CLOUD_PROVIDERS,
+  cloudProvider,
+  type CloudProviderId,
+} from '@shared/llm-providers';
 
 type Provider = 'api' | 'subscription' | 'local' | 'cloud';
 type Status = Res<'llm:claudeCodeStatus'>;
@@ -311,6 +316,7 @@ export function CloudModelCard(): React.JSX.Element {
         . A ChatGPT or Gemini app subscription is separate from API access.
       </p>
       {p.note && <p className="text-xs text-ink-300">{p.note}</p>}
+      {p.baseUrl.includes(ACCOUNT_SLOT) && <AccountIdField />}
       <label className="flex flex-col gap-1 text-sm text-ink-100">
         Model
         <input

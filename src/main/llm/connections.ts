@@ -57,7 +57,7 @@ const MAX_LABEL = 60;
 /** CONNECTION_ID_RE allows two digits. */
 const MAX_CONNECTION_NUMBER = 99;
 /** Model ids as providers write them: letters, digits and . _ - : / @ + (e.g. accounts/fireworks/models/x). */
-const MODEL_RE = /^[\w.:/@+-]{1,120}$/;
+export const MODEL_RE = /^[\w.:/@+-]{1,120}$/;
 
 const isProvider = (p: string): p is CloudProviderId => CLOUD_PROVIDERS.some((c) => c.id === p);
 

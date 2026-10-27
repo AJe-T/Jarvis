@@ -2,7 +2,6 @@ import { POOL_TOOLS, privateSourceOf } from '@shared/free-pool';
 import { JarvisError } from '../errors';
 import type { BrainRef } from '../llm/brains';
 import type { Trail } from '../llm/pool/pool';
-import { providerName } from '../llm/pool/snapshot';
 import { findSensitive } from '../security/redact';
 import type { Services } from '../services';
 import { runAgentLoop, type LoopResult, type ToolRuntime, type TurnContext } from './agent-loop';
@@ -114,23 +113,34 @@ async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
     task: title,
   });
   const tools = restrictTools(job.tools, (name) => POOL_TOOLS.has(name));
-  const result = await runAgentLoop(
-    {
-      llm,
-      tools,
-      budget: s.budget,
-      ledger: s.ledger,
-      maxIterations: job.maxSteps,
-      maxTokens: job.maxTokens,
-    },
-    job.turn,
-    {
-      model: 'pool',
-      system: [{ type: 'text', text: job.system }],
-      messages: [{ role: 'user', content: job.prompt }],
-    },
-    { onText: () => undefined, persist: () => undefined },
-  );
+  // A third-party answer is outside content, like a web page: what Jarvis does after reading it
+  // needs Sir's confirmation (the delegate_task result is marked untrusted from this taint), even
+  // when the loop stops with an error afterwards.
+  let result: LoopResult;
+  try {
+    result = await runAgentLoop(
+      {
+        llm,
+        tools,
+        budget: s.budget,
+        ledger: s.ledger,
+        maxIterations: job.maxSteps,
+        maxTokens: job.maxTokens,
+      },
+      job.turn,
+      {
+        model: 'pool',
+        system: [{ type: 'text', text: job.system }],
+        messages: [{ role: 'user', content: job.prompt }],
+      },
+      { onText: () => undefined, persist: () => undefined },
+    );
+  } finally {
+    if (llm.trail.attempts.some((a) => a.ok && a.tier === 3)) {
+      job.turn.taint.tainted = true;
+      job.turn.taint.source ??= 'a third-party AI (tier 3)';
+    }
+  }
   return { ...result, text: `${result.text}\n\n${trailLine(llm.trail)}` };
 }
 
@@ -156,9 +166,10 @@ export function trailLine(trail: Trail): string {
   const done = trail.attempts.filter((a) => a.ok).at(-1);
   const failed = trail.attempts.filter((a) => !a.ok);
   const tried = failed.length
-    ? `; tried ${failed.map((f) => `${providerName(f.provider)}: ${f.reason ?? 'failed'}`).join(', ')}`
+    ? `; tried ${failed.map((f) => `${f.name}: ${f.reason ?? 'failed'}`).join(', ')}`
     : '';
+  const third = done?.tier === 3 ? ', a third-party AI' : '';
   return done
-    ? `(Free pool: answered by ${providerName(done.provider)} · ${done.model}${tried}.)`
+    ? `(Free pool: answered by ${done.name}${third} · ${done.model}${tried}.)`
     : `(Free pool${tried}.)`;
 }

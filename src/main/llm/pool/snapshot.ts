@@ -2,13 +2,16 @@ import {
   FREE_PROVIDERS,
   type KeyHealth,
   type PoolAnswer,
+  type PoolKey,
   type PoolModel,
+  type PoolProvider,
   type PoolSnapshot,
 } from '@shared/free-pool';
 import { cloudProvider, type AiConnection, type CloudProviderId } from '@shared/llm-providers';
 import type { Db } from '../../db/connection';
 import type { SecretStore } from '../../settings/secrets';
 import type { SettingsService } from '../../settings/settings-service';
+import type { CustomProvider } from './custom';
 import {
   balancedScore,
   modelMeta,
@@ -25,6 +28,7 @@ const SHORT: Partial<Record<CloudProviderId, string>> = {
   cerebras: 'Cerebras',
   openrouter: 'OpenRouter',
   nvidia: 'NVIDIA NIM',
+  cloudflare: 'Cloudflare',
 };
 export const providerName = (id: string): string =>
   SHORT[id as CloudProviderId] ?? cloudProvider(id as CloudProviderId).label;
@@ -38,6 +42,7 @@ export function buildSnapshot(x: {
   secrets: Pick<SecretStore, 'get'>;
   routes: RouteState[];
   connections: Array<AiConnection & { poolModels: string[] }>;
+  custom: CustomProvider[];
   health: Map<string, { health: 'healthy' | 'issue'; at: string }>;
   cooling: Map<string, { until: number; reason: string }>;
   now: number;
@@ -49,41 +54,54 @@ export function buildSnapshot(x: {
   const strategy = settings.get('pool.strategy');
   const overrides = settings.get('pool.providers');
 
-  const providers = FREE_PROVIDERS.map((def) => {
-    const keys = x.connections
-      .filter((c) => c.provider === def.id)
-      .map((c) => {
-        const mine = x.routes.filter((r) => r.connectionId === c.id);
-        const coolNow = mine.some((r) => r.coolingUntil && r.coolingUntil > now);
-        const h = x.health.get(c.id);
-        const health: KeyHealth =
-          h?.health === 'issue' ? 'issue' : coolNow ? 'cooling' : h ? 'healthy' : 'unchecked';
-        const requestsToday = (
-          db
-            .prepare('SELECT COUNT(*) AS n FROM pool_calls WHERE connection_id = ? AND day = ?')
-            .get(c.id, day) as { n: number }
-        ).n;
-        return {
-          id: c.id,
-          label: c.label,
-          hint: (x.secrets.get(c.secret) ?? '').slice(-4),
-          health,
-          lastChecked: h?.at ?? null,
-          usedToday: Math.max(0, ...mine.map(usedFraction)),
-          requestsToday,
-        };
-      });
+  /** One key's row: only its last four characters ever leave main. */
+  const keyView = (id: string, label: string, secret: string): PoolKey => {
+    const mine = x.routes.filter((r) => r.connectionId === id);
+    const coolNow = mine.some((r) => r.coolingUntil && r.coolingUntil > now);
+    const h = x.health.get(id);
+    const health: KeyHealth =
+      h?.health === 'issue' ? 'issue' : coolNow ? 'cooling' : h ? 'healthy' : 'unchecked';
+    const requestsToday = (
+      db
+        .prepare('SELECT COUNT(*) AS n FROM pool_calls WHERE connection_id = ? AND day = ?')
+        .get(id, day) as { n: number }
+    ).n;
     return {
-      id: def.id,
-      label: providerName(def.id),
-      tier: overrides[def.id]?.tier ?? def.tier,
-      enabled: overrides[def.id]?.enabled ?? true,
-      keys,
-      docsUrl: def.limitsUrl,
-      checked: def.checked,
-      note: def.note,
+      id,
+      label,
+      hint: (x.secrets.get(secret) ?? '').slice(-4),
+      health,
+      lastChecked: h?.at ?? null,
+      usedToday: Math.max(0, ...mine.map(usedFraction)),
+      requestsToday,
     };
-  });
+  };
+
+  const providers: PoolProvider[] = FREE_PROVIDERS.map((def) => ({
+    id: def.id,
+    label: providerName(def.id),
+    tier: overrides[def.id]?.tier ?? def.tier,
+    enabled: overrides[def.id]?.enabled ?? true,
+    keys: x.connections
+      .filter((c) => c.provider === def.id)
+      .map((c) => keyView(c.id, c.label, c.secret)),
+    docsUrl: def.limitsUrl,
+    checked: def.checked,
+    note: def.note,
+  }));
+  // Sir's own: always tier 3; one row whether or not the relay wants a key.
+  for (const c of x.custom)
+    providers.push({
+      id: c.id,
+      label: c.name,
+      tier: 3,
+      enabled: overrides[c.id]?.enabled ?? true,
+      keys: [keyView(c.id, x.secrets.get(c.secret) ? 'API key' : 'No key', c.secret)],
+      docsUrl: c.baseUrl,
+      checked: '',
+      note: 'Added by you, not checked by Jarvis. Gets only the question itself, never private work, and only after you say yes.',
+      custom: { host: c.host, model: c.model },
+    });
 
   // Models in the order requests would go right now (every tier, no special needs).
   const order = rankRoutes(
@@ -213,6 +231,7 @@ export function buildSnapshot(x: {
     enabled: settings.get('pool.enabled'),
     strategy,
     tier3: settings.get('pool.tier3'),
+    tier3EveryTime: settings.get('pool.tier3EveryTime'),
     keyOrder: settings.get('pool.keyOrder'),
     checkHours: settings.get('pool.checkHours'),
     retryEmpty: settings.get('pool.retryEmpty'),

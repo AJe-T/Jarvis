@@ -44,6 +44,7 @@ import {
 import { createFakeClaude, loadFakeScript } from './llm/fake-claude';
 import type { LlmClient } from './llm/types';
 import { createUsageLedger } from './llm/usage-ledger';
+import { createCustomProviders } from './llm/pool/custom';
 import { createFreePool, type Tier3Answer } from './llm/pool/pool';
 import { randomUUID } from 'node:crypto';
 import { logger } from './logging/logger';
@@ -330,6 +331,7 @@ export function createServices(opts: ServiceOptions) {
     settings,
     secrets,
     connections,
+    custom: createCustomProviders({ db, secrets }),
     catalog: () => registry.catalog(),
     ask: (q) =>
       new Promise<Tier3Answer>((resolve) => {
@@ -341,7 +343,7 @@ export function createServices(opts: ServiceOptions) {
           resolve(a);
         }
         tier3Pending.set(requestId, finish);
-        opts.emit('pool:ask', { requestId, soonestMin: q.soonestMin });
+        opts.emit('pool:ask', { requestId, soonestMin: q.soonestMin, everyTime: q.everyTime });
       }),
     claudePrice: () => ledger.priceFor(settings.get('models.default')),
     ...(opts.fetch ? { fetch: opts.fetch } : {}),

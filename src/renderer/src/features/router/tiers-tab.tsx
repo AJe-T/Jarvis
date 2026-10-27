@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Check, Lock, ShieldAlert } from 'lucide-react';
 import { PRIVATE_SOURCES, type PoolSnapshot, type PoolTier } from '@shared/free-pool';
 import { Button } from '../../components/ui/button';
-import { Panel, ProviderDot, SettingRow, TIER_NAME, TierTag } from './parts';
+import { Panel, ProviderDot, SettingRow, TIER_NAME, TierTag, Toggle } from './parts';
 
 const TIER_RULE: Record<PoolTier, string> = {
   1: 'Gets everything, including private data. First choice for anything important.',
@@ -17,7 +17,7 @@ export function TiersTab({
   onChange,
 }: {
   snap: PoolSnapshot;
-  onChange: (patch: { tier3: 'ask' | 'never' }) => void;
+  onChange: (patch: { tier3?: 'ask' | 'never'; tier3EveryTime?: boolean }) => void;
 }): React.JSX.Element {
   const [preview, setPreview] = useState(false);
   const members: Record<PoolTier, Array<{ id: string; label: string }>> = {
@@ -96,6 +96,16 @@ export function TiersTab({
             <option value="never">Never use them</option>
           </select>
         </SettingRow>
+        <SettingRow
+          title="Ask every time for third-party AIs"
+          detail="Off: one yes lasts until Jarvis restarts if you choose so. On: Jarvis asks before every third-party answer."
+        >
+          <Toggle
+            label="Ask every time for third-party AIs"
+            checked={snap.tier3EveryTime}
+            onChange={(on) => onChange({ tier3EveryTime: on })}
+          />
+        </SettingRow>
         <div>
           <Button onClick={() => setPreview(true)}>
             <ShieldAlert size={14} aria-hidden /> Preview the question
@@ -103,7 +113,13 @@ export function TiersTab({
         </div>
       </Panel>
 
-      <Tier3Question open={preview} soonestMin={12} preview onAnswer={() => setPreview(false)} />
+      <Tier3Question
+        open={preview}
+        soonestMin={12}
+        everyTime={snap.tier3EveryTime}
+        preview
+        onAnswer={() => setPreview(false)}
+      />
     </div>
   );
 }
@@ -112,11 +128,14 @@ export function TiersTab({
 export function Tier3Question({
   open,
   soonestMin,
+  everyTime,
   preview,
   onAnswer,
 }: {
   open: boolean;
   soonestMin: number | null;
+  /** pool.tier3EveryTime: no "Until Jarvis restarts". */
+  everyTime: boolean;
   preview?: boolean;
   onAnswer: (a: 'once' | 'session' | 'no') => void;
 }): React.JSX.Element {
@@ -135,7 +154,8 @@ export function Tier3Question({
           <Dialog.Description className="mt-2 text-sm text-ink-300">
             Every trusted free AI is busy or out of today&apos;s limit
             {soonestMin ? ` (soonest back in about ${soonestMin} min)` : ''}. Third-party AIs are
-            run by small, unknown companies that can read what is sent to them.
+            run by small, unknown companies (or added by you) that can read what is sent to them.
+            They get only the question itself, and Jarvis treats their answer like a web page.
           </Dialog.Description>
           <p className="mt-3 flex items-start gap-2 rounded-sm bg-surface-2 p-3 text-sm text-ink-100">
             <Lock size={14} aria-hidden className="mt-0.5 shrink-0 text-ok-400" />
@@ -144,7 +164,9 @@ export function Tier3Question({
           </p>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <Button onClick={() => onAnswer('no')}>No, wait</Button>
-            <Button onClick={() => onAnswer('session')}>Until Jarvis restarts</Button>
+            {!everyTime && (
+              <Button onClick={() => onAnswer('session')}>Until Jarvis restarts</Button>
+            )}
             <Button variant="primary" onClick={() => onAnswer('once')}>
               Just this once
             </Button>

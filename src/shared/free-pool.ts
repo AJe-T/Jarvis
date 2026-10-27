@@ -68,8 +68,8 @@ export interface FreeProviderDef {
 /**
  * Providers whose keys join the pool. ⚠️ Checked 2026-10-27 against each limits page: Groq and
  * Gemini show free limits only in the signed-in console, NVIDIA's page lists none, so those are
- * learned (429 + retry-after, Groq's x-ratelimit-* headers). Cloudflare Workers AI needs Sir's
- * account id inside the address, so it waits for a fixed-address design (Integrations.md).
+ * learned (429 + retry-after, Groq's x-ratelimit-* headers). Cloudflare Workers AI (2.31) has
+ * Sir's account id inside its fixed address, filled in by code (ADR-045).
  */
 export const FREE_PROVIDERS: readonly FreeProviderDef[] = [
   {
@@ -120,7 +120,26 @@ export const FREE_PROVIDERS: readonly FreeProviderDef[] = [
     checked: '2026-10-27',
     note: 'Limits depend on the workspace plan; learned from replies.',
   },
+  {
+    id: 'cloudflare',
+    tier: 2,
+    limits: {},
+    limitsUrl: 'https://developers.cloudflare.com/workers-ai/platform/pricing/',
+    checked: '2026-10-27',
+    note: 'Free: 10,000 neurons a day, reset at 00:00 UTC. A request costs neurons by model and length, so the cap is learned from replies. Needs your Account ID in Settings → Models & AI.',
+  },
 ];
+
+// ── Sir's own tier-3 providers (Security.md §16.15, ADR-045) ───────────────────────────────
+
+/** `custom_<n>`; a number is never handed out twice (removed rows stay). */
+export const CUSTOM_ID_RE = /^custom_\d{1,3}$/;
+export const isCustomProvider = (id: string): boolean => CUSTOM_ID_RE.test(id);
+/** The DPAPI secret holding a custom provider's key. */
+export const customSecret = (id: string): string => `custom_ai_${id.slice('custom_'.length)}`;
+/** Protected like the providers' own keys: an MCP server can't be bound to it. */
+export const isCustomSecret = (name: string): boolean => /^custom_ai_\d{1,3}$/.test(name);
+export const MAX_CUSTOM_PROVIDERS = 10;
 
 export const freeProvider = (id: string): FreeProviderDef | undefined =>
   FREE_PROVIDERS.find((p) => p.id === id);
@@ -135,6 +154,7 @@ export const ENV_KEY_NAMES: Record<string, CloudProviderId> = {
   NVIDIA_API_KEY: 'nvidia',
   NVIDIA_NIM_API_KEY: 'nvidia',
   MISTRAL_API_KEY: 'mistral',
+  CLOUDFLARE_API_TOKEN: 'cloudflare',
 };
 
 // ── Private data (Security.md §16.15): a turn that used any of these never leaves tier 1 ──
@@ -241,6 +261,8 @@ export const PoolProviderSchema = z.object({
   docsUrl: z.string(),
   checked: z.string(),
   note: z.string(),
+  /** One of Sir's own providers: always tier 3, address fixed once saved. */
+  custom: z.object({ host: z.string(), model: z.string() }).optional(),
 });
 export type PoolProvider = z.infer<typeof PoolProviderSchema>;
 
@@ -310,6 +332,7 @@ export const PoolSnapshotSchema = z.object({
   enabled: z.boolean(),
   strategy: z.enum(ROUTING_STRATEGY_IDS),
   tier3: z.enum(['ask', 'never']),
+  tier3EveryTime: z.boolean(),
   keyOrder: z.enum(['roomiest', 'turns']),
   checkHours: z.number(),
   retryEmpty: z.boolean(),

@@ -150,6 +150,22 @@ export const CLOUD_PROVIDERS = [
     note: 'The docs show POST /v1/chat/completions; if Refresh models fails, type the model id from build.nvidia.com.',
   },
   {
+    id: 'cloudflare',
+    label: 'Cloudflare Workers AI',
+    category: 'model-api',
+    // ADR-045: the one address with a slot. Code fills in Sir's Account ID (32 hex characters,
+    // `llm.cloud.cloudflareAccount`); nothing else of it can change.
+    baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1',
+    secret: 'cloudflare',
+    keyHint: '',
+    keysUrl: 'https://dash.cloudflare.com/profile/api-tokens',
+    docsUrl: 'https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/',
+    models: 'manual',
+    tools: 'per-model',
+    checked: '2026-10-27',
+    note: 'Also needs your Account ID (dash.cloudflare.com → Workers AI), one for every Cloudflare key; the API token needs the Workers AI permission. No model list is published: type the id, e.g. @cf/meta/llama-3.1-8b-instruct.',
+  },
+  {
     id: 'openrouter',
     label: 'OpenRouter (hundreds of models, one key)',
     category: 'gateway',
@@ -272,6 +288,29 @@ export const CLOUD_PROVIDER_IDS = CLOUD_PROVIDERS.map((p) => p.id) as [
 
 export function cloudProvider(id: CloudProviderId): CloudProvider {
   return CLOUD_PROVIDERS.find((p) => p.id === id) ?? CLOUD_PROVIDERS[0];
+}
+
+/** Cloudflare's address holds Sir's account id: the only part of a catalogue address he sets. */
+export const ACCOUNT_SLOT = '{account_id}';
+export const CF_ACCOUNT_RE = /^[0-9a-f]{32}$/;
+
+/** A provider's address with the account id put in by code; '' while the id is missing or malformed. */
+export function providerBaseUrl(p: Pick<CloudProviderDef, 'baseUrl'>, account: string): string {
+  if (!p.baseUrl.includes(ACCOUNT_SLOT)) return p.baseUrl;
+  return CF_ACCOUNT_RE.test(account) ? p.baseUrl.replace(ACCOUNT_SLOT, account) : '';
+}
+
+/** True when `raw` is one of the catalogue's addresses (a slot matches exactly 32 hex characters). */
+export function isCatalogueUrl(raw: string, allowed: readonly string[]): boolean {
+  return allowed.some((a) => {
+    if (!a.includes(ACCOUNT_SLOT)) return a === raw;
+    const [head = '', tail = ''] = a.split(ACCOUNT_SLOT);
+    return (
+      raw.startsWith(head) &&
+      raw.endsWith(tail) &&
+      CF_ACCOUNT_RE.test(raw.slice(head.length, raw.length - tail.length))
+    );
+  });
 }
 
 // ── Connections (integrations step 3) ───────────────────────────────────────────────────────

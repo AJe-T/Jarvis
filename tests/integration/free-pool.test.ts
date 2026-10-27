@@ -67,8 +67,15 @@ describe('free AI pool', () => {
     expect(msg.content[0]).toMatchObject({ type: 'text', text: 'Tea came from China.' });
     expect(msg.id.startsWith('pool_conn_cerebras_')).toBe(true);
     expect(session.trail.attempts).toEqual([
-      { provider: 'groq', model: 'llama-3.3-70b-versatile', ok: false, reason: 'rate limited' },
-      { provider: 'cerebras', model: 'gpt-oss-120b', ok: true },
+      {
+        provider: 'groq',
+        name: 'Groq',
+        model: 'llama-3.3-70b-versatile',
+        tier: 2,
+        ok: false,
+        reason: 'rate limited',
+      },
+      { provider: 'cerebras', name: 'Cerebras', model: 'gpt-oss-120b', tier: 2, ok: true },
     ]);
 
     const snap = s.pool.snapshot();
@@ -121,6 +128,41 @@ describe('free AI pool', () => {
     };
     s.answerTier3(ask2.requestId, 'once');
     expect((await second).content[0]).toMatchObject({ text: 'From the relay.' });
+  });
+
+  it('a tier-3 answer gets only the question and taints the turn like a web page', async () => {
+    const t = setup((url) => (url === GROQ ? sse('From the relay.') : rateLimited()));
+    const s = t.services;
+    s.settings.set('pool.providers', { groq: { tier: 3 } });
+    const turn = {
+      turnId: 't1',
+      conversationId: 'c1',
+      mode: 'text' as const,
+      purpose: 'task' as const,
+      signal: new AbortController().signal,
+      taint: { tainted: false } as { tainted: boolean; source?: string },
+    };
+    const run = runOnBrain(s, 'free', {
+      system: 'You are a sub-agent of JARVIS.',
+      prompt: 'What does drift mean?',
+      tools: s.tools,
+      maxSteps: 2,
+      maxTokens: 200,
+      turn,
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    const ask = t.events.find((e) => e.event === 'pool:ask')?.payload as { requestId: string };
+    s.answerTier3(ask.requestId, 'once');
+    const result = await run;
+
+    expect(result.text).toContain('(Free pool: answered by Groq, a third-party AI');
+    expect(turn.taint).toEqual({ tainted: true, source: 'a third-party AI (tier 3)' });
+    const sent = t.bodies.at(-1) as unknown as { tools?: unknown; messages: unknown };
+    expect(sent.tools).toBeUndefined();
+    expect(sent.messages).toEqual([
+      { role: 'system', content: 'Answer the question clearly and briefly.' },
+      { role: 'user', content: 'What does drift mean?' },
+    ]);
   });
 
   it('never gets a task from a turn that read private data, or that carries a secret', async () => {

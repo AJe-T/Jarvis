@@ -17,7 +17,7 @@ import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
 import { BrainRefSchema, CLOUD_PROVIDER_IDS, CONNECTION_ID_RE } from './llm-providers';
 import { RunEstimateSchema, RunRequestSchema, RunViewSchema } from './ai-runs';
-import { LIVE_STRATEGIES, PoolSnapshotSchema } from './free-pool';
+import { CUSTOM_ID_RE, LIVE_STRATEGIES, PoolSnapshotSchema } from './free-pool';
 import { AGENT_CLI_IDS } from './agent-clis';
 import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSchema } from './npcs';
 
@@ -69,6 +69,13 @@ import {
 
 const Ok = z.object({ ok: z.literal(true) });
 const Empty = z.object({}).strict();
+/** AI Router: a custom provider as Sir types it (main checks it again before use). */
+const CustomProviderInput = z.object({
+  name: z.string().min(1).max(40),
+  baseUrl: z.string().min(9).max(200),
+  model: z.string().min(1).max(120),
+  apiKey: z.string().max(500).optional(),
+});
 const Id = z.string().min(1).max(64);
 const VaultPath = z.string().min(1).max(400);
 
@@ -441,7 +448,8 @@ export const INVOKE = {
   'pool:snapshot': contract(Empty, PoolSnapshotSchema),
   'pool:setProvider': contract(
     z.object({
-      id: z.enum(CLOUD_PROVIDER_IDS),
+      // A custom provider (custom_<n>) can only be switched on/off: it stays tier 3.
+      id: z.union([z.enum(CLOUD_PROVIDER_IDS), z.string().regex(CUSTOM_ID_RE)]),
       enabled: z.boolean().optional(),
       tier: z.union([z.literal(2), z.literal(3)]).optional(),
     }),
@@ -461,6 +469,7 @@ export const INVOKE = {
       enabled: z.boolean().optional(),
       strategy: z.enum(LIVE_STRATEGIES).optional(),
       tier3: z.enum(['ask', 'never']).optional(),
+      tier3EveryTime: z.boolean().optional(),
       keyOrder: z.enum(['roomiest', 'turns']).optional(),
       checkHours: z.number().int().min(0).max(24).optional(),
       retryEmpty: z.boolean().optional(),
@@ -477,6 +486,20 @@ export const INVOKE = {
       saved: z.array(z.object({ provider: z.string(), connectionId: z.string() })),
       skipped: z.array(z.object({ provider: z.string(), reason: z.string() })),
     }),
+  ),
+  /**
+   * ADR-045: Sir's own OpenAI-compatible provider, always tier 3. Main checks the address (HTTPS,
+   * public host, no bare IP, its DNS answer), keeps it fixed, and stores the key in DPAPI.
+   */
+  'pool:addCustom': contract(CustomProviderInput, PoolSnapshotSchema),
+  /** Same checks, then a one-token "Reply OK"; nothing is saved. */
+  'pool:testCustom': contract(
+    CustomProviderInput,
+    z.object({ ok: z.boolean(), error: z.string().optional() }),
+  ),
+  'pool:removeCustom': contract(
+    z.object({ id: z.string().regex(CUSTOM_ID_RE) }),
+    PoolSnapshotSchema,
   ),
   /** Sir's answer to "Use third-party AIs?" (pool:ask). */
   'pool:answer': contract(
@@ -1134,7 +1157,12 @@ export const EVENTS = {
   /** A multi-AI run changed (a step started, streamed text, finished). */
   'runs:update': z.object({ run: RunViewSchema }),
   /** AI Router: tiers 1 and 2 are out of limits; may a third-party AI answer? (pool:answer). */
-  'pool:ask': z.object({ requestId: z.string(), soonestMin: z.number().nullable() }),
+  'pool:ask': z.object({
+    requestId: z.string(),
+    soonestMin: z.number().nullable(),
+    /** pool.tier3EveryTime: no "until Jarvis restarts" choice. */
+    everyTime: z.boolean(),
+  }),
   'npc:meeting': z.object({ meeting: NpcMeetingSchema }),
   'mini:layout': z.object({ side: z.enum(['left', 'right']), tucked: z.boolean() }),
   /** A setting changed in main (e.g. Jarvis switched his personality by voice); the UI follows. */

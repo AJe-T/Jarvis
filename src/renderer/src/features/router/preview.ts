@@ -125,6 +125,7 @@ export function previewSnapshot(now = Date.now()): PoolSnapshot {
     enabled: true,
     strategy: 'balanced',
     tier3: 'ask',
+    tier3EveryTime: false,
     keyOrder: 'roomiest',
     checkHours: 6,
     retryEmpty: true,

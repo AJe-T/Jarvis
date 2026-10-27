@@ -34,6 +34,9 @@ export interface PoolActions {
   provider(patch: Req<'pool:setProvider'>): void;
   model(patch: Req<'pool:setModel'>): void;
   checkKeys(): Promise<void>;
+  /** Sir's own tier-3 provider; true once saved (main checked it). */
+  addCustom(input: Req<'pool:addCustom'>): Promise<boolean>;
+  removeCustom(id: string): void;
   reload(): void;
 }
 
@@ -56,6 +59,17 @@ export function RouterView(): React.JSX.Element {
     provider: (patch) => void run(call('pool:setProvider', patch)),
     model: (patch) => void run(call('pool:setModel', patch)),
     checkKeys: () => run(call('pool:checkKeys', {})),
+    addCustom: (input) =>
+      call('pool:addCustom', input)
+        .then((next) => {
+          setSnap(next);
+          return true;
+        })
+        .catch((e: unknown) => {
+          toast({ level: 'error', message: cleanError(e) });
+          return false;
+        }),
+    removeCustom: (id) => void run(call('pool:removeCustom', { id })),
     reload,
   };
 

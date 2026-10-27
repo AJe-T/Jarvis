@@ -71,14 +71,19 @@ export const HELP: Record<string, HelpEntry> = {
       'Overview: who is answering, today’s numbers, paused routes and the last answers with what was tried first.',
       'Models: pick how requests are routed, filter by tools, vision or context size, and open a model to see every provider that serves it and its limits.',
       'Providers & keys: switch providers on or off, move them between tier 2 and tier 3, see each key’s health and how much of today’s limit it has used.',
-      'Tiers & privacy: the private-data rule (always on) and what happens when tiers 1 and 2 run out.',
+      'Add custom provider: any OpenAI-compatible relay (https, public address). It always stays in tier 3, gets only the question itself, and its answer is treated like a web page.',
+      'Cloudflare Workers AI needs your Account ID as well as the API token: Settings → Models & AI.',
+      'Tiers & privacy: the private-data rule (always on), what happens when tiers 1 and 2 run out, and "Ask every time for third-party AIs".',
       'The tier depends on who receives your text, not the model: Gemini through Google is tier 2, Gemini through an unknown relay is tier 3.',
     ],
     tips: [
       'A key’s chosen model joins the pool, and so does every model you star for it in Settings → Models & AI.',
       'Delegation, Abilities and Analytics are drawn now and start working in Phases 2–4.',
     ],
-    say: ['Use the free pool to summarise these three pages', 'Ask a free AI to translate this into Hindi'],
+    say: [
+      'Use the free pool to summarise these three pages',
+      'Ask a free AI to translate this into Hindi',
+    ],
   },
   npcs: {
     title: 'NPCs',

@@ -1,4 +1,6 @@
+import { isCustomProvider } from '@shared/free-pool';
 import { MAX_CONNECTIONS_PER_PROVIDER, defaultConnectionId } from '@shared/llm-providers';
+import { JarvisError } from '../../errors';
 import { parseEnvKeys } from '../../llm/pool/env-import';
 import type { Services } from '../../services';
 import { handle } from '../handle';
@@ -8,6 +10,18 @@ export function registerPoolHandlers(s: Services): void {
   handle('pool:snapshot', () => s.pool.snapshot());
 
   handle('pool:setProvider', (req) => {
+    if (isCustomProvider(req.id) && !s.pool.custom.find(req.id))
+      throw new JarvisError(
+        'NOT_FOUND',
+        `no custom provider ${req.id}`,
+        'That provider does not exist.',
+      );
+    if (isCustomProvider(req.id) && req.tier !== undefined && req.tier !== 3)
+      throw new JarvisError(
+        'POLICY_BLOCKED',
+        'custom provider tier',
+        'Your own providers always stay in tier 3.',
+      );
     const all = s.settings.get('pool.providers');
     const cur = all[req.id] ?? {};
     s.settings.set('pool.providers', {
@@ -47,6 +61,7 @@ export function registerPoolHandlers(s: Services): void {
     if (req.enabled !== undefined) s.settings.set('pool.enabled', req.enabled);
     if (req.strategy) s.settings.set('pool.strategy', req.strategy);
     if (req.tier3) s.settings.set('pool.tier3', req.tier3);
+    if (req.tier3EveryTime !== undefined) s.settings.set('pool.tier3EveryTime', req.tier3EveryTime);
     if (req.keyOrder) s.settings.set('pool.keyOrder', req.keyOrder);
     if (req.checkHours !== undefined) s.settings.set('pool.checkHours', req.checkHours);
     if (req.retryEmpty !== undefined) s.settings.set('pool.retryEmpty', req.retryEmpty);
@@ -95,6 +110,35 @@ export function registerPoolHandlers(s: Services): void {
       skipped: skipped.length,
     });
     return { found, saved, skipped };
+  });
+
+  // Sir's own providers (ADR-045): name and host are audited, never the key.
+  handle('pool:addCustom', async (req) => {
+    const c = await s.pool.custom.add(req);
+    s.audit.append('user', 'pool.custom_add', {
+      id: c.id,
+      host: c.host,
+      keySet: Boolean(req.apiKey),
+    });
+    return s.pool.snapshot();
+  });
+
+  handle('pool:testCustom', async (req) => {
+    try {
+      await s.pool.testCustom(req);
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        error: (e instanceof JarvisError && e.userMessage) || 'The test failed.',
+      };
+    }
+  });
+
+  handle('pool:removeCustom', (req) => {
+    s.pool.custom.remove(req.id);
+    s.audit.append('user', 'pool.custom_remove', { id: req.id });
+    return s.pool.snapshot();
   });
 
   handle('pool:answer', (req) => {

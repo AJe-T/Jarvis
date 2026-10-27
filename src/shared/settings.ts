@@ -9,7 +9,12 @@ import {
   type KokoroVoice,
 } from './voices';
 import { DEFAULT_ORB_STYLE, ORB_STYLE_IDS } from './orb-styles';
-import { CLOUD_PROVIDER_IDS, CONNECTION_ID_RE, type CloudProviderId } from './llm-providers';
+import {
+  CF_ACCOUNT_RE,
+  CLOUD_PROVIDER_IDS,
+  CONNECTION_ID_RE,
+  type CloudProviderId,
+} from './llm-providers';
 import { ROUTING_STRATEGY_IDS, type RoutingStrategy } from './free-pool';
 import {
   AURA_VOICES,
@@ -84,6 +89,14 @@ export const SETTINGS = {
     schema: z.union([z.literal(''), z.string().regex(CONNECTION_ID_RE)]),
     default: '',
   },
+  /**
+   * ADR-045: Sir's Cloudflare Account ID, the only part of a cloud address he sets. Exactly 32
+   * lowercase hex characters; code puts it into the fixed Workers AI address.
+   */
+  'llm.cloud.cloudflareAccount': {
+    schema: z.union([z.literal(''), z.string().regex(CF_ACCOUNT_RE)]),
+    default: '',
+  },
   /** ADR-013: OpenAI-compatible server on this PC or the home network (Ollama, LM Studio). */
   'llm.local.baseUrl': { schema: z.string().url().max(200), default: 'http://localhost:11434/v1' },
   'llm.local.model': { schema: z.string().max(120), default: '' },
@@ -94,6 +107,8 @@ export const SETTINGS = {
   'pool.strategy': { schema: z.enum(ROUTING_STRATEGY_IDS), default: 'balanced' as RoutingStrategy },
   /** When tiers 1 and 2 are out of limits: ask Sir before a third-party AI, or never use one. */
   'pool.tier3': { schema: z.enum(['ask', 'never']), default: 'ask' as 'ask' | 'never' },
+  /** Ask before every tier-3 answer (off = Sir may say yes until Jarvis restarts). */
+  'pool.tier3EveryTime': { schema: z.boolean(), default: false },
   /** Per provider: switched off, or moved between tier 2 and 3. */
   'pool.providers': {
     schema: z.record(

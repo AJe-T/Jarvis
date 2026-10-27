@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import type { LivePrice, ModelListing } from '@shared/llm-providers';
+import {
+  isCatalogueUrl,
+  providerBaseUrl,
+  type CloudProviderDef,
+  type LivePrice,
+  type ModelListing,
+} from '@shared/llm-providers';
 import { JarvisError } from '../errors';
 import { redact } from '../security/redact';
 
@@ -280,14 +286,31 @@ export interface LocalLlmConfig {
     };
     /** The connection id, carried in the message id so usage can be told apart per key. */
     tag?(): string;
+    /** Sir's custom tier-3 providers may not need a key (AI Router). */
+    keyOptional?: boolean;
   };
 }
 
 /** Only the catalogue's fixed HTTPS addresses (shared/llm-providers.ts), never one typed in. */
 export function checkCloudUrl(raw: string, allowed: readonly string[]): URL {
-  if (!allowed.includes(raw) || !raw.startsWith('https://'))
+  if (!isCatalogueUrl(raw, allowed) || !raw.startsWith('https://'))
     throw new JarvisError('INVALID', 'unknown cloud url', 'That AI provider is not supported.');
   return new URL(raw);
+}
+
+/** A catalogue address, with Sir's Cloudflare Account ID filled in by code (ADR-045). */
+export function cloudBaseUrl(
+  p: Pick<CloudProviderDef, 'baseUrl' | 'label'>,
+  account: string,
+): string {
+  const url = providerBaseUrl(p, account);
+  if (!url)
+    throw new JarvisError(
+      'INVALID',
+      'no account id',
+      `Add your ${p.label} Account ID in Settings → Models & AI.`,
+    );
+  return url;
 }
 
 /** Only loopback or private-network servers: the whole conversation goes to this endpoint. */
@@ -346,7 +369,7 @@ export function createLocalClient(cfg: LocalLlmConfig): LlmClient & {
   const checkUrl = (raw: string): URL =>
     cloud ? checkCloudUrl(raw, cloud.allowedBaseUrls) : checkLocalUrl(raw);
   const needKey = (): void => {
-    if (cloud && !cfg.apiKey?.())
+    if (cloud && !cloud.keyOptional && !cfg.apiKey?.())
       throw new JarvisError(
         'INVALID',
         'no cloud key',
