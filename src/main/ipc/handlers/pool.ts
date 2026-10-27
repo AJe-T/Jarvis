@@ -1,4 +1,4 @@
-import { DELEGATION_KEYS, isCustomProvider } from '@shared/free-pool';
+import { ABILITY_KEYS, DELEGATION_KEYS, isCustomProvider } from '@shared/free-pool';
 import { MAX_CONNECTIONS_PER_PROVIDER, defaultConnectionId } from '@shared/llm-providers';
 import { JarvisError } from '../../errors';
 import { parseEnvKeys } from '../../llm/pool/env-import';
@@ -69,11 +69,20 @@ export function registerPoolHandlers(s: Services): void {
       const v = req.delegation?.[k];
       if (v !== undefined) s.settings.set(`pool.delegation.${k}`, v);
     }
+    for (const k of ABILITY_KEYS) {
+      const v = req.abilities?.[k];
+      if (v === undefined) continue;
+      s.settings.set(`pool.abilities.${k}`, v);
+      // Where Sir's recorded voice may go: the audit keeps every change.
+      if (k === 'voiceHearing') s.audit.append('user', 'pool.voiceHearing', { enabled: v });
+    }
     return s.pool.snapshot();
   });
 
   handle('pool:checkKeys', async () => {
     s.pool.clearCooldowns();
+    s.freeSearch.clearPauses();
+    s.images.clearPauses();
     await s.pool.checkKeys();
     return s.pool.snapshot();
   });
@@ -143,6 +152,19 @@ export function registerPoolHandlers(s: Services): void {
     s.pool.custom.remove(req.id);
     s.audit.append('user', 'pool.custom_remove', { id: req.id });
     return s.pool.snapshot();
+  });
+
+  // Sir typed the prompt himself; it still passes the private-data check (keys, cards, passwords).
+  handle('pool:image', async (req) => {
+    const img = await s.images.generate(req.prompt, req.size, AbortSignal.timeout(240_000), () =>
+      s.searchGate({ conversationId: '' }, req.prompt),
+    );
+    s.audit.append('user', 'pool.image', { path: img.path, by: img.by });
+    return {
+      path: img.path,
+      by: img.by,
+      dataUrl: `data:${img.mime};base64,${img.data.toString('base64')}`,
+    };
   });
 
   handle('pool:answer', (req) => {

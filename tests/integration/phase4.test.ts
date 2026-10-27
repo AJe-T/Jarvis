@@ -260,7 +260,7 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     await idle(t.services);
   });
 
-  it('falls back to the Windows voice when Edge TTS fails, warning once', async () => {
+  it('falls back to the Windows voice when Edge TTS fails, naming it once', async () => {
     const t = setupVoice(
       {
         rules: [
@@ -280,7 +280,10 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     expect(
       t.events.filter(
         (e) =>
-          e.event === 'notify' && /backup voice/.test((e.payload as { message: string }).message),
+          e.event === 'notify' &&
+          /Speaking with Windows voice now \(Edge voices failed/.test(
+            (e.payload as { message: string }).message,
+          ),
       ),
     ).toHaveLength(1);
   });

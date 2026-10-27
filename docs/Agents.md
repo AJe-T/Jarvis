@@ -177,7 +177,8 @@ Each tool's description (in code) states: purpose, when to use, when not to use,
 | Request type | Preferred route |
 |---|---|
 | Open/close/switch apps, volume, brightness, files, reminders | Native tools |
-| "Search the web / what's the latest…" | `web_search` server tool |
+| "Search the web / what's the latest…" | `free_web_search` (AI Router 2.33); the `web_search` server tool appears only when free search can't take the turn (used up, off, or a private chat) |
+| "Draw / make a picture of…" | `generate_image` (free model, saved to the vault; say who made it) |
 | Web page interaction (log in already done, read, click, fill) | Playwright MCP tools |
 | GitHub / Notion / Calendar data | Their MCP servers |
 | Clicking inside a desktop app's UI | `delegate_desktop_task` |

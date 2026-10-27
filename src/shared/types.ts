@@ -71,6 +71,12 @@ export const KNOWN_SECRETS = [
   'assemblyai',
   'speech_server',
   'local_llm',
+  // AI Router Phase 3: free search APIs (shared/free-pool.ts SEARCH_PROVIDERS).
+  'search_tavily',
+  'search_brave',
+  'search_exa',
+  'search_firecrawl',
+  'search_linkup',
 ] as const;
 export const SECRET_NAME_RE = /^[a-z][a-z0-9_]{1,39}$/;
 export const SecretNameSchema = z.string().regex(SECRET_NAME_RE);

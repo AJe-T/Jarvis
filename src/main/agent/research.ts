@@ -9,6 +9,7 @@ import { pickModel } from './model-router';
 /** Tools the researcher may use: reading the web, nothing that acts on the PC. */
 const RESEARCH_TOOLS = new Set([
   'web_search',
+  'free_web_search',
   'fetch_web_page',
   'search_tool_output',
   'search_memory',
@@ -45,8 +46,8 @@ export function createResearchTool(
   deps: { writeNote?(rel: string, markdown: string): Promise<unknown> } = {},
 ): Tool {
   const restricted = (): ToolRuntime => ({
-    definitions: () =>
-      s.tools.definitions().filter((d) => RESEARCH_TOOLS.has((d as { name: string }).name)),
+    definitions: (ctx) =>
+      s.tools.definitions(ctx).filter((d) => RESEARCH_TOOLS.has((d as { name: string }).name)),
     catalog: () => (s.tools.catalog?.() ?? []).filter((t) => RESEARCH_TOOLS.has(t.name)),
     isBatchToolset: () => false,
     execute: (block, ctx) =>

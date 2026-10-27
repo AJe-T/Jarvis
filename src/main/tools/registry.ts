@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
+import type { TurnContext } from '../agent/agent-loop';
 import type { Tool } from './types';
 
 export const WEB_SEARCH_TOOL = {
@@ -20,8 +21,19 @@ function inputSchema(tool: Tool): Anthropic.Tool.InputSchema {
   return schema as Anthropic.Tool.InputSchema;
 }
 
-/** API-Guide.md §2.2: one registry for native, MCP and Anthropic-defined tools. */
-export function createToolRegistry(opts: { webSearchEnabled(): boolean }) {
+/** Who is asking for the tool list: the conversation and what this turn already read. */
+export type ToolScope = Pick<TurnContext, 'conversationId' | 'taint'>;
+
+/**
+ * API-Guide.md §2.2: one registry for native, MCP and Anthropic-defined tools. AI Router Phase 3:
+ * Claude sees free_web_search while a free search can take the turn, and the paid web_search only
+ * when none can (used up, or the conversation holds private data). Without a turn (the catalog),
+ * both are listed as before.
+ */
+export function createToolRegistry(opts: {
+  webSearchEnabled(scope?: ToolScope): boolean;
+  freeSearchShown?(scope?: ToolScope): boolean;
+}) {
   const tools = new Map<string, Tool>();
   const providers: Array<() => Tool[]> = [];
 
@@ -55,13 +67,16 @@ export function createToolRegistry(opts: { webSearchEnabled(): boolean }) {
         inputSchema: inputSchema(t),
       }));
     },
-    definitions(): Anthropic.ToolUnion[] {
-      const defs: Anthropic.ToolUnion[] = all().map((t) =>
-        'anthropicDefinition' in t
-          ? (t as AnthropicDefinedTool).anthropicDefinition
-          : { name: t.name, description: t.description, input_schema: inputSchema(t) },
-      );
-      if (opts.webSearchEnabled()) defs.push({ ...WEB_SEARCH_TOOL });
+    definitions(scope?: ToolScope): Anthropic.ToolUnion[] {
+      const hideFree = opts.freeSearchShown ? !opts.freeSearchShown(scope) : false;
+      const defs: Anthropic.ToolUnion[] = all()
+        .filter((t) => !(hideFree && t.name === 'free_web_search'))
+        .map((t) =>
+          'anthropicDefinition' in t
+            ? (t as AnthropicDefinedTool).anthropicDefinition
+            : { name: t.name, description: t.description, input_schema: inputSchema(t) },
+        );
+      if (opts.webSearchEnabled(scope)) defs.push({ ...WEB_SEARCH_TOOL });
       // Cache order is tools → system → messages: mark the end of the tool list (API-Guide.md §3.2).
       const last = defs.at(-1);
       if (last) defs[defs.length - 1] = { ...last, cache_control: { type: 'ephemeral' } };

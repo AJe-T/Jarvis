@@ -377,6 +377,8 @@ export const BRAIN_IDS = [
   'local',
   // AI Router (2.30): the free pool, non-private work only (Security.md §16.15).
   'free',
+  // AI Router Phase 3 (2.33): 2–3 free models draft, a judge writes one answer (tier 2, no tools).
+  'fusion',
   ...CLOUD_PROVIDER_IDS,
   'chatgpt',
   'antigravity',
@@ -387,6 +389,7 @@ export const BRAIN_LABELS: Record<BrainId, string> = {
   jarvis: 'Jarvis (main connection)',
   local: 'Local model',
   free: 'Free AI pool',
+  fusion: 'Fusion (free AIs + judge)',
   ...(Object.fromEntries(CLOUD_PROVIDERS.map((p) => [p.id, p.label])) as Record<
     CloudProviderId,
     string

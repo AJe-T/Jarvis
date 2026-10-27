@@ -149,6 +149,16 @@ export const SETTINGS = {
   'pool.delegation.fallback': { schema: z.boolean(), default: true },
   /** Past 80% of today's Claude budget: the front door opens and Claude is told to delegate more. */
   'pool.delegation.budgetAware': { schema: z.boolean(), default: true },
+  /** AI Router Phase 3 (2.33): free_web_search (Tavily → Brave → Exa → Firecrawl → Linkup) before Claude's paid search. */
+  'pool.abilities.search': { schema: z.boolean(), default: true },
+  /** generate_image: Cloudflare Workers AI, then (after Sir's yes) Pollinations as tier 3. */
+  'pool.abilities.image': { schema: z.boolean(), default: true },
+  /** Brain "fusion": three free models draft, a fourth judges (tier 2, text only). */
+  'pool.abilities.fusion': { schema: z.boolean(), default: true },
+  /** Speaking backup: Kokoro → Edge → ElevenLabs → Windows when a voice fails (reply text only). */
+  'pool.abilities.voiceSpeaking': { schema: z.boolean(), default: true },
+  /** Hearing backup: Whisper on this PC → Groq → OpenAI. Sends Sir's recorded voice out, so off by default. */
+  'pool.abilities.voiceHearing': { schema: z.boolean(), default: false },
   'models.default': { schema: modelId, default: 'claude-sonnet-5-5' },
   'models.deep': { schema: modelId, default: 'claude-opus-5-5' },
   'models.fast': { schema: modelId, default: 'claude-haiku-4-5-20251001' },
@@ -515,4 +525,5 @@ export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   'voice.tts.provider',
   'voice.stt.serverUrl',
   'voice.tts.serverUrl',
+  'pool.abilities.voiceHearing', // Sir's recorded voice to Groq / OpenAI when on-device speech fails
 ];

@@ -40,7 +40,8 @@ export interface TurnContext {
 
 /** What the loop needs from the tool system (implemented by tools/executor in Phase 2). */
 export interface ToolRuntime {
-  definitions(): Anthropic.ToolUnion[];
+  /** The turn decides which web search Claude sees (free first, paid when free can't: registry.ts). */
+  definitions(ctx?: TurnContext): Anthropic.ToolUnion[];
   execute(block: ToolUseBlock, ctx: TurnContext): Promise<ToolResultBlockParam>;
   isBatchToolset(block: ToolUseBlock): boolean;
   /** Plain JSON-Schema tool list, for the Claude subscription path (served over MCP). */
@@ -148,7 +149,7 @@ export async function runAgentLoop(
           model: req.model,
           max_tokens: deps.maxTokens ?? 4096,
           system: req.system,
-          tools: deps.tools.definitions(),
+          tools: deps.tools.definitions(ctx),
           messages: req.withCache ? req.withCache(messages) : [...messages],
         },
         {

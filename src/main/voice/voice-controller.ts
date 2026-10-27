@@ -22,6 +22,7 @@ import {
 import type { QuickMatch } from './quick-commands';
 import type { ContinuousTranscriber, HeardSegment } from './local/continuous';
 import { Utterance, warmSpeech } from './tts-pipeline';
+import { speakingFallbacks, ttsName, whyOf, type EngineReport } from './backup';
 import { createLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
 import {
   rms,
@@ -76,6 +77,8 @@ export interface VoiceDeps {
   onDictation?(text: string): void;
   /** ADR-012 intent judge: is the latest ambient speech for Jarvis, and what does Sir want? */
   judge?(transcript: string, ctx: JudgeContext): Promise<Intent>;
+  /** AI Router Phase 3: which speech engine is in use (a notice on every switch). */
+  report?: EngineReport;
   /** Instant commands (routine triggers, time, date): answered without the model. */
   quick?(text: string): QuickMatch | null;
   /** Overridable for tests. */
@@ -266,15 +269,22 @@ export function createVoiceController(d: VoiceDeps) {
       {
         ...voiceOf,
         fallbacks: () =>
-          d.settings.get('voice.tts.provider') === 'sapi'
-            ? []
-            : d.settings.get('voice.tts.provider') === 'edge'
-              ? [d.factories.sapi]
-              : [d.factories.edge, d.factories.sapi],
+          speakingFallbacks(
+            d.settings.get('voice.tts.provider'),
+            d.factories,
+            d.settings.get('pool.abilities.voiceSpeaking'),
+          ),
+        onEngine: (id, failed) =>
+          d.report?.(
+            'speaking',
+            ttsName(id),
+            failed && `${ttsName(failed.id)} failed: ${whyOf(failed.err)}`,
+          ),
         emitAudio: (p) => d.emit('tts:audio', p),
         emitStop: (utteranceId) => d.emit('tts:stop', utteranceId ? { utteranceId } : {}),
         onFallback: (err) => {
-          if (fallbackWarned) return;
+          // With the engine reporter, every switch is announced by name instead.
+          if (fallbackWarned || d.report) return;
           fallbackWarned = true;
           const why = err instanceof JarvisError && err.userMessage ? ` ${err.userMessage}` : '';
           d.emit('notify', {

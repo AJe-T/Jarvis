@@ -46,6 +46,10 @@ import type { LlmClient } from './llm/types';
 import { createUsageLedger } from './llm/usage-ledger';
 import { createCustomProviders } from './llm/pool/custom';
 import { createFreePool, type Tier3Answer } from './llm/pool/pool';
+import { createFusion } from './llm/pool/fusion';
+import { createImageTool, createImages } from './llm/pool/images';
+import { createFreeSearch, createFreeSearchTool } from './llm/pool/search';
+import { privateBlock } from './agent/brain-runner';
 import { randomUUID } from 'node:crypto';
 import { logger } from './logging/logger';
 import { createScheduler } from './scheduler/scheduler';
@@ -80,7 +84,7 @@ import { createYouTubeTools } from './tools/everyday/youtube';
 import { createVideoTools } from './tools/everyday/video';
 import { createWeatherTools } from './tools/everyday/weather';
 import { createSkillStore } from './skills/skills';
-import { createToolRegistry } from './tools/registry';
+import { createToolRegistry, type ToolScope } from './tools/registry';
 import { createOutputStore, createSavedOutputTools } from './tools/saved-outputs';
 import { createPlanner } from './planner/planner';
 import { createPlannerTools } from './planner/planner-tools';
@@ -356,8 +360,47 @@ export function createServices(opts: ServiceOptions) {
         opts.emit('pool:ask', { requestId, soonestMin: q.soonestMin, everyTime: q.everyTime });
       }),
     claudePrice: () => ledger.priceFor(settings.get('models.default')),
+    abilities: () => ({
+      search: freeSearch.status(),
+      paidSearch: settings.get('web.search.enabled'),
+      image: images.status(),
+      voice: { ...voiceEngines },
+    }),
     ...(opts.fetch ? { fetch: opts.fetch } : {}),
   });
+  // AI Router Phase 3 (2.33, Security.md §16.15): free search, pictures, fusion; every path asks
+  // the same privacy gate in code before anything leaves the PC.
+  const freeSearch = createFreeSearch({
+    settings,
+    secrets,
+    ...(opts.fetch ? { fetch: opts.fetch } : {}),
+  });
+  const images = createImages({
+    settings,
+    secrets,
+    connections,
+    mayUseTier3: () => pool.mayUseTier3(),
+    vaultRoot: () => settings.get('vault.path'),
+    ...(opts.fetch ? { fetch: opts.fetch } : {}),
+  });
+  const fusion = createFusion({ pool, settings });
+  /** The speech engines in use right now (voice-controller sets them; the AI Router page shows them). */
+  const voiceEngines: { hearing: string | null; speaking: string | null } = {
+    hearing: null,
+    speaking: null,
+  };
+  const searchGate = (w: { conversationId: string; private?: string | undefined }, text: string) =>
+    privateBlock(db, w, text);
+  /** Free search can take this turn: switched on, a provider free, nothing private in the chat. */
+  const freeSearchFits = (scope: ToolScope): boolean =>
+    freeSearch.usable() &&
+    !searchGate(
+      {
+        conversationId: scope.conversationId,
+        private: scope.taint.privateSource ?? scope.taint.privateData,
+      },
+      '',
+    );
   const answerTier3 = (requestId: string, answer: Tier3Answer): void => {
     tier3Pending.get(requestId)?.(answer);
   };
@@ -372,7 +415,7 @@ export function createServices(opts: ServiceOptions) {
     }, 15 * 60_000);
     timer.unref?.();
   }
-  const brains = createBrains({ ...brainDeps, jarvis: llm, local: llmLocal, cli, pool });
+  const brains = createBrains({ ...brainDeps, jarvis: llm, local: llmLocal, cli, pool, fusion });
   // Integrations step 4: one request to several AIs, answers only.
   const multiRun = createMultiRun({
     db,
@@ -455,7 +498,11 @@ export function createServices(opts: ServiceOptions) {
   if (!opts.isTest) sessionWatcher.start();
   const appIndex = createAppIndex(opts.os, opts.startMenuDirs ?? defaultStartMenuDirs());
   const registry = createToolRegistry({
-    webSearchEnabled: () => settings.get('web.search.enabled'),
+    // Claude's paid search only when free search can't take the turn (AI Router Phase 3).
+    webSearchEnabled: (scope) =>
+      settings.get('web.search.enabled') && (!scope || !freeSearchFits(scope)),
+    freeSearchShown: (scope) =>
+      scope ? freeSearchFits(scope) : settings.get('pool.abilities.search'),
   });
   for (const tool of createPlannerTools(planner, (view) => {
     opts.emit('nav:open', { view });
@@ -491,6 +538,9 @@ export function createServices(opts: ServiceOptions) {
     ...createWebPageTools(opts.fetch ? { fetch: opts.fetch } : {}),
     // YouTube transcripts without an API key (idea from jo-inc/camofox-browser).
     ...createYouTubeTools(opts.fetch ? { fetch: opts.fetch } : {}),
+    // AI Router Phase 3: free search APIs and free image models, private data never sent.
+    createFreeSearchTool({ search: freeSearch, gate: searchGate }),
+    createImageTool({ images, gate: searchGate }),
     // Videos from HTML with HyperFrames (heygen-com/hyperframes), rendered on this PC.
     ...createVideoTools({ videosDir: () => join(opts.paths.videos, 'Jarvis') }),
     // HuggingGPT (microsoft/JARVIS): Claude plans, picks Hub models, runs them, explains.
@@ -567,7 +617,9 @@ export function createServices(opts: ServiceOptions) {
       const others = brains
         .available()
         .filter(
-          (b) => b !== 'jarvis' && (b !== 'free' || settings.get('pool.delegation.delegate')),
+          (b) =>
+            b !== 'jarvis' &&
+            ((b !== 'free' && b !== 'fusion') || settings.get('pool.delegation.delegate')),
         );
       const line = others.length
         ? `other AIs for delegate_task "brain": ${others.map((b) => `${brains.label(b)} (${b})`).join(', ')}`
@@ -701,6 +753,11 @@ export function createServices(opts: ServiceOptions) {
     connectionClient: (id: string) => createCloudClient(brainDeps, () => id),
     brains,
     pool,
+    freeSearch,
+    images,
+    fusion,
+    voiceEngines,
+    searchGate,
     answerTier3,
     paidBudget,
     freeBudget,

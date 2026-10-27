@@ -20,7 +20,9 @@ import { RunEstimateSchema, RunRequestSchema, RunViewSchema } from './ai-runs';
 import {
   CUSTOM_ID_RE,
   LIVE_STRATEGIES,
+  PoolAbilitySettingsSchema,
   PoolDelegationSchema,
+  IMAGE_SIZES,
   PoolSnapshotSchema,
 } from './free-pool';
 import { AGENT_CLI_IDS } from './agent-clis';
@@ -479,8 +481,17 @@ export const INVOKE = {
       checkHours: z.number().int().min(0).max(24).optional(),
       retryEmpty: z.boolean().optional(),
       delegation: PoolDelegationSchema.partial().optional(),
+      abilities: PoolAbilitySettingsSchema.partial().optional(),
     }),
     PoolSnapshotSchema,
+  ),
+  /**
+   * AI Router → Abilities → Generate (Sir's click). Main checks the prompt for private data, asks
+   * before a tier-3 model, and saves the picture to the vault; `by` names who made it.
+   */
+  'pool:image': contract(
+    z.object({ prompt: z.string().trim().min(1).max(1000), size: z.enum(IMAGE_SIZES) }),
+    z.object({ path: z.string(), by: z.string(), dataUrl: z.string() }),
   ),
   /** One model-list call per key; clears pauses caused by a key that now works. */
   'pool:checkKeys': contract(Empty, PoolSnapshotSchema),

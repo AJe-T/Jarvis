@@ -75,16 +75,20 @@ export const HELP: Record<string, HelpEntry> = {
       'Cloudflare Workers AI needs your Account ID as well as the API token: Settings → Models & AI.',
       'Tiers & privacy: the private-data rule (always on), what happens when tiers 1 and 2 run out, and "Ask every time for third-party AIs".',
       'Delegation: Claude hands heavy, non-private work to free AIs; the front door (off until you switch it on) sends short, plain, non-private questions straight to a free AI; a chat keeps its free model for 30 minutes; each side covers when the other is out; past 80% of today’s Claude budget, free AIs are preferred. The chat always says when a free AI answered.',
+      'Abilities: free web search (Tavily → Brave → Exa → Firecrawl → Linkup, keys on Providers & keys; Claude’s paid search only when they are used up), free pictures saved to your vault under Images/ (Cloudflare, or Pollinations after you say yes), the fusion brain (free drafts and a judge, also in Compare AIs) and a voice backup chain that always tells you which engine is in use.',
       'The tier depends on who receives your text, not the model: Gemini through Google is tier 2, Gemini through an unknown relay is tier 3.',
     ],
     tips: [
       'A key’s chosen model joins the pool, and so does every model you star for it in Settings → Models & AI.',
-      'Abilities and Analytics are drawn now and start working in Phases 3–4.',
+      'Hearing backup sends your recorded voice to Groq or OpenAI when Whisper on this PC fails, so it stays off until you switch it on and confirm.',
+      'Wide and tall pictures come only from Pollinations, a third party, so Jarvis asks first. Analytics is drawn now and starts working in Phase 4.',
       'Questions about you, your files, messages or plans never take the front door: Claude answers them.',
     ],
     say: [
       'Use the free pool to summarise these three pages',
       'Ask a free AI to translate this into Hindi',
+      'Draw a logo for my bakery',
+      'Use the fusion brain to compare green and black tea',
     ],
   },
   npcs: {

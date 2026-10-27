@@ -45,3 +45,32 @@ describe('Utterance speech cache', () => {
     expect(tts.spoken).toHaveLength(2);
   });
 });
+
+describe('Utterance backup voice (AI Router Phase 3)', () => {
+  it('a failed voice hands the sentence to the next, and says which voice spoke and why', async () => {
+    const broken = createFakeTts('fake', { fail: true });
+    const edge = createFakeTts('edge');
+    const engines: Array<[string, string | undefined]> = [];
+    let done: () => void = () => undefined;
+    const finished = new Promise<void>((r) => (done = r));
+    const u = new Utterance(
+      {
+        primary: () => broken,
+        fallbacks: () => [edge],
+        voice: () => 'v',
+        rate: () => '+0%',
+        emitAudio: (p) => p.last && done(),
+        emitStop: () => undefined,
+        onFallback: () => undefined,
+        onEngine: (id, failed) => engines.push([id, failed?.id]),
+        logger,
+      },
+      { extractSpoken: false },
+    );
+    u.push('Hello, sir.');
+    u.end();
+    await finished;
+    expect(edge.spoken).toEqual(['Hello, sir.']);
+    expect(engines).toEqual([['edge', 'fake']]);
+  });
+});

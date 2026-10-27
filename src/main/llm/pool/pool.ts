@@ -3,6 +3,7 @@ import {
   freeProvider,
   isCustomProvider,
   routeKey,
+  type PoolAbilities,
   type PoolLimits,
   type PoolSnapshot,
 } from '@shared/free-pool';
@@ -56,6 +57,8 @@ export interface PoolDeps {
   /** Claude's price per token, to show what the pool saved. */
   claudePrice(): Price;
   fetch?: typeof fetch;
+  /** Phase 3 abilities for the page (search keys, image makers, fusion line-up, voice engines). */
+  abilities?(): Omit<PoolAbilities, 'fusion' | 'settings'>;
   /** Tests: DNS answers for custom providers' hosts. */
   lookup?: Lookup;
   now?: () => number;
@@ -136,6 +139,8 @@ export interface PoolJob {
   sticky?: string;
   /** What a different model gets than the one that answered this conversation before. */
   handover?: (req: LlmRequest) => LlmRequest;
+  /** Fusion: narrows or reorders the ranked routes (one provider per drafter, the judge's pick). */
+  pick?: (ranked: RouteState[]) => RouteState[];
 }
 
 const MAX_ATTEMPTS = 6;
@@ -566,6 +571,19 @@ export function createFreePool(deps: PoolDeps) {
     }
   }
 
+  /**
+   * "Use third-party AIs?": false when Sir chose never or said no; a yes for the session holds
+   * until restart (unless he asked to be asked every time). Chat, fusion and images share it.
+   */
+  async function mayUseTier3(soonestMin: number | null = null): Promise<boolean> {
+    if (settings.get('pool.tier3') === 'never') return false;
+    const everyTime = settings.get('pool.tier3EveryTime');
+    if (tier3ForSession && !everyTime) return true;
+    const answer = await deps.ask({ soonestMin, everyTime });
+    if (answer === 'session' && !everyTime) tier3ForSession = true;
+    return answer !== 'no';
+  }
+
   /** One sub-task's client: tries tier 2, then (with Sir's yes) tier 3; records its trail. */
   function session(job: PoolJob): LlmClient & { trail: Trail } {
     const trail: Trail = { attempts: [] };
@@ -592,33 +610,28 @@ export function createFreePool(deps: PoolDeps) {
             settings.get('pool.keyOrder'),
             now(),
           );
+          const picked = job.pick ? job.pick(ranked) : ranked;
           if (tier === 3) {
-            if (settings.get('pool.tier3') === 'never') break;
             // Only ask when a third-party route could actually take this request.
-            if (ranked.length === 0) break;
-            const everyTime = settings.get('pool.tier3EveryTime');
-            if (!tier3ForSession || everyTime) {
-              const soon = lastSkipped
-                .map((s) => s.route.coolingUntil ?? 0)
-                .filter((x) => x > now())
-                .sort((a, b) => a - b)[0];
-              const answer = await deps.ask({
-                soonestMin: soon ? Math.max(1, Math.round((soon - now()) / 60_000)) : null,
-                everyTime,
-              });
-              if (answer === 'no') break;
-              if (answer === 'session' && !everyTime) tier3ForSession = true;
-            }
+            if (picked.length === 0) break;
+            const soon = lastSkipped
+              .map((s) => s.route.coolingUntil ?? 0)
+              .filter((x) => x > now())
+              .sort((a, b) => a - b)[0];
+            if (
+              !(await mayUseTier3(soon ? Math.max(1, Math.round((soon - now()) / 60_000)) : null))
+            )
+              break;
           }
           lastSkipped = [...lastSkipped, ...skipped.filter((s) => s.why !== 'tier')];
           // Sticky: the model that answered this conversation goes first while it still can.
           const order =
             before && settings.get('pool.delegation.sticky')
               ? [
-                  ...ranked.filter((r) => r.key === before),
-                  ...ranked.filter((r) => r.key !== before),
+                  ...picked.filter((r) => r.key === before),
+                  ...picked.filter((r) => r.key !== before),
                 ]
-              : ranked;
+              : picked;
           for (const r of order) {
             if (tried >= MAX_ATTEMPTS || (tried > 0 && now() - started > TIME_BUDGET_MS)) break;
             tried += 1;
@@ -647,6 +660,7 @@ export function createFreePool(deps: PoolDeps) {
   return {
     session,
     routes,
+    mayUseTier3,
     /** Ready = switched on and a tier-2 route set up, or a tier-3 one Jarvis may ask about. */
     ready: (): boolean =>
       settings.get('pool.enabled') &&
@@ -662,6 +676,7 @@ export function createFreePool(deps: PoolDeps) {
         health,
         cooling,
         now: now(),
+        abilities: deps.abilities,
         claudeCost: (input, output) =>
           costOf(deps.claudePrice(), { input, output, cacheRead: 0, cacheWrite: 0 }),
       }),

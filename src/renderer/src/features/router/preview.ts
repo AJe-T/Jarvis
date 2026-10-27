@@ -137,6 +137,20 @@ export function previewSnapshot(now = Date.now()): PoolSnapshot {
       fallback: true,
       budgetAware: true,
     },
+    abilities: {
+      settings: {
+        search: true,
+        image: true,
+        fusion: true,
+        voiceSpeaking: true,
+        voiceHearing: false,
+      },
+      search: [],
+      paidSearch: true,
+      image: [],
+      fusion: { drafters: [], judge: null },
+      voice: { hearing: null, speaking: null },
+    },
     providers: PREVIEW_PROVIDERS,
     models: PREVIEW_MODELS,
     recent: [

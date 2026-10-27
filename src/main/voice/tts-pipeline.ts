@@ -14,6 +14,8 @@ export interface TtsDeps {
   emitAudio(p: EventPayload<'tts:audio'>): void;
   emitStop(utteranceId?: string): void;
   onFallback(err: unknown): void;
+  /** The voice that just spoke a sentence (AI Router Phase 3: Sir sees every switch). */
+  onEngine?(id: string, failed?: { id: string; err: unknown }): void;
   logger: Logger;
   onFirstAudio?(utteranceId: string): void;
 }
@@ -165,6 +167,7 @@ export class Utterance {
       for (const c of hit) this.send(c.mime, c.data);
       return;
     }
+    let failed: { id: string; err: unknown } | undefined;
     for (const [i, provider] of chain.entries()) {
       if (this.aborted) return;
       const before = this.seq;
@@ -176,6 +179,7 @@ export class Utterance {
         }
         // Only the chosen voice is kept: a backup voice may be gone once the first one recovers.
         if (this.cache && i === 0 && !this.aborted) rememberSpeech(key, chunks);
+        if (!this.aborted) this.deps.onEngine?.(provider.id, i > 0 ? failed : undefined);
         return;
       } catch (err) {
         // Part of the sentence already played: a backup voice would repeat its start.
@@ -185,6 +189,7 @@ export class Utterance {
           i === chain.length - 1 ? 'last fallback TTS failed' : 'TTS failed; trying the next voice',
         );
         if (i === 0) this.deps.onFallback(err);
+        failed ??= { id: provider.id, err };
       }
     }
   }

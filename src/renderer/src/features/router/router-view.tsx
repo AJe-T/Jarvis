@@ -117,7 +117,7 @@ export function RouterView(): React.JSX.Element {
               )}
             >
               {t.label}
-              {t.phase > 2 && (
+              {t.phase > 3 && (
                 <span className="font-code text-3xs text-ink-500" aria-label={`Phase ${t.phase}`}>
                   P{t.phase}
                 </span>
@@ -140,7 +140,9 @@ export function RouterView(): React.JSX.Element {
                   onChange={(patch) => actions.settings({ delegation: patch })}
                 />
               )}
-              {tab === 'abilities' && <AbilitiesTab />}
+              {tab === 'abilities' && (
+                <AbilitiesTab snap={snap} actions={actions} onKeys={() => setTab('providers')} />
+              )}
               {tab === 'analytics' && <AnalyticsTab snap={snap} />}
             </>
           )}

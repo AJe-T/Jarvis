@@ -28,6 +28,7 @@ import { matchQuickCommand, type RoutineTriggers } from './quick-commands';
 import type { Recorder, SttProvider } from './types';
 import { createVoiceController, type VoiceFactories } from './voice-controller';
 import { clearSpeechCache } from './tts-pipeline';
+import { createEngineReporter, hearingChain, whyOf, type EngineReport } from './backup';
 import { decodeAudio } from './audio-decode';
 import { createElevenLabsTts } from './tts/elevenlabs';
 import { createKokoroTts } from './tts/kokoro';
@@ -114,20 +115,32 @@ function phraseTranscribers(s: Services): Record<PhraseEngine, Transcriber> {
 }
 
 /** A cloud phrase that fails (limit, network, server off) is read on this PC instead, when it can be. */
-export function withLocalFallback(t: Transcriber, local: LocalEngines): Transcriber {
+export function withLocalFallback(
+  t: Transcriber,
+  local: LocalEngines,
+  report?: { name: string; to: EngineReport },
+): Transcriber {
   return {
     async transcribe(audio, language) {
       try {
-        return await t.transcribe(audio, language);
+        const text = await t.transcribe(audio, language);
+        report?.to('hearing', report.name);
+        return text;
       } catch (err) {
         if (!local.ready()) throw err;
         logger.warn({ err: String(err) }, 'phrase engine failed; using on-device speech');
-        return local.transcribe(audio, language ?? 'auto');
+        const text = await local.transcribe(audio, language ?? 'auto');
+        report?.to('hearing', LOCAL_HEARING, `${report.name}: ${whyOf(err)}`);
+        return text;
       }
     },
     release: () => t.release(),
   };
 }
+
+const LOCAL_HEARING = 'Whisper on this PC';
+const sttName = (id: SttEngineId): string =>
+  id === 'groq' ? 'Groq Whisper' : (STT_ENGINES.find((e) => e.id === id)?.title ?? id);
 
 /** The chosen engine has the key it needs (on-device engines and own servers need none). */
 function hasKey(s: Services, id: SttEngineId): boolean {
@@ -146,6 +159,17 @@ export function realFactories(
     !!capture && s.settings.get('voice.echoCancel') && !capture.broken();
   const deepgram = createDeepgramStt(() => s.secrets.get('deepgram'));
   const phrase = phraseTranscribers(s);
+  const report = createEngineReporter({ engines: s.voiceEngines, emit: s.emit });
+  /**
+   * AI Router Phase 3: cloud hearing behind on-device Whisper, only when Sir switched it on
+   * (it sends his recorded voice to Groq / OpenAI) and only engines whose key is set.
+   */
+  const cloudHearing = (): Array<{ name: string; t: Transcriber }> =>
+    s.settings.get('pool.abilities.voiceHearing')
+      ? (['groq', 'openai'] as const)
+          .filter((id) => hasKey(s, id))
+          .map((id) => ({ name: sttName(id), t: phrase[id] }))
+      : [];
   const stt: SttProvider = {
     id: 'selected',
     start: async (o) => {
@@ -153,7 +177,24 @@ export function realFactories(
       // A cloud engine chosen but no key: fall back to free on-device speech when it is downloaded.
       const engine =
         chosen !== 'whisper' && !hasKey(s, chosen) && local.ready() ? 'whisper' : chosen;
-      if (engine === 'whisper') return local.stt.start(o);
+      if (engine === 'whisper') {
+        const cloud = cloudHearing();
+        if (cloud.length && local.vadReady()) {
+          // chisle: phrase mode (no live partials) while cloud hearing is on; keeps uploads to whole phrases.
+          const onDevice: Transcriber = {
+            transcribe: (audio, language) => local.transcribe(audio, language ?? 'auto'),
+            release: async () => undefined,
+          };
+          return local
+            .phraseStt(
+              'whisper',
+              hearingChain([{ name: LOCAL_HEARING, t: onDevice }, ...cloud], report),
+            )
+            .start(o);
+        }
+        report('hearing', LOCAL_HEARING);
+        return local.stt.start(o);
+      }
       const info = STT_ENGINES.find((e) => e.id === engine);
       if (!hasKey(s, engine))
         throw new JarvisError(
@@ -161,14 +202,22 @@ export function realFactories(
           'no speech engine',
           `Speech needs a one-time setup: Settings → Voice → "Set up free on-device speech" (about 100 MB, works offline), or add a ${info?.keyLabel ?? 'key'}.`,
         );
-      if (engine === 'deepgram') return deepgram.start(o);
+      if (engine === 'deepgram') {
+        report('hearing', sttName('deepgram'));
+        return deepgram.start(o);
+      }
       if (!local.vadReady())
         throw new JarvisError(
           'INVALID',
           'voice detector not downloaded',
           `${info?.title ?? 'This engine'} needs the small voice detector (2 MB) to hear when you stop talking: Settings → Voice → Speech to text → Download.`,
         );
-      return local.phraseStt(engine, withLocalFallback(phrase[engine], local)).start(o);
+      return local
+        .phraseStt(
+          engine,
+          withLocalFallback(phrase[engine], local, { name: sttName(engine), to: report }),
+        )
+        .start(o);
     },
   };
   return {
@@ -388,6 +437,7 @@ export function createVoiceSystem(
     broker: s.broker,
     killSwitch: s.killSwitch,
     emit: s.emit,
+    report: createEngineReporter({ engines: s.voiceEngines, emit: s.emit }),
     logger,
     factories:
       opts.factories ??

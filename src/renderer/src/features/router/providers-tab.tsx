@@ -19,6 +19,7 @@ import { confirmAction } from '../../components/ui/confirm-modal';
 import { Button, IconButton } from '../../components/ui/button';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
+import { SecretField } from '../settings/secret-field';
 import {
   FilterChip,
   HealthDot,
@@ -209,7 +210,54 @@ export function ProvidersTab({
           </SettingRow>
         </div>
       </Panel>
+      <SearchKeysPanel search={snap.abilities.search} onSaved={actions.reload} />
     </div>
+  );
+}
+
+/** AI Router Phase 3: one key per free search API, tried in this order (Abilities → Free web search). */
+function SearchKeysPanel({
+  search,
+  onSaved,
+}: {
+  search: PoolSnapshot['abilities']['search'];
+  onSaved: () => void;
+}): React.JSX.Element {
+  return (
+    <Panel title="Free search keys">
+      <p className="text-sm text-ink-300">
+        Web searches try these in order and use Claude&apos;s paid search only when all are used up.
+        Keys are encrypted on this PC; only their last four characters are shown.
+      </p>
+      <ol className="flex flex-col gap-4">
+        {search.map((p, i) => (
+          <li key={p.id} className="flex flex-col gap-1">
+            <SecretField
+              name={p.secret}
+              label={`${i + 1}. ${p.name}`}
+              placeholder={`${p.name} API key`}
+              onSaved={onSaved}
+            />
+            <span className="flex flex-wrap items-center gap-x-3 text-xs text-ink-500">
+              <span>Free: {p.free}</span>
+              {p.keySet && <span>{p.usedToday} searches today</span>}
+              {p.pause && (
+                <span className="text-lamp-400">
+                  paused until {new Date(p.pause.until).toLocaleTimeString()}: {p.pause.reason}
+                </span>
+              )}
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-accent-300 underline-offset-2 hover:underline"
+                onClick={() => void call('app:openExternal', { url: p.signupUrl })}
+              >
+                Get a key <ExternalLink size={11} aria-hidden />
+              </button>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Panel>
   );
 }
 

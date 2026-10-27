@@ -63,7 +63,7 @@ describe('RouterView', () => {
       'Providers & keys',
       'Tiers & privacy',
       'Delegation',
-      'AbilitiesP3',
+      'Abilities',
       'AnalyticsP4',
     ]);
   });
@@ -95,6 +95,36 @@ describe('RouterView', () => {
     expect(settings).toHaveBeenCalledWith({ delegation: { frontDoor: true } });
     fireEvent.click(screen.getByRole('switch', { name: 'Hand-over note' }));
     expect(settings).toHaveBeenCalledWith({ delegation: { handover: false } });
+  });
+
+  it('wires every ability to its setting; cloud hearing waits for Sir to confirm', async () => {
+    const image = vi.fn(async () => ({
+      path: 'Images/2026-10-28-owl.jpg',
+      by: 'Cloudflare Workers AI · FLUX.1 [schnell]',
+      dataUrl: 'data:image/jpeg;base64,AA==',
+    }));
+    (window as unknown as { jarvis: { call: Record<string, unknown> } }).jarvis.call['pool:image'] =
+      image;
+    await renderView();
+    fireEvent.click(screen.getByRole('tab', { name: 'Abilities' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Free web search' }));
+    expect(settings).toHaveBeenCalledWith({ abilities: { search: false } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Fusion brain' }));
+    expect(settings).toHaveBeenCalledWith({ abilities: { fusion: false } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Speaking backup' }));
+    expect(settings).toHaveBeenCalledWith({ abilities: { voiceSpeaking: false } });
+    const hearing = screen.getByRole('switch', { name: 'Cloud hearing backup' });
+    expect(hearing.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(hearing);
+    // Sir's recorded voice: nothing changes until he confirms in the dialog.
+    expect(settings).not.toHaveBeenCalledWith({ abilities: { voiceHearing: true } });
+
+    fireEvent.change(screen.getByLabelText('Describe the image'), {
+      target: { value: 'a neon owl' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    expect(await screen.findByText(/Made by Cloudflare Workers AI/)).toBeTruthy();
+    expect(image).toHaveBeenCalledWith({ prompt: 'a neon owl', size: 'square' });
   });
 
   it('opens the tier-3 question with its three answers', async () => {

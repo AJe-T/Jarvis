@@ -46,7 +46,7 @@ All use `main/llm/local-client.ts` (Messages API ↔ OpenAI Chat Completions tra
 
 **Connections (v2.25).** Each provider can have up to five keys (`conn_<provider>` is the main key, `conn_<provider>_<n>` the extras), each with its own model registry in `ai_models` (live / typed / cached, favourite, enabled). Extra keys are brains for `delegate_task` and NPCs and can be Jarvis's own (`llm.cloud.connection`). Code: `main/llm/connections.ts`, `main/ipc/handlers/ai-connections.ts`, `renderer/.../settings/connections-card.tsx`.
 
-**AI Router (v2.29 layout, v2.30 Phase 1, v2.31 custom providers + Cloudflare, v2.32 Phase 2 delegation; ADR-045).** Brain `free` = the free pool: every key of a provider in `FREE_PROVIDERS` (`shared/free-pool.ts`: Gemini, Groq, Cerebras, OpenRouter, NVIDIA, Mistral, Cloudflare) plus Sir's own tier-3 providers (`pool_custom`), with its chosen model and starred models. `main/llm/pool/` (router: pure ranking; pool: attempts, learning, tier-3 question; snapshot: the page), `pool_calls` (migration 017), IPC `pool:*`, Sidebar → AI Router. Private turns are refused in `agent/brain-runner.ts` (Security.md §16.15). Phase 2 (front door, fallback, sticky, hand-over) lives in `agent/front-door.ts` and the orchestrator's `answer()`; Phases 3–4 are drawn on the page with a Phase tag.
+**AI Router (v2.29 layout, v2.30 Phase 1, v2.31 custom providers + Cloudflare, v2.32 Phase 2 delegation, v2.33 Phase 3 abilities; ADR-045).** Brain `free` = the free pool: every key of a provider in `FREE_PROVIDERS` (`shared/free-pool.ts`: Gemini, Groq, Cerebras, OpenRouter, NVIDIA, Mistral, Cloudflare) plus Sir's own tier-3 providers (`pool_custom`), with its chosen model and starred models. `main/llm/pool/` (router: pure ranking; pool: attempts, learning, tier-3 question; snapshot: the page), `pool_calls` (migration 017), IPC `pool:*`, Sidebar → AI Router. Private turns are refused in `agent/brain-runner.ts` (Security.md §16.15). Phase 2 (front door, fallback, sticky, hand-over) lives in `agent/front-door.ts` and the orchestrator's `answer()`; Phase 3 (free search, images, fusion: `llm/pool/search.ts`, `images.ts`, `fusion.ts`, `limits.ts`; voice backup: `voice/backup.ts`) is below; Phase 4 is drawn on the page with a Phase tag.
 
 **Multi-AI runs (v2.26).** Sidebar → Compare AIs runs compare / review / chain over any ready brains (`main/agent/multi-run.ts`, migration 015). Model execution only (no tools); agent execution with tools stays in `delegate_task`. Fallback execution remains `llm.fallbackLocal` (opt-in); specialist routing is Jarvis choosing a `brain` in `delegate_task`. Neither switches models silently.
 
@@ -117,6 +117,33 @@ Claude stays the boss; six settings under `pool.delegation.*` (AI Router → Del
 | Budget-aware (80%) | on | `budget-guard.ts` `dayShare` | Front door opens + Claude told to delegate; API-key connection only |
 
 Not done (later phases): a model-written hand-over note, Laya approving front-door questions, front-door answers for messages with attachments.
+
+### AI Router Phase 3: Abilities (agreed 2026-10-28, built in v2.33)
+
+Four abilities under `pool.abilities.*` (AI Router → Abilities). Full rules: Security.md §16.15 "Abilities (2.33)", ADR-045 amendment. Every one passes the privacy gate in code before anything leaves the PC.
+
+| Service | Use | Request (⚠️ checked 2026-10-28 against the official API reference) | Free allowance | Status |
+|---|---|---|---|---|
+| Tavily | search 1 | `POST https://api.tavily.com/search`, `Authorization: Bearer`, `{query, max_results, search_depth: "basic"}` → `results[].title/url/content`; 429 (+ Retry-After), 432 plan limit, 433 pay-as-you-go limit | 1,000 credits a month (basic search = 1 credit) | Supported |
+| Brave Search | search 2 | `GET https://api.search.brave.com/res/v1/web/search?q=&count=`, `X-Subscription-Token` → `web.results[].title/url/description` | $5 credit a month (about 1,000 searches); needs a card, so set a spending limit (third-party reports, 2026; Brave's pricing page needs sign-in) | Supported |
+| Exa | search 3 | `POST https://api.exa.ai/search`, `x-api-key`, `{query, numResults, contents: {text: {maxCharacters}}}` → `results[].title/url/text` | starting credit (amount shown only in the dashboard) | Supported |
+| Firecrawl | search 4 | `POST https://api.firecrawl.dev/v2/search`, `Authorization: Bearer`, `{query, limit}` → `data.web[].url/title/description` | starting credits (dashboard) | Supported |
+| Linkup | search 5 | `POST https://api.linkup.so/v1/search`, `Authorization: Bearer`, `{q, depth: "standard", outputType: "searchResults"}` → `results[]` (`type` text: `name/url/content`; images skipped); 429 limit or no credit | free monthly credit (dashboard) | Supported |
+| Cloudflare Workers AI | images, tier 2 | `POST https://api.cloudflare.com/client/v4/accounts/{id}/ai/run/@cf/black-forest-labs/flux-1-schnell`, Bearer token, `{prompt ≤ 2048, steps ≤ 8}` → `result.image` (base64 JPEG). Black Forest Labs terms. | 10,000 neurons a day (reset 00:00 UTC); one 1024² picture at 4 steps ≈ 58 neurons | Supported (square only: the model takes no size) |
+| Pollinations | images, tier 3 | `GET https://image.pollinations.ai/prompt/{prompt}?width&height&seed&safe=true`, no key → JPEG; area ≤ 768², one at a time, 45 s apart, 402 + Retry-After over the limit | free, per IP, with a small logo | Supported, asks first |
+| Gemini image models | images | — | no free image quota ("limit: 0" on the free tier, 2026) | **Dropped** |
+| Groq Whisper / OpenAI transcribe | hearing backup | existing transcribers (`voice/stt/cloud-stt.ts`, API-Guide.md §9) | Groq free tier; OpenAI paid | Supported, off by default |
+| Kokoro / Edge / ElevenLabs / Windows | speaking backup | existing voices (`voice/tts/`) | Kokoro, Edge, Windows free | Supported |
+
+| Ability | Default | Where | Sir's decision |
+|---|---|---|---|
+| Free web search | on | `llm/pool/search.ts` (`free_web_search`), `tools/registry.ts` (which search Claude sees, per turn) | Order above; paid `web_search` only when none can take it; in `POOL_TOOLS` |
+| Image generation | on | `llm/pool/images.ts` (`generate_image`, IPC `pool:image`) | Cloudflare → Pollinations (tier 3, asks first); vault `Images/` + credit note |
+| Fusion brain | on | `llm/pool/fusion.ts`, brain `fusion` (`brains.ts`, `brain-runner.ts`) | 3 drafters, best judge, no tools; offered in Compare AIs |
+| Voice backup: speaking | on | `voice/backup.ts` `speakingFallbacks`, `tts-pipeline.ts` `onEngine` | Kokoro → Edge → ElevenLabs → Windows |
+| Voice backup: hearing | **off** | `voice/backup.ts` `hearingChain`, `voice-system.ts` | Allowed, off by default, confirm to switch on, every switch named |
+
+Not done: a size picker for Cloudflare (its free FLUX model has no size), counting each search provider's monthly credit from its dashboard (only replies are read), fusion drafts with tools.
 
 ## How to add an OpenAI-compatible provider
 

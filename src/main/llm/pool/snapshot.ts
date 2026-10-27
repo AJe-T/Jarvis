@@ -6,7 +6,10 @@ import {
   type PoolModel,
   type PoolProvider,
   type PoolSnapshot,
+  ABILITY_KEYS,
   DELEGATION_KEYS,
+  type PoolAbilities,
+  type PoolAbilitySettings,
   type PoolDelegation,
 } from '@shared/free-pool';
 import { cloudProvider, type AiConnection, type CloudProviderId } from '@shared/llm-providers';
@@ -14,6 +17,7 @@ import type { Db } from '../../db/connection';
 import type { SecretStore } from '../../settings/secrets';
 import type { SettingsService } from '../../settings/settings-service';
 import type { CustomProvider } from './custom';
+import { fusionLineup } from './fusion';
 import {
   balancedScore,
   modelMeta,
@@ -48,6 +52,7 @@ export function buildSnapshot(x: {
   health: Map<string, { health: 'healthy' | 'issue'; at: string }>;
   cooling: Map<string, { until: number; reason: string }>;
   now: number;
+  abilities?: (() => Omit<PoolAbilities, 'fusion' | 'settings'>) | undefined;
   claudeCost(input: number, output: number): number;
 }): PoolSnapshot {
   const { db, settings, now } = x;
@@ -240,6 +245,18 @@ export function buildSnapshot(x: {
     delegation: Object.fromEntries(
       DELEGATION_KEYS.map((k) => [k, settings.get(`pool.delegation.${k}`)]),
     ) as PoolDelegation,
+    abilities: {
+      settings: Object.fromEntries(
+        ABILITY_KEYS.map((k) => [k, settings.get(`pool.abilities.${k}`)]),
+      ) as PoolAbilitySettings,
+      ...(x.abilities?.() ?? {
+        search: [],
+        paidSearch: settings.get('web.search.enabled'),
+        image: [],
+        voice: { hearing: null, speaking: null },
+      }),
+      fusion: fusionLineup(x.routes, now),
+    },
     providers,
     models,
     recent,

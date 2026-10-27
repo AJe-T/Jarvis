@@ -12,7 +12,8 @@ import { pickModel } from './model-router';
 /** A tool runtime that only offers, and only runs, the allowed tools. */
 export function restrictTools(base: ToolRuntime, allowed: (name: string) => boolean): ToolRuntime {
   return {
-    definitions: () => base.definitions().filter((d) => allowed((d as { name: string }).name)),
+    definitions: (ctx) =>
+      base.definitions(ctx).filter((d) => allowed((d as { name: string }).name)),
     catalog: () => (base.catalog?.() ?? []).filter((t) => allowed(t.name)),
     isBatchToolset: () => false,
     execute: (block, ctx) =>
@@ -56,6 +57,7 @@ export async function runOnBrain(s: Services, brain: BrainRef, job: BrainJob): P
     return { outcome: 'end_turn', text, citations: [], iterations: 1 };
   }
   if (brain === 'free') return runOnPool(s, job);
+  if (brain === 'fusion') return runOnFusion(s, job);
   const llm = s.brains.get(brain);
   if (!llm)
     throw new JarvisError(
@@ -143,16 +145,72 @@ async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
 }
 
 /**
+ * Brain "fusion" (Phase 3): the same gate as runOnPool, at the start and before every draft and
+ * the judge; text only (no tools), tier 2 only. The reply ends with every model used.
+ */
+async function runOnFusion(s: Services, job: BrainJob): Promise<LoopResult> {
+  const sent = `${job.system}\n${job.prompt}`;
+  const why = poolBlock(s.db, job.turn, sent);
+  if (why)
+    throw new JarvisError(
+      'POLICY_BLOCKED',
+      'private data for the free pool',
+      `Free AIs never get Sir's private data (this task involves ${why}). Do it yourself, or use the local model.`,
+    );
+  if (!s.fusion.ready())
+    throw new JarvisError(
+      'INVALID',
+      'fusion not ready',
+      'Fusion needs the free pool on, fusion switched on (AI Router → Abilities), and keys from at least two free providers.',
+    );
+  const llm = s.fusion.session({
+    id: `fusion_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    task: job.prompt.split('\n')[0]?.slice(0, 120) ?? '',
+    gate: () => poolBlock(s.db, job.turn, sent),
+  });
+  const msg = await llm.stream(
+    {
+      model: 'pool',
+      max_tokens: job.maxTokens,
+      system: job.system,
+      messages: [{ role: 'user', content: job.prompt }],
+    },
+    { signal: job.turn.signal },
+  );
+  s.ledger.record(msg, 'task', job.turn.conversationId);
+  const text = msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+  return { outcome: 'end_turn', text, citations: [], iterations: 1 };
+}
+
+/**
  * Why text may not go to the free pool, or null (Security.md §16.15). Every pool path (delegation,
  * front door, hand-over note, fallback) asks this, in code, and no setting turns it off: private
  * data read this turn, keys/passwords/cards seen, a private tool call anywhere in this conversation
  * (or running beside this one), or a secret in the text itself.
  */
 export function poolBlock(db: Db, turn: TurnContext, text: string): string | null {
+  return privateBlock(
+    db,
+    {
+      conversationId: turn.conversationId,
+      private: turn.taint.privateSource ?? turn.taint.privateData,
+    },
+    text,
+  );
+}
+
+/**
+ * The same gate for a tool (free search, images): `private` is what this turn already read
+ * (ToolContext.private), and the conversation's tool calls are checked as they stand right now.
+ */
+export function privateBlock(
+  db: Db,
+  where: { conversationId: string; private?: string | undefined },
+  text: string,
+): string | null {
   return (
-    turn.taint.privateSource ??
-    turn.taint.privateData ??
-    privateInConversation(db, turn.conversationId) ??
+    where.private ??
+    privateInConversation(db, where.conversationId) ??
     (findSensitive(text).length ? 'private data in the task' : null)
   );
 }

@@ -335,7 +335,7 @@ ${savedNote(saved)}`;
   }
 
   return {
-    definitions: () => deps.registry.definitions(),
+    definitions: (ctx) => deps.registry.definitions(ctx),
     catalog: () => deps.registry.catalog(),
     execute,
     isBatchToolset: (block) => Boolean((block as { toolset_name?: string | null }).toolset_name),

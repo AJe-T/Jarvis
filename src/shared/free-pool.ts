@@ -223,6 +223,8 @@ export const POOL_TOOLS: ReadonlySet<string> = new Set([
   'fetch_web_page',
   'read_feed',
   'youtube_transcript',
+  // Phase 3 (2.33): every query is checked in code before it leaves the PC (pool/search.ts).
+  'free_web_search',
 ]);
 
 /** The private source a tool's output counts as, or null when it's public (web, weather…). */
@@ -340,6 +342,117 @@ export const DELEGATION_KEYS = Object.keys(PoolDelegationSchema.shape) as Array<
   keyof PoolDelegation
 >;
 
+// ── Phase 3 abilities (2.33, settings `pool.abilities.*`) ─────────────────────────────────────
+
+/** Switches on AI Router → Abilities. `voiceHearing` sends Sir's recorded voice out: off by default. */
+export const PoolAbilitySettingsSchema = z.object({
+  search: z.boolean(),
+  image: z.boolean(),
+  fusion: z.boolean(),
+  voiceSpeaking: z.boolean(),
+  voiceHearing: z.boolean(),
+});
+export type PoolAbilitySettings = z.infer<typeof PoolAbilitySettingsSchema>;
+export const ABILITY_KEYS = Object.keys(PoolAbilitySettingsSchema.shape) as Array<
+  keyof PoolAbilitySettings
+>;
+
+export interface SearchProviderDef {
+  id: 'tavily' | 'brave' | 'exa' | 'firecrawl' | 'linkup';
+  name: string;
+  /** DPAPI secret name (Providers & keys → Free search keys). */
+  secret: string;
+  /** ⚠️ Free allowance as the provider states it (checked date below). */
+  free: string;
+  signupUrl: string;
+}
+
+/**
+ * Free search APIs, tried in this order (Sir's choice). ⚠️ Endpoints, auth headers and reply shapes
+ * checked against each provider's API reference on 2026-10-28; allowances are learned from replies
+ * (429 / 402 / 432) since most dashboards show them only after sign-in.
+ */
+export const SEARCH_PROVIDERS: readonly SearchProviderDef[] = [
+  {
+    id: 'tavily',
+    name: 'Tavily',
+    secret: 'search_tavily',
+    free: '1,000 credits a month',
+    signupUrl: 'https://app.tavily.com',
+  },
+  {
+    id: 'brave',
+    name: 'Brave Search',
+    secret: 'search_brave',
+    free: '$5 credit a month (about 1,000 searches); needs a card, set a spending limit',
+    signupUrl: 'https://api-dashboard.search.brave.com',
+  },
+  {
+    id: 'exa',
+    name: 'Exa',
+    secret: 'search_exa',
+    free: 'free starting credit',
+    signupUrl: 'https://dashboard.exa.ai',
+  },
+  {
+    id: 'firecrawl',
+    name: 'Firecrawl',
+    secret: 'search_firecrawl',
+    free: 'free starting credits',
+    signupUrl: 'https://www.firecrawl.dev/app',
+  },
+  {
+    id: 'linkup',
+    name: 'Linkup',
+    secret: 'search_linkup',
+    free: 'free monthly credit',
+    signupUrl: 'https://app.linkup.so',
+  },
+];
+export const SEARCH_SECRETS: ReadonlySet<string> = new Set(SEARCH_PROVIDERS.map((p) => p.secret));
+
+export const IMAGE_SIZES = ['square', 'wide', 'tall'] as const;
+export type ImageSize = (typeof IMAGE_SIZES)[number];
+
+/** A cooldown learned from a provider's reply, as the page shows it. */
+const Pause = z.object({ until: z.string(), reason: z.string() });
+
+export const PoolAbilitiesSchema = z.object({
+  settings: PoolAbilitySettingsSchema,
+  search: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      free: z.string(),
+      signupUrl: z.string(),
+      secret: z.string(),
+      keySet: z.boolean(),
+      last4: z.string().optional(),
+      usedToday: z.number(),
+      pause: Pause.optional(),
+    }),
+  ),
+  /** Claude's paid web search is switched on in Settings (the last resort). */
+  paidSearch: z.boolean(),
+  image: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      model: z.string(),
+      tier: PoolTierSchema,
+      ready: z.boolean(),
+      sizes: z.array(z.enum(IMAGE_SIZES)),
+      note: z.string(),
+      pause: Pause.optional(),
+    }),
+  ),
+  /** Who would answer a fusion job now ("Groq · llama-3.3-70b"), or empty when under two providers. */
+  fusion: z.object({ drafters: z.array(z.string()), judge: z.string().nullable() }),
+  /** The engine in use right now, by name (no silent switching). */
+  voice: z.object({ hearing: z.string().nullable(), speaking: z.string().nullable() }),
+});
+export type PoolAbilities = z.infer<typeof PoolAbilitiesSchema>;
+
 export const PoolSnapshotSchema = z.object({
   /** True while the numbers are samples (2.29 layout); false when main serves them. */
   preview: z.boolean(),
@@ -351,6 +464,7 @@ export const PoolSnapshotSchema = z.object({
   checkHours: z.number(),
   retryEmpty: z.boolean(),
   delegation: PoolDelegationSchema,
+  abilities: PoolAbilitiesSchema,
   providers: z.array(PoolProviderSchema),
   models: z.array(PoolModelSchema),
   recent: z.array(PoolAnswerSchema),

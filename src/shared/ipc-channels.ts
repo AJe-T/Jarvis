@@ -73,6 +73,7 @@ export const INVOKE_CHANNELS = [
   'pool:testCustom',
   'pool:removeCustom',
   'pool:answer',
+  'pool:image',
   'ai:connections',
   'ai:connection',
   'llm:cliStatus',
