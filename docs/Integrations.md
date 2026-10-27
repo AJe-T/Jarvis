@@ -81,6 +81,28 @@ What is never done, whatever the app: reading browser cookies, scraping a chat w
 
 **Step 6 findings (2026-10-17, this PC).** Installed: Gemini CLI 0.40.1, OpenCode 1.14.48, and only VS Code Insiders' Copilot bootstrapper (the real `@github/copilot` CLI isn't installed). Gemini CLI headless (`-p … --approval-mode plan`) is refused by Google for personal accounts ("migrate to Antigravity"), so it stays detected-only; the Antigravity brain covers the plan and the Gemini API covers keys. OpenCode headless (`run --agent plan --pure --dir <empty folder>`) starts, but its own provider sign-in is missing ("Missing Authentication header") and it exits 0 on that error, so a runner would also need to read its JSON events for errors; it gets wired once `opencode auth login` is done and a test answer comes back. Aider, Goose, Cursor and Kimi aren't installed. Bedrock, Vertex AI and Azure AI Foundry are not built: each needs its cloud account (AWS SigV4 keys, a Google service account, an Azure resource and Entra ID or key), none exists on this PC to test against, and every model they host is reachable through the existing keys or gateways.
 
+### AI Router: custom tier-3 providers and Cloudflare (agreed 2026-10-27, build before Phase 2)
+
+Sir's decision. Amends the "Custom public endpoint: Unsupported" row above **for tier 3 only**; the main brain and tier 2 keep fixed addresses. Record it in ADR-045 (TRD.md, BIBLE §10) and Security.md §16.15 when built.
+
+**1. Custom providers (always tier 3).** AI Router → Providers & keys → **+ Add custom provider**: Name, Address (an OpenAI-compatible base URL, e.g. `https://gen.pollinations.ai/v1`), optional API key, Model, **Test**. Use case: basic, non-private questions ("what does *drift* mean?") on relays Sir has keys for. Guards, all enforced in code:
+
+| Guard | Rule |
+|---|---|
+| Tier | A custom provider is **always tier 3**; it can't be moved to tier 2. |
+| Address | HTTPS only; public hosts only: refuse localhost, loopback, private/link-local ranges (10/8, 172.16/12, 192.168/16, 169.254/16, ::1, fc00::/7) and bare IPs; resolve the host and re-check the IP before each call (DNS rebinding). Store it main-side; fixed after saving (edit = remove + add). |
+| What is sent | Only the task / question itself: no chat history, no memory notes, no personal system prompt. All existing private-data checks still apply (taint, conversation history, running calls, `findSensitive`). |
+| Answers | Every tier-3 answer is **untrusted outside content** (taint it like a web page): actions Jarvis takes after reading it need Sir's confirmation. |
+| Tools | None for tier-3 routes in Phase 1 extras (answers only). |
+| Consent | The existing tier-3 pop-up (No, wait / Until Jarvis restarts / Just this once), plus a setting **"Ask every time for third-party AIs"** (default off = once per session). |
+| Keys | DPAPI secret per custom provider (new secret-name pattern, protected like provider keys); only the last four characters are shown; never logged or audited. |
+| Limits | Unknown: learned from replies like the others (`retry-after`, 429 ladder). |
+| Docs | Each custom provider shows "added by Sir, not checked by Jarvis" on the page. |
+
+**2. Cloudflare Workers AI (tier 2).** OpenAI-compatible at `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1`. The address stays fixed in code; only `{account_id}` comes from Sir: a settings field validated as exactly 32 lowercase hex characters, inserted by code (never free text). API token as a DPAPI secret like other providers, entered by Sir in Settings → Models & AI (never pasted in chat). ⚠️ Check Cloudflare's docs for the model-list path and free limits (daily neuron allowance) before building; tests use a fake Cloudflare server.
+
+**3. Later (Phase 4):** context size per model: read it where a provider publishes it (OpenRouter's model list), learn it from "too long" errors, let Sir type it; then bring back the 32K+ / 128K+ / 1M+ filter.
+
 ## How to add an OpenAI-compatible provider
 
 1. Read the provider's official docs: base URL, auth header, whether `GET {base}/models` exists.
