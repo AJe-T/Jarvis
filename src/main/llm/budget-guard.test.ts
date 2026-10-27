@@ -3,7 +3,7 @@ import { migrate, openDatabase } from '../db/connection';
 import { createSettingsRepo } from '../db/repos/settings-repo';
 import { createUsageRepo } from '../db/repos/usage-repo';
 import { createSettingsService } from '../settings/settings-service';
-import { createBudgetGuard } from './budget-guard';
+import { createBudgetGuard, dayShare } from './budget-guard';
 import { costOf, createUsageLedger, monthStart } from './usage-ledger';
 
 function setup() {
@@ -81,6 +81,18 @@ describe('budget guard', () => {
     settings.set('budget.monthlyUsd', 1);
     ledger.record(msg('claude-sonnet-5-5', 600_000, 0), 'chat', null);
     expect(() => guard.assertCanSpend()).toThrow(/month's budget/);
+  });
+
+  it('reports the share of today spent, only for a paid connection; a free guard never blocks', () => {
+    const { ledger, settings } = setup();
+    ledger.record(msg('claude-sonnet-5-5', 800_000, 0), 'chat', null); // $1.60 of $2
+    expect(dayShare(ledger, settings)).toBeCloseTo(0.8);
+    const free = createBudgetGuard(ledger, settings, () => false);
+    ledger.record(msg('claude-sonnet-5-5', 800_000, 0), 'chat', null);
+    expect(free.isExceeded()).toBe(false);
+    expect(() => free.assertCanSpend(250_000)).toThrow(/input tokens/);
+    settings.set('llm.provider', 'subscription');
+    expect(dayShare(ledger, settings)).toBe(0);
   });
 
   it('stops a turn over the per-turn token ceiling', () => {

@@ -6,6 +6,8 @@ import {
   type PoolModel,
   type PoolProvider,
   type PoolSnapshot,
+  DELEGATION_KEYS,
+  type PoolDelegation,
 } from '@shared/free-pool';
 import { cloudProvider, type AiConnection, type CloudProviderId } from '@shared/llm-providers';
 import type { Db } from '../../db/connection';
@@ -235,6 +237,9 @@ export function buildSnapshot(x: {
     keyOrder: settings.get('pool.keyOrder'),
     checkHours: settings.get('pool.checkHours'),
     retryEmpty: settings.get('pool.retryEmpty'),
+    delegation: Object.fromEntries(
+      DELEGATION_KEYS.map((k) => [k, settings.get(`pool.delegation.${k}`)]),
+    ) as PoolDelegation,
     providers,
     models,
     recent,

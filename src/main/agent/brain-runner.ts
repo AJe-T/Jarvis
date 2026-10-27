@@ -1,7 +1,9 @@
 import { POOL_TOOLS, privateSourceOf } from '@shared/free-pool';
+import type { Db } from '../db/connection';
 import { JarvisError } from '../errors';
 import type { BrainRef } from '../llm/brains';
 import type { Trail } from '../llm/pool/pool';
+import type { LlmClient } from '../llm/types';
 import { findSensitive } from '../security/redact';
 import type { Services } from '../services';
 import { runAgentLoop, type LoopResult, type ToolRuntime, type TurnContext } from './agent-loop';
@@ -90,11 +92,7 @@ export async function runOnBrain(s: Services, brain: BrainRef, job: BrainJob): P
  * password or card is refused, and the pool's sub-agent gets only public lookup tools.
  */
 async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
-  const why =
-    job.turn.taint.privateSource ??
-    job.turn.taint.privateData ??
-    privateInConversation(s, job.turn.conversationId) ??
-    (findSensitive(`${job.system}\n${job.prompt}`).length ? 'private data in the task' : null);
+  const why = poolBlock(s.db, job.turn, `${job.system}\n${job.prompt}`);
   if (why)
     throw new JarvisError(
       'POLICY_BLOCKED',
@@ -111,6 +109,8 @@ async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
   const llm = s.pool.session({
     id: `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     task: title,
+    // Delegations in one chat keep the same model (a sub-task is self-contained: no hand-over note).
+    sticky: job.turn.conversationId,
   });
   const tools = restrictTools(job.tools, (name) => POOL_TOOLS.has(name));
   // A third-party answer is outside content, like a web page: what Jarvis does after reading it
@@ -120,9 +120,10 @@ async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
   try {
     result = await runAgentLoop(
       {
-        llm,
+        llm: gated(llm, () => poolBlock(s.db, job.turn, `${job.system}\n${job.prompt}`)),
         tools,
-        budget: s.budget,
+        // Free: Claude's budget never stops it (only the per-turn token ceiling).
+        budget: s.freeBudget,
         ledger: s.ledger,
         maxIterations: job.maxSteps,
         maxTokens: job.maxTokens,
@@ -136,22 +137,35 @@ async function runOnPool(s: Services, job: BrainJob): Promise<LoopResult> {
       { onText: () => undefined, persist: () => undefined },
     );
   } finally {
-    if (llm.trail.attempts.some((a) => a.ok && a.tier === 3)) {
-      job.turn.taint.tainted = true;
-      job.turn.taint.source ??= 'a third-party AI (tier 3)';
-    }
+    markThirdParty(llm.trail, job.turn);
   }
   return { ...result, text: `${result.text}\n\n${trailLine(llm.trail)}` };
+}
+
+/**
+ * Why text may not go to the free pool, or null (Security.md §16.15). Every pool path (delegation,
+ * front door, hand-over note, fallback) asks this, in code, and no setting turns it off: private
+ * data read this turn, keys/passwords/cards seen, a private tool call anywhere in this conversation
+ * (or running beside this one), or a secret in the text itself.
+ */
+export function poolBlock(db: Db, turn: TurnContext, text: string): string | null {
+  return (
+    turn.taint.privateSource ??
+    turn.taint.privateData ??
+    privateInConversation(db, turn.conversationId) ??
+    (findSensitive(text).length ? 'private data in the task' : null)
+  );
 }
 
 /**
  * The first private source this conversation touched, in any turn or in a tool call running
  * right now beside the delegation (tool_calls rows exist before the tool runs).
  */
-function privateInConversation(s: Services, conversationId: string): string | null {
-  const rows = s.db
+function privateInConversation(db: Db, conversationId: string): string | null {
+  const rows = db
     .prepare(
-      "SELECT DISTINCT tool_name, source FROM tool_calls WHERE conversation_id = ? AND status IN ('pending', 'running', 'success')",
+      // Anything that started counts: a tool that failed half-way may still have read something.
+      "SELECT DISTINCT tool_name, source FROM tool_calls WHERE conversation_id = ? AND status != 'not_run'",
     )
     .all(conversationId) as Array<{ tool_name: string; source: string }>;
   for (const r of rows) {
@@ -159,6 +173,33 @@ function privateInConversation(s: Services, conversationId: string): string | nu
     if (found) return `${found} earlier in this conversation`;
   }
   return null;
+}
+
+/**
+ * The gate again before every pool request, not only at the start: a sub-agent beside this one
+ * may read something private while the pool job runs.
+ */
+export function gated<C extends LlmClient>(llm: C, why: () => string | null): C {
+  return {
+    ...llm,
+    stream(req, opts) {
+      const found = why();
+      if (found)
+        throw new JarvisError(
+          'POLICY_BLOCKED',
+          'private data for the free pool',
+          `Free AIs never get Sir's private data (this task involves ${found}).`,
+        );
+      return llm.stream(req, opts);
+    },
+  };
+}
+
+/** A tier-3 answer is outside content, like a web page: later actions in this turn need Sir's yes. */
+export function markThirdParty(trail: Trail, turn: TurnContext): void {
+  if (!trail.attempts.some((a) => a.ok && a.tier === 3)) return;
+  turn.taint.tainted = true;
+  turn.taint.source ??= 'a third-party AI (tier 3)';
 }
 
 /** "(Free pool: answered by Cerebras · gpt-oss-120b; tried Groq: rate limited.)" */

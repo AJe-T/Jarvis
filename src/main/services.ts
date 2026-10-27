@@ -22,7 +22,7 @@ import { NO_PROVIDERS, createContextBuilder, type ContextProviders } from './age
 import { runAgentLoop } from './agent/agent-loop';
 import { createOrchestrator, type Emit } from './agent/orchestrator';
 import { createSdkLoop } from './agent/sdk-loop';
-import { createBudgetGuard } from './llm/budget-guard';
+import { createBudgetGuard, dayShare } from './llm/budget-guard';
 import { budgetAlertText, createBudgetAlerts } from './llm/budget-alerts';
 import { createFallbackClient } from './llm/fallback-client';
 import { createStrategyStore, learnFromTurn } from './agent/strategies';
@@ -85,10 +85,18 @@ import { createOutputStore, createSavedOutputTools } from './tools/saved-outputs
 import { createPlanner } from './planner/planner';
 import { createPlannerTools } from './planner/planner-tools';
 import { createLaya } from './laya/laya';
+import { BUDGET_SHARE, createPoolTurns } from './agent/front-door';
 import { createTerminal } from './apps/terminal';
 import { LAYA_ACTIONS, createFastPath } from './agent/fast-path';
 
 const LAYA_WARM_DELAY_MS = 5000;
+/** Laya's front-door veto: anything but "general" sends the question to Claude. */
+const FRONT_DOOR_KINDS = {
+  general: 'a general question or chat that needs nothing about the person and no action',
+  personal:
+    'something about the person: their own data, files, messages, plans, people or memories',
+  action: 'an action on the computer, its apps, devices or online accounts',
+};
 /** "Your local model is answering" is shown at most this often. */
 const FALLBACK_NOTICE_MS = 10 * 60_000;
 
@@ -247,6 +255,8 @@ export function createServices(opts: ServiceOptions) {
   const budget = createBudgetGuard(ledger, settings);
   // Sub-agents on another provider's API spend money whatever Jarvis's own connection is.
   const paidBudget = createBudgetGuard(ledger, settings, () => true);
+  // The free pool costs nothing: only the per-turn token ceiling applies (Security.md §16.15).
+  const freeBudget = createBudgetGuard(ledger, settings, () => false);
   const killSwitch = createKillSwitch();
   const state = createAssistantStateHub();
   state.onChange((s, detail) =>
@@ -554,11 +564,22 @@ export function createServices(opts: ServiceOptions) {
     retrieve: (t) => slots.providers.retrieve(t),
     integrations: () => {
       // Jarvis decides which AI does what: he needs to know which ones Sir set up.
-      const others = brains.available().filter((b) => b !== 'jarvis');
+      const others = brains
+        .available()
+        .filter(
+          (b) => b !== 'jarvis' && (b !== 'free' || settings.get('pool.delegation.delegate')),
+        );
       const line = others.length
         ? `other AIs for delegate_task "brain": ${others.map((b) => `${brains.label(b)} (${b})`).join(', ')}`
         : '';
-      return [slots.providers.integrations(), line].filter(Boolean).join('; ');
+      // AI Router Phase 2: nearly out of budget → push heavy non-private work to the free pool.
+      const tight =
+        others.includes('free') &&
+        settings.get('pool.delegation.budgetAware') &&
+        dayShare(ledger, settings) >= BUDGET_SHARE
+          ? `today's Claude budget is over 80% used: hand every heavy job with none of Sir's private data to brain "free"`
+          : '';
+      return [slots.providers.integrations(), line, tight].filter(Boolean).join('; ');
     },
     allowedRoots: () => settings.get('files.allowedRoots'),
     screenCount: () => slots.providers.screenCount(),
@@ -598,6 +619,23 @@ export function createServices(opts: ServiceOptions) {
     assistantName: () => settings.get('assistant.name'),
     logger,
   });
+  // AI Router Phase 2: front door and fallback turns on the free pool (agent/front-door.ts).
+  const poolTurns = createPoolTurns({
+    db,
+    conversations,
+    pool,
+    tools: () => tools,
+    budget: freeBudget,
+    claudeBudget: budget,
+    ledger,
+    settings,
+    dayShare: () => dayShare(ledger, settings),
+    // Laya (when loaded) may only send a front-door question back to Claude, never approve one.
+    veto: async (text) => {
+      const p = await laya.classify(text, FRONT_DOOR_KINDS);
+      return !!p && (p['general'] ?? 0) < Math.max(p['personal'] ?? 0, p['action'] ?? 0);
+    },
+  });
   // Loaded after startup settles so the first voice or chat decision can use it.
   setTimeout(() => laya.warm(), LAYA_WARM_DELAY_MS).unref();
 
@@ -616,6 +654,7 @@ export function createServices(opts: ServiceOptions) {
     emit: opts.emit,
     logger,
     fastPath,
+    poolTurns,
   });
 
   orchestrator.onTurnEnd((turn) => learnFromTurn(strategies, turn));
@@ -664,6 +703,7 @@ export function createServices(opts: ServiceOptions) {
     pool,
     answerTier3,
     paidBudget,
+    freeBudget,
     claudeCode,
     planLimits,
     skills,

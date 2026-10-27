@@ -5,6 +5,7 @@ import { defineTool, fail, type Tool, type ToolOutput } from '../tools/types';
 import type { LoopResult, TurnContext } from './agent-loop';
 import type { BrainRef } from '../llm/brains';
 import { BrainRefSchema, CLOUD_PROVIDER_IDS } from '@shared/llm-providers';
+import { isPoolExhausted } from '../llm/pool/pool';
 import { restrictTools, runOnBrain } from './brain-runner';
 
 /**
@@ -54,7 +55,7 @@ function verdict(r: LoopResult): string {
 export function createSubagentTool(s: Services): Tool {
   return defineTool({
     name: NAME,
-    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", "free" (the free AI pool: costs nothing, so prefer it for heavy work with none of Sir's private data in it — summaries, drafts, translations, reading public web pages; it is refused once this turn has read his memory, files, screen, passwords, clipboard or messages, and it gets only public lookup tools; never write Sir's personal details — names, addresses, health, money, anything from his memory — into a free task), another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}) or one of Sir's extra keys for it by connection id ("conn_openai_2"…; the available ones are listed in your context), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
+    description: `Hand 1–4 self-contained jobs to sub-agents that work in parallel, each with a fresh context (they do NOT see this conversation, so put everything they need in the instructions) and the tools you name (default: all yours). Each returns a short report. Use for independent pieces of a bigger job (research three options, check several folders, draft parts) or to keep long tool output out of this chat. Not for quick single steps. "brain" picks the AI for a task: "jarvis" (default, you), "local", "free" (the free AI pool: costs nothing, so USE IT for heavy work with none of Sir's private data in it — summarising or translating public text, first drafts, reading several public web pages — instead of doing it yourself, and ask it for a short report so only that comes back; it is refused once this conversation has read his memory, files, screen, passwords, clipboard or messages, and it gets only public lookup tools; never write Sir's personal details — names, addresses, health, money, anything from his memory — into a free task; if every free AI is busy, you do the task automatically and the report says so), another provider API (${CLOUD_PROVIDER_IDS.map((id) => `"${id}"`).join(', ')}) or one of Sir's extra keys for it by connection id ("conn_openai_2"…; the available ones are listed in your context), or the plans Sir pays for, through their apps, "chatgpt" and "antigravity" (Gemini) — those two only answer (no tools, and never with outside content), so give them thinking/writing tasks. Use it when Sir asks for a particular AI, or to compare answers from several AIs at once.`,
     input: z.object({
       tasks: z.array(TaskSchema).min(1).max(MAX_TASKS),
       shared_context: z.string().max(8000).optional(),
@@ -75,6 +76,10 @@ export function createSubagentTool(s: Services): Tool {
       const empty = tasks.find(
         (t) => t.tools && !t.tools.some((n) => known.has(n) && !NEVER.has(n)),
       );
+      if (tasks.some((t) => t.brain === 'free') && !s.settings.get('pool.delegation.delegate'))
+        return fail(
+          'Sir switched off handing work to free AIs (AI Router → Delegation). Use another brain or do it yourself.',
+        );
       const missing = tasks.find((t) => t.brain && !s.brains.ready(t.brain));
       if (missing?.brain)
         return fail(
@@ -113,23 +118,38 @@ export function createSubagentTool(s: Services): Tool {
               : []),
           ].join('\n');
           const brain: BrainRef = task.brain ?? 'jarvis';
+          const job = {
+            system: SUBAGENT_PROMPT,
+            prompt,
+            tools: restrictTools(s.tools, allowed),
+            maxSteps: max_steps,
+            maxTokens: REPORT_TOKENS,
+            turn,
+          };
           try {
-            const result = await runOnBrain(s, brain, {
-              system: SUBAGENT_PROMPT,
-              prompt,
-              tools: restrictTools(s.tools, allowed),
-              maxSteps: max_steps,
-              maxTokens: REPORT_TOKENS,
-              turn,
-            });
+            const result = await runOnBrain(s, brain, job);
             return { task, brain, status: verdict(result), text: result.text.trim(), turn };
           } catch (err) {
+            let failure = err;
+            // Every free AI busy: Jarvis's own brain does it (tier 1, so nothing private is at risk).
+            if (
+              brain === 'free' &&
+              isPoolExhausted(err) &&
+              s.settings.get('pool.delegation.fallback')
+            )
+              try {
+                const result = await runOnBrain(s, 'jarvis', job);
+                const text = `(Free pool busy, so Claude did this one.)\n${result.text.trim()}`;
+                return { task, brain: 'jarvis' as BrainRef, status: verdict(result), text, turn };
+              } catch (again) {
+                failure = again;
+              }
             return {
               task,
               brain,
               status: 'failed',
               // The sentence written for people says why (and what to do); the code text doesn't.
-              text: `It stopped with an error: ${err instanceof JarvisError && err.userMessage ? err.userMessage : errorMessage(err)}`,
+              text: `It stopped with an error: ${failure instanceof JarvisError && failure.userMessage ? failure.userMessage : errorMessage(failure)}`,
               turn,
             };
           }

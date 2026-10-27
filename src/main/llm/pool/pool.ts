@@ -89,16 +89,20 @@ const TIER3_SYSTEM = 'Answer the question clearly and briefly.';
 
 /**
  * Security.md §16.15: a tier-3 route gets the task itself and nothing else: no system prompt, no
- * earlier turns or tool results, no pictures, no tools. The first user message is the job's task:
- * pool sessions always start from one (brain-runner.ts, Compare AIs).
+ * earlier turns or tool results, no pictures, no tools. The task is the newest user message with
+ * text: a sub-task's only one (brain-runner.ts, Compare AIs), or a chat's current question
+ * (front-door.ts; tool results are not text).
  */
 export function questionOnly(req: LlmRequest): LlmRequest {
-  const first = req.messages.find((m) => m.role === 'user');
-  const text = !first
-    ? ''
-    : typeof first.content === 'string'
-      ? first.content
-      : first.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n');
+  const textOf = (m: LlmRequest['messages'][number]): string =>
+    typeof m.content === 'string'
+      ? m.content
+      : m.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n');
+  const text =
+    req.messages
+      .filter((m) => m.role === 'user')
+      .map(textOf)
+      .findLast((x) => x.trim() !== '') ?? '';
   return {
     model: req.model,
     max_tokens: req.max_tokens,
@@ -114,6 +118,24 @@ function answerOnly(msg: LlmMessage): LlmMessage {
     content: msg.content.filter((b) => b.type !== 'tool_use'),
     stop_reason: msg.stop_reason === 'tool_use' ? 'end_turn' : msg.stop_reason,
   };
+}
+
+/** A conversation keeps the pool model that last answered it this long (pool.delegation.sticky). */
+export const STICKY_MS = 30 * 60_000;
+
+/** The pool's "every route tried" error: Claude may take the job instead (pool.delegation.fallback). */
+export const isPoolExhausted = (err: unknown): boolean =>
+  err instanceof JarvisError && err.message === 'free pool exhausted';
+
+export interface PoolJob {
+  id: string;
+  task: string;
+  /** Tiers to try (default 2 then 3); the front door uses tier 2 only. */
+  tiers?: ReadonlyArray<2 | 3>;
+  /** Conversation id: the model that last answered it is tried first, for 30 minutes. */
+  sticky?: string;
+  /** What a different model gets than the one that answered this conversation before. */
+  handover?: (req: LlmRequest) => LlmRequest;
 }
 
 const MAX_ATTEMPTS = 6;
@@ -148,6 +170,8 @@ export function createFreePool(deps: PoolDeps) {
   const health = new Map<string, { health: 'healthy' | 'issue'; at: string }>();
   const lastUsed = new Map<string, number>();
   let tier3ForSession = false;
+  /** Conversation id → the route that last answered it (expires STICKY_MS after that answer). */
+  const lastRoute = new Map<string, { key: string; until: number }>();
 
   db.prepare('DELETE FROM pool_calls WHERE day < ?').run(utcDay(now() - KEEP_DAYS * 86_400_000));
 
@@ -443,7 +467,7 @@ export function createFreePool(deps: PoolDeps) {
     r: RouteState,
     req: LlmRequest,
     opts: StreamOptions,
-    job: { id: string; task: string },
+    job: PoolJob,
     trail: Trail,
   ): Promise<{ msg: LlmMessage } | { streamed: boolean; error: unknown }> {
     let status: number | undefined;
@@ -543,7 +567,7 @@ export function createFreePool(deps: PoolDeps) {
   }
 
   /** One sub-task's client: tries tier 2, then (with Sir's yes) tier 3; records its trail. */
-  function session(job: { id: string; task: string }): LlmClient & { trail: Trail } {
+  function session(job: PoolJob): LlmClient & { trail: Trail } {
     const trail: Trail = { attempts: [] };
     return {
       trail,
@@ -555,7 +579,9 @@ export function createFreePool(deps: PoolDeps) {
         let lastSkipped: ReturnType<typeof rankRoutes>['skipped'] = [];
         // Phase 1 runs Priority and Balanced; later strategies fall back to Balanced.
         const live = settings.get('pool.strategy') === 'priority' ? 'priority' : 'balanced';
-        for (const tier of [2, 3] as const) {
+        const prev = job.sticky ? lastRoute.get(job.sticky) : undefined;
+        const before = prev && prev.until > now() ? prev.key : undefined;
+        for (const tier of job.tiers ?? ([2, 3] as const)) {
           const all = routes();
           // Tier 3 gets the question only (no tools, no pictures), so it never needs either.
           const needs = tier === 3 ? { tools: false, vision: false } : needsOf(req);
@@ -585,11 +611,25 @@ export function createFreePool(deps: PoolDeps) {
             }
           }
           lastSkipped = [...lastSkipped, ...skipped.filter((s) => s.why !== 'tier')];
-          for (const r of ranked) {
+          // Sticky: the model that answered this conversation goes first while it still can.
+          const order =
+            before && settings.get('pool.delegation.sticky')
+              ? [
+                  ...ranked.filter((r) => r.key === before),
+                  ...ranked.filter((r) => r.key !== before),
+                ]
+              : ranked;
+          for (const r of order) {
             if (tried >= MAX_ATTEMPTS || (tried > 0 && now() - started > TIME_BUDGET_MS)) break;
             tried += 1;
-            const res = await attempt(r, req, opts, job, trail);
-            if ('msg' in res) return res.msg;
+            // Tier 3 never gets the note: questionOnly takes the current question from req.
+            const switched = before && r.key !== before && r.tier === 2;
+            const sent = switched && job.handover ? job.handover(req) : req;
+            const res = await attempt(r, sent, opts, job, trail);
+            if ('msg' in res) {
+              if (job.sticky) lastRoute.set(job.sticky, { key: r.key, until: now() + STICKY_MS });
+              return res.msg;
+            }
             failed += 1;
             // Text already on screen is never mixed with another model's answer.
             if (res.streamed) throw res.error;

@@ -1,4 +1,4 @@
-import { isCustomProvider } from '@shared/free-pool';
+import { DELEGATION_KEYS, isCustomProvider } from '@shared/free-pool';
 import { MAX_CONNECTIONS_PER_PROVIDER, defaultConnectionId } from '@shared/llm-providers';
 import { JarvisError } from '../../errors';
 import { parseEnvKeys } from '../../llm/pool/env-import';
@@ -65,6 +65,10 @@ export function registerPoolHandlers(s: Services): void {
     if (req.keyOrder) s.settings.set('pool.keyOrder', req.keyOrder);
     if (req.checkHours !== undefined) s.settings.set('pool.checkHours', req.checkHours);
     if (req.retryEmpty !== undefined) s.settings.set('pool.retryEmpty', req.retryEmpty);
+    for (const k of DELEGATION_KEYS) {
+      const v = req.delegation?.[k];
+      if (v !== undefined) s.settings.set(`pool.delegation.${k}`, v);
+    }
     return s.pool.snapshot();
   });
 

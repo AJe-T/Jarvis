@@ -137,6 +137,18 @@ export const SETTINGS = {
   'pool.checkHours': { schema: z.number().int().min(0).max(24), default: 6 },
   /** A model that answers with nothing counts as a miss and the next one is tried. */
   'pool.retryEmpty': { schema: z.boolean(), default: true },
+  /** AI Router Phase 2 (2.32, Security.md §16.15): Claude may hand heavy non-private sub-tasks to brain "free". */
+  'pool.delegation.delegate': { schema: z.boolean(), default: true },
+  /** Short, plain, non-private chats skip Claude and go to a tier-2 free AI (rules in agent/front-door.ts). */
+  'pool.delegation.frontDoor': { schema: z.boolean(), default: false },
+  /** A conversation keeps the pool model that answered it for 30 minutes. */
+  'pool.delegation.sticky': { schema: z.boolean(), default: true },
+  /** When that model is out, the next one gets a short note of the free AIs' earlier answers (off: the question only). */
+  'pool.delegation.handover': { schema: z.boolean(), default: true },
+  /** Pool exhausted → Claude answers; Claude out of budget or limits → the pool answers non-private chats. */
+  'pool.delegation.fallback': { schema: z.boolean(), default: true },
+  /** Past 80% of today's Claude budget: the front door opens and Claude is told to delegate more. */
+  'pool.delegation.budgetAware': { schema: z.boolean(), default: true },
   'models.default': { schema: modelId, default: 'claude-sonnet-5-5' },
   'models.deep': { schema: modelId, default: 'claude-opus-5-5' },
   'models.fast': { schema: modelId, default: 'claude-haiku-4-5-20251001' },

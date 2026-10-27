@@ -129,6 +129,14 @@ export function previewSnapshot(now = Date.now()): PoolSnapshot {
     keyOrder: 'roomiest',
     checkHours: 6,
     retryEmpty: true,
+    delegation: {
+      delegate: true,
+      frontDoor: false,
+      sticky: true,
+      handover: true,
+      fallback: true,
+      budgetAware: true,
+    },
     providers: PREVIEW_PROVIDERS,
     models: PREVIEW_MODELS,
     recent: [

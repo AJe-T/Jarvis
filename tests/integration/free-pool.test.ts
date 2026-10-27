@@ -3,52 +3,10 @@ import { runOnBrain } from '@main/agent/brain-runner';
 import { createSubagentTool } from '@main/agent/subagents';
 import { JarvisError } from '@main/errors';
 import { POOL_TOOLS } from '@shared/free-pool';
-import { idle, setupServices } from './helpers';
+import { idle } from './helpers';
+import { CEREBRAS, GROQ, rateLimited, setup, sse } from './pool-fakes';
 
 /** AI Router Phase 1: the free pool behind brain "free", against fake provider servers. */
-
-const sse = (text: string): Response =>
-  new Response(
-    [
-      `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}`,
-      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 40, completion_tokens: 12 } })}`,
-      'data: [DONE]',
-      '',
-    ].join('\n\n'),
-    { status: 200, headers: { 'content-type': 'text/event-stream' } },
-  );
-
-type Reply = (url: string) => Response;
-
-function setup(reply: Reply, script: Parameters<typeof setupServices>[0] = { rules: [] }) {
-  const calls: string[] = [];
-  const bodies: Array<{ tools?: Array<{ function: { name: string } }> }> = [];
-  const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    if (typeof init?.body === 'string')
-      bodies.push(JSON.parse(init.body) as (typeof bodies)[number]);
-    const url = input instanceof Request ? input.url : input.toString();
-    calls.push(url);
-    return reply(url);
-  }) as typeof globalThis.fetch;
-  const t = setupServices(script, { fetch });
-  const s = t.services;
-  s.secrets.set('groq', 'gsk_test_groq_key_0000');
-  s.connections.setModel('conn_groq', 'llama-3.3-70b-versatile');
-  s.secrets.set('cerebras', 'csk-test-cerebras-0000');
-  s.connections.setModel('conn_cerebras', 'gpt-oss-120b');
-  // Groq first in Priority, so the failover is deterministic.
-  s.settings.set('pool.strategy', 'priority');
-  s.settings.set('pool.models', {
-    'llama-3.3-70b-versatile': { order: 0 },
-    'gpt-oss-120b': { order: 1 },
-  });
-  return { ...t, calls, bodies };
-}
-
-const GROQ = 'https://api.groq.com/openai/v1/chat/completions';
-const CEREBRAS = 'https://api.cerebras.ai/v1/chat/completions';
-const rateLimited = (): Response =>
-  new Response('{"error":"rate limit"}', { status: 429, headers: { 'retry-after': '30' } });
 
 const request = {
   model: 'pool',

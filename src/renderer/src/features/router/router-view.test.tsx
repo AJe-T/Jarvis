@@ -62,7 +62,7 @@ describe('RouterView', () => {
       'Models',
       'Providers & keys',
       'Tiers & privacy',
-      'DelegationP2',
+      'Delegation',
       'AbilitiesP3',
       'AnalyticsP4',
     ]);
@@ -83,6 +83,18 @@ describe('RouterView', () => {
     for (const s of PRIVATE_SOURCES) expect(screen.getByText(s.label)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Third-party AIs'), { target: { value: 'never' } });
     expect(settings).toHaveBeenCalledWith({ tier3: 'never' });
+  });
+
+  it('wires every delegation rule to its setting (front door off by default)', async () => {
+    await renderView();
+    fireEvent.click(screen.getByRole('tab', { name: 'Delegation' }));
+    const door = screen.getByRole('switch', { name: 'Front door' });
+    expect(door.getAttribute('aria-checked')).toBe('false');
+    expect(door.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(door);
+    expect(settings).toHaveBeenCalledWith({ delegation: { frontDoor: true } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Hand-over note' }));
+    expect(settings).toHaveBeenCalledWith({ delegation: { handover: false } });
   });
 
   it('opens the tier-3 question with its three answers', async () => {

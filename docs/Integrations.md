@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | v2.30 (steps 1–5 done; step 6 checked; AI Router Phase 1 done) |
+| Status | v2.32 (steps 1–5 done; step 6 checked; AI Router Phases 1–2 done) |
 | Generated part | Provider and agent tables in [REFERENCE.md](REFERENCE.md) (`npm run docs:reference`) |
 | Security | [Security.md](Security.md) §16.10–16.11 always wins |
 
@@ -46,7 +46,7 @@ All use `main/llm/local-client.ts` (Messages API ↔ OpenAI Chat Completions tra
 
 **Connections (v2.25).** Each provider can have up to five keys (`conn_<provider>` is the main key, `conn_<provider>_<n>` the extras), each with its own model registry in `ai_models` (live / typed / cached, favourite, enabled). Extra keys are brains for `delegate_task` and NPCs and can be Jarvis's own (`llm.cloud.connection`). Code: `main/llm/connections.ts`, `main/ipc/handlers/ai-connections.ts`, `renderer/.../settings/connections-card.tsx`.
 
-**AI Router (v2.29 layout, v2.30 Phase 1, v2.31 custom providers + Cloudflare; ADR-045).** Brain `free` = the free pool: every key of a provider in `FREE_PROVIDERS` (`shared/free-pool.ts`: Gemini, Groq, Cerebras, OpenRouter, NVIDIA, Mistral, Cloudflare) plus Sir's own tier-3 providers (`pool_custom`), with its chosen model and starred models. `main/llm/pool/` (router: pure ranking; pool: attempts, learning, tier-3 question; snapshot: the page), `pool_calls` (migration 017), IPC `pool:*`, Sidebar → AI Router. Private turns are refused in `agent/brain-runner.ts` (Security.md §16.15). Phases 2–4 are drawn on the page with a Phase tag.
+**AI Router (v2.29 layout, v2.30 Phase 1, v2.31 custom providers + Cloudflare, v2.32 Phase 2 delegation; ADR-045).** Brain `free` = the free pool: every key of a provider in `FREE_PROVIDERS` (`shared/free-pool.ts`: Gemini, Groq, Cerebras, OpenRouter, NVIDIA, Mistral, Cloudflare) plus Sir's own tier-3 providers (`pool_custom`), with its chosen model and starred models. `main/llm/pool/` (router: pure ranking; pool: attempts, learning, tier-3 question; snapshot: the page), `pool_calls` (migration 017), IPC `pool:*`, Sidebar → AI Router. Private turns are refused in `agent/brain-runner.ts` (Security.md §16.15). Phase 2 (front door, fallback, sticky, hand-over) lives in `agent/front-door.ts` and the orchestrator's `answer()`; Phases 3–4 are drawn on the page with a Phase tag.
 
 **Multi-AI runs (v2.26).** Sidebar → Compare AIs runs compare / review / chain over any ready brains (`main/agent/multi-run.ts`, migration 015). Model execution only (no tools); agent execution with tools stays in `delegate_task`. Fallback execution remains `llm.fallbackLocal` (opt-in); specialist routing is Jarvis choosing a `brain` in `delegate_task`. Neither switches models silently.
 
@@ -102,6 +102,21 @@ Sir's decision. Amends the "Custom public endpoint: Unsupported" row above **for
 **2. Cloudflare Workers AI (tier 2).** OpenAI-compatible at `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1`. The address stays fixed in code; only `{account_id}` comes from Sir: a settings field validated as exactly 32 lowercase hex characters, inserted by code (never free text). API token as a DPAPI secret like other providers, entered by Sir in Settings → Models & AI (never pasted in chat). Checked 2026-10-27 (developers.cloudflare.com): chat completions and embeddings are documented, **no model list**, so `models: 'manual'` and key checks use the one-token ping; free allowance 10,000 neurons a day, reset 00:00 UTC, so limits are learned. Tests use a fake server (`pool.test.ts`).
 
 **3. Later (Phase 4):** context size per model: read it where a provider publishes it (OpenRouter's model list), learn it from "too long" errors, let Sir type it; then bring back the 32K+ / 128K+ / 1M+ filter.
+
+### AI Router Phase 2: Delegation (agreed 2026-10-27, built in v2.32)
+
+Claude stays the boss; six settings under `pool.delegation.*` (AI Router → Delegation). Full rules: Security.md §16.15 "Delegation (2.32)", ADR-045 amendment.
+
+| Rule | Default | Where | Sir's decision |
+|---|---|---|---|
+| Claude delegates heavy, non-private work | on | `agent/subagents.ts` description; `services.ts` context line | Short report back |
+| Front door for simple chats | off | `agent/front-door.ts` `frontDoor`, orchestrator `answer()` | Strict word rules + Laya veto only; tier 2 only; public lookup tools (`POOL_TOOLS`) |
+| Sticky conversations (30 min) | on | `llm/pool/pool.ts` `lastRoute` | Delegations and chat turns of one conversation share it |
+| Hand-over note | on | `front-door.ts` `handoverText` | Built in code from the pool's own exchanges (no extra model call); off = question only |
+| Fallback both ways | on | `answer()`, `subagents.ts` | Claude out → local model first (when on), then the pool; tier 3 may be asked. Pool out → sub-task re-runs on Claude automatically |
+| Budget-aware (80%) | on | `budget-guard.ts` `dayShare` | Front door opens + Claude told to delegate; API-key connection only |
+
+Not done (later phases): a model-written hand-over note, Laya approving front-door questions, front-door answers for messages with attachments.
 
 ## How to add an OpenAI-compatible provider
 

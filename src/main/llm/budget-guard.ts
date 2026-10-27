@@ -8,6 +8,19 @@ export interface BudgetGuard {
   isExceeded(): boolean;
 }
 
+/** Jarvis's own connection is paid per use (API key or cloud); subscription and local are not. */
+const ownPaid = (settings: SettingsService): boolean => {
+  const p = settings.get('llm.provider');
+  return p === 'api' || p === 'cloud';
+};
+
+/** Share (0–1+) of today's Claude budget spent; 0 when Jarvis's connection isn't paid per use. */
+export function dayShare(ledger: UsageLedger, settings: SettingsService): number {
+  const daily = settings.get('budget.dailyUsd');
+  if (!ownPaid(settings) || daily <= 0) return 0;
+  return ledger.totals().day / daily;
+}
+
 /** Security.md §11. */
 export function createBudgetGuard(
   ledger: UsageLedger,
@@ -19,8 +32,7 @@ export function createBudgetGuard(
 
   function check(): JarvisError | null {
     // ADR-010/013: subscription and local models have no per-call charge; budgets limit API-key spend.
-    const p = settings.get('llm.provider');
-    if (!(paid ? paid() : p === 'api' || p === 'cloud')) return null;
+    if (!(paid ? paid() : ownPaid(settings))) return null;
     const { day, month } = ledger.totals();
     const daily = settings.get('budget.dailyUsd');
     const monthly = settings.get('budget.monthlyUsd');

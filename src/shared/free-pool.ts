@@ -326,6 +326,20 @@ export const PoolPressureSchema = z.object({
 });
 export type PoolPressure = z.infer<typeof PoolPressureSchema>;
 
+/** Phase 2 delegation rules (settings `pool.delegation.*`). */
+export const PoolDelegationSchema = z.object({
+  delegate: z.boolean(),
+  frontDoor: z.boolean(),
+  sticky: z.boolean(),
+  handover: z.boolean(),
+  fallback: z.boolean(),
+  budgetAware: z.boolean(),
+});
+export type PoolDelegation = z.infer<typeof PoolDelegationSchema>;
+export const DELEGATION_KEYS = Object.keys(PoolDelegationSchema.shape) as Array<
+  keyof PoolDelegation
+>;
+
 export const PoolSnapshotSchema = z.object({
   /** True while the numbers are samples (2.29 layout); false when main serves them. */
   preview: z.boolean(),
@@ -336,6 +350,7 @@ export const PoolSnapshotSchema = z.object({
   keyOrder: z.enum(['roomiest', 'turns']),
   checkHours: z.number(),
   retryEmpty: z.boolean(),
+  delegation: PoolDelegationSchema,
   providers: z.array(PoolProviderSchema),
   models: z.array(PoolModelSchema),
   recent: z.array(PoolAnswerSchema),

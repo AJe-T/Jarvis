@@ -74,11 +74,13 @@ export const HELP: Record<string, HelpEntry> = {
       'Add custom provider: any OpenAI-compatible relay (https, public address). It always stays in tier 3, gets only the question itself, and its answer is treated like a web page.',
       'Cloudflare Workers AI needs your Account ID as well as the API token: Settings → Models & AI.',
       'Tiers & privacy: the private-data rule (always on), what happens when tiers 1 and 2 run out, and "Ask every time for third-party AIs".',
+      'Delegation: Claude hands heavy, non-private work to free AIs; the front door (off until you switch it on) sends short, plain, non-private questions straight to a free AI; a chat keeps its free model for 30 minutes; each side covers when the other is out; past 80% of today’s Claude budget, free AIs are preferred. The chat always says when a free AI answered.',
       'The tier depends on who receives your text, not the model: Gemini through Google is tier 2, Gemini through an unknown relay is tier 3.',
     ],
     tips: [
       'A key’s chosen model joins the pool, and so does every model you star for it in Settings → Models & AI.',
-      'Delegation, Abilities and Analytics are drawn now and start working in Phases 2–4.',
+      'Abilities and Analytics are drawn now and start working in Phases 3–4.',
+      'Questions about you, your files, messages or plans never take the front door: Claude answers them.',
     ],
     say: [
       'Use the free pool to summarise these three pages',

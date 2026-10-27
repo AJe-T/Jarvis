@@ -17,7 +17,12 @@ import { PasswordEntryInput } from './passwords';
 import { StagePanelSchema } from './stage';
 import { BrainRefSchema, CLOUD_PROVIDER_IDS, CONNECTION_ID_RE } from './llm-providers';
 import { RunEstimateSchema, RunRequestSchema, RunViewSchema } from './ai-runs';
-import { CUSTOM_ID_RE, LIVE_STRATEGIES, PoolSnapshotSchema } from './free-pool';
+import {
+  CUSTOM_ID_RE,
+  LIVE_STRATEGIES,
+  PoolDelegationSchema,
+  PoolSnapshotSchema,
+} from './free-pool';
 import { AGENT_CLI_IDS } from './agent-clis';
 import { NPC_STATES, NpcInputSchema, NpcMeetingSchema, NpcMessageSchema, NpcSchema } from './npcs';
 
@@ -473,6 +478,7 @@ export const INVOKE = {
       keyOrder: z.enum(['roomiest', 'turns']).optional(),
       checkHours: z.number().int().min(0).max(24).optional(),
       retryEmpty: z.boolean().optional(),
+      delegation: PoolDelegationSchema.partial().optional(),
     }),
     PoolSnapshotSchema,
   ),

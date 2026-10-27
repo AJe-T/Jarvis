@@ -5,7 +5,7 @@ import { createSettingsService } from '../../settings/settings-service';
 import { createConnections } from '../connections';
 import type { LlmRequest } from '../types';
 import { createCustomProviders, type Lookup } from './custom';
-import { createFreePool, type Tier3Answer } from './pool';
+import { createFreePool, questionOnly, type Tier3Answer } from './pool';
 
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
 const sse = (...events: object[]): Response =>
@@ -101,8 +101,14 @@ const req: LlmRequest = {
         { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } },
       ],
     },
-    { role: 'assistant', content: 'Earlier answer from another AI.' },
-    { role: 'user', content: 'Follow-up with tool results.' },
+    {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id: 'tu_1', name: 'get_weather', input: {} }],
+    },
+    {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: 'Tool output.' }],
+    },
   ],
 };
 const relay = {
@@ -191,5 +197,28 @@ describe('AI Router: Cloudflare Workers AI (tier 2, fixed address + Account ID)'
     );
     // Tier 2 keeps the task as Claude wrote it (tools included).
     expect(seen[0]?.body['tools']).toBeDefined();
+  });
+});
+
+describe('AI Router: tier 3 gets the question only', () => {
+  it('sends the newest user text: a chat’s current question, never earlier turns or tool results', () => {
+    const req = {
+      model: 'pool',
+      max_tokens: 100,
+      system: 'You are JARVIS…',
+      messages: [
+        { role: 'user', content: 'What is the capital of France?' },
+        { role: 'assistant', content: 'Paris.' },
+        { role: 'user', content: 'And of Germany?' },
+        { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'x', input: {} }] },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'secret' }] },
+      ],
+    } as unknown as LlmRequest;
+    expect(questionOnly(req)).toEqual({
+      model: 'pool',
+      max_tokens: 100,
+      system: 'Answer the question clearly and briefly.',
+      messages: [{ role: 'user', content: 'And of Germany?' }],
+    });
   });
 });

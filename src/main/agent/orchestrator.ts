@@ -10,6 +10,7 @@ import type { KillSwitch } from '../security/kill-switch';
 import type {
   ConversationRow,
   ConversationsRepo,
+  MessageRow,
   NewMessage,
 } from '../db/repos/conversations-repo';
 import { toSummary } from '../db/repos/conversations-repo';
@@ -18,7 +19,9 @@ import type { BudgetGuard } from '../llm/budget-guard';
 import type { UsageLedger } from '../llm/usage-ledger';
 import type { LlmClient, MessageParam, ToolUseBlock } from '../llm/types';
 import type { SettingsService } from '../settings/settings-service';
+import { isPoolExhausted } from '../llm/pool/pool';
 import { runAgentLoop, textOfContent, type ToolRuntime, type TurnContext } from './agent-loop';
+import type { PoolTurns } from './front-door';
 import type { AssistantStateHub } from './assistant-state';
 import { historyWindow, type ContextBuilder } from './context-builder';
 import { createMoodFilter, stripMood } from './mood';
@@ -68,6 +71,8 @@ export interface TurnInfo {
   direct?: DirectAction | undefined;
   /** Sir's own plain request (no attachments, not an automation): the fast path may answer it. */
   fastPathOk?: boolean;
+  /** Seq of this turn's own user message (a later message may already be queued behind it). */
+  userSeq?: number;
 }
 
 export interface TurnEnd extends TurnInfo {
@@ -108,7 +113,15 @@ export interface OrchestratorDeps {
   logger: Logger;
   /** ADR-030: a plain PC command Sir typed or said → one tool, no model call (agent/fast-path). */
   fastPath?: (text: string) => Promise<DirectAction | null>;
+  /** AI Router Phase 2: the free pool answers simple chats (front door) or when Claude can't. */
+  poolTurns?: PoolTurns;
 }
+
+const FRONT_DOOR_NOTICE = {
+  on: "Front door: a free AI answered this simple question, so Claude wasn't used.",
+  budget:
+    "Today's Claude budget is over 80% used, so a free AI answered this simple question (front door).",
+} as const;
 
 const PRIVATE_PREFIX = /^\/private\s+/i;
 /** The per-turn context block (date, memories, skills…) before anything was measured. */
@@ -144,14 +157,14 @@ export function createOrchestrator(deps: OrchestratorDeps) {
   const startListeners = new Set<(turn: TurnInfo) => void>();
   const endListeners = new Set<(turn: TurnEnd) => void | Promise<void>>();
 
-  function persist(conversationId: string, messages: NewMessage[]): void {
+  function persist(conversationId: string, messages: NewMessage[]): MessageRow[] {
     const clean = messages.map((m) => ({
       ...m,
       content: redactContent(m.content),
       // Mood tags stay in the API content (history) but not in search text or summaries.
       textPlain: redact(stripMood(m.textPlain)),
     }));
-    deps.conversations.appendMessages(conversationId, clean);
+    return deps.conversations.appendMessages(conversationId, clean);
   }
 
   function ensureConversation(req: SendRequest, isPrivate: boolean): ConversationRow {
@@ -253,6 +266,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     toolUseIds: string[],
     /** After each model step: a later step may open with its own mood tag. */
     onStepEnd: () => void,
+    /** Something of this turn was saved to the history. */
+    onPersist?: () => void,
   ): Promise<{ outcome: TurnEnd['outcome']; text: string; citations: Citation[] }> {
     const system = await deps.context.system({
       conversationId: info.conversationId,
@@ -276,13 +291,64 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       },
       {
         onText,
-        persist: (msgs) => persist(info.conversationId, msgs),
+        persist: (msgs) => {
+          onPersist?.();
+          persist(info.conversationId, msgs);
+        },
         onStep: (msg) => {
           for (const b of msg.content) if (b.type === 'tool_use') toolUseIds.push(b.id);
           onStepEnd();
         },
       },
     );
+  }
+
+  /**
+   * AI Router Phase 2 (Security.md §16.15): the front door may send a simple, non-private chat to
+   * the free pool first; Claude answers otherwise. Each side covers for the other, never silently
+   * (a notice in the chat, and the pool's trail line), and never once text is on screen.
+   */
+  async function answer(
+    info: TurnInfo,
+    ctx: TurnContext,
+    onText: (delta: string) => void,
+    toolUseIds: string[],
+    onStepEnd: () => void,
+  ): Promise<{ outcome: TurnEnd['outcome']; text: string; citations: Citation[] }> {
+    const pt = deps.poolTurns;
+    if (!pt) return modelTurn(info, ctx, onText, toolUseIds, onStepEnd);
+    let streamed = false;
+    const watched = (d: string): void => {
+      if (d) streamed = true;
+      onText(d);
+    };
+    const hooks = {
+      onText: watched,
+      persist: (m: NewMessage[]) => persist(info.conversationId, m),
+      toolUseIds,
+    };
+    const door = await pt.frontDoor(info, ctx);
+    if (door)
+      try {
+        const r = await pt.run(info, ctx, hooks, 'front-door');
+        emitNotice(info, FRONT_DOOR_NOTICE[door]);
+        return r;
+      } catch (err) {
+        if (streamed || ctx.signal.aborted || !isPoolExhausted(err)) throw err;
+        emitNotice(info, 'The free AIs were busy, so Claude answered.');
+      }
+    const ranTools = toolUseIds.length;
+    let saved = false;
+    try {
+      return await modelTurn(info, ctx, watched, toolUseIds, onStepEnd, () => (saved = true));
+    } catch (err) {
+      // Only a turn Claude left untouched: nothing shown, run or saved (no second answer).
+      const fresh = !streamed && !saved && toolUseIds.length === ranTools && !ctx.signal.aborted;
+      if (!fresh || !(await pt.fallbackOk(info, ctx, err))) throw err;
+      const why = err instanceof JarvisError && err.userMessage ? `${err.userMessage} ` : '';
+      emitNotice(info, `${why}A free AI answered instead of Claude.`);
+      return pt.run(info, ctx, hooks, 'fallback');
+    }
   }
 
   /** Instant command (idea from Priler/jarvis): one tool, no model call, result kept in the history as text. */
@@ -354,7 +420,7 @@ ${detail.trim()}`;
           : null);
       const result = direct
         ? await directTurn(info, direct, ctx, onText, toolUseIds)
-        : await modelTurn(info, ctx, onText, toolUseIds, () => forward(mood.flush()));
+        : await answer(info, ctx, onText, toolUseIds, () => forward(mood.flush()));
       forward(mood.flush());
       outcome = result.outcome;
       replyText = stripMood(result.text);
@@ -462,7 +528,7 @@ ${detail.trim()}`;
       if (!text) throw new JarvisError('INVALID', 'empty message', 'Type a message first.');
       const conv = ensureConversation(req, isPrivate);
       const turnId = newId('t_');
-      persist(conv.id, [
+      const [own] = persist(conv.id, [
         {
           role: 'user',
           content: userContent(text, req.attachments),
@@ -479,6 +545,7 @@ ${detail.trim()}`;
         purpose: req.purpose ?? 'chat',
         ...(req.direct ? { direct: req.direct } : {}),
         fastPathOk: (req.purpose ?? 'chat') === 'chat' && !req.attachments?.length,
+        ...(own ? { userSeq: own.seq } : {}),
       };
       // Typed messages are shown optimistically by the renderer; spoken ones appear once recognised.
       if (req.source === 'voice') {
