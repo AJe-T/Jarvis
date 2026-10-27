@@ -185,6 +185,14 @@ export function ModelsTab({
                       {m.maker && (
                         <span className="tag bg-neutral-tint text-ink-300">{m.maker}</span>
                       )}
+                      {m.contextK > 0 && (
+                        <span className="tag bg-neutral-tint text-ink-300" title="Context window">
+                          {m.contextK >= 1000
+                            ? `${Math.round(m.contextK / 100) / 10}M`
+                            : `${m.contextK}K`}{' '}
+                          context
+                        </span>
+                      )}
                       {m.usedTokens > 0 && (
                         <span className="tag bg-neutral-tint text-ink-300">
                           {fmtTokens(m.usedTokens)} this month
@@ -225,7 +233,7 @@ export function ModelsTab({
               <tr>
                 <td colSpan={7} className="py-8 text-center text-sm text-ink-300">
                   {models.length === 0
-                    ? 'No free models yet. Add a key on Providers & keys, then pick its model in Settings → Models & AI (starred models join too).'
+                    ? 'No free models yet. Add a key on Providers & keys, then press Check keys: every free chat model the key can use appears here (OpenRouter: models ending in :free).'
                     : 'No model matches these filters.'}
                 </td>
               </tr>
@@ -250,7 +258,8 @@ function RouteRows({ snap, model }: { snap: PoolSnapshot; model: PoolModel }): R
       <td colSpan={6} className="py-3 pr-4">
         <p className="mb-2 text-xs text-ink-500">
           Same model, different doors. The router tries tier-2 doors first; a tier-3 door is used
-          only after you say yes, and never for private work.
+          only after you say yes, and never for private work. Limits are the provider&apos;s free
+          caps for your key (Groq&apos;s are read from its replies, per model).
         </p>
         <ul className="flex flex-col gap-1.5">
           {model.routes.map((r) => {
@@ -261,8 +270,7 @@ function RouteRows({ snap, model }: { snap: PoolSnapshot; model: PoolModel }): R
                 <span className="w-44 truncate text-ink-100">{p?.label ?? r.providerId}</span>
                 <TierTag tier={r.tier} />
                 <span className="font-code text-xs text-ink-300 tabular-nums">
-                  {r.limits.rpm ? `${r.limits.rpm} / min` : 'no per-minute cap'} ·{' '}
-                  {r.limits.rpd ? `${r.limits.rpd.toLocaleString()} / day` : 'no daily cap'}
+                  {limitsText(r.limits)}
                 </span>
                 <span className="ml-auto flex items-center gap-2 text-xs text-ink-500">
                   today
@@ -289,6 +297,17 @@ function RouteRows({ snap, model }: { snap: PoolSnapshot; model: PoolModel }): R
       </td>
     </tr>
   );
+}
+
+/** "30 req/min · 1,000 req/day · 12K tokens/min" or, before the first answer, where they come from. */
+function limitsText(l: PoolModel['routes'][number]['limits']): string {
+  const parts = [
+    l.rpm && `${l.rpm} req/min`,
+    l.rpd && `${l.rpd.toLocaleString()} req/day`,
+    l.tpm && `${fmtTokens(l.tpm)} tokens/min`,
+    l.tpd && `${fmtTokens(l.tpd)} tokens/day`,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'limits not published: learned after its first answer';
 }
 
 function RoutingOptions({

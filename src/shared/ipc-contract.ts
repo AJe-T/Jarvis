@@ -57,6 +57,7 @@ const AiConnectionSchema = z.object({
           cacheWritePerMTok: z.number(),
         })
         .nullable(),
+      context: z.number().nullable(),
     }),
   ),
 });

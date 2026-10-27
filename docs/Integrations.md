@@ -143,6 +143,8 @@ Four abilities under `pool.abilities.*` (AI Router → Abilities). Full rules: S
 | Voice backup: speaking | on | `voice/backup.ts` `speakingFallbacks`, `tts-pipeline.ts` `onEngine` | Kokoro → Edge → ElevenLabs → Windows |
 | Voice backup: hearing | **off** | `voice/backup.ts` `hearingChain`, `voice-system.ts` | Allowed, off by default, confirm to switch on, every switch named |
 
+**2.33.1:** keys with no chosen model join with their listed free chat models; `pool.checkKeys` re-lists each key's models (`connections.syncLive`) and stores context sizes (migration 019, `ai_models.context_tokens`; ⚠️ OpenRouter `context_length`, Groq `context_window`, checked 2026-10-28); Groq's `x-ratelimit-*` caps are learned per route.
+
 Not done: a size picker for Cloudflare (its free FLUX model has no size), counting each search provider's monthly credit from its dashboard (only replies are read), fusion drafts with tools.
 
 ## How to add an OpenAI-compatible provider

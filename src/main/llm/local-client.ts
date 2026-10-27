@@ -10,7 +10,17 @@ import { JarvisError } from '../errors';
 import { redact } from '../security/redact';
 
 const OpenAiModels = z.object({
-  data: z.array(z.object({ id: z.string(), pricing: z.unknown().optional() })).default([]),
+  data: z
+    .array(
+      z.object({
+        id: z.string(),
+        pricing: z.unknown().optional(),
+        // ⚠️ Checked 2026-10-28: OpenRouter lists context_length, Groq context_window.
+        context_length: z.number().int().positive().optional().catch(undefined),
+        context_window: z.number().int().positive().optional().catch(undefined),
+      }),
+    )
+    .default([]),
 });
 
 /** Most a real model charges per million tokens; anything above is a misread unit, not a price. */
@@ -384,7 +394,9 @@ export function createLocalClient(cfg: LocalLlmConfig): LlmClient & {
   } => cloud?.listing?.() ?? { kind: 'openai' };
 
   /** Model ids, and their prices where the gateway publishes them (integrations step 5). */
-  async function listModelsDetailed(): Promise<Array<{ id: string; price: LivePrice | null }>> {
+  async function listModelsDetailed(): Promise<
+    Array<{ id: string; price: LivePrice | null; context?: number | null }>
+  > {
     needKey();
     const how = listing();
     if (how.kind === 'manual')
@@ -418,6 +430,7 @@ export function createLocalClient(cfg: LocalLlmConfig): LlmClient & {
     return body.data.map((m) => ({
       id: m.id,
       price: prices ? parsePrice(prices, m.pricing) : null,
+      context: m.context_length ?? m.context_window ?? null,
     }));
   }
 

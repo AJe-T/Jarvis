@@ -130,6 +130,19 @@ export const FREE_PROVIDERS: readonly FreeProviderDef[] = [
   },
 ];
 
+/** Model-list entries that aren't chat models: speech, embeddings, pictures, safety filters. */
+const NOT_CHAT =
+  /whisper|tts|orpheus|playai|embed|guard|safety|rerank|moderation|imagen|image|veo|lyria|aqa|ocr|flux|diffusion|bge-|clip/i;
+
+/**
+ * A model a key with nothing chosen joins the pool with (2.33.1). OpenRouter's other models are
+ * paid, so only ids ending ":free" count there.
+ */
+export function isFreeChatModel(provider: string, model: string): boolean {
+  if (NOT_CHAT.test(model)) return false;
+  return provider !== 'openrouter' || model.endsWith(':free');
+}
+
 // ── Sir's own tier-3 providers (Security.md §16.15, ADR-045) ───────────────────────────────
 
 /** `custom_<n>`; a number is never handed out twice (removed rows stay). */

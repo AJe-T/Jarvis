@@ -320,3 +320,4 @@ Found by file name only (`shared/agent-clis.ts`); `detected` ones are not used b
 | `016_usage_sources.sql` | Integrations step 5: usage per provider, connection and model, with where each price came from. |
 | `017_pool.sql` | AI Router (2.30): every attempt the free pool made, answered or not. Drives the limit tracker |
 | `018_pool_custom.sql` | AI Router (2.31, ADR-045): Sir's own OpenAI-compatible providers. Always tier 3. |
+| `019_model_context.sql` | AI Router (2.33.1): each listed model's context window in tokens, as the provider's model list |

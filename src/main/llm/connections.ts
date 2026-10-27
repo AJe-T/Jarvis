@@ -13,6 +13,7 @@ import {
 } from '@shared/llm-providers';
 import type { Db } from '../db/connection';
 import { JarvisError } from '../errors';
+import { redact } from '../security/redact';
 import type { SecretStore } from '../settings/secrets';
 import type { SettingsService } from '../settings/settings-service';
 
@@ -41,6 +42,7 @@ interface ModelRow {
   out_per_mtok: number | null;
   cache_read_per_mtok: number | null;
   cache_write_per_mtok: number | null;
+  context_tokens: number | null;
 }
 
 const priceOf = (m: ModelRow): LivePrice | null =>
@@ -69,6 +71,31 @@ export function createConnections(deps: {
 }) {
   const { db, settings, secrets } = deps;
   const now = (): string => (deps.now?.() ?? new Date()).toISOString();
+
+  /** A name is shown everywhere and stored as plain text: never a key pasted into the wrong box. */
+  const keyLike = (label: string): boolean => redact(label) !== label;
+  const refuseKey = (label: string): void => {
+    if (keyLike(label))
+      throw new JarvisError(
+        'INVALID',
+        'key in a connection name',
+        'That looks like an API key. Put the key in the key box; the name is only a label, like "Groq (work)".',
+      );
+  };
+
+  // A key typed into a name before 2.33.1 is replaced by the default name (the key itself is in secrets.bin).
+  for (const r of db.prepare('SELECT id, provider, label FROM ai_connections').all() as Array<{
+    id: string;
+    provider: string;
+    label: string;
+  }>)
+    if (keyLike(r.label) && isProvider(r.provider)) {
+      const n = /_(\d+)$/.exec(r.id.slice(5))?.[1];
+      db.prepare('UPDATE ai_connections SET label = ? WHERE id = ?').run(
+        `${cloudProvider(r.provider).label}${n ? ` (${n})` : ''}`,
+        r.id,
+      );
+    }
 
   const rowOf = (id: string): ConnRow | undefined =>
     db
@@ -116,6 +143,7 @@ export function createConnections(deps: {
       enabled: m.enabled === 1,
       seenAt: m.seen_at,
       price: priceOf(m),
+      context: m.context_tokens ?? null,
     }));
   }
 
@@ -195,6 +223,7 @@ export function createConnections(deps: {
           'No more keys can be added for this provider.',
         );
       const id = `${defaultConnectionId(provider)}_${n}`;
+      refuseKey(label);
       const name = label.trim().slice(0, MAX_LABEL) || `${cloudProvider(provider).label} (${n})`;
       db.prepare(
         'INSERT INTO ai_connections (id, provider, label, secret, model, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -206,6 +235,7 @@ export function createConnections(deps: {
       const r = row(id);
       const name = label.trim().slice(0, MAX_LABEL);
       if (!name) throw new JarvisError('INVALID', 'empty label', 'Give the connection a name.');
+      refuseKey(name);
       db.prepare('UPDATE ai_connections SET label = ? WHERE id = ?').run(name, r.id);
     },
 
@@ -240,14 +270,15 @@ export function createConnections(deps: {
      */
     syncLive(
       id: string,
-      listed: Array<string | { id: string; price: LivePrice | null }>,
+      listed: Array<string | { id: string; price: LivePrice | null; context?: number | null }>,
     ): ConnectionModel[] {
       const r = row(id);
-      const byId = new Map<string, LivePrice | null>();
+      const byId = new Map<string, { price: LivePrice | null; context: number | null }>();
       for (const m of listed) {
         const entry = typeof m === 'string' ? { id: m, price: null } : m;
         const key = entry.id.trim();
-        if (MODEL_RE.test(key) && !byId.has(key)) byId.set(key, entry.price);
+        if (MODEL_RE.test(key) && !byId.has(key))
+          byId.set(key, { price: entry.price, context: entry.context ?? null });
       }
       const at = now();
       db.exec('BEGIN');
@@ -258,14 +289,15 @@ export function createConnections(deps: {
         // A listed price replaces the old one; a gateway that stops listing it leaves it unknown.
         const upsert = db.prepare(
           `INSERT INTO ai_models (connection_id, model, source, seen_at, in_per_mtok, out_per_mtok,
-             cache_read_per_mtok, cache_write_per_mtok) VALUES (?, ?, 'live', ?, ?, ?, ?, ?)
+             cache_read_per_mtok, cache_write_per_mtok, context_tokens) VALUES (?, ?, 'live', ?, ?, ?, ?, ?, ?)
            ON CONFLICT (connection_id, model) DO UPDATE SET seen_at = excluded.seen_at,
              source = CASE WHEN source = 'manual' THEN 'manual' ELSE 'live' END,
              in_per_mtok = excluded.in_per_mtok, out_per_mtok = excluded.out_per_mtok,
              cache_read_per_mtok = excluded.cache_read_per_mtok,
-             cache_write_per_mtok = excluded.cache_write_per_mtok`,
+             cache_write_per_mtok = excluded.cache_write_per_mtok,
+             context_tokens = COALESCE(excluded.context_tokens, context_tokens)`,
         );
-        for (const [m, p] of byId)
+        for (const [m, { price: p, context }] of byId)
           upsert.run(
             r.id,
             m,
@@ -274,6 +306,7 @@ export function createConnections(deps: {
             p?.outPerMTok ?? null,
             p?.cacheReadPerMTok ?? null,
             p?.cacheWritePerMTok ?? null,
+            context,
           );
         db.exec('COMMIT');
       } catch (err) {

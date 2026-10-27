@@ -132,6 +132,12 @@ export function buildSnapshot(x: {
     ).map((r) => [r.model, r.n]),
   );
 
+  /** Context window per model, from the keys' model lists (largest any door reports). */
+  const contextOf = new Map<string, number>();
+  for (const c of x.connections)
+    for (const m of c.models)
+      if (m.context) contextOf.set(m.model, Math.max(contextOf.get(m.model) ?? 0, m.context));
+
   const models: PoolModel[] = [...byModel.entries()].map(([id, rs]) => {
     const meta = modelMeta(id);
     const stats = rs.reduce(
@@ -150,7 +156,7 @@ export function buildSnapshot(x: {
       label: meta.label,
       maker: meta.maker,
       size: meta.size,
-      contextK: 0,
+      contextK: Math.round((contextOf.get(id) ?? 0) / 1000),
       tools: rs.some((r) => r.tools === true)
         ? true
         : rs.every((r) => r.tools === false)

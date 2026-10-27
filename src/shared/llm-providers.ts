@@ -353,6 +353,8 @@ export interface ConnectionModel {
   seenAt: string | null;
   /** Only for gateways that publish prices; null = unknown. */
   price: LivePrice | null;
+  /** Context window in tokens where the model list says (OpenRouter, Groq); null = unknown. */
+  context: number | null;
 }
 
 export interface AiConnection {

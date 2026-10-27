@@ -2,6 +2,7 @@ import {
   FREE_PROVIDERS,
   freeProvider,
   isCustomProvider,
+  isFreeChatModel,
   routeKey,
   type PoolAbilities,
   type PoolLimits,
@@ -191,20 +192,29 @@ export function createFreePool(deps: PoolDeps) {
     return { enabled: o.enabled ?? true, order: o.order ?? 1000 };
   };
 
-  /** Keys of free providers that have a key: their main model plus starred ones. */
+  /**
+   * Keys of free providers that have a key: their main model plus starred ones. A key with nothing
+   * chosen or starred joins with every free chat model its model list shows (2.33.1), so adding a
+   * key is enough; Sir switches models off on the Models tab.
+   */
   function poolConnections() {
     return deps.connections
       .list()
       .filter((c) => c.keySet && freeProvider(c.provider))
-      .map((c) => ({
-        ...c,
-        poolModels: [
-          ...new Set([
-            ...(c.model ? [c.model] : []),
-            ...c.models.filter((m) => m.favourite && m.enabled).map((m) => m.model),
-          ]),
-        ],
-      }));
+      .map((c) => {
+        const chosen = [
+          ...(c.model ? [c.model] : []),
+          ...c.models.filter((m) => m.favourite && m.enabled).map((m) => m.model),
+        ];
+        const listed = chosen.length
+          ? []
+          : c.models
+              .filter(
+                (m) => m.enabled && m.source === 'live' && isFreeChatModel(c.provider, m.model),
+              )
+              .map((m) => m.model);
+        return { ...c, poolModels: [...new Set([...chosen, ...listed])] };
+      });
   }
 
   const count = (sql: string, ...args: Array<string | number>): number =>
@@ -225,12 +235,16 @@ export function createFreePool(deps: PoolDeps) {
       .filter((c) => providerBaseUrl(cloudProvider(c.provider), account) !== '')
       .flatMap((c) => {
         const prov = providerSettings(c.provider);
-        const limits = { ...freeProvider(c.provider)?.limits, ...learnedLimits.get(c.id) };
         return c.poolModels.map((model) => ({
           connectionId: c.id,
           provider: c.provider,
           model,
-          limits,
+          // Groq reports its caps per model, so learned limits are kept per route.
+          limits: {
+            ...freeProvider(c.provider)?.limits,
+            ...learnedLimits.get(c.id),
+            ...learnedLimits.get(routeKey(c.id, model)),
+          },
           ...prov,
         }));
       });
@@ -393,13 +407,16 @@ export function createFreePool(deps: PoolDeps) {
     );
   }
 
-  /** Groq reports its caps in headers: x-ratelimit-limit-requests = per day, -tokens = per minute. */
-  function learnHeaders(connectionId: string, h: Headers): void {
+  /**
+   * Groq reports its caps per model in headers: x-ratelimit-limit-requests = per day, -tokens =
+   * per minute (⚠️ checked 2026-10-28, console.groq.com/docs/rate-limits). Kept per route.
+   */
+  function learnHeaders(key: string, h: Headers): void {
     const rpd = Number(h.get('x-ratelimit-limit-requests'));
     const tpm = Number(h.get('x-ratelimit-limit-tokens'));
     if (rpd > 0 || tpm > 0)
-      learnedLimits.set(connectionId, {
-        ...learnedLimits.get(connectionId),
+      learnedLimits.set(key, {
+        ...learnedLimits.get(key),
         ...(rpd > 0 ? { rpd } : {}),
         ...(tpm > 0 ? { tpm } : {}),
       });
@@ -486,7 +503,7 @@ export function createFreePool(deps: PoolDeps) {
     const client = clientFor(target, r.model, (o) => {
       status = o.status;
       headers = o.headers;
-      learnHeaders(r.connectionId, o.headers);
+      learnHeaders(r.key, o.headers);
     });
     const name = target.custom ? target.name : providerName(r.provider);
     let streamed = false;
@@ -700,7 +717,9 @@ export function createFreePool(deps: PoolDeps) {
             const t = targetOf(c.id, c.provider);
             const client = clientFor(t, c.model);
             if (t.listing === 'manual') await client.ping(c.model, AbortSignal.timeout(20_000));
-            else await client.listModels();
+            // The list also refreshes the key's models (and their context sizes) for the pool.
+            else if (t.custom) await client.listModels();
+            else deps.connections.syncLive(c.id, await client.listModelsDetailed());
             health.set(c.id, { health: 'healthy', at });
             if (cooling.get(c.id)?.reason === 'key rejected') cooling.delete(c.id);
           } catch (err) {
