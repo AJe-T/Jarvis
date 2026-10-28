@@ -47,6 +47,8 @@ flowchart LR
 | **Preload** | Exposes a minimal, typed `window.jarvis` API via `contextBridge`; no Node access leaks | Bridge |
 | **Renderer** (Chromium, sandboxed) | React UI: chat, orb, activity, confirmations, settings, memory browser; plays TTS audio buffers | Untrusted-by-default |
 | **Overlay window** (renderer) | Always-on-top mini orb + "Computer Control" red border | Untrusted-by-default |
+| **Inference host** (utility process, `out/main/inference-host.js`, ADR-029) | Whisper, Kokoro, Piper, Laya, WavLM at below-normal priority | Controlled (own code; model files only) |
+| **Audio worker** (utility process, `out/main/audio-host.js`, voice fix 1B) | Real-time audio models: keyword spotter, openWakeWord, personal wake word, Silero voice detector, at above-normal priority. Main posts mic frames and gets "heard" / speech probability back in order; the mic loop never waits on it. A crash fails its engines, which are reopened | Controlled (own code; model files only) |
 | **MCP child processes** | Third-party tool servers (stdio) | Untrusted |
 | **PowerShell child processes** | Short-lived, per tool call | Controlled |
 
