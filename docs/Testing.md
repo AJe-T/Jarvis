@@ -130,7 +130,7 @@ During a fake computer-use session with held modifier keys → kill → assert a
 
 `npm run evals` (asks for confirmation, prints estimated cost). Uses **fake OS tools** that record calls, so evals are safe and deterministic on the tool side.
 
-Scoring per case: expected tool(s) called with matching key args (fuzzy), no forbidden tools, and a reply regex where the answer is checkable. (Implemented in `tests/evals/`. The Haiku-as-judge reply rubric is not built yet. Cases 22, 23 and 31 need live MCP servers or a real screen, so they are skipped and checked by hand. There is no `focus_window` tool: case 8 accepts `open_app` or `list_open_windows`.)
+Scoring per case: expected tool(s) called with matching key args (fuzzy), no forbidden tools, and a reply regex where the answer is checkable. **Forge plan quality (2.40, `tests/evals/forge.eval.ts`):** five cases check the level (self-built tool vs core change), the study source in `studyApp`, and a complete goal (≥ 160 characters), and one everyday question must not reach Forge; every confirmation is declined, so nothing is built. (Implemented in `tests/evals/`. The Haiku-as-judge reply rubric is not built yet. Cases 22, 23 and 31 need live MCP servers or a real screen, so they are skipped and checked by hand. There is no `focus_window` tool: case 8 accepts `open_app` or `list_open_windows`.)
 
 | # | Input | Expect |
 |---|---|---|

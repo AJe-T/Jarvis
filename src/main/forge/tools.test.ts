@@ -51,6 +51,7 @@ function setup(start: Forge['start'] = vi.fn()) {
     approve: vi.fn(() => ({ id: 'forge_1' }) as ForgeRun),
     lastShip: vi.fn(() => null),
     rollback: vi.fn(() => SHIP),
+    history: vi.fn(() => []),
   };
   const tools = createForgeTools({
     forge,

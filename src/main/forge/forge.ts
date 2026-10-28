@@ -1,8 +1,22 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { errorMessage } from '../errors';
 import { bossRules, DELEGATE_RULE, type BossResult, type CheckFn, type DelegateFn } from './boss';
-import { describeReport, runGate, runGates, type GateReport, type GateRunner } from './gates';
+import {
+  describeReport,
+  runGate,
+  runGates,
+  type GateReport,
+  type GateResult,
+  type GateRunner,
+} from './gates';
 import { addedRuns, copyFindings, indexStudyRepo } from './nocopy';
 import type { Finding } from './protected';
 import { describeShip, shipChange, type ShipInfo } from './ship';
@@ -148,6 +162,118 @@ export interface Forge {
   lastShip(): ShipInfo | null;
   /** Schedules the restore of the data backed up before the last Forge build. */
   rollback(): ShipInfo;
+  /** F7: every saved run, newest first, for Settings → Forge (the current one included). */
+  history(): ForgeRunView[];
+}
+
+/** One run as the Forge page shows it: no logs beyond the last steps, nothing from the repo but text. */
+export interface ForgeRunView {
+  id: string;
+  kind: 'change' | 'tool';
+  goal: string;
+  state: ForgeState;
+  startedAt: number;
+  endedAt: number | null;
+  costUsd: number;
+  branch: string | null;
+  tool: string | null;
+  error: string | null;
+  freeEdits: number;
+  claudeEdits: number;
+  checks: Array<{ id: string; ok: boolean }>;
+  ship: {
+    state: ShipInfo['state'];
+    version: string | null;
+    done: string[];
+    installer: string | null;
+    error: string | null;
+  } | null;
+  study: {
+    source: string;
+    notes: string | null;
+    blocks: number;
+    warns: number;
+    partial: boolean;
+  } | null;
+  summary: string;
+  log: string[];
+}
+
+const MAX_HISTORY = 100;
+/** Run files read for the page (newest names), and the largest one read: a run file is a few KB. */
+const MAX_RUN_FILES = 500;
+const MAX_RUN_FILE_BYTES = 1_000_000;
+const SHIP_STATES: readonly ShipInfo['state'][] = ['running', 'shipped', 'failed', 'cancelled'];
+const STATES: readonly ForgeState[] = [
+  'preparing',
+  'installing',
+  'building',
+  'checking',
+  'passed',
+  'failed',
+  'cancelled',
+];
+
+const str = (v: unknown, max: number): string | null =>
+  typeof v === 'string' ? v.slice(0, max) : null;
+const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+/**
+ * A saved run file → the page's view. The files are Jarvis's own, but a run's summary and log come
+ * from the repo's code and Claude: everything is type-checked and capped, and shown as plain text.
+ */
+export function runView(r: ForgeRun, installersDir?: string): ForgeRunView | null {
+  if (typeof r.id !== 'string' || typeof r.goal !== 'string' || !Number.isFinite(r.startedAt))
+    return null;
+  const objects = <T>(v: unknown): T[] =>
+    Array.isArray(v) ? v.filter((x): x is T => typeof x === 'object' && x !== null) : [];
+  const findings = objects<Finding>(r.study?.findings);
+  const results = objects<GateResult>(r.report?.results);
+  // An installer path is only shown when it is in Forge's own installers folder.
+  const installer = str(r.ship?.installer, 400);
+  const ownInstaller =
+    installer &&
+    installersDir &&
+    resolve(installer)
+      .toLowerCase()
+      .startsWith(resolve(installersDir).toLowerCase() + sep)
+      ? installer
+      : null;
+  return {
+    id: r.id.slice(0, 64),
+    kind: r.kind === 'tool' ? 'tool' : 'change',
+    goal: r.goal.slice(0, 600),
+    state: STATES.includes(r.state) ? r.state : 'failed',
+    startedAt: r.startedAt,
+    endedAt: typeof r.endedAt === 'number' ? r.endedAt : null,
+    costUsd: num(r.costUsd),
+    branch: str(r.branch, 200),
+    tool: str(r.tool?.name, 64),
+    error: str(r.error, 500),
+    freeEdits: num(r.workers?.free),
+    claudeEdits: num(r.workers?.boss),
+    checks: results.map((g) => ({ id: String(g.id).slice(0, 20), ok: g.ok === true })),
+    ship: r.ship
+      ? {
+          state: SHIP_STATES.includes(r.ship.state) ? r.ship.state : 'failed',
+          version: str(r.ship.version, 20),
+          done: Array.isArray(r.ship.done) ? r.ship.done.map((d) => String(d).slice(0, 20)) : [],
+          installer: ownInstaller,
+          error: str(r.ship.error, 500),
+        }
+      : null,
+    study: r.study
+      ? {
+          source: String(r.study.source).slice(0, 300),
+          notes: str(r.study.notes, 400),
+          blocks: findings.filter((f) => f.severity === 'block').length,
+          warns: findings.filter((f) => f.severity === 'warn').length,
+          partial: r.study.partial === true,
+        }
+      : null,
+    summary: str(r.summary, 4000) ?? '',
+    log: (Array.isArray(r.log) ? r.log : []).slice(-8).map((l) => String(l).slice(0, 300)),
+  };
 }
 
 const MAX_LOG = 40;
@@ -562,6 +688,36 @@ export function createForge(deps: ForgeDeps): Forge {
         );
       });
       return snapshot(r);
+    },
+    history() {
+      // The checks run changed code as Sir, which could plant files here: only regular, small files
+      // whose name is their run id, and one bad file only drops itself.
+      const views = new Map<string, ForgeRunView>();
+      const view = (r: ForgeRun): ForgeRunView | null => {
+        try {
+          return runView(r, deps.ship?.installersDir);
+        } catch {
+          return null;
+        }
+      };
+      const files = existsSync(deps.runsDir)
+        ? readdirSync(deps.runsDir).filter((f) => /^forge_[a-z0-9]+\.json$/.test(f))
+        : [];
+      for (const f of files.sort().slice(-MAX_RUN_FILES)) {
+        const p = join(deps.runsDir, f);
+        try {
+          const st = lstatSync(p);
+          if (!st.isFile() || st.size > MAX_RUN_FILE_BYTES) continue;
+          const r = JSON.parse(readFileSync(p, 'utf8')) as ForgeRun;
+          const v = r?.id === f.slice(0, -'.json'.length) ? view(r) : null;
+          if (v) views.set(v.id, v);
+        } catch {
+          // A damaged run file is left out of the list.
+        }
+      }
+      const now = current ? view(current) : null;
+      if (now) views.set(now.id, now);
+      return [...views.values()].sort((a, b) => b.startedAt - a.startedAt).slice(0, MAX_HISTORY);
     },
     lastShip() {
       const s = current?.ship ?? readShipFile();

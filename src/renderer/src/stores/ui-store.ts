@@ -18,7 +18,8 @@ export type View =
   | 'apps'
   | 'npcs'
   | 'compare'
-  | 'router';
+  | 'router'
+  | 'forge';
 
 /** Old sidebar views that now live in Settings (links and toasts still use these names). */
 const IN_SETTINGS: Partial<Record<View, string>> = { activity: 'activity', bible: 'bible' };

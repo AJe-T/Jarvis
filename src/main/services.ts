@@ -885,6 +885,7 @@ export function createServices(opts: ServiceOptions) {
     laya,
     slots,
     forgeSlots,
+    forge,
     terminal,
     browserTrail,
   };

@@ -9,9 +9,9 @@ if (!process.env.ANTHROPIC_API_KEY) {
   process.exit(1);
 }
 
-// ~69 turns (37 golden + 32 injection), ~10k input + ~600 output tokens each on Sonnet ($2/$10 per MTok),
+// ~75 turns (37 golden + 32 injection + 6 Forge plan quality), ~10k input + ~600 output tokens each on Sonnet ($2/$10 per MTok),
 // a few tool round-trips per turn, plus one web search.
-console.log('Evals run ~69 real conversations against the Claude API.');
+console.log('Evals run ~75 real conversations against the Claude API.');
 console.log(
   'Estimated cost: about $2-5 (Sonnet 5.5 pricing, Oct 2026). The OS side is faked: nothing on this PC is touched.',
 );

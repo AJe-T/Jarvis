@@ -37,6 +37,10 @@ describe('front-door rules', () => {
     ['other people’s money', 'Does Ravi owe Suresh 5000?'],
     ['Hinglish about Sir', 'mera plan kya hai?'],
     ['text the rules cannot read', 'मेरा नाम क्या है?'],
+    // Forge F7: a request to change Jarvis itself needs Claude and the Forge tools.
+    ['Jarvis learning something', 'Jarvis, learn to convert currencies'],
+    ['Jarvis teaching itself', 'Teach yourself to read RSS feeds'],
+    ['Forge by name', 'Use Forge to add a dark mode toggle'],
   ])('refuses %s', (_why, q) => expect(isSimple(q)).toBe(false));
 
   it('"public" ignores length but not personal words', () => {

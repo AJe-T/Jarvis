@@ -7,6 +7,7 @@ import {
   Columns3,
   Route,
   FileText,
+  Hammer,
   KeyRound,
   LayoutGrid,
   ListChecks,
@@ -53,6 +54,7 @@ const SYSTEMS: Item[] = [
   { view: 'apps', label: 'Apps', Icon: Boxes },
   { view: 'automations', label: 'Automations', Icon: Workflow },
   { view: 'skills', label: 'Skills', Icon: Puzzle },
+  { view: 'forge', label: 'Forge', Icon: Hammer },
   { view: 'connections', label: 'Connections', Icon: Plug },
   { view: 'copilot', label: 'Reply copilot', Icon: MessagesSquare },
 ];

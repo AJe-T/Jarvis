@@ -64,6 +64,27 @@ export const HELP: Record<string, HelpEntry> = {
       'Your prompt goes to every AI you pick, and each bills its own account: pick only the ones you want to see it.',
     ],
   },
+  forge: {
+    title: 'Forge',
+    what: 'Jarvis improving itself: a new tool (no reinstall) or a change to its own code, built and checked by your Claude Code in Forge’s own copy of the source. This page lists every run, what it cost and what shipped.',
+    how: [
+      'Ask: Jarvis agrees the goal with you, then asks before it starts (budget per run in Settings, default $5 of Claude).',
+      'A change that passes every check waits for you: say “approve it” to see the files and cost, then it builds the installer, backs up your data, merges and pushes. You run the installer yourself.',
+      'Name an app, a website or a GitHub repo to build it like: Claude studies it first and writes our own version; copied code fails the run.',
+      'Open a run for its checks, study notes, shipping steps, installer path and Claude’s summary.',
+    ],
+    say: [
+      'Jarvis, learn to convert currencies',
+      'Add a dark mode toggle to Settings, like the one in VS Code',
+      'How is Forge doing?',
+      'Approve it',
+      'Roll back Forge',
+    ],
+    tips: [
+      'Forge starts every run from GitHub’s dev branch: push your own commits first.',
+      'Roll back in this order: close Jarvis, run the previous installer, then start Jarvis.',
+    ],
+  },
   router: {
     title: 'AI Router',
     what: 'Every AI Jarvis uses, in one place: how much free AI your keys give you, all your API keys, the free models, the main brain that answers you (Claude), and the rules for who may see what. Since 2.35 this is the only place for these settings; Settings → Models & AI just links here.',

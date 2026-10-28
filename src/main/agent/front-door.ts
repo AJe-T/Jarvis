@@ -25,9 +25,9 @@ import { displayText } from './ui-history';
  * tool call that the gate could see.
  */
 
-/** Sir, his people and plans, or his PC and accounts: never "public", whatever the length. */
+/** Sir, his people and plans, his PC and accounts, or Jarvis changing itself (Forge): never "public". */
 const PERSONAL =
-  /\b(?:i|i'm|im|i've|i'd|i'll|me|my|mine|myself|we|we're|our|ours|us|remind|remember|forget|note|notes|save|schedule|calendar|meeting|appointment|email|e-mail|mail|inbox|message|messages|whatsapp|telegram|sms|text|call|phone|mobile|address|send|reply|contact|file|files|folder|document|screen|clipboard|password|vault|todo|task|alarm|timer|open|launch|close|install|uninstall|delete|buy|order|book|pay|transfer|owe|owes|account|bank|loan|salary|passport|aadhaar|pan|health|doctor|wife|husband|son|daughter|mom|mother|dad|father|brother|sister|boss|friend|girlfriend|boyfriend|mera|meri|mere|mujhe|mujhko|hum|hamara|hamari|apna|apni)\b/i;
+  /\b(?:i|i'm|im|i've|i'd|i'll|me|my|mine|myself|we|we're|our|ours|us|remind|remember|forget|note|notes|save|schedule|calendar|meeting|appointment|email|e-mail|mail|inbox|message|messages|whatsapp|telegram|sms|text|call|phone|mobile|address|send|reply|contact|file|files|folder|document|screen|clipboard|password|vault|todo|task|alarm|timer|open|launch|close|install|uninstall|delete|buy|order|book|pay|transfer|owe|owes|account|bank|loan|salary|passport|aadhaar|pan|health|doctor|wife|husband|son|daughter|mom|mother|dad|father|brother|sister|boss|friend|girlfriend|boyfriend|mera|meri|mere|mujhe|mujhko|hum|hamara|hamari|apna|apni|learn to|teach yourself|forge)\b/i;
 /** Phone, account or card-like numbers, e-mail addresses, and text the rules can't read (not Latin). */
 const IDENTIFYING =
   /\d[\d\s-]{6,}\d|[^\s@]+@[^\s@]+\.[a-z]{2,}|[^\p{Script=Latin}\p{N}\p{P}\p{S}\s]/iu;

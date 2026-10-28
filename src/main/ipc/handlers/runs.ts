@@ -3,6 +3,8 @@ import { handle } from '../handle';
 
 /** Integrations step 4: Sidebar → Compare AIs. */
 export function registerRunHandlers(s: Services): void {
+  // Forge F7: the run history page (Sidebar → Forge). Read-only.
+  handle('forge:runs', () => s.forge.history());
   // Jarvis's own connection comes first (BRAIN_IDS order): what Sir compares the others against.
   handle('runs:brains', () =>
     s.brains.available().map((id) => ({

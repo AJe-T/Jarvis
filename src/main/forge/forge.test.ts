@@ -296,6 +296,95 @@ describe('Forge runs', () => {
     });
   });
 
+  it('planted run files never break the history or pass for real runs (security review 2.40)', () => {
+    const { forge, runsDir } = setup({});
+    const base = {
+      kind: 'change',
+      goal: 'x',
+      state: 'passed',
+      log: [],
+      workers: { free: 0, boss: 0 },
+    };
+    const put = (name: string, run: unknown): void =>
+      writeFileSync(join(runsDir, `${name}.json`), JSON.stringify(run));
+    put('forge_nulls', {
+      ...base,
+      id: 'forge_nulls',
+      startedAt: 5,
+      report: { results: [null] },
+      study: { source: 's', findings: [null] },
+      ship: { state: 'hacked', done: [null], installer: 'C:/evil/Jarvis-Setup-9.9.9.exe' },
+    });
+    // Infinity (1e999 in JSON) would fail the page's validation.
+    writeFileSync(
+      join(runsDir, 'forge_inf.json'),
+      `{"id":"forge_inf","goal":"x","startedAt":1e999}`,
+    );
+    // Another run's id: it can't stand in for that run.
+    put('forge_zzzz', { ...base, id: 'forge_nulls', startedAt: 9, goal: 'impostor' });
+    writeFileSync(
+      join(runsDir, 'forge_huge.json'),
+      `{"id":"forge_huge","goal":"${'x'.repeat(1_100_000)}","startedAt":1}`,
+    );
+    const h = forge.history();
+    expect(h.map((r) => r.id)).toEqual(['forge_nulls']);
+    expect(h[0]).toMatchObject({
+      goal: 'x',
+      checks: [],
+      ship: { state: 'failed', installer: null },
+    });
+    expect(h[0]?.study).toMatchObject({ blocks: 0, warns: 0 });
+  });
+
+  it('the history lists saved and current runs, newest first, with cost, ship and study (F7)', async () => {
+    const { forge, runsDir } = setup({});
+    writeFileSync(
+      join(runsDir, 'forge_aaa.json'),
+      JSON.stringify({
+        id: 'forge_aaa',
+        kind: 'tool',
+        goal: 'An older tool run',
+        state: 'passed',
+        startedAt: 1,
+        endedAt: 2,
+        costUsd: 0.5,
+        tool: { name: 'calc', tools: [] },
+        workers: { free: 2, boss: 1 },
+        log: [],
+        approved: [],
+        ship: { state: 'shipped', version: '2.40.0', done: ['bumped'], runId: 'x', at: 0 },
+        study: {
+          source: 'https://github.com/a/b',
+          kind: 'repo',
+          findings: [
+            { path: 'a', severity: 'warn', problem: 'x' },
+            { path: 'b', severity: 'block', problem: 'y' },
+          ],
+        },
+      }),
+    );
+    writeFileSync(join(runsDir, 'forge_bad.json'), '{not json');
+    writeFileSync(join(runsDir, 'forge_ccc.json'), JSON.stringify({ id: 'forge_ccc' }));
+    writeFileSync(join(runsDir, 'notes.txt'), 'ignored');
+    forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
+    await settle(forge);
+    const h = forge.history();
+    expect(h.map((r) => r.id)).toEqual([forge.status()?.id, 'forge_aaa']);
+    expect(h[0]).toMatchObject({ kind: 'change', state: 'passed', costUsd: 1.5 });
+    expect(h[0]?.checks.length).toBe(8);
+    expect(h[1]).toMatchObject({
+      tool: 'calc',
+      freeEdits: 2,
+      claudeEdits: 1,
+      ship: { state: 'shipped', version: '2.40.0' },
+      study: { source: 'https://github.com/a/b', blocks: 1, warns: 1, partial: false },
+    });
+  });
+
   it('branch names are readable and safe', () => {
     expect(runSlug('Add "dark mode" to the Settings page!', Date.UTC(2026, 0, 2, 3, 4, 5))).toBe(
       '20260102030405-add-dark-mode-to-the',

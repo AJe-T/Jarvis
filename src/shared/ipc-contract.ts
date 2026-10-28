@@ -227,6 +227,50 @@ const SkillName = z
   .string()
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   .max(64);
+const ForgeRunViewSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['change', 'tool']),
+  goal: z.string(),
+  state: z.enum([
+    'preparing',
+    'installing',
+    'building',
+    'checking',
+    'passed',
+    'failed',
+    'cancelled',
+  ]),
+  startedAt: z.number(),
+  endedAt: z.number().nullable(),
+  costUsd: z.number(),
+  branch: z.string().nullable(),
+  tool: z.string().nullable(),
+  error: z.string().nullable(),
+  freeEdits: z.number(),
+  claudeEdits: z.number(),
+  checks: z.array(z.object({ id: z.string(), ok: z.boolean() })),
+  ship: z
+    .object({
+      state: z.enum(['running', 'shipped', 'failed', 'cancelled']),
+      version: z.string().nullable(),
+      done: z.array(z.string()),
+      installer: z.string().nullable(),
+      error: z.string().nullable(),
+    })
+    .nullable(),
+  study: z
+    .object({
+      source: z.string(),
+      notes: z.string().nullable(),
+      blocks: z.number(),
+      warns: z.number(),
+      partial: z.boolean(),
+    })
+    .nullable(),
+  summary: z.string(),
+  log: z.array(z.string()),
+});
+
 const SkillView = z.object({
   name: z.string(),
   description: z.string(),
@@ -456,6 +500,8 @@ export const INVOKE = {
   'runs:list': contract(Empty, z.array(RunViewSchema)),
   'runs:remove': contract(z.object({ id: RunId }), Ok),
   'runs:clear': contract(Empty, z.object({ removed: z.number().int() })),
+  /** Forge F7: Sidebar → Forge, every saved run (read-only; Forge's own files, checked in main). */
+  'forge:runs': contract(Empty, z.array(ForgeRunViewSchema)),
   /** AIs that can take part right now, by name. */
   'runs:brains': contract(Empty, z.array(z.object({ id: BrainRefSchema, label: z.string() }))),
   /** AI Router (2.30): the free pool's live state (no prompts, no answers, no keys). */

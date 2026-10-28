@@ -63,6 +63,7 @@ export const INVOKE_CHANNELS = [
   'runs:remove',
   'runs:clear',
   'runs:brains',
+  'forge:runs',
   'pool:snapshot',
   'pool:setProvider',
   'pool:setModel',

@@ -4,6 +4,7 @@ import { AppsView } from './features/apps/apps-view';
 import { NpcsView } from './features/npcs/npcs-view';
 import { CompareView } from './features/compare/compare-view';
 import { RouterView } from './features/router/router-view';
+import { ForgeView } from './features/forge/forge-view';
 import { Tier3Host, useTier3 } from './features/router/tier3-host';
 import { ConnectionsView } from './features/connections/connections-view';
 import { CopilotView } from './features/copilot/copilot-view';
@@ -40,6 +41,7 @@ export const EXTRA_VIEWS: Partial<Record<View, ComponentType>> = {
   npcs: NpcsView,
   compare: CompareView,
   router: RouterView,
+  forge: ForgeView,
 };
 export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog, Tier3Host];
 
