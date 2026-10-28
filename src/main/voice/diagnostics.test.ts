@@ -71,7 +71,7 @@ describe('voice diagnostics (Phase 0)', () => {
     advance(REPORT_MS);
     diag.drop('queue');
     diag.drop('overrun', 2);
-    expect(diag.totals()).toEqual({ queue: 5, length: 0, early: 0, overrun: 2 });
+    expect(diag.totals()).toEqual({ queue: 5, length: 0, early: 0, overrun: 2, backlog: 0 });
     const msgs = lines.map((l) => [l.msg, l.obj['reason'], l.obj['frames']]);
     expect(msgs).toEqual([
       ['audio frames dropped', 'queue', 1],

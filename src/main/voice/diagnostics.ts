@@ -13,9 +13,10 @@ const MAX_FILE_BYTES = 10 * 60 * SAMPLE_RATE * 2;
 /**
  * Where a frame was lost: the capture window's queue overflowed, a frame of the wrong length
  * arrived, the early buffer (audio before speech-to-text connected) was full, or the native
- * recorder overran because the mic loop read too slowly.
+ * recorder overran because the mic loop read too slowly, or the audio worker fell behind on wake
+ * frames (backlog).
  */
-export type DropReason = 'queue' | 'length' | 'early' | 'overrun';
+export type DropReason = 'queue' | 'length' | 'early' | 'overrun' | 'backlog';
 /** What the frames in a debug recording were fed to. */
 export type TapKind = 'stt' | 'wake' | 'ambient';
 
@@ -197,6 +198,7 @@ export function createVoiceDiagnostics(opts: {
         length: drops.get('length')?.total ?? 0,
         early: drops.get('early')?.total ?? 0,
         overrun: drops.get('overrun')?.total ?? 0,
+        backlog: drops.get('backlog')?.total ?? 0,
       };
     },
 

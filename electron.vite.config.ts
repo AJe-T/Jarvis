@@ -21,6 +21,8 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           'inference-host': resolve(__dirname, 'src/main/inference/host.ts'),
+          // Voice fix 1B: the utility process that runs the wake words and the voice detector.
+          'audio-host': resolve(__dirname, 'src/main/voice/audio-worker/host.ts'),
         },
       },
     },

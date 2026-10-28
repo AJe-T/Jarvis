@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { isDefaultName } from '@shared/assistant-name';
 import { JarvisError } from '../errors';
@@ -56,6 +57,7 @@ import { clearSpeechCache } from './tts-pipeline';
 import { createEngineReporter, hearingChain, whyOf, type EngineReport } from './backup';
 import { decodeAudio } from './audio-decode';
 import { createVoiceDiagnostics, type VoiceDiagnostics } from './diagnostics';
+import { createAudioWorker, utilityLink } from './audio-worker/client';
 import { createMicSupervisor, type CaptureStarted, type MicSupervisor } from './mic-supervisor';
 import { createElevenLabsTts } from './tts/elevenlabs';
 import { createKokoroTts } from './tts/kokoro';
@@ -455,7 +457,17 @@ export function createVoiceSystem(
     root: join(s.userData, 'models'),
     onProgress: (p) => s.emit('models:progress', p),
   });
+  // Voice fix 1B: wake words and the voice detector run in their own utility process (the app only;
+  // tests and plain Node keep them in this process).
+  const audioHost = join(__dirname, 'audio-host.js');
+  const worker =
+    !s.isTest && process.versions['electron'] && existsSync(audioHost)
+      ? createAudioWorker({ logger, connect: () => utilityLink(audioHost, logger) })
+      : undefined;
   const local = createLocalEngines(models, s.settings, {
+    ...(worker ? { worker } : {}),
+    onWakeTiming: diag.timer('worker.wake'),
+    onWakeBacklog: () => diag.drop('backlog'),
     onSlow: () => {
       logger.warn('speech recognition is slower than real time');
       s.emit('notify', {
@@ -487,6 +499,7 @@ export function createVoiceSystem(
         device: s.isTest ? '' : (listAudioDevices()[deviceIndex] ?? 'default'),
         deepgramKey: !!s.secrets.get('deepgram'),
         debugAudio: s.settings.get('voice.debugAudio'),
+        audioWorker: !!worker,
       },
       'voice setup',
     );

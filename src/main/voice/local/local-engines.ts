@@ -32,6 +32,7 @@ import {
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 import type { Transcriber } from './whisper';
 import { inference } from '../../inference/client';
+import type { AudioWorker } from '../audio-worker/client';
 
 /** Whisper in the model process (ADR-029); resolves once the model is loaded there. */
 async function isolatedWhisper(dir: string, multilingual: boolean): Promise<Transcriber> {
@@ -82,10 +83,24 @@ export function createLocalEngines(
     onSlow?(): void;
     onNearMiss?(info: Record<string, unknown>): void;
     onSpotted?(info: Record<string, unknown>): void;
-    /** Phase 0: how long each keyword-spotter decode took (it runs synchronously in main). */
+    /** Phase 0: how long each keyword-spotter decode took (when it runs in main, without a worker). */
     onSpotterDecode?(ms: number): void;
+    /**
+     * Voice fix 1B: the audio worker that runs the wake words and the voice detector off the main
+     * process. Absent in tests and plain Node, where they run here as before.
+     */
+    worker?: AudioWorker;
+    /** Inference time of one wake frame in the worker. */
+    onWakeTiming?(ms: number): void;
+    /** A wake frame dropped because the worker fell behind. */
+    onWakeBacklog?(): void;
   } = {},
 ) {
+  const worker = hooks.worker;
+  const wakeHooks = {
+    ...(hooks.onWakeTiming ? { onTiming: hooks.onWakeTiming } : {}),
+    ...(hooks.onWakeBacklog ? { onBacklog: hooks.onWakeBacklog } : {}),
+  };
   let vad: Promise<Vad> | null = null;
   let whisper: { id: ModelId; model: Promise<Transcriber> } | null = null;
   let featureModels: Promise<OwwModels> | null = null;
@@ -133,13 +148,23 @@ export function createLocalEngines(
     return model;
   }
 
+  /** The Silero voice detector: in the audio worker when there is one. */
+  function openVad(): Promise<Vad & { release?(): void }> {
+    const path = join(store.dir('silero-vad'), 'silero_vad.onnx');
+    return worker ? worker.vad(path) : loadSileroVad(path);
+  }
+
   function voiceActivity(): Promise<Vad> {
     if (!store.installed('silero-vad')) return Promise.reject(notReady('voice detector'));
-    vad ??= remember(loadSileroVad(join(store.dir('silero-vad'), 'silero_vad.onnx')), () => {
+    vad ??= remember(openVad(), () => {
       vad = null;
     });
     return vad;
   }
+  // A crashed worker took the shared voice detector with it: open a fresh one next time.
+  worker?.onCrash(() => {
+    vad = null;
+  });
 
   const stt: SttProvider = createWhisperStt({ vad: voiceActivity, transcriber });
 
@@ -163,6 +188,14 @@ export function createLocalEngines(
       store.installed('silero-vad') && store.installed(settings.get('voice.stt.whisperModel')),
     async wake(sensitivity: number): Promise<WakeWord> {
       const threshold = thresholdFor(sensitivity);
+      if (worker) {
+        if (!store.installed('openwakeword-hey-jarvis'))
+          throw notReady('"Hey Jarvis" wake-word model');
+        return worker.wake(
+          { engine: 'openwakeword', dir: store.dir('openwakeword-hey-jarvis'), threshold },
+          wakeHooks,
+        );
+      }
       return createOpenWakeWord(await owwModels(), threshold, Date.now, (score) =>
         hooks.onNearMiss?.({ engine: 'hey-jarvis', score: round2(score), threshold }),
       );
@@ -176,6 +209,20 @@ export function createLocalEngines(
       templates: WakeTemplates,
       alsoHeyJarvis: boolean,
     ): Promise<WakeWord> {
+      if (worker) {
+        if (!store.installed('openwakeword-hey-jarvis'))
+          throw notReady('"Hey Jarvis" wake-word model');
+        return worker.wake(
+          {
+            engine: 'personal',
+            dir: store.dir('openwakeword-hey-jarvis'),
+            templates,
+            sensitivity,
+            ...(alsoHeyJarvis ? { classifierThreshold: thresholdFor(sensitivity) } : {}),
+          },
+          wakeHooks,
+        );
+      }
       return createPersonalWake(await owwModels(), templates, {
         sensitivity,
         ...(alsoHeyJarvis ? { classifierThreshold: thresholdFor(sensitivity) } : {}),
@@ -192,8 +239,20 @@ export function createLocalEngines(
      * spotting. Sir's calibrated level can only make it more eager for his voice.
      */
     async spotterWake(sensitivity: number, name: string, learned: string[]): Promise<WakeWord> {
-      const model = await spotter();
       const threshold = spotterThreshold(sensitivity, settings.get('voice.wake.spotterLevel'));
+      if (worker) {
+        if (!store.installed('kws-zipformer-en')) throw notReady('instant wake-word model');
+        return worker.wake(
+          {
+            engine: 'spotter',
+            dir: store.dir('kws-zipformer-en'),
+            phrases: wakePhrases(name, learned),
+            threshold,
+          },
+          wakeHooks,
+        );
+      }
+      const model = await spotter();
       const engine = await model.open(
         keywordsText(wakePhrases(name, learned), model.pieces, threshold),
       );
@@ -245,10 +304,10 @@ export function createLocalEngines(
     }): Promise<ContinuousTranscriber> {
       if (!store.installed('silero-vad')) throw notReady('Whisper model');
       const [ownVad] = await Promise.all([
-        loadSileroVad(join(store.dir('silero-vad'), 'silero_vad.onnx')),
+        openVad(),
         transcriber(), // warm it now so the first phrase isn't slow
       ]);
-      return createContinuousTranscriber({
+      const continuous = createContinuousTranscriber({
         vad: ownVad,
         // Looked up per phrase: switching the Whisper model disposes the old one, and holding on to
         // it made every later phrase fail with "Session already disposed".
@@ -260,6 +319,14 @@ export function createLocalEngines(
         endSilenceMs: () => settings.get('voice.endSilenceMs'),
         ...handlers,
       });
+      // Its own detector in the worker goes when always-listening stops.
+      return {
+        ...continuous,
+        close() {
+          continuous.close();
+          ownVad.release?.();
+        },
+      };
     },
     /** Loads Whisper in the background when it is selected, so the first command isn't slow. */
     preload(): void {
