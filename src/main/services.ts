@@ -81,7 +81,11 @@ import { createClaudeSessionTools } from './claude-sessions/tools';
 import { runBoss } from './forge/boss';
 import { createForge } from './forge/forge';
 import { createForgeTools } from './forge/tools';
+import { createToolRunner, type McpAccess } from './forge/tool-build';
+import { nodeRunsTools } from './forge/tool-runtime';
+import { poolWorkers } from './forge/workers';
 import { createGit, createNodeRunner, createWorkspace } from './forge/workspace';
+import { providerName } from './llm/pool/snapshot';
 import { systemNode } from './lib/process';
 import { createScreenTools } from './tools/everyday/screen';
 import { createWebPageTools } from './tools/everyday/web-page';
@@ -518,6 +522,8 @@ export function createServices(opts: ServiceOptions) {
   for (const tool of createGoalTools(planner)) registry.register(tool);
   // Forge (ADR-046, docs/Forge.md): Jarvis builds changes to itself in its own clone, then every check runs.
   const forgeDir = join(opts.userData, 'forge');
+  /** Filled in by mcp/mcp-system.ts once the connections manager exists. */
+  const forgeSlots: { mcp: McpAccess | null } = { mcp: null };
   const forge = createForge({
     workspace: async () => {
       const node = await systemNode();
@@ -533,6 +539,28 @@ export function createServices(opts: ServiceOptions) {
     budgetUsd: () => settings.get('forge.budgetUsd'),
     announce,
     runsDir: join(forgeDir, 'runs'),
+    // F3: self-built tools run in Node's permission sandbox and join as MCP connections.
+    tools: {
+      forgeDir,
+      runner: async (dir) => {
+        const node = await systemNode();
+        if (!node || !nodeRunsTools(node.version))
+          throw new Error(
+            `Self-built tools need Node.js 22.14+ (or 24+) on this PC; ${node ? `you have ${node.version}` : 'none was found'}.`,
+          );
+        return createToolRunner(node.exe, dir);
+      },
+      mcp: () => forgeSlots.mcp,
+    },
+    // F4: small edits go to free AIs (no-training providers first; the others only after Sir's yes).
+    workers: poolWorkers({
+      enabled: () => settings.get('pool.enabled') && settings.get('forge.freeWorkers'),
+      routes: () => pool.routes(),
+      session: (job) => pool.session(job),
+      record: (msg) => ledger.record(msg, 'task', null),
+      confirm: (input, signal) => broker.request(input, signal),
+      label: providerName,
+    }),
   });
   for (const tool of createForgeTools({
     forge,
@@ -820,6 +848,7 @@ export function createServices(opts: ServiceOptions) {
     orchestrator,
     laya,
     slots,
+    forgeSlots,
     terminal,
     browserTrail,
   };

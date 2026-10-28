@@ -116,11 +116,34 @@ export type CheckFn = (
   files: string[],
 ) => Promise<GateResult>;
 
-/** In-process MCP server with Forge's two tools for the boss. */
-function createForgeServer(check: CheckFn, changedFiles: () => Promise<string>): McpServer {
+/** Phase F4: hands a small edit to a free AI (forge/workers.ts). */
+export type DelegateFn = (raw: unknown) => Promise<{ ok: boolean; text: string }>;
+
+const DELEGATE_TOOL = {
+  name: 'delegate_edit',
+  description:
+    'Hand a small, exact edit of 1–3 files to a free AI, to save Claude usage. Write the task completely (what to change, signatures, behaviour, edge cases) and name the files (existing or new); add read-only context such as related types if needed. The free AI writes the files; you MUST then Read them, fix what is wrong and run the checks. If it says the free AIs did not do it, do the edit yourself.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      task: { type: 'string', maxLength: 6000 },
+      files: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 3 },
+      context: { type: 'string', maxLength: 4000 },
+    },
+    required: ['task', 'files'],
+  },
+};
+
+/** In-process MCP server with Forge's tools for the boss. */
+function createForgeServer(
+  check: CheckFn,
+  changedFiles: () => Promise<string>,
+  delegate?: DelegateFn,
+): McpServer {
   const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { capabilities: { tools: {} } });
   mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
     tools: [
+      ...(delegate ? [DELEGATE_TOOL] : []),
       {
         name: 'run_check',
         description:
@@ -145,6 +168,10 @@ function createForgeServer(check: CheckFn, changedFiles: () => Promise<string>):
     const args = req.params.arguments ?? {};
     if (req.params.name === 'changed_files')
       return { content: [{ type: 'text', text: (await changedFiles()) || 'No changes yet.' }] };
+    if (req.params.name === 'delegate_edit' && delegate) {
+      const r = await delegate(args);
+      return { content: [{ type: 'text', text: r.text }], ...(r.ok ? {} : { isError: true }) };
+    }
     const c = args['check'];
     if (req.params.name !== 'run_check' || (c !== 'typecheck' && c !== 'lint' && c !== 'test'))
       return { content: [{ type: 'text', text: 'Unknown tool or check.' }], isError: true };
@@ -160,14 +187,22 @@ function createForgeServer(check: CheckFn, changedFiles: () => Promise<string>):
   return mcp;
 }
 
-export function bossRules(approved: readonly string[], repoRules: string): string {
+/** Phase F4: how the boss should use the free workers. */
+export const DELEGATE_RULE = `
+- Save Claude usage: for each well-defined edit of 1–3 files (a new module from a clear spec, a test file, a mechanical change), try delegate_edit first and do it yourself only when it says the free AIs did not. Plan, review and fix yourself; always Read what a free AI wrote before relying on it.`;
+
+export function bossRules(
+  approved: readonly string[],
+  repoRules: string,
+  delegate = false,
+): string {
   return `
 
 # Jarvis Forge
 You are working for JARVIS on its own source code, in Forge's private copy of the repository (your working directory). Sir asked for one change; build it completely.
 
 Rules:
-- Work only in this repository. You have file tools and two Forge tools: run_check (typecheck, lint, tests) and changed_files. There is no shell.
+- Work only in this repository. You have file tools and Forge tools: run_check (typecheck, lint, tests), changed_files${delegate ? ' and delegate_edit' : ''}. There is no shell.${delegate ? DELEGATE_RULE : ''}
 - Test first: write or update the tests for the change, then the code. Before you finish, run_check typecheck, lint and test on the files you changed, and fix every failure.
 - Never delete, skip (.skip, .todo, .only, xit) or weaken a test to make it pass, and never change test, lint or type settings. Forge rejects such changes.
 - Protected files (Forge safety rules) cannot be changed${approved.length ? `, except the ones Sir approved for this run: ${approved.join(', ')}` : ''}. If the change truly needs another protected file, stop and say which one and why in your summary.
@@ -200,6 +235,7 @@ export async function runBoss(input: {
   signal: AbortSignal;
   check: CheckFn;
   changedFiles(): Promise<string>;
+  delegate?: DelegateFn;
   onProgress(text: string): void;
 }): Promise<BossResult> {
   const path = requirePath(input.rt);
@@ -211,7 +247,7 @@ export async function runBoss(input: {
   const server: McpServerConfig = {
     type: 'sdk',
     name: SERVER,
-    instance: createForgeServer(input.check, input.changedFiles),
+    instance: createForgeServer(input.check, input.changedFiles, input.delegate),
     timeout: CHECK_TIMEOUT_MS,
   };
   let text = '';

@@ -20,6 +20,12 @@ export function createMcpSystem(
     ...(opts.extraEnv ? { extraEnv: opts.extraEnv } : {}),
   });
   s.registry.addProvider(() => manager.tools());
+  // Forge F3: installing a self-built tool adds (or updates) its connection here.
+  s.forgeSlots.mcp = {
+    list: () => manager.list(),
+    add: (input) => manager.add(input),
+    update: (id, patch) => manager.update(id, patch),
+  };
   s.slots.providers = { ...s.slots.providers, integrations: () => manager.integrationsSummary() };
   return { repo, manager };
 }

@@ -138,6 +138,34 @@ describe('runBoss', () => {
     expect(r).toEqual({ ok: true, summary: 'Before/After/Why: added a.', costUsd: 0.42, turns: 7 });
   });
 
+  it('offers delegate_edit only when free workers are on, and passes its answer back', async () => {
+    let tools: string[] = [];
+    let answer = '';
+    const query = fakeClaudeCode(async function* (io) {
+      tools = await io.listTools();
+      const r = await io.callTool('delegate_edit', { task: 'x', files: ['src/a.ts'] }, 'u1');
+      answer = r.content[0]?.text ?? '';
+      yield result('success', { result: 'ok', total_cost_usd: 0, num_turns: 1 });
+    });
+    await runBoss({
+      rt: rtWith(query),
+      repoDir: REPO,
+      brief: 'Add a',
+      rules: '',
+      approved: [],
+      budgetUsd: 3,
+      signal: new AbortController().signal,
+      check: () => Promise.reject(new Error('unused')),
+      changedFiles: () => Promise.resolve(''),
+      delegate: (raw) => Promise.resolve({ ok: true, text: `wrote ${JSON.stringify(raw)}` }),
+      onProgress: () => undefined,
+    });
+    expect(tools).toEqual(['delegate_edit', 'run_check', 'changed_files']);
+    expect(answer).toContain('src/a.ts');
+    expect(bossRules([], '', true)).toContain('try delegate_edit first');
+    expect(bossRules([], '', false)).not.toContain('delegate_edit');
+  });
+
   it('reports why it stopped when the budget or turn limit ends the run', async () => {
     const query = fakeClaudeCode(async function* () {
       yield text('m1', 'Half done.');

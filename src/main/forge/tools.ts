@@ -3,6 +3,7 @@ import { FORGE_REPO_RE } from '@shared/forge';
 import { defineTool, fail, ok, type Tool } from '../tools/types';
 import { describeRun, type Forge } from './forge';
 import { isProtected } from './protected';
+import { connectionName, TOOL_NAME_RE } from './tool-build';
 
 /**
  * Forge tools (docs/Forge.md): Sir asks for a change to Jarvis itself, Claude agrees the goal with
@@ -64,11 +65,75 @@ export function createForgeTools(deps: {
             `Not protected files, leave them out of allowProtected: ${notProtected.join(', ')}`,
           );
         try {
-          const r = deps.forge.start(goal, allowProtected);
+          const r = deps.forge.start({ kind: 'change', goal, approved: allowProtected });
           return Promise.resolve(
             ok(
               `Forge started (run ${r.id}). I'll tell sir when it finishes; forge_status shows progress.`,
             ),
+          );
+        } catch (err) {
+          return fail(err instanceof Error ? err.message : String(err));
+        }
+      },
+    }),
+    defineTool({
+      name: 'forge_build_tool',
+      description:
+        "Build a new ability for Jarvis as a self-built tool, with no reinstall (Forge phase F3): Claude Code writes a small sandboxed Node.js tool (it can use the internet, read only its own folder and write only its data folder; no programs, no npm packages), tests it, and checks it loads. Prefer this over forge_start when the ability needs no change to Jarvis's own screens or core: fetching or converting data, calling a public API, calculations. Agree the goal with sir first and write it completely. Same name again updates that tool. Installing needs forge_install_tool after it passes.",
+      input: z.object({
+        name: z
+          .string()
+          .trim()
+          .regex(TOOL_NAME_RE, 'lowercase letters, digits and -, 2–24 characters'),
+        goal: z.string().trim().min(20).max(6000),
+      }),
+      tier: 'CONFIRM',
+      timeoutMs: 10_000,
+      summarize: ({ name }) => `Forge: build the tool "${name}"`,
+      confirm: ({ name, goal }) => ({
+        title: 'Let Jarvis build a new tool?',
+        actionLabel: 'Build it',
+        details: `Tool: ${name}\nBudget: up to $${deps.budgetUsd()} of Claude (estimate)\n\nGoal:\n${goal}`,
+        detailsKind: 'text',
+        purpose:
+          'Claude Code writes the tool in its own folder and Forge tests it in a sandbox. Nothing is added to Jarvis until you install it.',
+      }),
+      async run({ name, goal }) {
+        try {
+          const r = deps.forge.start({ kind: 'tool', goal, name });
+          return Promise.resolve(
+            ok(
+              `Forge is building the tool "${name}" (run ${r.id}). I'll tell sir when it is checked; then forge_install_tool adds it.`,
+            ),
+          );
+        } catch (err) {
+          return fail(err instanceof Error ? err.message : String(err));
+        }
+      },
+    }),
+    defineTool({
+      name: 'forge_install_tool',
+      description:
+        'Install the tool Forge just built and checked, as a connection (Settings → Connections can switch it off or remove it). Every use asks sir first unless he changes that there. Only after forge_status shows the tool run PASSED and sir wants it.',
+      input: z.object({}),
+      tier: 'CONFIRM',
+      timeoutMs: 90_000,
+      summarize: () => `Install the tool "${deps.forge.status()?.tool?.name ?? ''}"`,
+      confirm: () => {
+        const t = deps.forge.status()?.tool;
+        return {
+          title: `Install the tool "${t?.name ?? ''}"?`,
+          actionLabel: 'Install',
+          details: `${(t?.tools ?? []).map((x) => `- ${x.name}: ${x.description}`).join('\n')}\n\nRuns with Node's permission sandbox: it can use the internet, read only its own folder (%APPDATA%\\Jarvis\\forge\\tools\\${t?.name ?? ''}) and write only its data folder. It cannot start programs. Jarvis asks you before each use.`,
+          detailsKind: 'text',
+        };
+      },
+      async run() {
+        try {
+          const how = await deps.forge.installTool();
+          const t = deps.forge.status()?.tool;
+          return ok(
+            `The tool "${t?.name ?? ''}" is ${how === 'added' ? 'installed' : 'updated'}: ${(t?.tools ?? []).map((x) => x.name).join(', ')}. It appears as the connection "${connectionName(t?.name ?? '')}" in Settings → Connections.`,
           );
         } catch (err) {
           return fail(err instanceof Error ? err.message : String(err));

@@ -86,7 +86,11 @@ async function settle(forge: ReturnType<typeof createForge>): Promise<void> {
 describe('Forge runs', () => {
   it('prepares, installs, builds, commits and passes every gate, then tells Sir', async () => {
     const { forge, calls, announce, bossInputs, runsDir } = setup({});
-    forge.start('Add a weather tool that reads the public API', []);
+    forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
     await settle(forge);
     const r = forge.status();
     expect(r?.state).toBe('passed');
@@ -111,7 +115,7 @@ describe('Forge runs', () => {
     const { forge, calls, announce } = setup({
       files: [{ status: 'M', path: 'src/main/security/guards.ts' }],
     });
-    forge.start('Change the guards somehow, please', []);
+    forge.start({ kind: 'change', goal: 'Change the guards somehow, please', approved: [] });
     await settle(forge);
     expect(forge.status()?.state).toBe('failed');
     expect(forge.status()?.error).toBe('the review check failed');
@@ -121,7 +125,11 @@ describe('Forge runs', () => {
 
   it('a failing gate fails the run and names it', async () => {
     const { forge } = setup({ failGate: 'test:e2e' });
-    forge.start('Add a weather tool that reads the public API', []);
+    forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
     await settle(forge);
     expect(forge.status()).toMatchObject({ state: 'failed', error: 'the e2e check failed' });
     expect(describeRun(forge.status()!, Date.now())).toContain('FAIL e2e');
@@ -137,7 +145,11 @@ describe('Forge runs', () => {
           turns: 40,
         }),
     });
-    forge.start('Add a weather tool that reads the public API', []);
+    forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
     await settle(forge);
     expect(forge.status()?.state).toBe('failed');
     expect(forge.status()?.error).toContain('budget');
@@ -147,7 +159,11 @@ describe('Forge runs', () => {
 
   it('no change at all is a failure, not a pass', async () => {
     const { forge } = setup({ committed: false });
-    forge.start('Add a weather tool that reads the public API', []);
+    forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
     await settle(forge);
     expect(forge.status()?.error).toContain('without changing any file');
   });
@@ -161,8 +177,14 @@ describe('Forge runs', () => {
           input.signal.addEventListener('abort', () => release());
         }),
     });
-    forge.start('Add a weather tool that reads the public API', []);
-    expect(() => forge.start('Another change entirely for Jarvis', [])).toThrow(/already working/);
+    forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
+    expect(() =>
+      forge.start({ kind: 'change', goal: 'Another change entirely for Jarvis', approved: [] }),
+    ).toThrow(/already working/);
     await vi.waitFor(() => expect(forge.status()?.state).toBe('building'));
     expect(forge.cancel()).toBe(true);
     await settle(forge);
@@ -171,11 +193,30 @@ describe('Forge runs', () => {
     expect(announce).toHaveBeenCalledWith('Forge', expect.stringContaining('cancelled'));
   });
 
+  it('a tool run needs the tool builder; the status counts free-AI edits', () => {
+    const { forge } = setup({});
+    expect(() =>
+      forge.start({ kind: 'tool', goal: 'A tool that adds two numbers', name: 'calc' }),
+    ).toThrow(/not available/);
+    const r = forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
+    expect(describeRun({ ...r, workers: { free: 3, boss: 1 } }, Date.now())).toContain(
+      'Free AIs did 3 of 4 handed-off edits',
+    );
+  });
+
   it('refuses to start before the repository is set', () => {
     const { forge } = setup({ repoUrl: '' });
-    expect(() => forge.start('Add a weather tool that reads the public API', [])).toThrow(
-      /not set up/,
-    );
+    expect(() =>
+      forge.start({
+        kind: 'change',
+        goal: 'Add a weather tool that reads the public API',
+        approved: [],
+      }),
+    ).toThrow(/not set up/);
   });
 
   it('branch names are readable and safe', () => {

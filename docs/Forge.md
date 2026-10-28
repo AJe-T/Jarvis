@@ -1,6 +1,6 @@
 # Forge — Jarvis improves itself
 
-> Status: **F0 decided, F1 + F2 built (v2.36.0, ADR-046, Security.md §17).** Next: F3.
+> Status: **F0 decided; F1 + F2 built (v2.36.0); F3 + F4 built (v2.37.0). ADR-046, Security.md §17.** Next: F5.
 > `docs/Security.md` wins every conflict with this doc.
 
 Sir gives Jarvis a GitHub repo, an app or website to study, or a plain description. Jarvis builds that
@@ -31,7 +31,7 @@ for cheap triage (e.g. "does this request need core changes?"), with Claude deci
 | Level | Output | Reinstall? | Touches core? |
 |---|---|---|---|
 | **L1 Skill** | Instructions from a repo or description | No | No (exists today) |
-| **L2 Self-built tool** | A small MCP server Jarvis writes in `%APPDATA%\Jarvis\forge\tools\<name>\`, tested, then registered | No; on/off/remove in one click | No |
+| **L2 Self-built tool** | One `tool.mjs` (Node built-ins and `fetch` only) run by Forge's own small MCP runtime in Node's permission sandbox, in `%APPDATA%\Jarvis\forge\tools\<name>\`; tested, then registered as the connection `forge-<name>` | No; on/off/remove in Settings → Connections | No |
 | **L3 Self-modify** | A branch of Jarvis's own source, all gates green, Sir-approved, built to an installer | Yes | Yes, behind protected-path rules |
 
 The boss always tries the lowest level that delivers the ability. L3 is only for UI, IPC, settings or core changes.
@@ -110,8 +110,8 @@ Each phase ends with tests green, BIBLE.md updated, a version bump and an instal
 | **F0 Design** ✅ | Lock decisions | §7 answered 2026-10-28; ADR-046; Security §17 | Done |
 | **F1 Headless boss** ✅ 2.36 | Claude Code runs a brief in Forge's clone without a window and reports back | `forge/boss.ts` (Agent SDK, file tools only, `run_check`/`changed_files` MCP tools, permission gate), `forge/workspace.ts` (clone, branch, `npm ci` every run, commit, clean, diff; no git hooks, `.git/config` restored each run), `forge/forge.ts` (one run at a time, budget, cancel, announce), tools `forge_setup`/`forge_start`/`forge_status`/`forge_cancel`. Progress through `forge_status` and notifications; a Forge panel comes in F7 | Unit + real-git integration tests green; first real run is Sir's |
 | **F2 Gates + protected paths** ✅ 2.36 | Nothing ships unless green | `forge/gates.ts`: review → typecheck → lint → related tests → full unit → build → e2e → secret scan, stop at first failure; `forge/protected.ts`: protected files, deleted/renamed tests, `.skip/.only/.todo/xit`, fewer assertions (warning) | Planted bad diffs (protected file, skipped test, deleted test) are rejected in tests |
-| **F3 L2 self-built tools** | New abilities with no reinstall | Tool template (MCP server + Zod + tests); sandbox folder; register/disable/remove UI; boss picks L2 when it fits | "Make a tool that fetches X's public API" works end to end, then is removed cleanly |
-| **F4 Free workers** | Cheap typing | `forge-plan.json` task format; worker tools scoped to the worktree (read/write allowed files only); escalation ladder; Analytics "Forge saved" | ≥60% of tasks in a sample run finish on free models, all gates still green |
+| **F3 L2 self-built tools** ✅ 2.37 | New abilities with no reinstall | `forge/tool-runtime.ts` (stdlib MCP runtime, the guard for what Node 24's permission model can't limit: built-in allow-list via module hooks, public-https-only fetch, no WebSocket or internals; sandbox flags; rules), `forge/tool-build.ts` (build folder, file review, import allow-list, syntax, tests and load check in the sandbox, install as an MCP connection), tools `forge_build_tool` / `forge_install_tool`; on/off/remove through the existing Connections page | Real-Node integration test: a tool builds, passes, installs, answers over MCP, cannot read a file outside its folder, and every escape (sockets, local addresses, plain http, child_process, Node internals) is blocked at runtime; a `child_process` import, a test reading outside, and a missing test fail |
+| **F4 Free workers** ✅ 2.37 | Cheap typing | `forge/workers.ts`: the boss's `delegate_edit` (1–3 files, complete new contents as JSON, one retry with the reason), no-training free providers first (`FREE_TIER_TRAINING` in `src/shared/forge.ts`), a pop-up before the others (once per run), then the boss; tier 2 only; secret check; paths through the boss's permission gate; `forge.freeWorkers` switch; counts in `forge_status`. A separate task-plan file and an Analytics card were left out: the boss plans in its own session, and pool calls already show in Analytics | Unit tests for the ladder, consent, path and secret checks; the share done free is measured on Sir's first real runs |
 | **F5 Ship + rollback** | Installer, merge and undo | After Sir approves: version bump, `dist`, merge `forge/<slug>` into `dev`, tag, push to GitHub (automatic, Sir's decision); Sir's own copy catches up with `git pull`. DB/settings backup; "Roll back" flow | Install a Forge build, roll back, previous version starts with Sir's data intact |
 | **F6 Study mode** | "Build it like that app" | REA + repo study → behaviour notes; no-copy check; skills/connections allow-list for runs | A feature studied from a sample app is rebuilt in our own code |
 | **F7 Polish** | Daily use | Voice: "Jarvis, learn to …"; Forge history page; per-run cost; evals for plan quality | Sir uses it for a real feature |

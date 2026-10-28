@@ -7,7 +7,12 @@ const ctx = {} as never;
 
 function setup(start: Forge['start'] = vi.fn()) {
   let url = '';
-  const forge: Forge = { start, status: vi.fn(() => null), cancel: vi.fn(() => false) };
+  const forge: Forge = {
+    start,
+    status: vi.fn(() => null),
+    cancel: vi.fn(() => false),
+    installTool: vi.fn(() => Promise.resolve('added' as const)),
+  };
   const tools = createForgeTools({
     forge,
     repoUrl: () => url,
@@ -48,9 +53,11 @@ describe('Forge tools', () => {
     expect(t.confirm?.(input).details).toContain('PROTECTED FILES YOU ALLOW IT TO CHANGE');
     const out = await t.run(input, ctx);
     expect(out.isError).toBeUndefined();
-    expect(start).toHaveBeenCalledWith('Let the guards allow one more folder', [
-      'src/main/security/guards.ts',
-    ]);
+    expect(start).toHaveBeenCalledWith({
+      kind: 'change',
+      goal: 'Let the guards allow one more folder',
+      approved: ['src/main/security/guards.ts'],
+    });
   });
 
   it('forge_start refuses unprotected paths in allowProtected and reports start errors', async () => {
