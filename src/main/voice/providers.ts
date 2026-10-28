@@ -10,6 +10,7 @@ import { newId } from '../lib/util';
 import { runPowerShell } from '../tools/powershell';
 import { createOverrunMeter } from './diagnostics';
 import { escapeSsml } from './speech/speech';
+import { deepgramEvents } from './stt/deepgram-events';
 import type { Recorder, SttProvider, SttSession, TtsChunk, TtsProvider, WakeWord } from './types';
 
 // ── Speech to text: Deepgram live (API-Guide.md §9.2, verified against @deepgram/sdk 5.14.0) ─────────
@@ -49,24 +50,10 @@ export function createDeepgramStt(getKey: () => string | undefined): SttProvider
       const fire = (event: string, ...args: unknown[]): void => {
         for (const h of handlers.get(event) ?? []) (h as (...a: unknown[]) => void)(...args);
       };
-      let finalParts: string[] = [];
-      socket.on('message', (msg) => {
-        if (msg.type === 'Results') {
-          const text = msg.channel.alternatives[0]?.transcript ?? '';
-          if (msg.is_final) {
-            if (text) finalParts.push(text);
-            if (msg.speech_final && finalParts.length) {
-              fire('final', finalParts.join(' '));
-              finalParts = [];
-            } else fire('partial', [...finalParts].join(' '));
-          } else if (text) fire('partial', [...finalParts, text].join(' '));
-        } else if (msg.type === 'UtteranceEnd') {
-          if (finalParts.length) fire('final', finalParts.join(' '));
-          finalParts = [];
-          fire('utteranceEnd');
-        } else if (msg.type === 'SpeechStarted') fire('speechStarted');
-      });
-      socket.on('error', (err) => fire('error', err));
+      const events = deepgramEvents(fire);
+      socket.on('message', (msg) => events.message(msg));
+      socket.on('error', (err) => events.error(err));
+      socket.on('close', (e) => events.close(e.code));
       socket.connect();
       await socket.waitForOpen();
       const session: SttSession = {
@@ -76,6 +63,7 @@ export function createDeepgramStt(getKey: () => string | undefined): SttProvider
           handlers.set(event, [...(handlers.get(event) ?? []), cb]);
         },
         async close() {
+          events.ending();
           try {
             socket.sendCloseStream({ type: 'CloseStream' });
           } catch {
