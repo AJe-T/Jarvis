@@ -54,6 +54,9 @@ export interface MicHooks {
 export interface CaptureDevice {
   label: string;
   id: string;
+  /** Chromium's clean-up besides echo cancellation (voice fix 1C; both off unless Sir turns them on). */
+  noiseSuppression?: boolean;
+  autoGainControl?: boolean;
 }
 
 export function isCaptureUrl(raw: string): boolean {
@@ -220,6 +223,8 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
             deviceLabel: device.label,
             deviceId: device.id,
             frameLength,
+            noiseSuppression: device.noiseSuppression ?? false,
+            autoGainControl: device.autoGainControl ?? false,
           });
         },
         onStop: () => {

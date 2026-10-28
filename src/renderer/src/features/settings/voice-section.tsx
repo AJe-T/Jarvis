@@ -107,6 +107,18 @@ export function VoiceSection(): React.JSX.Element {
             label={`Echo cancellation: the microphone ignores ${name}'s own voice, so saying the name interrupts mid-reply even without headphones`}
           />
           <SettingSwitch
+            k="voice.capture.noiseSuppression"
+            label="Noise suppression (with echo cancellation): quieter background, but it can clip the start and end of words, which makes the wake word and speech recognition miss. Turn on only in a noisy room"
+          />
+          <SettingSwitch
+            k="voice.capture.autoGain"
+            label="Automatic microphone volume (with echo cancellation): helps a very quiet microphone, but the level keeps changing, which confuses the wake word. Prefer raising the microphone level in Windows"
+          />
+          <p className="max-w-xl text-sm text-ink-300">
+            Changed echo cancellation or these two? Record your voice again in Your voice below, so
+            the wake word is calibrated for how the microphone sounds now.
+          </p>
+          <SettingSwitch
             k="voice.bargeIn"
             label={`Without echo cancellation, saying the name still interrupts ${name} mid-reply (use headphones, or the speakers can wake it; the hotkey always interrupts)`}
           />

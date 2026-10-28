@@ -347,6 +347,13 @@ export const SETTINGS = {
    * chooses another microphone.
    */
   'voice.captureDeviceId': { schema: z.string().max(300), default: '' },
+  /**
+   * Voice fix 1C: Chromium's noise suppression and automatic gain on the echo-cancelled mic. Off by
+   * default: the wake-word and speech models were trained on plain audio, and gain "pumping" or
+   * suppressed word endings make them miss. On helps a noisy room or a very quiet microphone.
+   */
+  'voice.capture.noiseSuppression': { schema: z.boolean(), default: false },
+  'voice.capture.autoGain': { schema: z.boolean(), default: false },
   /** Priler/jarvis-style instant commands: routine trigger phrases, time and date answered offline. */
   'voice.quickCommands': { schema: z.boolean(), default: true },
   'voice.sounds': { schema: z.boolean(), default: true },

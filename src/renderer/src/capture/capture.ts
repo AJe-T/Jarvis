@@ -1,3 +1,5 @@
+import micWorkletUrl from './mic-worklet?worker&url';
+
 // Capture window (Security.md §7, main/windows/capture-window.ts): a hidden window with its own
 // session, the only place allowed to open the microphone or camera.
 // - Microphone: Chromium's echo cancellation removes Jarvis's own voice from what the mic hears, so
@@ -13,19 +15,30 @@ interface CaptureApi {
 }
 
 type Command =
-  | { type: 'mic-start'; deviceLabel: string; deviceId: string; frameLength: number }
+  | {
+      type: 'mic-start';
+      deviceLabel: string;
+      deviceId: string;
+      frameLength: number;
+      /** Voice fix 1C: Chromium's own clean-up, chosen in Settings (both off by default). */
+      noiseSuppression?: boolean;
+      autoGainControl?: boolean;
+    }
   | { type: 'mic-stop' }
   | { type: 'snap'; id: string; deviceLabel: string };
 
 const api = (window as unknown as { capture: CaptureApi }).capture;
 
 const SAMPLE_RATE = 16_000;
-/** ScriptProcessor block size (a power of two); frames are re-cut to the length main asks for. */
-const BLOCK = 512;
 /** The camera needs a moment to settle its exposure before the still. */
 const CAMERA_SETTLE_MS = 700;
 
 let mic: { ctx: AudioContext; stream: MediaStream } | null = null;
+
+interface Processing {
+  noiseSuppression: boolean;
+  autoGainControl: boolean;
+}
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
@@ -62,7 +75,12 @@ async function pickMic(
 /** Bumped by every start and stop, so a start that finishes after a newer command gives up. */
 let generation = 0;
 
-async function micStart(deviceLabel: string, savedId: string, frameLength: number): Promise<void> {
+async function micStart(
+  deviceLabel: string,
+  savedId: string,
+  frameLength: number,
+  processing: Processing,
+): Promise<void> {
   micStop();
   const mine = ++generation;
   const picked = await pickMic(deviceLabel, savedId);
@@ -70,39 +88,39 @@ async function micStart(deviceLabel: string, savedId: string, frameLength: numbe
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       ...(id ? { deviceId: { exact: id } } : {}),
+      // Echo cancellation is why this window exists; the rest is Sir's choice (voice fix 1C): the
+      // wake-word and speech models were trained on plain audio, which suppression and gain reshape.
       echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
+      noiseSuppression: processing.noiseSuppression,
+      autoGainControl: processing.autoGainControl,
       channelCount: 1,
     },
   });
-  if (mine !== generation) {
+  const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+  const stale = (): boolean => {
+    if (mine === generation) return false;
     // Stopped (or restarted) while the microphone was opening: close this one.
     for (const t of stream.getTracks()) t.stop();
-    return;
-  }
-  const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    void ctx.close();
+    return true;
+  };
+  if (stale()) return;
   // A hidden window may start suspended; frames only flow once it runs.
   await ctx.resume();
+  // Voice fix 1C: an AudioWorklet (the audio thread) replaces the deprecated ScriptProcessorNode.
+  await ctx.audioWorklet.addModule(micWorkletUrl);
+  if (stale()) return;
   const source = ctx.createMediaStreamSource(stream);
-  // ponytail: ScriptProcessorNode is deprecated but simple and fine at 16 kHz; an AudioWorklet if it ever goes.
-  const node = ctx.createScriptProcessor(BLOCK, 1, 1);
-  let pending = new Int16Array(0);
-  node.onaudioprocess = (e) => {
-    const input = e.inputBuffer.getChannelData(0);
-    const next = new Int16Array(pending.length + input.length);
-    next.set(pending);
-    for (let i = 0; i < input.length; i++) {
-      const s = Math.max(-1, Math.min(1, input[i] ?? 0));
-      next[pending.length + i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-    }
-    let at = 0;
-    for (; at + frameLength <= next.length; at += frameLength)
-      api.frames(new Uint8Array(next.slice(at, at + frameLength).buffer));
-    pending = next.slice(at);
-  };
+  const node = new AudioWorkletNode(ctx, 'mic-frames', {
+    numberOfInputs: 1,
+    numberOfOutputs: 1,
+    channelCount: 1,
+    channelCountMode: 'explicit',
+    processorOptions: { frameLength },
+  });
+  node.port.onmessage = (e: MessageEvent<ArrayBuffer>) => api.frames(new Uint8Array(e.data));
   source.connect(node);
-  // The node only runs while connected to an output; it writes silence.
+  // Connected to the output so the graph keeps pulling it; it writes nothing, so it plays silence.
   node.connect(ctx.destination);
   mic = { ctx, stream };
   // Unplugged or turned off in Windows: say so, so main falls back and retries (voice fix 1A).
@@ -182,7 +200,10 @@ async function snap(id: string, deviceLabel: string): Promise<void> {
 api.onCommand((raw) => {
   const cmd = raw as Command;
   if (cmd.type === 'mic-start')
-    micStart(cmd.deviceLabel, cmd.deviceId ?? '', cmd.frameLength).catch((e: unknown) => {
+    micStart(cmd.deviceLabel, cmd.deviceId ?? '', cmd.frameLength, {
+      noiseSuppression: cmd.noiseSuppression ?? false,
+      autoGainControl: cmd.autoGainControl ?? false,
+    }).catch((e: unknown) => {
       micStop();
       api.micState('failed', message(e));
     });

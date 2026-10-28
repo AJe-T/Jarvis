@@ -17,7 +17,7 @@ import {
 /** The capture window's echo-cancelled microphone (windows/capture-window.ts). */
 export interface MicCapture {
   recorder(
-    device: { label: string; id: string },
+    device: { label: string; id: string; noiseSuppression?: boolean; autoGainControl?: boolean },
     frameLength: number,
     hooks?: {
       onDrop?(reason: 'queue' | 'length'): void;
@@ -264,6 +264,8 @@ export function realFactories(
               {
                 label: listAudioDevices()[deviceIndex] ?? '',
                 id: s.settings.get('voice.captureDeviceId'),
+                noiseSuppression: s.settings.get('voice.capture.noiseSuppression'),
+                autoGainControl: s.settings.get('voice.capture.autoGain'),
               },
               frameLength,
               {
@@ -615,6 +617,18 @@ export function createVoiceSystem(
       s.settings.set('voice.captureDeviceId', '');
     // Echo cancellation switched (back) on: give the capture window a fresh start.
     if (key === 'voice.echoCancel') mic.retry();
+    // Voice fix 1C: the wake word was calibrated on the microphone as it sounded then.
+    if (
+      (key === 'voice.echoCancel' ||
+        key === 'voice.capture.noiseSuppression' ||
+        key === 'voice.capture.autoGain') &&
+      (s.settings.get('voice.wake.spotterLevel') > 0 || s.secrets.get(WAKE_TEMPLATES_SECRET))
+    )
+      s.emit('notify', {
+        level: 'info',
+        message: `The microphone sounds different now. Record your voice again (Settings → Voice → Your voice) so “Hey ${s.settings.get('assistant.name')}” stays calibrated for it.`,
+        action: 'settings:voice',
+      });
     // Spellings learned for the old name would wake Jarvis on the wrong word.
     if (key === 'assistant.name' && s.settings.get('voice.wake.learned').length)
       s.settings.set('voice.wake.learned', []);
@@ -644,6 +658,8 @@ export function createVoiceSystem(
       key === 'voice.deviceIndex' ||
       key === 'voice.echoCancel' ||
       key === 'voice.debugAudio' || // closes open recordings, restarts the mic with debug output
+      key === 'voice.capture.noiseSuppression' ||
+      key === 'voice.capture.autoGain' ||
       key === 'assistant.name'
     )
       // A wake word that can't start must say so (it used to fail silently and simply never hear Sir).
