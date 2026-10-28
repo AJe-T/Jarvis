@@ -109,6 +109,38 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     expect(t.states()).toContain('SPEAKING');
   });
 
+  it('the mic loop keeps reading while the wake engine is still thinking (voice fix 1B)', async () => {
+    const t = setupServices({ rules: [] });
+    t.services.settings.set('voice.mode', 'wake');
+    t.services.settings.set('voice.wake.provider', 'openwakeword');
+    t.services.settings.set('voice.greet', false); // stock lines are cached globally; leave them be
+    const rec = createFakeRecorder(512);
+    let asked = 0;
+    const slowWake = {
+      frameLength: 512,
+      // An engine (worker) that never answers: the old loop waited on the first frame forever.
+      process: () => {
+        asked++;
+        return new Promise<boolean>(() => undefined);
+      },
+      reset: () => undefined,
+      release: () => undefined,
+    };
+    const v = createVoiceSystem(t.services, {
+      factories: {
+        recorder: () => rec,
+        wake: () => slowWake,
+        stt: createFakeStt([]),
+        edge: createFakeTts('edge'),
+        sapi: createFakeTts('sapi'),
+      },
+    });
+    expect(await v.start()).toEqual({ ok: true });
+    await until(() => rec.reads >= 5);
+    expect(asked).toBeGreaterThanOrEqual(5);
+    v.voice.shutdown();
+  });
+
   it('clears the wake engine when listening ends, so the phrase that woke it cannot fire again', async () => {
     const t = setupVoice({ rules: [] }, ['hello'], { mode: 'wake' });
     expect(await t.v.start()).toEqual({ ok: true });

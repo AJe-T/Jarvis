@@ -116,15 +116,19 @@ export function chunkedWake(
 
   return {
     frameLength: OWW_CHUNK,
+    // Frames may arrive before the last one finished (the mic loop doesn't wait): one at a time.
     process(frame) {
       if (released) return Promise.resolve(false);
-      const run = processFrame(frame);
+      const run = inflight.then(() => processFrame(frame));
       inflight = run.catch(() => undefined);
       return run;
     },
     reset: () => {
-      pending = new Int16Array(0);
-      onReset();
+      // After the frames already queued, so a reset never lands in the middle of one.
+      inflight = inflight.then(() => {
+        pending = new Int16Array(0);
+        onReset();
+      });
     },
     release: () => {
       released = true;

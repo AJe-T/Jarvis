@@ -104,6 +104,8 @@ const SAMPLE_END_SILENCE_MS = 700;
 /** Frame loudness that counts as speech while enrolling. */
 const SAMPLE_SPEECH_RMS = 0.02;
 const MAX_EARLY_FRAMES = 250; // 8 s at 512 samples per frame, 20 s at 1280
+/** A wake engine that fails again within this long of being reopened stays off (Sir is told). */
+const WAKE_REOPEN_MS = 30_000;
 /** Dictation lets Sir pause to think mid-sentence. */
 const DICTATION_PAUSE_MS = 1500;
 const DICTATION_MAX_MS = 120_000;
@@ -203,6 +205,8 @@ export function createVoiceController(d: VoiceDeps) {
   let wakeTap: AudioTap | null = null;
   let ambientTap: AudioTap | null = null;
   const wakeTiming = d.diag?.timer('wake.process');
+  /** When a failed wake engine was last reopened. */
+  let wakeReopenedAt = 0;
   const wakeLine = createLinePicker(WAKE_LINES);
   const workingLine = createLinePicker(WORKING_LINES);
   /** The "Yes, sir?" playing before listening starts (no echo cancellation). */
@@ -455,6 +459,59 @@ export function createVoiceController(d: VoiceDeps) {
   }
 
   /**
+   * Voice fix 1B: hands one frame to the wake engine without waiting for it, so the mic loop goes
+   * straight back to reading. Engines in the audio worker answer later, in order; an answer of
+   * "heard" wakes Jarvis if that engine and microphone are still current and he isn't listening yet.
+   */
+  function feedWake(w: WakeWord, frame: Int16Array, rec: Recorder): void {
+    const started = performance.now();
+    let result: boolean | Promise<boolean>;
+    try {
+      result = w.process(frame);
+    } catch (err) {
+      return wakeFailed(w, err);
+    }
+    if (typeof result === 'boolean') {
+      wakeTiming?.(performance.now() - started);
+      if (result) woke(w, rec);
+      return;
+    }
+    result.then(
+      (heard) => {
+        if (heard) woke(w, rec);
+      },
+      (err: unknown) => wakeFailed(w, err),
+    );
+  }
+
+  function woke(w: WakeWord, rec: Recorder): void {
+    if (wake !== w || recorder !== rec || listening || sample) return;
+    // One recording per wake: it ends with the phrase that fired.
+    wakeTap?.close();
+    wakeTap = null;
+    onWake();
+  }
+
+  /** The wake engine failed (its worker crashed): reopen it, but not in a tight loop. */
+  function wakeFailed(w: WakeWord, err: unknown): void {
+    if (wake !== w) return; // a replaced engine may fail on its way out; ignore that
+    log.warn({ err: errorMessage(err) }, 'wake word engine failed');
+    wake = null;
+    w.release();
+    if (Date.now() - wakeReopenedAt < WAKE_REOPEN_MS) {
+      d.emit('notify', {
+        level: 'error',
+        message:
+          'The wake word stopped working. Press to talk still works; change any voice setting or restart to try again.',
+        action: 'settings:voice',
+      });
+      return;
+    }
+    wakeReopenedAt = Date.now();
+    void controller.applyMode();
+  }
+
+  /**
    * One loop per recorder. applyMode replaces the recorder (and the wake engine) while a read or a
    * wake-word inference may still be pending; that loop must then end quietly instead of reporting a
    * broken microphone and releasing the new recorder (the bug that silently disabled the wake word).
@@ -483,23 +540,9 @@ export function createVoiceController(d: VoiceDeps) {
           ambientTap?.write(frame);
           ambient.write(frame);
         } else if (wake && mode() === 'wake' && !sleeping) {
-          const w = wake;
           wakeTap ??= d.diag?.tap('wake') ?? null;
           wakeTap?.write(frame);
-          let heard = false;
-          const started = performance.now();
-          try {
-            heard = await w.process(frame);
-          } catch (err) {
-            if (wake === w) throw err; // a replaced engine may fail on its way out; ignore that
-          }
-          wakeTiming?.(performance.now() - started);
-          if (heard && wake === w && recorder === rec) {
-            // One recording per wake: it ends with the phrase that fired.
-            wakeTap?.close();
-            wakeTap = null;
-            onWake();
-          }
+          feedWake(wake, frame, rec);
         }
       }
     } catch (err) {
@@ -982,7 +1025,7 @@ export function createVoiceController(d: VoiceDeps) {
     afterSpeech(u, () => void startListening(true));
   }
 
-  return {
+  const controller = {
     onConfirmShown,
     say,
     notice,
@@ -1180,6 +1223,7 @@ export function createVoiceController(d: VoiceDeps) {
 
     isListening: () => listening !== null,
   };
+  return controller;
 }
 
 export type VoiceController = ReturnType<typeof createVoiceController>;
