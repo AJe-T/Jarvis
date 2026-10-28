@@ -79,7 +79,7 @@
     "fuse.js": "7.5.0",
     "laya-ts": "file:vendor/laya-ts-0.1.0-3cf26cb.tgz",
     "lucide-react": "1.52.0",
-    "msedge-tts": "2.0.9",
+    "msedge-tts": "2.1.1",
     "nanoid": "6.0.2",
     "onnxruntime-node": "1.30.0",
     "pino": "10.4.0",
