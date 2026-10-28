@@ -7,6 +7,7 @@ import { baseOptions, requirePath, type ClaudeCodeRuntime } from '../llm/claude-
 import { forgeEnv } from './env';
 import { describeReport, type GateResult } from './gates';
 import { isProtected, normalizePath, PROTECTED_PATHS } from './protected';
+import type { ReaPolicy } from './study';
 
 /**
  * The Forge boss (docs/Forge.md F1): Sir's own Claude Code, run headless through the Agent SDK in
@@ -83,21 +84,56 @@ const escapesRepo = (pattern: unknown): boolean =>
     EXPANDS.test(pattern.trim()) ||
     /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(pattern));
 
+/** Phase F6: what one study run adds. Never write access, never another MCP server. */
+export interface StudyAccess {
+  /** Folders the boss may read (a studied repository's read-only copy). */
+  readRoots?: readonly string[];
+  /** REA's tools (mcp__rea__*) for this run, each call decided by the study's policy. */
+  rea?: ReaPolicy;
+}
+
+const REA_PREFIX = 'mcp__rea__';
+/** A Glob pattern or Grep file filter that names .git (of the clone or a studied copy). */
+const NAMES_GIT = /(?:^|[\\/{,])\.git(?:[\\/},]|$)/i;
+
+const isGitPath = (p: string): boolean => p === '.git' || p.startsWith('.git/');
+
 /** The only gate on the boss's tool calls. */
-export function forgePermission(repoDir: string, approved: readonly string[]): CanUseTool {
+export function forgePermission(
+  repoDir: string,
+  approved: readonly string[],
+  study: StudyAccess = {},
+): CanUseTool {
   return (name, input) => {
     const allow = Promise.resolve({ behavior: 'allow' as const, updatedInput: input });
     const deny = (message: string): ReturnType<CanUseTool> =>
       Promise.resolve({ behavior: 'deny', message });
     if (name.startsWith(PREFIX) || name === 'TodoWrite') return allow;
+    if (name.startsWith(REA_PREFIX)) {
+      const why = study.rea
+        ? study.rea(name.slice(REA_PREFIX.length), input)
+        : 'REA is only available in a run that studies an app or a website.';
+      return why ? deny(why) : allow;
+    }
     if (!READ_TOOLS.has(name) && !WRITE_TOOLS.has(name))
       return deny(`${name} is not available in Forge. Use run_check to run checks.`);
-    if (escapesRepo(name === 'Glob' ? input['pattern'] : input['glob']))
-      return deny('Search patterns must stay inside the Forge repository.');
+    const pattern = name === 'Glob' ? input['pattern'] : input['glob'];
+    if (escapesRepo(pattern)) return deny('Search patterns must stay inside the Forge repository.');
+    if (typeof pattern === 'string' && NAMES_GIT.test(pattern))
+      return deny('.git is not available in Forge.');
     const target = targetOf(input);
     if (target === null) return READ_TOOLS.has(name) ? allow : deny('No file path given.');
     const rel = insideRepo(repoDir, target);
-    if (rel === null) return deny(`${target} is outside the Forge repository.`);
+    if (rel === null) {
+      // A studied repository: reading only, and never its .git.
+      const studied = READ_TOOLS.has(name)
+        ? (study.readRoots ?? []).some((root) => {
+            const r = insideRepo(root, target);
+            return r !== null && !isGitPath(normalizePath(r));
+          })
+        : false;
+      return studied ? allow : deny(`${target} is outside the Forge repository.`);
+    }
     const p = normalizePath(rel);
     if (p === '.git' || p.startsWith('.git/')) return deny('.git is not available in Forge.');
     if (READ_TOOLS.has(name)) return allow;
@@ -236,6 +272,8 @@ export async function runBoss(input: {
   check: CheckFn;
   changedFiles(): Promise<string>;
   delegate?: DelegateFn;
+  /** Phase F6: a studied repository to read, and REA's server, for this run only. */
+  study?: { readRoots: string[]; mcp?: Record<string, McpServerConfig>; rea?: ReaPolicy };
   onProgress(text: string): void;
 }): Promise<BossResult> {
   const path = requirePath(input.rt);
@@ -262,8 +300,12 @@ export async function runBoss(input: {
         // Belt and braces: `tools` already leaves these out.
         disallowedTools: NEVER_TOOLS,
         permissionMode: 'default',
-        canUseTool: forgePermission(input.repoDir, input.approved),
-        mcpServers: { [SERVER]: server },
+        canUseTool: forgePermission(input.repoDir, input.approved, {
+          readRoots: input.study?.readRoots ?? [],
+          ...(input.study?.rea ? { rea: input.study.rea } : {}),
+        }),
+        // Forge's own server last, so a study server can never take its name.
+        mcpServers: { ...(input.study?.mcp ?? {}), [SERVER]: server },
         systemPrompt: { type: 'preset', preset: 'claude_code', append: input.rules },
         maxTurns: MAX_TURNS,
         maxBudgetUsd: input.budgetUsd,

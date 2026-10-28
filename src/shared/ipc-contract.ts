@@ -232,6 +232,7 @@ const SkillView = z.object({
   description: z.string(),
   license: z.string().nullable(),
   enabled: z.boolean(),
+  forge: z.boolean(),
   files: z.array(z.string()),
 });
 /** One link or folder may hold a whole skills library: all installed, plus notes for Sir. */
@@ -681,6 +682,7 @@ export const INVOKE = {
   ),
   'skills:remove': contract(z.object({ name: SkillName }), Ok),
   'skills:setEnabled': contract(z.object({ name: SkillName, enabled: z.boolean() }), Ok),
+  'skills:setForge': contract(z.object({ name: SkillName, forge: z.boolean() }), Ok),
   'dictation:history': contract(
     Empty,
     z.array(

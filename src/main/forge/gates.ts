@@ -8,6 +8,7 @@ import { reviewDiff, type ChangedFile, type Finding } from './protected';
 
 export const GATE_IDS = [
   'review',
+  'no-copy',
   'typecheck',
   'lint',
   'related',
@@ -32,6 +33,9 @@ export interface GateReport {
   findings: Finding[];
 }
 
+/** Gates that run a command (review and no-copy read the diff). */
+export type CommandGateId = Exclude<GateId, 'review' | 'no-copy'>;
+
 /** Node arguments for one check: an npm script (through npm-cli.js), or a script file in the repo. */
 export type GateCommand = { npm: string[] } | { node: string[] };
 
@@ -47,7 +51,7 @@ const SOURCE = /\.(?:[cm]?[jt]sx?)$/i;
 
 /** The command and time limit of each command gate. */
 export function gateCommand(
-  id: Exclude<GateId, 'review'>,
+  id: CommandGateId,
   changed: readonly string[] = [],
 ): { cmd: GateCommand; timeoutMs: number } | null {
   switch (id) {
@@ -80,7 +84,7 @@ export function gateCommand(
 /** Runs one command gate; a gate with nothing to check (no changed source files) passes. */
 export async function runGate(
   run: GateRunner,
-  id: Exclude<GateId, 'review'>,
+  id: CommandGateId,
   changed: readonly string[],
   signal: AbortSignal,
   now: () => number = Date.now,
@@ -101,6 +105,8 @@ export async function runGates(
     approved: readonly string[];
     signal: AbortSignal;
     onGate?: (id: GateId) => void;
+    /** F6: what the no-copy check found against the studied repository (none: no study). */
+    noCopy?: readonly Finding[];
   },
 ): Promise<GateReport> {
   const findings = reviewDiff(input.files, input.patch, input.approved);
@@ -114,9 +120,22 @@ export async function runGates(
     },
   ];
   if (blocked.length > 0) return { ok: false, results, findings };
+  if (input.noCopy) {
+    const copied = input.noCopy.filter((f) => f.severity === 'block');
+    findings.push(...input.noCopy);
+    results.push({
+      id: 'no-copy',
+      ok: copied.length === 0,
+      ms: 0,
+      tail:
+        input.noCopy.map((f) => `${f.severity.toUpperCase()} ${f.path}: ${f.problem}`).join('\n') ||
+        'No code copied from the studied repository.',
+    });
+    if (copied.length > 0) return { ok: false, results, findings };
+  }
   const changed = input.files.filter((f) => f.status !== 'D').map((f) => f.path);
   for (const id of GATE_IDS) {
-    if (id === 'review') continue;
+    if (id === 'review' || id === 'no-copy') continue;
     if (input.signal.aborted) return { ok: false, results, findings };
     input.onGate?.(id);
     const r = await runGate(deps.run, id, changed, input.signal, deps.now);

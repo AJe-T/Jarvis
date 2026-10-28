@@ -29,6 +29,10 @@ function setup(opts: {
   /** A git call whose first argument is this fails. */
   failGit?: string;
   shipFile?: string;
+  /** F6: the change's unified diff, and the study hooks. */
+  patch?: string;
+  study?: ForgeDeps['study'];
+  skills?: ForgeDeps['skills'];
 }) {
   const runsDir = mkdtempSync(join(tmpdir(), 'forge-runs-'));
   const repo = mkdtempSync(join(tmpdir(), 'forge-repo-'));
@@ -67,7 +71,7 @@ function setup(opts: {
     changes: () =>
       Promise.resolve({
         files: opts.files ?? [{ status: 'M', path: 'src/main/a.ts' }],
-        patch: '',
+        patch: opts.patch ?? '',
         truncated: false,
         stat: [{ path: 'src/main/a.ts', added: 12, removed: 3 }],
         head: 'aaa111',
@@ -120,6 +124,8 @@ function setup(opts: {
     budgetUsd: () => 5,
     announce,
     runsDir,
+    ...(opts.study ? { study: opts.study } : {}),
+    ...(opts.skills ? { skills: opts.skills } : {}),
     ship: {
       installersDir: join(runsDir, 'installers'),
       file: opts.shipFile ?? join(runsDir, 'last-ship.json'),
@@ -295,6 +301,141 @@ describe('Forge runs', () => {
       '20260102030405-add-dark-mode-to-the',
     );
     expect(runSlug('???', Date.UTC(2026, 0, 2, 3, 4, 5))).toBe('20260102030405');
+  });
+});
+
+describe('Forge study mode (F6)', () => {
+  const GOAL = 'Add a command palette like the one in the studied app';
+  const STUDIED = Array.from(
+    { length: 30 },
+    (_, i) =>
+      `export function palette${i}(items) { return rankItems(items, 'score-${i}', ${i * 3}); }`,
+  );
+  function studiedRepo(): string {
+    const d = mkdtempSync(join(tmpdir(), 'forge-studied-'));
+    dirs.push(d);
+    mkdirSync(join(d, 'src'));
+    writeFileSync(join(d, 'src', 'palette.js'), STUDIED.join('\n'));
+    return d;
+  }
+  const copiedPatch = [
+    'diff --git a/src/renderer/palette.ts b/src/renderer/palette.ts',
+    '--- /dev/null',
+    '+++ b/src/renderer/palette.ts',
+    '@@ -0,0 +1,25 @@',
+    ...STUDIED.slice(0, 25).map((l) => `+${l}`),
+  ].join('\n');
+
+  it('a repo study clones it read-only for the boss, and copied code fails before any command runs', async () => {
+    const root = studiedRepo();
+    const cloneRepo = vi.fn(() => Promise.resolve(root));
+    const rea = vi.fn(() => Promise.reject(new Error('not used')));
+    const s = setup({ patch: copiedPatch, study: { cloneRepo, rea } });
+    s.forge.start({
+      kind: 'change',
+      goal: GOAL,
+      approved: [],
+      studyApp: 'https://github.com/acme/palette',
+    });
+    await settle(s.forge);
+    expect(cloneRepo).toHaveBeenCalledWith('https://github.com/acme/palette.git', 'acme-palette');
+    expect(rea).not.toHaveBeenCalled();
+    const input = s.bossInputs[0];
+    expect(input?.study).toEqual({ readRoots: [root] });
+    expect(input?.rules).toContain('# Study first');
+    // The source reaches the rules only as a quoted, checked value.
+    expect(input?.rules).toContain('Source: "https://github.com/acme/palette.git"');
+    expect(input?.rules).toContain('docs/forge-study/20261028080000-add-a-command-palette-like.md');
+    expect(input?.rules).toContain('UNTRUSTED DATA');
+    const r = s.forge.status();
+    expect(r).toMatchObject({ state: 'failed', error: 'the no-copy check failed' });
+    expect(s.calls.some((c) => c.startsWith('gate:'))).toBe(false);
+    const text = describeRun(r!, Date.now());
+    expect(text).toContain('Study notes:');
+    expect(text).toContain('BLOCK src/renderer/palette.ts: 25 lines match src/palette.js');
+  });
+
+  it('our own code passes the no-copy check and every other gate', async () => {
+    const root = studiedRepo();
+    const s = setup({
+      patch: copiedPatch.replace(
+        /palette(\d+)\(items\) \{ return rankItems/g,
+        'mine$1(list) { return sortList',
+      ),
+      study: { cloneRepo: () => Promise.resolve(root), rea: () => Promise.reject(new Error('x')) },
+    });
+    s.forge.start({
+      kind: 'change',
+      goal: GOAL,
+      approved: [],
+      studyApp: 'https://github.com/acme/palette',
+    });
+    await settle(s.forge);
+    expect(s.forge.status()?.state).toBe('passed');
+    expect(
+      s.forge
+        .status()
+        ?.report?.results.map((g) => g.id)
+        .slice(0, 2),
+    ).toEqual(['review', 'no-copy']);
+    expect(describeRun(s.forge.status()!, Date.now())).toContain('No-copy check: no code copied');
+  });
+
+  it('an app study attaches REA for that run only; a missing REA stops the run before Claude', async () => {
+    const rea = vi.fn(() =>
+      Promise.resolve({ type: 'stdio' as const, command: 'node.exe', args: ['npx-cli.js'] }),
+    );
+    const s = setup({ study: { cloneRepo: () => Promise.reject(new Error('x')), rea } });
+    s.forge.start({ kind: 'change', goal: GOAL, approved: [], studyApp: 'Raycast' });
+    await settle(s.forge);
+    expect(s.bossInputs[0]?.study?.mcp?.['rea']).toMatchObject({ command: 'node.exe' });
+    expect(s.bossInputs[0]?.rules).toContain('REA tools');
+    s.forge.start({ kind: 'change', goal: GOAL, approved: [] });
+    await settle(s.forge);
+    expect(s.bossInputs[1]?.study).toBeUndefined();
+    expect(s.bossInputs[1]?.rules).not.toContain('Study first');
+
+    const broken = setup({
+      study: {
+        cloneRepo: () => Promise.reject(new Error('x')),
+        rea: () => Promise.reject(new Error('REA needs Node.js 22.19+')),
+      },
+    });
+    broken.forge.start({
+      kind: 'change',
+      goal: GOAL,
+      approved: [],
+      studyApp: 'https://raycast.com',
+    });
+    await settle(broken.forge);
+    expect(broken.forge.status()).toMatchObject({
+      state: 'failed',
+      error: 'REA needs Node.js 22.19+',
+    });
+    expect(broken.bossInputs).toHaveLength(0);
+  });
+
+  it('refuses an unclear studyApp before anything starts; marked skills join the rules', async () => {
+    const s = setup({
+      study: {
+        cloneRepo: () => Promise.reject(new Error('x')),
+        rea: () => Promise.reject(new Error('x')),
+      },
+      skills: () =>
+        Promise.resolve({
+          text: '<skill name="tdd">Write the test first.</skill>',
+          skipped: ['bad (looks like a prompt injection)'],
+        }),
+    });
+    expect(() =>
+      s.forge.start({ kind: 'change', goal: GOAL, approved: [], studyApp: 'file:///C:/x' }),
+    ).toThrow(/http and https/);
+    expect(s.forge.status()).toBeNull();
+    s.forge.start({ kind: 'change', goal: GOAL, approved: [] });
+    await settle(s.forge);
+    expect(s.bossInputs[0]?.rules).toContain('# Skills Sir chose for Forge runs');
+    expect(s.bossInputs[0]?.rules).toContain('Write the test first.');
+    expect(s.forge.status()?.log).toContain('Skills left out: bad (looks like a prompt injection)');
   });
 });
 

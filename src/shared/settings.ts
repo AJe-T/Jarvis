@@ -354,6 +354,8 @@ export const SETTINGS = {
   },
   /** Skills Sir turned off (by name); installed skills are on by default. */
   'skills.disabled': { schema: z.array(z.string().max(64)).max(500), default: [] as string[] },
+  /** Skills Sir marked "Forge" (by name): their instructions join the boss's rules (F6). */
+  'skills.forge': { schema: z.array(z.string().max(64)).max(50), default: [] as string[] },
   /** News feeds for read_feed and the briefing: "Name | https://url" per line (ideas from OpenJarvis). */
   'feeds.list': {
     schema: z.string().max(5000),

@@ -19,6 +19,43 @@ const files = [
 ];
 
 describe('Forge gates', () => {
+  it('a copied block from the studied repo stops the run right after the review (F6)', async () => {
+    const run = fakeRunner();
+    const report = await runGates(
+      { run },
+      {
+        files,
+        patch: '',
+        approved: [],
+        signal,
+        noCopy: [{ path: 'src/a.ts', severity: 'block', problem: '25 lines match x.js' }],
+      },
+    );
+    expect(report.ok).toBe(false);
+    expect(report.results.map((r) => [r.id, r.ok])).toEqual([
+      ['review', true],
+      ['no-copy', false],
+    ]);
+    expect(run.seen).toEqual([]);
+    expect(describeReport(report)).toContain('FAIL no-copy');
+  });
+
+  it('a short copy is a warning; the checks go on (F6)', async () => {
+    const report = await runGates(
+      { run: fakeRunner() },
+      {
+        files,
+        patch: '',
+        approved: [],
+        signal,
+        noCopy: [{ path: 'src/a.ts', severity: 'warn', problem: '8 lines match x.js' }],
+      },
+    );
+    expect(report.ok).toBe(true);
+    expect(report.results[1]).toMatchObject({ id: 'no-copy', ok: true });
+    expect(describeReport(report)).toContain('src/a.ts: 8 lines match x.js');
+  });
+
   it('runs every check in order: cheap first, the full suite after related tests', async () => {
     const run = fakeRunner();
     const report = await runGates({ run }, { files, patch: '', approved: [], signal });

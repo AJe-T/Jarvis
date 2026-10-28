@@ -304,6 +304,15 @@ export function SkillsNetwork({
                   .catch((err: unknown) => toast({ level: 'error', message: cleanError(err) }))
               }
             />
+            <Switch
+              label="Use in Forge runs (Claude follows it when Jarvis builds itself)"
+              checked={current.forge}
+              onChange={(on) =>
+                void call('skills:setForge', { name: current.name, forge: on })
+                  .then(reload)
+                  .catch((err: unknown) => toast({ level: 'error', message: cleanError(err) }))
+              }
+            />
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="ghost"

@@ -150,6 +150,36 @@ describe('Forge tools', () => {
     });
   });
 
+  it('forge_start and forge_build_tool show what will be studied first, and refuse unclear sources (F6)', async () => {
+    const start = vi.fn(() => ({ id: 'forge_1' }) as ForgeRun);
+    const { byName } = setup(start);
+    const t = byName('forge_start');
+    const repo = t.input.parse({
+      goal: 'Add a command palette like that one',
+      studyApp: 'https://github.com/acme/palette',
+    });
+    expect(t.confirm?.(repo).details).toContain(
+      'STUDIES FIRST: the GitHub repository acme/palette',
+    );
+    expect(t.confirm?.(repo).details).toContain('read-only copy');
+    await t.run(repo, ctx);
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({ studyApp: 'https://github.com/acme/palette' }),
+    );
+    const app = byName('forge_build_tool').input.parse({
+      name: 'palette',
+      goal: 'A tool that ranks commands like Raycast',
+      studyApp: 'Raycast',
+    });
+    expect(byName('forge_build_tool').confirm?.(app).details).toContain(
+      'the app "Raycast", with REA',
+    );
+    expect(
+      t.input.safeParse({ goal: 'Add a command palette like that one', studyApp: 'file:///C:/x' })
+        .success,
+    ).toBe(false);
+  });
+
   it('forge_start refuses unprotected paths in allowProtected and reports start errors', async () => {
     const { byName } = setup(
       vi.fn(() => {

@@ -3,7 +3,18 @@ import { dirname, join } from 'node:path';
 import { errorMessage } from '../errors';
 import { bossRules, DELEGATE_RULE, type BossResult, type CheckFn, type DelegateFn } from './boss';
 import { describeReport, runGate, runGates, type GateReport, type GateRunner } from './gates';
+import { addedRuns, copyFindings, indexStudyRepo } from './nocopy';
+import type { Finding } from './protected';
 import { describeShip, shipChange, type ShipInfo } from './ship';
+import {
+  describeStudy,
+  parseStudy,
+  reaPolicy,
+  studyRules,
+  type ReaPolicy,
+  type StudySource,
+} from './study';
+import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 import {
   installTool,
   prepareToolBuild,
@@ -44,6 +55,17 @@ export interface ForgeRun {
   head?: string;
   /** Phase F5: shipping after Sir approved it. */
   ship?: ShipInfo;
+  /** Phase F6: what the boss studied first, its notes, and what the no-copy check found. */
+  study?: {
+    source: string;
+    kind: StudySource['kind'];
+    notes?: string;
+    /** The read-only copy of a studied repository. */
+    root?: string;
+    findings?: Finding[];
+    /** The studied repo was too big to index in full. */
+    partial?: boolean;
+  };
   /** A tool run: its name, build folder, the tools it lists, and whether it was installed. */
   tool?: { name: string; buildDir?: string; tools: ToolInfo[]; installed?: 'added' | 'updated' };
   /** What the boss is doing right now, newest last (capped). */
@@ -65,6 +87,8 @@ export interface BossInput {
   check: CheckFn;
   changedFiles(): Promise<string>;
   delegate?: DelegateFn;
+  /** Phase F6: a studied repository to read, and REA's server, for this run only. */
+  study?: { readRoots: string[]; mcp?: Record<string, McpServerConfig>; rea?: ReaPolicy };
   onProgress(text: string): void;
 }
 
@@ -84,6 +108,15 @@ export interface ForgeDeps {
   };
   /** Phase F4: free AIs for delegate_edit. */
   workers?: WorkerDeps;
+  /** Phase F6: study a repository, app or website before building. */
+  study?: {
+    /** A shallow, read-only clone of a github.com repository; returns its folder. */
+    cloneRepo(url: string, slug: string): Promise<string>;
+    /** REA's MCP server for one run; throws with a plain reason (no Node.js 22.19+…). */
+    rea(): Promise<McpServerConfig>;
+  };
+  /** Phase F6: the skills Sir marked "Forge" (injection-scanned and capped by the skill store). */
+  skills?(): Promise<{ text: string; skipped: string[] }>;
   /** Phase F5: shipping a passed change, and undoing it. */
   ship?: {
     installersDir: string;
@@ -98,8 +131,8 @@ export interface ForgeDeps {
 }
 
 export type StartRequest =
-  | { kind: 'change'; goal: string; approved: readonly string[] }
-  | { kind: 'tool'; goal: string; name: string };
+  | { kind: 'change'; goal: string; approved: readonly string[]; studyApp?: string | undefined }
+  | { kind: 'tool'; goal: string; name: string; studyApp?: string | undefined };
 
 export interface Forge {
   /** Starts a run in the background; throws when one is running or Forge isn't set up. */
@@ -149,6 +182,9 @@ export function createForge(deps: ForgeDeps): Forge {
     ...(r.tool ? { tool: { ...r.tool, tools: [...r.tool.tools] } } : {}),
     ...(r.stat ? { stat: r.stat.map((s) => ({ ...s })) } : {}),
     ...(r.ship ? { ship: { ...r.ship, done: [...r.ship.done] } } : {}),
+    ...(r.study
+      ? { study: { ...r.study, ...(r.study.findings ? { findings: [...r.study.findings] } : {}) } }
+      : {}),
   });
   const busy = (r: ForgeRun | null): boolean =>
     r !== null && (!FINISHED.includes(r.state) || r.ship?.state === 'running');
@@ -211,6 +247,49 @@ export function createForge(deps: ForgeDeps): Forge {
     return true;
   }
 
+  /**
+   * F6: the study (a read-only clone of the repository, or REA) and the marked skills: extra rules
+   * and access for this run's boss. `notes` is where the boss writes what it learned.
+   */
+  async function extrasFor(
+    r: ForgeRun,
+    notes: string,
+    shownNotes: string,
+  ): Promise<{ rules: string; study?: NonNullable<BossInput['study']> }> {
+    let rules = '';
+    let study: NonNullable<BossInput['study']> | undefined;
+    if (r.study) {
+      if (!deps.study) throw new Error('Study mode is not available.');
+      const src = parseStudy(r.study.source);
+      r.study = { ...r.study, notes: shownNotes };
+      if (src.kind === 'repo') {
+        progress(r, `Cloning ${src.owner}/${src.name} to study it (read-only)`);
+        const root = await deps.study.cloneRepo(src.url, `${src.owner}-${src.name}`);
+        r.study = { ...r.study, root };
+        rules += studyRules(src, notes, root);
+        study = { readRoots: [root] };
+      } else {
+        progress(r, `Starting REA to study ${describeStudy(src)}`);
+        rules += studyRules(src, notes);
+        study = { readRoots: [], mcp: { rea: await deps.study.rea() }, rea: reaPolicy(src) };
+      }
+    }
+    const skills = deps.skills ? await deps.skills() : { text: '', skipped: [] };
+    if (skills.skipped.length) progress(r, `Skills left out: ${skills.skipped.join(', ')}`);
+    if (skills.text)
+      rules += `\n\n# Skills Sir chose for Forge runs\nFollow them where they fit this change; the rules above win any conflict.\n${skills.text}`;
+    return { rules, ...(study ? { study } : {}) };
+  }
+
+  /** F6: the no-copy check of a run that studied a repository (none otherwise). */
+  function noCopy(r: ForgeRun, added: Map<string, string[][]>): Finding[] | undefined {
+    if (!r.study?.root) return undefined;
+    const index = indexStudyRepo(r.study.root);
+    const findings = copyFindings(added, index);
+    r.study = { ...r.study, findings, ...(index.partial ? { partial: true } : {}) };
+    return findings;
+  }
+
   async function executeChange(r: ForgeRun, signal: AbortSignal): Promise<void> {
     const { ws, run } = await deps.workspace();
     const { branch, base } = await ws.prepare(deps.repoUrl(), runSlug(r.goal, r.startedAt));
@@ -231,16 +310,19 @@ export function createForge(deps: ForgeDeps): Forge {
       ws.readText('conversations/RULES.md', RULES_CHARS),
     ].join('\n\n');
     const delegate = delegateFor(r, ws.dir, signal);
+    const notes = `docs/forge-study/${runSlug(r.goal, r.startedAt)}.md`;
+    const extras = await extrasFor(r, notes, join(ws.dir, notes));
     const boss = await deps.boss({
       repoDir: ws.dir,
       brief: r.goal,
-      rules: bossRules(r.approved, repoRules, Boolean(delegate)),
+      rules: bossRules(r.approved, repoRules, Boolean(delegate)) + extras.rules,
       approved: r.approved,
       budgetUsd: deps.budgetUsd(),
       signal,
       check,
       changedFiles: () => ws.status(),
       ...(delegate ? { delegate } : {}),
+      ...(extras.study ? { study: extras.study } : {}),
       onProgress: (t) => progress(r, t),
     });
     // Kept on the run's branch even when unfinished, so nothing the boss did is lost.
@@ -260,9 +342,17 @@ export function createForge(deps: ForgeDeps): Forge {
     Object.assign(r, { base, stat, head });
     if (truncated)
       return finish(r, 'failed', { error: 'the change is too large to review in full' });
+    const copied = noCopy(r, addedRuns(patch));
     const report = await runGates(
       { run, now },
-      { files, patch, approved: r.approved, signal, onGate: (id) => progress(r, `Gate: ${id}`) },
+      {
+        files,
+        patch,
+        approved: r.approved,
+        signal,
+        onGate: (id) => progress(r, `Gate: ${id}`),
+        ...(copied ? { noCopy: copied } : {}),
+      },
     );
     if (signal.aborted) return finish(r, 'cancelled', { report });
     const failed = report.results.find((g) => !g.ok);
@@ -281,21 +371,50 @@ export function createForge(deps: ForgeDeps): Forge {
     const runner = await t.runner(dir);
     r.state = 'building';
     const delegate = delegateFor(r, dir, signal);
+    const extras = await extrasFor(r, 'study-notes.md', join(dir, 'study-notes.md'));
     const boss = await deps.boss({
       repoDir: dir,
       brief: r.goal,
-      rules: toolRules(name) + (delegate ? DELEGATE_RULE : ''),
+      rules: toolRules(name) + (delegate ? DELEGATE_RULE : '') + extras.rules,
       approved: [],
       budgetUsd: deps.budgetUsd(),
       signal,
       check: (c) => toolCheck(runner, dir, c, signal),
       changedFiles: () => Promise.resolve(readdirSync(dir).join('\n')),
       ...(delegate ? { delegate } : {}),
+      ...(extras.study ? { study: extras.study } : {}),
       onProgress: (text) => progress(r, text),
     });
     if (!afterBoss(r, boss, signal)) return;
     r.state = 'checking';
-    const report = await runToolGates(runner, dir, signal, (id) => progress(r, `Check: ${id}`));
+    // The tool's own files, whole, against the studied repository.
+    const copied = noCopy(
+      r,
+      new Map(
+        readdirSync(dir, { withFileTypes: true })
+          .filter((e) => e.isFile() && /\.(?:mjs|json|md)$/i.test(e.name))
+          .map((e) => [e.name, [readFileSync(join(dir, e.name), 'utf8').split(/\r?\n/)]]),
+      ),
+    );
+    const blocked = (copied ?? []).filter((f) => f.severity === 'block');
+    if (blocked.length)
+      return finish(r, 'failed', {
+        error: 'the no-copy check failed',
+        report: {
+          ok: false,
+          results: [
+            {
+              id: 'no-copy',
+              ok: false,
+              ms: 0,
+              tail: blocked.map((f) => `BLOCK ${f.path}: ${f.problem}`).join('\n'),
+            },
+          ],
+          findings: copied ?? [],
+        },
+      });
+    const gated = await runToolGates(runner, dir, signal, (id) => progress(r, `Check: ${id}`));
+    const report = copied ? { ...gated, findings: [...gated.findings, ...copied] } : gated;
     if (signal.aborted) return finish(r, 'cancelled', { report });
     r.tool = { ...r.tool, tools: report.tools };
     const failed = report.results.find((g) => !g.ok);
@@ -373,6 +492,9 @@ export function createForge(deps: ForgeDeps): Forge {
           'Forge is not set up yet: it needs the GitHub address of the Jarvis repository.',
         );
       if (req.kind === 'tool' && !deps.tools) throw new Error('Building tools is not available.');
+      // F6: an unclear studyApp is refused before anything starts.
+      const study = req.studyApp ? parseStudy(req.studyApp) : null;
+      if (study && !deps.study) throw new Error('Study mode is not available.');
       const startedAt = now();
       const r: ForgeRun = {
         id: `forge_${startedAt.toString(36)}`,
@@ -384,6 +506,7 @@ export function createForge(deps: ForgeDeps): Forge {
         log: [],
         workers: { free: 0, boss: 0 },
         ...(req.kind === 'tool' ? { tool: { name: req.name, tools: [] } } : {}),
+        ...(study && req.studyApp ? { study: { source: req.studyApp, kind: study.kind } } : {}),
       };
       current = r;
       controller = new AbortController();
@@ -473,6 +596,27 @@ export function createForge(deps: ForgeDeps): Forge {
   };
 }
 
+function describeStudyRun(s: NonNullable<ForgeRun['study']>): string[] {
+  const findings = s.findings ?? [];
+  return [
+    `Studied first: ${s.source}${s.notes ? `. Study notes: ${s.notes}` : ''}${s.root ? ` (read-only copy: ${s.root})` : ''}`,
+    ...(s.root
+      ? findings.length
+        ? [
+            'No-copy check:',
+            ...findings.map((f) => `- ${f.severity.toUpperCase()} ${f.path}: ${f.problem}`),
+          ]
+        : s.findings
+          ? [
+              s.partial
+                ? 'No-copy check: nothing copied from the part of the studied repository it could index (it is too big to check in full).'
+                : 'No-copy check: no code copied from the studied repository.',
+            ]
+          : []
+      : []),
+  ];
+}
+
 export function describeRun(r: ForgeRun, at: number): string {
   const mins = Math.round(((r.endedAt ?? at) - r.startedAt) / 60_000);
   const what = r.kind === 'tool' ? `tool "${r.tool?.name ?? ''}"` : `"${r.goal}"`;
@@ -497,6 +641,7 @@ export function describeRun(r: ForgeRun, at: number): string {
     ...workers,
     ...tools,
     ...(r.log.length ? ['', 'Latest steps:', ...r.log.slice(-8).map((l) => `- ${l}`)] : []),
+    ...(r.study ? ['', ...describeStudyRun(r.study)] : []),
     ...(r.ship ? ['', describeShip(r.ship)] : []),
     ...(r.report ? ['', 'Checks:', describeReport(r.report)] : []),
     ...(r.summary ? ['', "Claude's summary:", r.summary] : []),

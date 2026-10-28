@@ -31,6 +31,9 @@ const DOWNLOADS_AT_ONCE = 6;
 const MAX_WALK = 20_000;
 /** Text files a skill may carry and Jarvis may read back (read_skill_file). */
 const TEXT = /\.(md|txt|json|ya?ml|csv|tsv|py|js|ts|sh|ps1|html|css|xml|toml|ini)$/i;
+/** Forge runs (F6): each marked skill's instructions are capped, and all of them together. */
+const FORGE_SKILL_CHARS = 8_000;
+const FORGE_SKILLS_CHARS = 24_000;
 
 /** A file found for a skill before it is read: path relative to the skill folder. */
 export interface SkillFileRef {
@@ -102,6 +105,8 @@ export interface Skill {
   license?: string;
   dir: string;
   enabled: boolean;
+  /** Sir marked it for Forge runs (Settings → Skills). */
+  forge: boolean;
   files: string[];
 }
 
@@ -169,6 +174,11 @@ export function createSkillStore(deps: {
 }) {
   const f = deps.fetch ?? fetch;
   const disabled = (): Set<string> => new Set(deps.settings.get('skills.disabled'));
+  const forgeMarked = (): Set<string> => new Set(deps.settings.get('skills.forge'));
+  const unmarkForge = (name: string): void => {
+    const marked = forgeMarked();
+    if (marked.delete(name)) deps.settings.set('skills.forge', [...marked]);
+  };
   const inside = (base: string, rel: string): string => {
     const p = resolve(base, rel);
     if (p !== base && !p.startsWith(base + sep))
@@ -186,6 +196,7 @@ export function createSkillStore(deps: {
       ...(meta.license ? { license: meta.license } : {}),
       dir,
       enabled: !off.has(meta.name) && !existsSync(join(dir, OFF_MARKER)),
+      forge: forgeMarked().has(meta.name),
       files: (await walk(dir)).filter((p) => p !== 'SKILL.md'),
     };
   }
@@ -222,6 +233,8 @@ export function createSkillStore(deps: {
         'That folder has no SKILL.md at its top level.',
       );
     const meta = parseSkillMd(md.content);
+    // A new or updated copy is not the one Sir marked for Forge: he marks it again if he wants.
+    unmarkForge(meta.name);
     if (files.length > MAX_FILES)
       throw new JarvisError(
         'INVALID',
@@ -392,6 +405,7 @@ export function createSkillStore(deps: {
     async remove(name: string): Promise<void> {
       const s = await get(name);
       await rm(s.dir, { recursive: true, force: true });
+      unmarkForge(name);
     },
 
     setEnabled(name: string, enabled: boolean): void {
@@ -401,6 +415,43 @@ export function createSkillStore(deps: {
         if (NAME.test(name)) rmSync(join(skillDir(name), OFF_MARKER), { force: true });
       } else off.add(name);
       deps.settings.set('skills.disabled', [...off]);
+    },
+
+    async setForge(name: string, on: boolean): Promise<void> {
+      // Only an installed skill can be marked (get throws for any other name).
+      if (on) await get(name);
+      const marked = forgeMarked();
+      if (on) marked.add(name);
+      else marked.delete(name);
+      deps.settings.set('skills.forge', [...marked]);
+    },
+
+    /**
+     * Forge phase F6: the instructions of the skills Sir marked "Forge" and left on, for the boss's
+     * rules of one run. Scanned again for injection (a skill can be edited on disk after install);
+     * one that looks like an injection is left out and named.
+     */
+    async forgeText(): Promise<{ text: string; skipped: string[] }> {
+      const parts: string[] = [];
+      const skipped: string[] = [];
+      let total = 0;
+      for (const s of (await list()).filter((x) => x.enabled && x.forge)) {
+        const { body } = parseSkillMd(await readFile(join(s.dir, 'SKILL.md'), 'utf8'));
+        if (isActionable(scanForInjection(body).severity)) {
+          skipped.push(`${s.name} (looks like a prompt injection)`);
+          continue;
+        }
+        // The body can't close its own wrapper.
+        const text = body.slice(0, FORGE_SKILL_CHARS).replace(/<\/?skill\b/gi, '&lt;skill');
+        const part = `<skill name="${s.name}" chosen_by="sir">\n${text}\n</skill>`;
+        if (total + part.length > FORGE_SKILLS_CHARS) {
+          skipped.push(`${s.name} (over the size limit for a run)`);
+          continue;
+        }
+        parts.push(part);
+        total += part.length;
+      }
+      return { text: parts.join('\n\n'), skipped };
     },
 
     async read(name: string): Promise<string> {

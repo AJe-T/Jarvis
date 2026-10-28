@@ -86,6 +86,8 @@ import { createToolRunner, type McpAccess } from './forge/tool-build';
 import { nodeRunsTools } from './forge/tool-runtime';
 import { poolWorkers } from './forge/workers';
 import { createGit, createNodeRunner, createWorkspace } from './forge/workspace';
+import { cloneStudyRepo, reaServer } from './forge/study';
+import { nodeRunsRea } from './claude-sessions/rea';
 import { providerName } from './llm/pool/snapshot';
 import { systemNode } from './lib/process';
 import { createScreenTools } from './tools/everyday/screen';
@@ -563,6 +565,25 @@ export function createServices(opts: ServiceOptions) {
       confirm: (input, signal) => broker.request(input, signal),
       label: providerName,
     }),
+    // F6: study a repository (read-only clone) or an app/website (REA) before building.
+    study: {
+      cloneRepo: async (url, slug) => {
+        const studyDir = join(forgeDir, 'study');
+        mkdirSync(studyDir, { recursive: true });
+        const dir = join(studyDir, slug);
+        await cloneStudyRepo(createGit(studyDir), url, dir);
+        return dir;
+      },
+      rea: async () => {
+        const node = await systemNode();
+        if (!node || !nodeRunsRea(node.version))
+          throw new Error(
+            `REA needs Node.js 22.19+ (or 24.11+) on this PC; ${node ? `you have ${node.version}` : 'none was found'}. Install the current Node.js LTS from nodejs.org.`,
+          );
+        return reaServer(node.exe);
+      },
+    },
+    skills: () => skills.forgeText(),
     // F5: after Sir approves, ship it; his data is backed up before he can install the build.
     ship: {
       installersDir: join(forgeDir, 'installers'),

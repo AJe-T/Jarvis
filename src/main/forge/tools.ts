@@ -5,9 +5,37 @@ import type { ConfirmDetails } from '../tools/types';
 import { describeRun, type Forge, type ForgeRun } from './forge';
 import { isProtected } from './protected';
 import { describeShip } from './ship';
+import { describeStudy, parseStudy } from './study';
+import { REA_PACKAGE } from '../claude-sessions/rea';
 import { connectionName, TOOL_NAME_RE } from './tool-build';
 
 const MAX_FILES_SHOWN = 40;
+
+/** F6: an installed app, a website or a github.com repository to study first (forge/study.ts). */
+const STUDY_APP = z
+  .string()
+  .trim()
+  .min(2)
+  .max(300)
+  .refine((s) => {
+    try {
+      parseStudy(s);
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'An app name, an http(s) website address, or https://github.com/<owner>/<repo>.')
+  .optional();
+
+function studyLine(studyApp: string | undefined): string {
+  if (!studyApp) return '';
+  const s = parseStudy(studyApp);
+  const how =
+    s.kind === 'repo'
+      ? 'Forge downloads a read-only copy (nothing in it is installed or run) and blocks code copied from it.'
+      : `with REA (${REA_PACKAGE}, MIT; npx downloads it the first time). REA may start the app or open the site in a browser to watch it.`;
+  return `\nSTUDIES FIRST: ${describeStudy(s)}, ${how} It builds our own version, never a copy.`;
+}
 
 /** What Sir sees before a change ships: goal, files with +/-, warnings, allowed protected files, cost. */
 export function approvalDetails(r: ForgeRun | null, runId: string): Partial<ConfirmDetails> {
@@ -85,26 +113,27 @@ export function createForgeTools(deps: {
       input: z.object({
         goal: z.string().trim().min(20).max(6000),
         allowProtected: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
+        studyApp: STUDY_APP,
       }),
       tier: 'CONFIRM',
       timeoutMs: 10_000,
       summarize: ({ goal }) => `Forge: build "${goal.slice(0, 80)}"`,
-      confirm: ({ goal, allowProtected }) => ({
+      confirm: ({ goal, allowProtected, studyApp }) => ({
         title: 'Let Jarvis change its own code?',
         actionLabel: 'Start Forge',
-        details: `Repository: ${deps.repoUrl() || '(not set up)'}\nBudget: up to $${deps.budgetUsd()} of Claude (estimate)${allowProtected.length ? `\n\nPROTECTED FILES YOU ALLOW IT TO CHANGE:\n${allowProtected.map((p) => `- ${p}`).join('\n')}` : ''}\n\nGoal:\n${goal}`,
+        details: `Repository: ${deps.repoUrl() || '(not set up)'}\nBudget: up to $${deps.budgetUsd()} of Claude (estimate)${studyLine(studyApp)}${allowProtected.length ? `\n\nPROTECTED FILES YOU ALLOW IT TO CHANGE:\n${allowProtected.map((p) => `- ${p}`).join('\n')}` : ''}\n\nGoal:\n${goal}`,
         detailsKind: 'text',
         purpose:
           "Claude Code edits files only in Forge's own copy and cannot run commands; Forge runs the checks. Nothing is installed or pushed.",
       }),
-      async run({ goal, allowProtected }) {
+      async run({ goal, allowProtected, studyApp }) {
         const notProtected = allowProtected.filter((p) => !isProtected(p));
         if (notProtected.length)
           return fail(
             `Not protected files, leave them out of allowProtected: ${notProtected.join(', ')}`,
           );
         try {
-          const r = deps.forge.start({ kind: 'change', goal, approved: allowProtected });
+          const r = deps.forge.start({ kind: 'change', goal, approved: allowProtected, studyApp });
           return Promise.resolve(
             ok(
               `Forge started (run ${r.id}). I'll tell sir when it finishes; forge_status shows progress.`,
@@ -125,21 +154,22 @@ export function createForgeTools(deps: {
           .trim()
           .regex(TOOL_NAME_RE, 'lowercase letters, digits and -, 2–24 characters'),
         goal: z.string().trim().min(20).max(6000),
+        studyApp: STUDY_APP,
       }),
       tier: 'CONFIRM',
       timeoutMs: 10_000,
       summarize: ({ name }) => `Forge: build the tool "${name}"`,
-      confirm: ({ name, goal }) => ({
+      confirm: ({ name, goal, studyApp }) => ({
         title: 'Let Jarvis build a new tool?',
         actionLabel: 'Build it',
-        details: `Tool: ${name}\nBudget: up to $${deps.budgetUsd()} of Claude (estimate)\n\nGoal:\n${goal}`,
+        details: `Tool: ${name}\nBudget: up to $${deps.budgetUsd()} of Claude (estimate)${studyLine(studyApp)}\n\nGoal:\n${goal}`,
         detailsKind: 'text',
         purpose:
           'Claude Code writes the tool in its own folder and Forge tests it in a sandbox. Nothing is added to Jarvis until you install it.',
       }),
-      async run({ name, goal }) {
+      async run({ name, goal, studyApp }) {
         try {
-          const r = deps.forge.start({ kind: 'tool', goal, name });
+          const r = deps.forge.start({ kind: 'tool', goal, name, studyApp });
           return Promise.resolve(
             ok(
               `Forge is building the tool "${name}" (run ${r.id}). I'll tell sir when it is checked; then forge_install_tool adds it.`,

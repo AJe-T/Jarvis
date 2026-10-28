@@ -104,6 +104,7 @@ export const INVOKE_CHANNELS = [
   'skills:installGitHub',
   'skills:remove',
   'skills:setEnabled',
+  'skills:setForge',
   'dictation:history',
   'dictation:clear',
   'models:status',

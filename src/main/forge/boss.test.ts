@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import type { ClaudeCodeRuntime } from '../llm/claude-code';
 import { fakeClaudeCode, result, text, toolUse } from '../../../tests/integration/fake-claude-code';
 import { bossRules, forgePermission, insideRepo, runBoss, type CheckFn } from './boss';
+import { parseStudy, reaPolicy } from './study';
 
 // A real folder: the permission check follows junctions with realpath.
 const ROOT = mkdtempSync(join(tmpdir(), 'forge-boss-'));
@@ -69,6 +70,41 @@ describe('Forge boss permissions', () => {
     for (const name of ['Bash', 'PowerShell', 'WebFetch', 'NotebookEdit', 'Task'])
       expect(await decide(name, { command: 'whoami' })).toBe('deny');
     expect(await decide('mcp__forge__run_check', { check: 'lint' })).toBe('allow');
+  });
+
+  it('REA tools and a studied folder are only for a study run, and the folder is read-only (F6)', async () => {
+    const studied = join(ROOT, 'study', 'owner-repo');
+    mkdirSync(join(studied, 'src'), { recursive: true });
+    const ctx = { signal: new AbortController().signal, toolUseID: 't' } as never;
+    const plain = forgePermission(REPO, []);
+    const study = forgePermission(REPO, [], {
+      readRoots: [studied],
+      rea: reaPolicy(parseStudy('Notion')),
+    });
+    const file = join(studied, 'src', 'a.js');
+    expect((await plain('mcp__rea__inspect_pe_resources', {}, ctx))?.behavior).toBe('deny');
+    expect((await plain('Read', { file_path: file }, ctx))?.behavior).toBe('deny');
+    expect((await study('mcp__rea__inspect_pe_resources', {}, ctx))?.behavior).toBe('allow');
+    // .git can't be reached through a search pattern either.
+    expect((await study('Glob', { pattern: '.git/**', path: studied }, ctx))?.behavior).toBe(
+      'deny',
+    );
+    expect(
+      (await study('Grep', { pattern: 'x', glob: '**/.git/*', path: studied }, ctx))?.behavior,
+    ).toBe('deny');
+    expect((await study('mcp__other__x', {}, ctx))?.behavior).toBe('deny');
+    expect((await study('Read', { file_path: file }, ctx))?.behavior).toBe('allow');
+    expect((await study('Glob', { pattern: '**/*.js', path: studied }, ctx))?.behavior).toBe(
+      'allow',
+    );
+    expect((await study('Write', { file_path: file }, ctx))?.behavior).toBe('deny');
+    expect((await study('Edit', { file_path: file }, ctx))?.behavior).toBe('deny');
+    expect(
+      (await study('Read', { file_path: join(studied, '.git', 'config') }, ctx))?.behavior,
+    ).toBe('deny');
+    expect(
+      (await study('Read', { file_path: join(ROOT, 'study', 'other.txt') }, ctx))?.behavior,
+    ).toBe('deny');
   });
 
   it('the rules name the approved files and tell Claude not to ship', () => {

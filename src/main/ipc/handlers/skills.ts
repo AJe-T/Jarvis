@@ -8,6 +8,7 @@ const view = (s: Skill) => ({
   description: s.description,
   license: s.license ?? null,
   enabled: s.enabled,
+  forge: s.forge,
   files: s.files,
 });
 
@@ -42,6 +43,13 @@ export function registerSkillHandlers(s: Services): void {
   handle('skills:setEnabled', async (req) => {
     // A library skill can be off by its folder marker alone, so refresh the context list directly.
     await changed(Promise.resolve(s.skills.setEnabled(req.name, req.enabled)));
+    return { ok: true };
+  });
+
+  // Forge F6: a marked skill's instructions join the rules of Forge runs; audited like an install.
+  handle('skills:setForge', async (req) => {
+    await s.skills.setForge(req.name, req.forge);
+    s.audit.append('user', 'skill.forge', { name: req.name, forge: req.forge });
     return { ok: true };
   });
 
