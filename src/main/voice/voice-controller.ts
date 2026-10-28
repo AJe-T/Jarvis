@@ -25,6 +25,7 @@ import { Utterance, warmSpeech } from './tts-pipeline';
 import { speakingFallbacks, ttsName, whyOf, type EngineReport } from './backup';
 import { createLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
 import type { AudioTap, VoiceDiagnostics } from './diagnostics';
+import { createEchoCheck, type EchoState } from './echo-check';
 import {
   rms,
   type Recorder,
@@ -82,6 +83,8 @@ export interface VoiceDeps {
   report?: EngineReport;
   /** Instant commands (routine triggers, time, date): answered without the model. */
   quick?(text: string): QuickMatch | null;
+  /** Voice fix 2A: whether echo cancellation was seen keeping Jarvis's voice out of the mic. */
+  onEcho?(state: EchoState): void;
   /** Phase 0: dropped-frame counts, inference timing and (voice.debugAudio) WAV recordings. */
   diag?: Pick<VoiceDiagnostics, 'tap' | 'drop' | 'timer' | 'flush'>;
   /** Overridable for tests. */
@@ -205,6 +208,10 @@ export function createVoiceController(d: VoiceDeps) {
   let wakeTap: AudioTap | null = null;
   let ambientTap: AudioTap | null = null;
   const wakeTiming = d.diag?.timer('wake.process');
+  const echo = createEchoCheck((state) => {
+    log.info({ state }, 'echo cancellation check');
+    d.onEcho?.(state);
+  });
   /** When a failed wake engine was last reopened. */
   let wakeReopenedAt = 0;
   const wakeLine = createLinePicker(WAKE_LINES);
@@ -351,7 +358,8 @@ export function createVoiceController(d: VoiceDeps) {
     if (listening || greetingLive) return log.info('wake word repeated; already listening');
     if (!d.settings.get('voice.greet')) return void startListening(false);
     const line = wakeLine();
-    if (d.factories.echoCancelled?.()) {
+    // Listening during the greeting relies on echo cancellation; not where it was seen to leak.
+    if (d.factories.echoCancelled?.() && echo.state() !== 'leaks') {
       void startListening(false, false, null, line); // synchronously LISTENING; say() leaves it so
       say(line, true);
       return;
@@ -523,10 +531,14 @@ export function createVoiceController(d: VoiceDeps) {
         const frame = await rec.read();
         if (recorder !== rec) break;
         const now = Date.now();
+        const level = rms(frame);
         if (now - lastLevel >= LEVEL_INTERVAL_MS) {
           lastLevel = now;
-          d.emit('voice:level', { rms: rms(frame) });
+          d.emit('voice:level', { rms: level });
         }
+        // Voice fix 2A: Jarvis's replies tell whether echo cancellation works (not while Sir talks).
+        if (listening || sample) echo.skipReply();
+        else echo.frame(level, d.state.get() === 'SPEAKING', now);
         if (sample) {
           feedSample(frame, (frame.length / 16000) * 1000);
         } else if (listening) {
@@ -600,7 +612,11 @@ export function createVoiceController(d: VoiceDeps) {
    * (Open-LLM-VTuber's "interrupt without headphones"); without it only when Sir turned barge-in on.
    */
   function canBargeIn(): boolean {
-    return d.settings.get('voice.bargeIn') || (d.factories.echoCancelled?.() ?? false);
+    // Voice fix 2A: by echo cancellation only once his replies showed it keeps his voice out.
+    return (
+      d.settings.get('voice.bargeIn') ||
+      ((d.factories.echoCancelled?.() ?? false) && echo.state() === 'verified')
+    );
   }
 
   function onWake(): void {
@@ -1187,6 +1203,7 @@ export function createVoiceController(d: VoiceDeps) {
         ensureRecorder();
       } else if (!needRecorder()) releaseRecorder();
       if (d.state.get() === 'SLEEP') d.state.set('IDLE');
+      echo.restart(d.factories.echoCancelled?.() ?? false);
       warmLines();
       return { ok: true };
     },
@@ -1222,6 +1239,8 @@ export function createVoiceController(d: VoiceDeps) {
     },
 
     isListening: () => listening !== null,
+    /** Voice fix 2A: what the replies showed about echo cancellation. */
+    echoState: (): EchoState => echo.state(),
   };
   return controller;
 }

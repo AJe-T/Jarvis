@@ -369,13 +369,40 @@ describe('dictation (ideas from isair/jarvis)', () => {
     t.v.voice.shutdown();
   });
 
-  it('with an echo-cancelled mic the wake word interrupts Jarvis mid-reply (no headphones needed)', async () => {
+  it('with an echo-cancelled mic not yet checked, the wake word does not cut Jarvis off (voice fix 2A)', async () => {
     const t = setup(
       { rules: [{ match: 'story', steps: [{ text: '<spoken>Once upon a time, sir.</spoken>' }] }] },
       ['tell me a story', 'stop'],
       { followUp: 0, echoCancelled: true },
     );
     await t.v.start();
+    expect(t.v.voice.echoState()).toBe('unverified');
+    t.wake.trigger();
+    await until(() => t.userTurns().length === 1);
+    await idle(t.services);
+    const audio = t.events.find((e) => e.event === 'tts:audio')?.payload as { utteranceId: string };
+    t.v.voice.onPlayback(audio.utteranceId, 'started');
+    t.wake.trigger();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(t.stt.sessions).toBe(1);
+    t.v.voice.shutdown();
+  });
+
+  it('once his replies show echo cancellation works, the wake word interrupts Jarvis mid-reply (no headphones needed)', async () => {
+    const t = setup(
+      { rules: [{ match: 'story', steps: [{ text: '<spoken>Once upon a time, sir.</spoken>' }] }] },
+      ['tell me a story', 'stop'],
+      { followUp: 0, echoCancelled: true },
+    );
+    await t.v.start();
+    // Two replies during which the mic stayed at the room's level (the fake mic never changes).
+    for (let i = 0; i < 2; i++) {
+      await new Promise((r) => setTimeout(r, 300));
+      t.services.state.set('SPEAKING');
+      await new Promise((r) => setTimeout(r, 1400));
+      t.services.state.set('IDLE');
+    }
+    await until(() => t.v.voice.echoState() === 'verified');
     t.wake.trigger();
     await until(() => t.userTurns().length === 1);
     await idle(t.services);

@@ -551,6 +551,7 @@ export function createVoiceSystem(
       opts.factories ??
       (s.isTest ? testFactories() : realFactories(s, local, models, opts.capture, { diag, mic })),
     diag,
+    onEcho: (state) => mic.echo(state),
     activeConversation: () => activeConversation ?? undefined,
     quick: (text) => matchQuickCommand(text, routineTriggers()),
     onDictation: (text) =>

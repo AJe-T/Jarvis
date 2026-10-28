@@ -1,5 +1,6 @@
 import type { VoiceStatus } from '@shared/ipc-contract';
 import type { Logger } from '../logging/logger';
+import type { EchoState } from './echo-check';
 
 /** Waits before each new try of the echo-cancelled microphone after it failed (voice fix 1A). */
 export const CAPTURE_RETRY_MS = [1000, 3000, 10_000] as const;
@@ -56,9 +57,11 @@ export function createMicSupervisor(deps: {
     retryInMs: null,
   };
 
+  let echo: EchoState = 'off';
+
   function set(next: Partial<MicStatus>): void {
     status = { ...status, ...next };
-    deps.emit({ mic: status });
+    deps.emit({ mic: status, echo });
   }
 
   function tryAgain(): void {
@@ -88,7 +91,19 @@ export function createMicSupervisor(deps: {
   }
 
   return {
-    status: (): VoiceStatus => ({ mic: status }),
+    status: (): VoiceStatus => ({ mic: status, echo }),
+
+    /** Voice fix 2A: the echo check's verdict; a leak is explained once. */
+    echo(next: EchoState): void {
+      if (next === echo) return;
+      if (next === 'leaks')
+        deps.notify(
+          'warn',
+          "Echo cancellation isn't keeping my voice out of the microphone here, so saying my name won't interrupt me while I talk. Use the hotkey, headphones, or lower the speaker volume.",
+        );
+      echo = next;
+      set({});
+    },
 
     /** The echo-cancelled microphone failed: the native one is opened now, a retry scheduled. */
     broken(why: string): void {

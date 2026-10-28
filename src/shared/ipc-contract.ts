@@ -100,6 +100,11 @@ export const VoiceStatus = z.object({
     inputs: z.array(z.object({ deviceId: z.string(), label: z.string() })),
     retryInMs: z.number().nullable(),
   }),
+  /**
+   * Voice fix 2A, from Jarvis's own replies: off = no echo cancellation; unverified = not checked
+   * yet (interrupting by voice waits); verified = his voice stays out of the mic; leaks = it doesn't.
+   */
+  echo: z.enum(['off', 'unverified', 'verified', 'leaks']),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatus>;
 const Empty = z.object({}).strict();

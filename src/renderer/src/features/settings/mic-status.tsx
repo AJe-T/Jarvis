@@ -32,6 +32,15 @@ export function MicStatus(): React.JSX.Element | null {
                 : `Echo cancellation's microphone keeps failing (${m.detail}). The Windows microphone is listening, without echo cancellation.`}
         </span>
       </p>
+      {st.echo !== 'off' && (
+        <p className={st.echo === 'leaks' ? 'mt-2 text-lamp-400' : 'mt-2 text-ink-300'}>
+          {st.echo === 'verified'
+            ? '✓ Echo cancellation keeps my voice out of the microphone: saying my name interrupts me mid-reply.'
+            : st.echo === 'leaks'
+              ? "My voice still reaches the microphone here, so saying my name won't interrupt me while I talk (the hotkey always does). Headphones or a lower speaker volume help."
+              : 'Echo cancellation is checked during my first replies; until then, interrupt me with the hotkey.'}
+        </p>
+      )}
       {(m.state === 'failed' || m.state === 'retrying') && (
         <Button className="mt-2" onClick={() => void call('voice:mic', { action: 'retry' })}>
           Try again
