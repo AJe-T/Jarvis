@@ -10,6 +10,7 @@ import {
   openDatabase,
   pendingMigrations,
   quickCheck,
+  scheduleRestore,
   type Db,
 } from './db/connection';
 import { createConversationsRepo } from './db/repos/conversations-repo';
@@ -532,7 +533,8 @@ export function createServices(opts: ServiceOptions) {
       mkdirSync(forgeDir, { recursive: true });
       const dir = join(forgeDir, 'repo');
       const run = createNodeRunner(node.exe, dir);
-      return { ws: createWorkspace({ dir, git: createGit(dir), run }), run };
+      const git = createGit(dir);
+      return { ws: createWorkspace({ dir, git, run }), run, git };
     },
     boss: (input) => runBoss({ rt: claudeCode, ...input }),
     repoUrl: () => settings.get('forge.repoUrl'),
@@ -561,6 +563,19 @@ export function createServices(opts: ServiceOptions) {
       confirm: (input, signal) => broker.request(input, signal),
       label: providerName,
     }),
+    // F5: after Sir approves, ship it; his data is backed up before he can install the build.
+    ship: {
+      installersDir: join(forgeDir, 'installers'),
+      file: join(forgeDir, 'last-ship.json'),
+      backup: () => backupNow(db, join(forgeDir, 'backups')),
+      restore: (file) => {
+        // Only Forge's own backups, whatever the record says (like applyPendingRestore).
+        const source = join(forgeDir, 'backups', basename(file));
+        if (!existsSync(source)) throw new Error(`The backup ${source} no longer exists.`);
+        scheduleRestore(db, opts.userData, { source });
+        audit.append('user', 'forge.rollback', { file: basename(file) });
+      },
+    },
   });
   for (const tool of createForgeTools({
     forge,

@@ -1,9 +1,48 @@
 import { z } from 'zod';
 import { FORGE_REPO_RE } from '@shared/forge';
 import { defineTool, fail, ok, type Tool } from '../tools/types';
-import { describeRun, type Forge } from './forge';
+import type { ConfirmDetails } from '../tools/types';
+import { describeRun, type Forge, type ForgeRun } from './forge';
 import { isProtected } from './protected';
+import { describeShip } from './ship';
 import { connectionName, TOOL_NAME_RE } from './tool-build';
+
+const MAX_FILES_SHOWN = 40;
+
+/** What Sir sees before a change ships: goal, files with +/-, warnings, allowed protected files, cost. */
+export function approvalDetails(r: ForgeRun | null, runId: string): Partial<ConfirmDetails> {
+  if (!r || r.id !== runId || r.kind !== 'change' || r.state !== 'passed')
+    return {
+      title: 'Nothing to ship',
+      details: `Run ${runId} is not a change run that passed every check.`,
+      detailsKind: 'text',
+    };
+  const stat = r.stat ?? [];
+  const files = stat
+    .slice(0, MAX_FILES_SHOWN)
+    .map((f) => `${f.path}  +${f.added} -${f.removed}`)
+    .concat(stat.length > MAX_FILES_SHOWN ? [`…and ${stat.length - MAX_FILES_SHOWN} more`] : []);
+  const warns = (r.report?.findings ?? []).filter((f) => f.severity === 'warn');
+  return {
+    title: 'Ship this change as a new Jarvis version?',
+    actionLabel: 'Ship it',
+    details: [
+      `Goal:\n${r.goal}`,
+      `Files changed (${stat.length}):\n${files.join('\n') || '(none listed)'}`,
+      ...(warns.length
+        ? [`WARNINGS FROM THE REVIEW:\n${warns.map((w) => `- ${w.path}: ${w.problem}`).join('\n')}`]
+        : []),
+      ...(r.approved.length
+        ? [`PROTECTED FILES YOU ALLOWED:\n${r.approved.map((p) => `- ${p}`).join('\n')}`]
+        : []),
+      `Claude's summary (its own words, not checked by Forge):\n${(r.summary ?? '').slice(0, 3000)}`,
+      `Claude cost: about $${(r.costUsd ?? 0).toFixed(2)}. Run ${r.id}, branch ${r.branch ?? ''}, commit ${(r.head ?? '').slice(0, 10)}. Forge also adds the version bump and, if missing, a BIBLE row; if dev moved meanwhile, a merge commit.`,
+    ].join('\n\n'),
+    detailsKind: 'text',
+    purpose:
+      'Forge bumps the version, builds the installer, backs up your data, merges into dev, tags it and pushes to GitHub. It never installs: you run the installer.',
+  };
+}
 
 /**
  * Forge tools (docs/Forge.md): Sir asks for a change to Jarvis itself, Claude agrees the goal with
@@ -141,6 +180,61 @@ export function createForgeTools(deps: {
       },
     }),
     defineTool({
+      name: 'forge_approve',
+      description:
+        "Ship the Forge change that just passed every check, after sir approves it (Forge phase F5): in Forge's own clone it bumps the version, builds the installer, backs up sir's data, merges the branch into dev, tags it and pushes to GitHub, then reports the installer path. Takes 10–30 minutes; sir is told when it ends. Never installs: sir runs the installer himself. Only when forge_status shows a change run PASSED and sir wants it shipped; runId is the id forge_status shows. After a failed step (push refused, merge conflict) it continues from that step.",
+      input: z.object({ runId: z.string().regex(/^forge_[a-z0-9]+$/) }),
+      tier: 'CONFIRM',
+      timeoutMs: 10_000,
+      summarize: ({ runId }) => `Forge: ship run ${runId}`,
+      confirm: ({ runId }) => approvalDetails(deps.forge.status(), runId),
+      async run({ runId }) {
+        try {
+          const r = deps.forge.approve(runId);
+          return Promise.resolve(
+            ok(
+              `Shipping run ${r.id}. I'll tell sir when the installer is ready; forge_status shows each step.`,
+            ),
+          );
+        } catch (err) {
+          return fail(err instanceof Error ? err.message : String(err));
+        }
+      },
+    }),
+    defineTool({
+      name: 'forge_rollback',
+      description:
+        "Undo the last Forge build when it broke something: schedules sir's data (database and settings) to be restored to how it was before that build, and gives him the previous installer to run. Only when sir asks to roll back.",
+      input: z.object({}),
+      tier: 'CONFIRM',
+      timeoutMs: 30_000,
+      summarize: () => `Forge: roll back v${deps.forge.lastShip()?.version ?? ''}`,
+      confirm: () => {
+        const s = deps.forge.lastShip();
+        return {
+          title: `Roll back Jarvis v${s?.version ?? ''}?`,
+          actionLabel: 'Roll back',
+          details: `Your data (chats, memory index, settings) goes back to how it was just before Forge built v${s?.version ?? ''}, the next time Jarvis starts. Anything newer is kept in pre-restore.db, not lost.\n\nThen run the previous installer${s?.previousInstaller ? `:\n${s.previousInstaller}` : ` for v${s?.fromVersion ?? 'the previous version'}`}`,
+          detailsKind: 'text',
+        };
+      },
+      async run() {
+        try {
+          const s = deps.forge.rollback();
+          const installer = s.previousInstaller
+            ? `run the previous installer: ${s.previousInstaller}`
+            : `run the installer of v${s.fromVersion ?? 'the previous version'} (Forge has no earlier installer of its own; your own dist folder or GitHub has it)`;
+          return Promise.resolve(
+            ok(
+              `Rollback is scheduled. Two steps for sir:\n1. Close Jarvis, then ${installer}.\n2. Start Jarvis. Before it opens anything it restores the data from just before v${s.version ?? ''} (backup ${s.backup ?? ''}); what changed since is kept in pre-restore.db.\nDo it in that order: if this newer Jarvis starts first, it restores the data and then upgrades it again.`,
+            ),
+          );
+        } catch (err) {
+          return fail(err instanceof Error ? err.message : String(err));
+        }
+      },
+    }),
+    defineTool({
       name: 'forge_status',
       description:
         "What Forge is doing or how its last run ended: state, latest steps, check results and Claude Code's summary.",
@@ -152,8 +246,13 @@ export function createForgeTools(deps: {
       summarize: () => 'Check Forge',
       async run() {
         const r = deps.forge.status();
+        const s = deps.forge.lastShip();
         return Promise.resolve(
-          ok(r ? describeRun(r, now()) : 'Forge has not run since Jarvis started.'),
+          ok(
+            r
+              ? describeRun(r, now())
+              : `Forge has not run since Jarvis started.${s ? `\n\nLast Forge build:\n${describeShip(s)}` : ''}`,
+          ),
         );
       },
     }),

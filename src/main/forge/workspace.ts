@@ -85,6 +85,25 @@ export function createNodeRunner(nodeExe: string, repoDir: string): GateRunner {
   };
 }
 
+/** Lines added and removed per file, for Sir's approval (binary files count as 0). */
+export interface DiffStat {
+  path: string;
+  added: number;
+  removed: number;
+}
+
+export function parseNumstat(out: string): DiffStat[] {
+  return out
+    .split('\n')
+    .map((l) => /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(l))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => ({
+      path: m[3] ?? '',
+      added: m[1] === '-' ? 0 : Number(m[1]),
+      removed: m[2] === '-' ? 0 : Number(m[2]),
+    }));
+}
+
 export interface Workspace {
   dir: string;
   /** Clone (first time) or fetch, then a clean branch `forge/<slug>` at origin/dev. Returns its base commit. */
@@ -96,7 +115,16 @@ export interface Workspace {
   /** Removes untracked and ignored files (.env, out/…) so the checks see only the committed change. */
   clean(): Promise<void>;
   /** `truncated`: the diff is too big to review in full, which Forge treats as a failure. */
-  changes(base: string): Promise<{ files: ChangedFile[]; patch: string; truncated: boolean }>;
+  changes(base: string): Promise<{
+    files: ChangedFile[];
+    patch: string;
+    truncated: boolean;
+    stat: DiffStat[];
+    /** The commit these changes end at: the one the checks pass or fail. */
+    head: string;
+  }>;
+  /** Puts .git/config back to how it was cloned (the checks ran changed code that could edit it); throws without the saved copy. */
+  restoreConfig(): void;
   /** `git status --short`: what the boss changed so far. */
   status(): Promise<string>;
   /** A text file from the repo, or '' when it doesn't exist (CLAUDE.md, RULES.md). */
@@ -107,8 +135,16 @@ export function createWorkspace(deps: { dir: string; git: GitFn; run: GateRunner
   const { dir, git } = deps;
   const config = join(dir, '.git', 'config');
   const pristine = join(dirname(dir), 'git-config.pristine');
+  const restoreConfig = (): void => {
+    if (!existsSync(pristine))
+      throw new Error(
+        `Forge's saved git settings (${pristine}) are missing; delete ${dir} so Forge clones again.`,
+      );
+    copyFileSync(pristine, config);
+  };
   return {
     dir,
+    restoreConfig,
     async prepare(repoUrl, slug) {
       if (!FORGE_REPO_RE.test(repoUrl))
         throw new Error('The Forge repository must be on github.com.');
@@ -119,7 +155,7 @@ export function createWorkspace(deps: { dir: string; git: GitFn; run: GateRunner
         });
         copyFileSync(config, pristine);
       } else {
-        if (existsSync(pristine)) copyFileSync(pristine, config);
+        if (existsSync(pristine)) restoreConfig();
         if ((await git(['remote', 'get-url', 'origin'])).trim() !== repoUrl) {
           await git(['remote', 'set-url', 'origin', repoUrl]);
           copyFileSync(config, pristine);
@@ -129,7 +165,8 @@ export function createWorkspace(deps: { dir: string; git: GitFn; run: GateRunner
       const branch = `forge/${slug}`;
       await git(['reset', '--hard']);
       await git(['clean', '-fdx', '-e', 'node_modules']);
-      await git(['checkout', '-B', branch, `origin/${BASE_BRANCH}`]);
+      // The full ref: a branch or tag a previous run's checks named "origin/dev" can't stand in.
+      await git(['checkout', '-B', branch, `refs/remotes/origin/${BASE_BRANCH}`]);
       return { branch, base: (await git(['rev-parse', 'HEAD'])).trim() };
     },
     async install(signal) {
@@ -146,11 +183,18 @@ export function createWorkspace(deps: { dir: string; git: GitFn; run: GateRunner
       await git(['clean', '-fdx', '-e', 'node_modules']);
     },
     async changes(base) {
-      const files = parseNameStatus(
-        await git([...DIFF, '--name-status', '-M', '-z', base, 'HEAD']),
-      );
-      const patch = await git([...DIFF, base, 'HEAD']);
-      return { files, patch: patch.slice(0, MAX_PATCH), truncated: patch.length > MAX_PATCH };
+      // One commit id for all three, before any check runs: F5 ships only this commit.
+      const head = (await git(['rev-parse', '--verify', 'HEAD^{commit}'])).trim();
+      const files = parseNameStatus(await git([...DIFF, '--name-status', '-M', '-z', base, head]));
+      const patch = await git([...DIFF, base, head]);
+      const stat = parseNumstat(await git([...DIFF, '--numstat', '-M', base, head]));
+      return {
+        files,
+        patch: patch.slice(0, MAX_PATCH),
+        truncated: patch.length > MAX_PATCH,
+        stat,
+        head,
+      };
     },
     status: () => git(['status', '--short']),
     readText(rel, max) {

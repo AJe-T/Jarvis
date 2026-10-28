@@ -1,8 +1,9 @@
-import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { errorMessage } from '../errors';
 import { bossRules, DELEGATE_RULE, type BossResult, type CheckFn, type DelegateFn } from './boss';
 import { describeReport, runGate, runGates, type GateReport, type GateRunner } from './gates';
+import { describeShip, shipChange, type ShipInfo } from './ship';
 import {
   installTool,
   prepareToolBuild,
@@ -14,11 +15,12 @@ import {
 } from './tool-build';
 import { toolRules } from './tool-runtime';
 import { createDelegateEdit, type WorkerDeps, type WorkerStats } from './workers';
-import type { Workspace } from './workspace';
+import type { DiffStat, GitFn, Workspace } from './workspace';
 
 /**
  * One Forge run (docs/Forge.md §3). A **change** (F1–F2): prepare the clone → npm ci → the boss
- * builds it → commit on the run's branch → every gate; shipping it is phase F5. A **tool** (F3):
+ * builds it → commit on the run's branch → every gate; after Sir approves, it ships (F5,
+ * forge/ship.ts). A **tool** (F3):
  * the boss writes a sandboxed tool in its own build folder → the tool's checks → it waits for Sir
  * to install it. In both, the boss can hand small edits to free AIs (F4). One run at a time.
  */
@@ -35,6 +37,13 @@ export interface ForgeRun {
   startedAt: number;
   endedAt?: number;
   branch?: string;
+  /** A change run: the commit it started from, and lines added/removed per file (for approval). */
+  base?: string;
+  stat?: DiffStat[];
+  /** The commit the checks ran on; the only one F5 may ship. */
+  head?: string;
+  /** Phase F5: shipping after Sir approved it. */
+  ship?: ShipInfo;
   /** A tool run: its name, build folder, the tools it lists, and whether it was installed. */
   tool?: { name: string; buildDir?: string; tools: ToolInfo[]; installed?: 'added' | 'updated' };
   /** What the boss is doing right now, newest last (capped). */
@@ -61,7 +70,7 @@ export interface BossInput {
 
 export interface ForgeDeps {
   /** The clone and a runner for its npm scripts; throws with a plain reason (no Node.js…). */
-  workspace(): Promise<{ ws: Workspace; run: GateRunner }>;
+  workspace(): Promise<{ ws: Workspace; run: GateRunner; git: GitFn }>;
   boss(input: BossInput): Promise<BossResult>;
   repoUrl(): string;
   budgetUsd(): number;
@@ -75,6 +84,16 @@ export interface ForgeDeps {
   };
   /** Phase F4: free AIs for delegate_edit. */
   workers?: WorkerDeps;
+  /** Phase F5: shipping a passed change, and undoing it. */
+  ship?: {
+    installersDir: string;
+    /** Where the last shipped build is kept: Sir installs it, Jarvis restarts, then may roll back. */
+    file: string;
+    /** Backs up Sir's database (settings live in it); returns the file. */
+    backup(): string;
+    /** Schedules that backup to replace the database on the next start. */
+    restore(backupFile: string): void;
+  };
   now?: () => number;
 }
 
@@ -90,6 +109,12 @@ export interface Forge {
   cancel(): boolean;
   /** Installs the checked tool of the last run (Sir confirms first, in forge_install_tool). */
   installTool(): Promise<'added' | 'updated'>;
+  /** Ships the last run in the background after Sir approved it (forge_approve). */
+  approve(runId: string): ForgeRun;
+  /** The last shipped (or partly shipped) build, also after a restart. */
+  lastShip(): ShipInfo | null;
+  /** Schedules the restore of the data backed up before the last Forge build. */
+  rollback(): ShipInfo;
 }
 
 const MAX_LOG = 40;
@@ -122,7 +147,11 @@ export function createForge(deps: ForgeDeps): Forge {
     approved: [...r.approved],
     workers: { ...r.workers },
     ...(r.tool ? { tool: { ...r.tool, tools: [...r.tool.tools] } } : {}),
+    ...(r.stat ? { stat: r.stat.map((s) => ({ ...s })) } : {}),
+    ...(r.ship ? { ship: { ...r.ship, done: [...r.ship.done] } } : {}),
   });
+  const busy = (r: ForgeRun | null): boolean =>
+    r !== null && (!FINISHED.includes(r.state) || r.ship?.state === 'running');
   const progress = (r: ForgeRun, text: string): void => {
     r.log = [...r.log, text].slice(-MAX_LOG);
   };
@@ -148,7 +177,7 @@ export function createForge(deps: ForgeDeps): Forge {
     else if (state === 'passed')
       deps.announce(
         'Forge',
-        `${what} is built and every check passed (branch ${r.branch ?? ''}). Shipping it as an installer comes with Forge phase F5.`,
+        `${what} is built and every check passed (branch ${r.branch ?? ''}). Say "approve it" to ship it as a new version; I'll show you the change first.`,
       );
     else if (state === 'failed')
       deps.announce('Forge', `${what} did not pass: ${r.error ?? 'see the Forge status'}.`);
@@ -227,7 +256,8 @@ export function createForge(deps: ForgeDeps): Forge {
     r.state = 'checking';
     // Ignored files the boss wrote (.env, out/…) are not in the diff, so they must not reach the checks.
     await ws.clean();
-    const { files, patch, truncated } = await ws.changes(base);
+    const { files, patch, truncated, stat, head } = await ws.changes(base);
+    Object.assign(r, { base, stat, head });
     if (truncated)
       return finish(r, 'failed', { error: 'the change is too large to review in full' });
     const report = await runGates(
@@ -275,9 +305,68 @@ export function createForge(deps: ForgeDeps): Forge {
     });
   }
 
+  function saveShip(r: ForgeRun): void {
+    save(r);
+    if (!deps.ship || !r.ship) return;
+    try {
+      mkdirSync(dirname(deps.ship.file), { recursive: true });
+      writeFileSync(deps.ship.file, JSON.stringify(r.ship, null, 2), 'utf8');
+    } catch (err) {
+      // Shipping goes on; only a rollback after a restart needs the file.
+      progress(r, `Could not save the ship record: ${errorMessage(err)}`);
+    }
+  }
+
+  async function executeShip(r: ForgeRun, s: ShipInfo, signal: AbortSignal): Promise<void> {
+    const sd = deps.ship;
+    if (!sd) throw new Error('Shipping is not available.');
+    const { ws, run, git } = await deps.workspace();
+    await shipChange(
+      {
+        ws,
+        git,
+        run,
+        installersDir: sd.installersDir,
+        backup: () => sd.backup(),
+        signal,
+        onStep: (t) => progress(r, t),
+        onChange: () => saveShip(r),
+      },
+      s,
+    );
+    s.state = 'shipped';
+    saveShip(r);
+    deps.announce(
+      'Forge',
+      `Jarvis v${s.version ?? ''} is built, merged into dev and pushed to GitHub. Installer: ${s.installer ?? ''}. Close Jarvis and run it when you're ready; your data was backed up first, and "roll back Forge" undoes it. Your own copy of the source catches up with git pull.${s.merge === 'merge commit' ? ' Note: dev had newer commits, so a merge commit was made; the installer was built from the branch before that merge.' : ''}`,
+    );
+  }
+
+  function readShipFile(): ShipInfo | null {
+    if (!deps.ship || !existsSync(deps.ship.file)) return null;
+    try {
+      // The record is a file in Sir's profile: only well-formed values reach the rollback dialog.
+      const s = JSON.parse(readFileSync(deps.ship.file, 'utf8')) as ShipInfo;
+      const version = (v: unknown): boolean => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v);
+      const exe = (p: unknown): boolean =>
+        p === undefined || (typeof p === 'string' && /^[^\n<>|"*?]+\.exe$/i.test(p));
+      const ok =
+        typeof s.runId === 'string' &&
+        Array.isArray(s.done) &&
+        version(s.version) &&
+        version(s.fromVersion) &&
+        exe(s.installer) &&
+        exe(s.previousInstaller) &&
+        typeof s.backup === 'string';
+      return ok ? s : null;
+    } catch {
+      return null;
+    }
+  }
+
   return {
     start(req) {
-      if (current && !FINISHED.includes(current.state))
+      if (current && busy(current))
         throw new Error(`Forge is already working on "${current.goal}". Cancel it or wait.`);
       if (req.kind === 'change' && !deps.repoUrl())
         throw new Error(
@@ -307,9 +396,60 @@ export function createForge(deps: ForgeDeps): Forge {
     },
     status: () => (current ? snapshot(current) : null),
     cancel() {
-      if (!current || FINISHED.includes(current.state) || !controller) return false;
+      if (!busy(current) || !controller) return false;
       controller.abort();
       return true;
+    },
+    approve(runId) {
+      const r = current;
+      if (!deps.ship) throw new Error('Shipping is not available.');
+      if (!r || r.kind !== 'change' || r.state !== 'passed' || !r.branch || !r.head)
+        throw new Error('Only a change run that passed every check can be shipped. Run one first.');
+      // Sir approved what the dialog showed: that exact run.
+      if (r.id !== runId)
+        throw new Error(`Run ${runId} is not the last Forge run (${r.id}); nothing was shipped.`);
+      if (r.ship?.state === 'shipped')
+        throw new Error(`This run is already shipped as v${r.ship.version ?? ''}.`);
+      if (r.ship?.state === 'running') throw new Error('This run is being shipped right now.');
+      // A ship that stopped (push refused, merge conflict…) resumes at the step that failed.
+      const { error: _old, ...prev } = r.ship ?? {
+        runId: r.id,
+        goal: r.goal,
+        branch: r.branch,
+        head: r.head,
+        done: [],
+        at: now(),
+      };
+      const s: ShipInfo = { ...prev, state: 'running' };
+      r.ship = s;
+      controller = new AbortController();
+      const signal = controller.signal;
+      saveShip(r);
+      void executeShip(r, s, signal).catch((err: unknown) => {
+        Object.assign(s, {
+          state: signal.aborted ? 'cancelled' : 'failed',
+          error: errorMessage(err),
+        });
+        saveShip(r);
+        deps.announce(
+          'Forge',
+          signal.aborted
+            ? 'Shipping was cancelled.'
+            : `Shipping stopped: ${s.error ?? ''}. Nothing was retried; approve again to continue from that step.`,
+        );
+      });
+      return snapshot(r);
+    },
+    lastShip() {
+      const s = current?.ship ?? readShipFile();
+      return s ? { ...s, done: [...s.done] } : null;
+    },
+    rollback() {
+      const s = current?.ship ?? readShipFile();
+      if (!deps.ship || !s?.backup || !s.version || !s.done.includes('backed-up'))
+        throw new Error('No Forge build has been shipped yet, so there is nothing to roll back.');
+      deps.ship.restore(s.backup);
+      return { ...s, done: [...s.done] };
     },
     async installTool() {
       const r = current;
@@ -338,7 +478,7 @@ export function describeRun(r: ForgeRun, at: number): string {
   const what = r.kind === 'tool' ? `tool "${r.tool?.name ?? ''}"` : `"${r.goal}"`;
   const where = r.branch ? `, branch ${r.branch}` : '';
   const cost = r.costUsd ? `, about $${r.costUsd.toFixed(2)} of Claude` : '';
-  const head = `Forge run ${what}: ${r.state.toUpperCase()} after ${mins} min${where}${cost}.`;
+  const head = `Forge run ${r.id} ${what}: ${r.state.toUpperCase()} after ${mins} min${where}${cost}.`;
   const w = r.workers;
   const workers =
     w.free + w.boss > 0
@@ -357,6 +497,7 @@ export function describeRun(r: ForgeRun, at: number): string {
     ...workers,
     ...tools,
     ...(r.log.length ? ['', 'Latest steps:', ...r.log.slice(-8).map((l) => `- ${l}`)] : []),
+    ...(r.ship ? ['', describeShip(r.ship)] : []),
     ...(r.report ? ['', 'Checks:', describeReport(r.report)] : []),
     ...(r.summary ? ['', "Claude's summary:", r.summary] : []),
   ].join('\n');

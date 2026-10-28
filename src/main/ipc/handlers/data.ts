@@ -1,7 +1,6 @@
-import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, shell } from 'electron';
-import { backupNow, listBackups } from '../../db/connection';
+import { backupNow, listBackups, scheduleRestore } from '../../db/connection';
 import { JarvisError } from '../../errors';
 import { tailLog } from '../../logging/log-tail';
 import type { Services } from '../../services';
@@ -21,11 +20,7 @@ export function registerDataHandlers(s: Services): void {
     if (!listBackups(backups).some((b) => b.file === req.file))
       throw new JarvisError('NOT_FOUND', 'no such backup', 'That backup no longer exists.');
     s.audit.append('user', 'db.restore', { file: req.file });
-    // Keep the current data outside the rotating backup set, so pruning can't remove the restore source.
-    const safety = join(s.userData, 'pre-restore.db');
-    rmSync(safety, { force: true });
-    s.db.prepare('VACUUM INTO ?').run(safety);
-    writeFileSync(join(s.userData, 'restore-pending.json'), JSON.stringify({ file: req.file }));
+    scheduleRestore(s.db, s.userData, { file: req.file });
     // The open database can't be replaced in place: restart, and the restore runs before it opens.
     setTimeout(() => {
       app.relaunch();

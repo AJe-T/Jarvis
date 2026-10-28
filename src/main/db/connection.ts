@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -126,6 +134,32 @@ export function backupNow(db: Db, dir: string, now = new Date()): string {
   for (const old of listBackups(dir).slice(KEEP_BACKUPS))
     rmSync(join(dir, old.file), { force: true });
   return target;
+}
+
+/**
+ * Database.md §7: marks backups/<file> to replace the database on the next start (applied before it
+ * opens), keeping the current data in pre-restore.db, outside the rotating backup set.
+ * `source`: a backup kept elsewhere (Forge's, ADR-046) is first copied in as the newest backup, so
+ * pruning can't remove it before the restart.
+ */
+export function scheduleRestore(
+  db: Db,
+  userData: string,
+  backup: { file: string } | { source: string },
+  now = new Date(),
+): string {
+  const dir = join(userData, 'backups');
+  let file: string;
+  if ('source' in backup) {
+    mkdirSync(dir, { recursive: true });
+    file = `jarvis-${stamp(now)}.db`;
+    copyFileSync(backup.source, join(dir, file));
+  } else file = backup.file;
+  const safety = join(userData, 'pre-restore.db');
+  rmSync(safety, { force: true });
+  db.prepare('VACUUM INTO ?').run(safety);
+  writeFileSync(join(userData, 'restore-pending.json'), JSON.stringify({ file }));
+  return file;
 }
 
 /** Backs up when the newest backup is older than 24 h. */
