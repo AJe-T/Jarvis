@@ -169,6 +169,7 @@ export function createSpotterWake(
       opts.onHeard?.(heard);
       return true;
     },
+    reset: () => engine.reset(),
     release() {
       // Native memory goes with the spotter object; nothing else is held.
     },

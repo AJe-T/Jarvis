@@ -736,6 +736,7 @@ export function createVoiceController(d: VoiceDeps) {
     clearTimeout(l.silence);
     clearTimeout(l.max);
     l.tap?.close();
+    wake?.reset();
     l.abort.abort();
     void l.session?.close().catch(() => undefined);
     if (!needRecorder()) releaseRecorder();

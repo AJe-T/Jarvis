@@ -33,14 +33,18 @@ export function createFakeRecorder(frameLength = 512): Recorder & { reads: numbe
   return r;
 }
 
-export function createFakeWake(): WakeWord & { trigger(): void } {
+export function createFakeWake(): WakeWord & { trigger(): void; resets: number } {
   let fire = false;
   return {
     frameLength: 512,
+    resets: 0,
     process: () => {
       const f = fire;
       fire = false;
       return f;
+    },
+    reset() {
+      this.resets++;
     },
     trigger: () => {
       fire = true;

@@ -109,6 +109,17 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     expect(t.states()).toContain('SPEAKING');
   });
 
+  it('clears the wake engine when listening ends, so the phrase that woke it cannot fire again', async () => {
+    const t = setupVoice({ rules: [] }, ['hello'], { mode: 'wake' });
+    expect(await t.v.start()).toEqual({ ok: true });
+    t.wake.trigger();
+    await until(() => t.stt.sessions === 1);
+    expect(t.wake.resets).toBe(0);
+    await until(() => t.services.conversations.list(5).length === 1);
+    expect(t.wake.resets).toBe(1);
+    t.v.voice.shutdown();
+  });
+
   it('wake word starts listening; levels are emitted while the mic runs', async () => {
     const t = setupVoice({ rules: [] }, ['hello'], { mode: 'wake' });
     t.services.secrets.set('picovoice', 'pv-test-key-123');

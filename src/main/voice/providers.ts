@@ -206,6 +206,7 @@ export function createPorcupine(accessKey: string, sensitivity: number): WakeWor
   return {
     frameLength: p.frameLength,
     process: (frame) => p.process(frame) >= 0,
+    reset: () => undefined, // Porcupine keeps no phrase between frames worth clearing
     release: () => p.release(),
   };
 }

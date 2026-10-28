@@ -187,31 +187,41 @@ export function createPersonalWake(
   /** Closest match of the phrase being spoken, logged when it ends without waking (a near miss). */
   let burst = { best: Infinity, fired: false };
 
-  return chunkedWake(async (chunk) => {
-    const embedding = await features(chunk);
-    sinceLoud = chunkRms(chunk) >= LOUD_RMS ? 0 : sinceLoud + 1;
-    recent.push(centred(embedding, stored.mean));
-    if (recent.length > keep) recent = recent.slice(-keep);
-    const score = classify ? await classify(embedding) : 0;
-    if (sinceLoud > SPEECH_RECENT_CHUNKS) {
-      if (!burst.fired && burst.best < threshold * 2) opts.onNearMiss?.(burst.best, threshold);
+  return chunkedWake(
+    async (chunk) => {
+      const embedding = await features(chunk);
+      sinceLoud = chunkRms(chunk) >= LOUD_RMS ? 0 : sinceLoud + 1;
+      recent.push(centred(embedding, stored.mean));
+      if (recent.length > keep) recent = recent.slice(-keep);
+      const score = classify ? await classify(embedding) : 0;
+      if (sinceLoud > SPEECH_RECENT_CHUNKS) {
+        if (!burst.fired && burst.best < threshold * 2) opts.onNearMiss?.(burst.best, threshold);
+        burst = { best: Infinity, fired: false };
+        return false;
+      }
+      if (recent.length < MIN_TEMPLATE) return false;
+      let distance = Infinity;
+      for (const t of stored.templates) distance = Math.min(distance, matchDistance(t, recent));
+      burst.best = Math.min(burst.best, distance);
+      const heard =
+        distance <= threshold ||
+        (opts.classifierThreshold !== undefined && score >= opts.classifierThreshold);
+      if (!heard) return false;
+      burst.fired = true; // a match, even if debounced, is not a near miss
+      if (now() - lastFire < DEBOUNCE_MS) return false;
+      lastFire = now();
+      recent = []; // the same phrase must not match again on the next chunk
+      return true;
+    },
+    models.release,
+    () => {
+      features.reset();
+      classify?.reset();
+      recent = [];
+      sinceLoud = Infinity;
       burst = { best: Infinity, fired: false };
-      return false;
-    }
-    if (recent.length < MIN_TEMPLATE) return false;
-    let distance = Infinity;
-    for (const t of stored.templates) distance = Math.min(distance, matchDistance(t, recent));
-    burst.best = Math.min(burst.best, distance);
-    const heard =
-      distance <= threshold ||
-      (opts.classifierThreshold !== undefined && score >= opts.classifierThreshold);
-    if (!heard) return false;
-    burst.fired = true; // a match, even if debounced, is not a near miss
-    if (now() - lastFire < DEBOUNCE_MS) return false;
-    lastFire = now();
-    recent = []; // the same phrase must not match again on the next chunk
-    return true;
-  }, models.release);
+    },
+  );
 }
 
 // ── storage (an internal secret: it is Sir's voice) ─────────────────────────────────────────

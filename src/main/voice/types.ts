@@ -50,6 +50,11 @@ export interface WakeWord {
   readonly frameLength: number;
   /** Porcupine answers synchronously; openWakeWord (ONNX) asynchronously. */
   process(frame: Int16Array): boolean | Promise<boolean>;
+  /**
+   * Forget the audio heard so far. Called when listening ends: the engine was not fed while Sir
+   * spoke, so its buffers still hold the phrase that woke Jarvis and would fire again.
+   */
+  reset(): void;
   release(): void;
 }
 

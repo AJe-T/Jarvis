@@ -33,6 +33,55 @@ function fakeOww(scoreAt: (call: number) => number) {
   return { models, calls };
 }
 
+/**
+ * Models that "hear" loudness: a loud chunk gives loud mel frames, an embedding is the window's
+ * average, and the score is 1 while the last 16 embeddings are mostly loud (a stand-in "Hey Jarvis").
+ */
+function loudnessOww(): OwwModels {
+  return {
+    async mel(audio) {
+      const loud = audio.some((x) => Math.abs(x) > 5000);
+      return new Float32Array(8 * 32).fill(loud ? 30 : -20); // → 5 or 0 after x/10 + 2
+    },
+    async embed(window) {
+      return new Float32Array(96).fill(window.reduce((a, b) => a + b, 0) / window.length);
+    },
+    async classify(features) {
+      let sum = 0;
+      for (let i = 0; i < 16; i++) sum += features[i * 96] ?? 0;
+      return sum / 16 > 2.5 ? 1 : 0;
+    },
+    release: () => undefined,
+  };
+}
+
+describe('wake word reset after listening (voice fix 1A)', () => {
+  const loud = new Int16Array(OWW_CHUNK).fill(12000);
+  const quiet = new Int16Array(OWW_CHUNK);
+
+  async function wokenThenQuiet(reset: boolean): Promise<boolean[]> {
+    let t = 0;
+    const ww = createOpenWakeWord(loudnessOww(), 0.5, () => t);
+    let woke = false;
+    for (let i = 0; i < 30 && !woke; i++) woke = await ww.process(loud);
+    expect(woke).toBe(true);
+    // Sir speaks his request for 5 s; the wake engine isn't fed meanwhile.
+    t += 5000;
+    if (reset) ww.reset();
+    const after: boolean[] = [];
+    for (let i = 0; i < 25; i++) after.push(await ww.process(quiet));
+    return after;
+  }
+
+  it('without reset the stale "Hey Jarvis" fires again on the first quiet chunk (the bug)', async () => {
+    expect((await wokenThenQuiet(false))[0]).toBe(true);
+  });
+
+  it('after reset only new speech can wake it', async () => {
+    expect(await wokenThenQuiet(true)).not.toContain(true);
+  });
+});
+
 describe('openWakeWord port (ADR-011)', () => {
   it('works in 80 ms chunks whatever the mic frame size, with 480 samples of context', async () => {
     const { models, calls } = fakeOww(() => 0);
