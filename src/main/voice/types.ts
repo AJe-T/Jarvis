@@ -25,8 +25,10 @@ export interface SttProvider {
 }
 
 export interface TtsChunk {
-  mime: 'audio/mpeg' | 'audio/wav';
+  /** audio/pcm (voice fix 2B): raw 16-bit little-endian mono samples at `sampleRate`. */
+  mime: 'audio/mpeg' | 'audio/wav' | 'audio/pcm';
   data: Uint8Array;
+  sampleRate?: number;
 }
 
 export interface TtsProvider {

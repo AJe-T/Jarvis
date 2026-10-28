@@ -32,6 +32,12 @@ export function MicStatus(): React.JSX.Element | null {
                 : `Echo cancellation's microphone keeps failing (${m.detail}). The Windows microphone is listening, without echo cancellation.`}
         </span>
       </p>
+      {st.hearing.engine && (
+        <p className={st.hearing.why ? 'mt-2 text-lamp-400' : 'mt-2 text-ink-300'}>
+          Speech recognition: {st.hearing.engine}
+          {st.hearing.why ? ` (instead of ${st.hearing.chosen}: its key is missing)` : ''}
+        </p>
+      )}
       {st.echo !== 'off' && (
         <p className={st.echo === 'leaks' ? 'mt-2 text-lamp-400' : 'mt-2 text-ink-300'}>
           {st.echo === 'verified'

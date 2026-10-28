@@ -3,7 +3,7 @@ import { errorMessage } from '../errors';
 import { newId } from '../lib/util';
 import type { Logger } from '../logging/logger';
 import { SentenceChunker, SpokenExtractor } from './speech/speech';
-import type { TtsProvider } from './types';
+import type { TtsChunk, TtsProvider } from './types';
 
 export interface TtsDeps {
   primary: () => TtsProvider;
@@ -20,10 +20,7 @@ export interface TtsDeps {
   onFirstAudio?(utteranceId: string): void;
 }
 
-interface CachedChunk {
-  mime: 'audio/mpeg' | 'audio/wav';
-  data: Uint8Array;
-}
+type CachedChunk = Pick<TtsChunk, 'mime' | 'data' | 'sampleRate'>;
 
 /** Stock lines ("Yes, sir?") as audio, so they play the moment Jarvis is woken. */
 const speechCache = new Map<string, CachedChunk[]>();
@@ -63,7 +60,11 @@ export async function warmSpeech(
     if (signal.aborted || speechCache.has(key)) continue;
     const chunks: CachedChunk[] = [];
     for await (const c of provider.synthesize(sentence, opts))
-      chunks.push({ mime: c.mime, data: c.data });
+      chunks.push({
+        mime: c.mime,
+        data: c.data,
+        ...(c.sampleRate ? { sampleRate: c.sampleRate } : {}),
+      });
     if (!signal.aborted) rememberSpeech(key, chunks);
   }
 }
@@ -164,7 +165,7 @@ export class Utterance {
     const key = speechKey(chain[0]?.id ?? '', opts.voice, opts.rate, text);
     const hit = this.cache ? speechCache.get(key) : undefined;
     if (hit) {
-      for (const c of hit) this.send(c.mime, c.data);
+      for (const c of hit) this.send(c);
       return;
     }
     let failed: { id: string; err: unknown } | undefined;
@@ -174,8 +175,12 @@ export class Utterance {
       const chunks: CachedChunk[] = [];
       try {
         for await (const chunk of provider.synthesize(text, opts)) {
-          this.send(chunk.mime, chunk.data);
-          chunks.push({ mime: chunk.mime, data: chunk.data });
+          this.send(chunk);
+          chunks.push({
+            mime: chunk.mime,
+            data: chunk.data,
+            ...(chunk.sampleRate ? { sampleRate: chunk.sampleRate } : {}),
+          });
         }
         // Only the chosen voice is kept: a backup voice may be gone once the first one recovers.
         if (this.cache && i === 0 && !this.aborted) rememberSpeech(key, chunks);
@@ -194,7 +199,7 @@ export class Utterance {
     }
   }
 
-  private send(mime: 'audio/mpeg' | 'audio/wav', data: Uint8Array): void {
+  private send({ mime, data, sampleRate }: CachedChunk): void {
     if (this.aborted) return;
     if (!this.firstAudio) {
       this.firstAudio = true;
@@ -205,6 +210,7 @@ export class Utterance {
       seq: this.seq++,
       mime,
       data: new Uint8Array(data),
+      ...(sampleRate ? { sampleRate } : {}),
     });
   }
 }

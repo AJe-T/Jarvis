@@ -63,6 +63,7 @@ import { createElevenLabsTts } from './tts/elevenlabs';
 import { createKokoroTts } from './tts/kokoro';
 import { createAuraTts, createGroqTts, createOpenAiTts, createServerTts } from './tts/cloud-tts';
 import { createPiperTts } from './tts/piper';
+import { createAuraStreamTts, createElevenLabsStreamTts, streamFirst } from './tts/stream-tts';
 import {
   assemblyAiTranscriber,
   elevenLabsTranscriber,
@@ -177,6 +178,13 @@ function hasKey(s: Services, id: SttEngineId): boolean {
   return !info?.key || id === 'server' || !!s.secrets.get(info.key);
 }
 
+/** Why the engine really listening differs from the chosen one ('' when it doesn't). */
+function fallbackWhy(chosen: SttEngineId, engine: SttEngineId): string {
+  if (chosen === engine) return '';
+  const info = STT_ENGINES.find((e) => e.id === chosen);
+  return `${sttName(chosen)} is chosen but has no ${info?.keyLabel ?? 'key'}, so ${LOCAL_HEARING} is listening instead. Add the key in Settings → Voice to use ${sttName(chosen)}.`;
+}
+
 /** The engine that will really hear Sir: a cloud engine without its key falls back to on-device speech. */
 function effectiveStt(s: Services, local: Pick<LocalEngines, 'ready'>): SttEngineId {
   const chosen = s.settings.get('voice.stt.provider');
@@ -192,6 +200,14 @@ export function realFactories(
   extras: { diag?: VoiceDiagnostics; mic?: MicSupervisor } = {},
 ): VoiceFactories {
   const { diag, mic } = extras;
+  const showHearing = (engine: SttEngineId): void => {
+    const chosen = s.settings.get('voice.stt.provider');
+    mic?.hearing({
+      chosen: sttName(chosen),
+      engine: sttName(engine),
+      why: fallbackWhy(chosen, engine),
+    });
+  };
   const captureOn = (): boolean =>
     !!capture && s.settings.get('voice.echoCancel') && !capture.broken();
   const deepgram = createDeepgramStt(() => s.secrets.get('deepgram'));
@@ -212,6 +228,7 @@ export function realFactories(
     start: async (o) => {
       // A cloud engine chosen but no key: fall back to free on-device speech when it is downloaded.
       const engine = effectiveStt(s, local);
+      showHearing(engine);
       if (engine === 'whisper') {
         const cloud = cloudHearing();
         if (cloud.length && local.vadReady()) {
@@ -325,12 +342,20 @@ export function realFactories(
       installed: () => models.installed('kokoro-82m'),
       voice: () => s.settings.get('voice.tts.kokoroVoice'),
     }),
-    elevenlabs: createElevenLabsTts({
-      key: () => s.secrets.get('elevenlabs'),
-      voiceId: () => s.settings.get('voice.tts.elevenVoice'),
-      model: () => s.settings.get('voice.tts.elevenModel'),
-      ...(s.fetch ? { fetch: s.fetch } : {}),
-    }),
+    // Voice fix 2B: streamed PCM over a WebSocket first, the same voice over HTTP if that fails.
+    elevenlabs: streamFirst(
+      createElevenLabsStreamTts({
+        key: () => s.secrets.get('elevenlabs'),
+        voiceId: () => s.settings.get('voice.tts.elevenVoice'),
+        model: () => s.settings.get('voice.tts.elevenModel'),
+      }),
+      createElevenLabsTts({
+        key: () => s.secrets.get('elevenlabs'),
+        voiceId: () => s.settings.get('voice.tts.elevenVoice'),
+        model: () => s.settings.get('voice.tts.elevenModel'),
+        ...(s.fetch ? { fetch: s.fetch } : {}),
+      }),
+    ),
     piper: createPiperTts({
       modelDir: (v) => models.dir(v),
       installed: (v) => models.installed(v),
@@ -343,11 +368,17 @@ export function realFactories(
       style: () => s.settings.get('voice.tts.openaiStyle'),
       ...(s.fetch ? { fetch: s.fetch } : {}),
     }),
-    aura: createAuraTts({
-      key: () => s.secrets.get('deepgram'),
-      voice: () => s.settings.get('voice.tts.auraVoice'),
-      ...(s.fetch ? { fetch: s.fetch } : {}),
-    }),
+    aura: streamFirst(
+      createAuraStreamTts({
+        key: () => s.secrets.get('deepgram'),
+        voice: () => s.settings.get('voice.tts.auraVoice'),
+      }),
+      createAuraTts({
+        key: () => s.secrets.get('deepgram'),
+        voice: () => s.settings.get('voice.tts.auraVoice'),
+        ...(s.fetch ? { fetch: s.fetch } : {}),
+      }),
+    ),
     groq: createGroqTts({
       key: () => s.secrets.get('groq'),
       voice: () => s.settings.get('voice.tts.groqVoice'),
@@ -486,6 +517,13 @@ export function createVoiceSystem(
   });
   /** Phase 0: the voice setup actually in effect (keys only as present / absent). */
   function logVoiceSetup(reason: string): void {
+    const chosen = s.settings.get('voice.stt.provider');
+    const engine = effectiveStt(s, local);
+    mic.hearing({
+      chosen: sttName(chosen),
+      engine: sttName(engine),
+      why: fallbackWhy(chosen, engine),
+    });
     const deviceIndex = s.settings.get('voice.deviceIndex');
     const echoCancel = s.settings.get('voice.echoCancel');
     logger.info(

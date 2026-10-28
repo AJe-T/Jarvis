@@ -58,10 +58,11 @@ export function createMicSupervisor(deps: {
   };
 
   let echo: EchoState = 'off';
+  let hearing: VoiceStatus['hearing'] = { chosen: '', engine: '', why: '' };
 
   function set(next: Partial<MicStatus>): void {
     status = { ...status, ...next };
-    deps.emit({ mic: status, echo });
+    deps.emit({ mic: status, echo, hearing });
   }
 
   function tryAgain(): void {
@@ -91,7 +92,20 @@ export function createMicSupervisor(deps: {
   }
 
   return {
-    status: (): VoiceStatus => ({ mic: status, echo }),
+    status: (): VoiceStatus => ({ mic: status, echo, hearing }),
+
+    /** Voice fix 2B: which speech-to-text engine really listens; a fallback is explained once. */
+    hearing(next: VoiceStatus['hearing']): void {
+      if (
+        next.chosen === hearing.chosen &&
+        next.engine === hearing.engine &&
+        next.why === hearing.why
+      )
+        return;
+      if (next.why && next.why !== hearing.why) deps.notify('warn', next.why);
+      hearing = next;
+      set({});
+    },
 
     /** Voice fix 2A: the echo check's verdict; a leak is explained once. */
     echo(next: EchoState): void {

@@ -3,6 +3,23 @@ import { useAssistantStore } from '../stores/assistant-store';
 
 type AudioEvent = EventPayload<'tts:audio'>;
 
+/** Head start before streamed PCM starts playing (and after any underrun). */
+const PCM_LEAD_S = 0.12;
+
+/** 16-bit little-endian mono samples → an AudioBuffer (no decoding: there is no container). */
+export function pcmBuffer(
+  ctx: Pick<BaseAudioContext, 'createBuffer'>,
+  bytes: Uint8Array,
+  sampleRate: number,
+): AudioBuffer {
+  const n = Math.max(1, bytes.length >> 1);
+  const buffer = ctx.createBuffer(1, n, sampleRate);
+  const out = buffer.getChannelData(0);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let i = 0; i < bytes.length >> 1; i++) out[i] = view.getInt16(i * 2, true) / 32768;
+  return buffer;
+}
+
 /**
  * Plays TTS chunks from main in order (Web Audio queue). Reports "started"/"finished" per utterance
  * so main can drive SPEAKING → IDLE, and feeds the output level to the orb (≤ 20 Hz).
@@ -40,18 +57,24 @@ class AudioPlayer {
       }
       const ctx = this.context();
       if (ctx.state === 'suspended') await ctx.resume();
-      const copy = e.data.slice().buffer;
       let buffer: AudioBuffer;
-      try {
-        buffer = await ctx.decodeAudioData(copy);
-      } catch {
-        return; // a corrupt chunk is skipped rather than stalling the queue
+      if (e.mime === 'audio/pcm') {
+        buffer = pcmBuffer(ctx, e.data, e.sampleRate ?? 24_000);
+      } else {
+        try {
+          buffer = await ctx.decodeAudioData(e.data.slice().buffer);
+        } catch {
+          return; // a corrupt chunk is skipped rather than stalling the queue
+        }
       }
       if (gen !== this.generation) return;
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       src.connect(this.analyser as AnalyserNode);
-      const at = Math.max(ctx.currentTime + 0.02, this.nextStart);
+      // Streamed PCM (voice fix 2B) arrives in small pieces: a short head start absorbs network
+      // jitter, then each piece is scheduled sample-exactly after the last, with no gap or click.
+      const lead = e.mime === 'audio/pcm' && this.nextStart <= ctx.currentTime ? PCM_LEAD_S : 0.02;
+      const at = Math.max(ctx.currentTime + lead, this.nextStart);
       src.start(at);
       this.nextStart = at + buffer.duration;
       this.playing.add(src);

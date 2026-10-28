@@ -105,6 +105,8 @@ export const VoiceStatus = z.object({
    * yet (interrupting by voice waits); verified = his voice stays out of the mic; leaks = it doesn't.
    */
   echo: z.enum(['off', 'unverified', 'verified', 'leaks']),
+  /** Voice fix 2B: the speech-to-text engine chosen, the one really listening, and why they differ. */
+  hearing: z.object({ chosen: z.string(), engine: z.string(), why: z.string() }),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatus>;
 const Empty = z.object({}).strict();
@@ -1235,8 +1237,10 @@ export const EVENTS = {
   'tts:audio': z.object({
     utteranceId: z.string(),
     seq: z.number(),
-    mime: z.enum(['audio/mpeg', 'audio/wav']),
+    mime: z.enum(['audio/mpeg', 'audio/wav', 'audio/pcm']),
     data: z.instanceof(Uint8Array),
+    /** audio/pcm only: samples per second of the 16-bit mono data (voice fix 2B). */
+    sampleRate: z.number().int().min(8000).max(48_000).optional(),
     /** End-of-utterance marker (empty data): playback is finished once everything before it has played. */
     last: z.boolean().optional(),
   }),

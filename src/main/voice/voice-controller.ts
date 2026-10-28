@@ -212,6 +212,29 @@ export function createVoiceController(d: VoiceDeps) {
     log.info({ state }, 'echo cancellation check');
     d.onEcho?.(state);
   });
+  /** Voice fix 2B: the request whose reply hasn't started playing yet. */
+  let pendingLatency: {
+    eosAt: number;
+    finalAt: number;
+    turnId?: string;
+    firstTokenAt?: number;
+  } | null = null;
+
+  function logLatency(l: NonNullable<typeof pendingLatency>): void {
+    pendingLatency = null;
+    const now = Date.now();
+    log.info(
+      {
+        eosToFinalMs: l.finalAt - l.eosAt,
+        finalToFirstTokenMs: l.firstTokenAt ? l.firstTokenAt - l.finalAt : null,
+        firstTokenToAudioMs: l.firstTokenAt ? now - l.firstTokenAt : null,
+        eosToFirstAudioMs: now - l.eosAt,
+        tts: d.settings.get('voice.tts.provider'),
+        stt: d.settings.get('voice.stt.provider'),
+      },
+      'latency: end of speech → first audio of the reply',
+    );
+  }
   /** When a failed wake engine was last reopened. */
   let wakeReopenedAt = 0;
   const wakeLine = createLinePicker(WAKE_LINES);
@@ -829,6 +852,8 @@ export function createVoiceController(d: VoiceDeps) {
     }
     endListening();
     timings.finalAt = Date.now();
+    // Voice fix 2B: one line per voice request, end of speech to the first sound of the reply.
+    pendingLatency = { eosAt: timings.eosAt ?? timings.finalAt, finalAt: timings.finalAt };
     if (timings.eosAt)
       log.info(
         { eosToFinalMs: timings.finalAt - timings.eosAt },
@@ -1009,10 +1034,12 @@ export function createVoiceController(d: VoiceDeps) {
     if (!ack || speaking !== ack) stopSpeaking();
     replyUtterances.add(turn.turnId);
     voiceTurns.set(turn.turnId, newUtterance(true, turn.turnId));
+    if (pendingLatency && !pendingLatency.turnId) pendingLatency.turnId = turn.turnId;
   });
   d.orchestrator.onDelta((turn, delta) => {
     const u = voiceTurns.get(turn.turnId);
     if (!u) return;
+    if (pendingLatency?.turnId === turn.turnId) pendingLatency.firstTokenAt ??= Date.now();
     rememberSpoken(delta);
     u.push(delta);
   });
@@ -1050,6 +1077,7 @@ export function createVoiceController(d: VoiceDeps) {
     /** Renderer playback lifecycle (tts:playback). */
     onPlayback(utteranceId: string, event: 'started' | 'finished' | 'level'): void {
       if (event === 'started') playing.add(utteranceId);
+      if (event === 'started' && pendingLatency?.turnId === utteranceId) logLatency(pendingLatency);
       if (event === 'started' && d.state.get() !== 'LISTENING') d.state.set('SPEAKING');
       if (event !== 'finished') return;
       playing.delete(utteranceId);
