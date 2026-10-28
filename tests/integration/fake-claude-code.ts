@@ -31,8 +31,9 @@ export function fakeClaudeCode(...scripts: FakeScript[]): QueryFn & { calls: Opt
     let client: Client | null = null;
     async function connect(): Promise<Client> {
       if (client) return client;
-      const server = (options.mcpServers?.['jarvis'] as unknown as { instance: McpServer })
-        .instance;
+      // Jarvis's server, or the only one given (Forge's "forge" server).
+      const config = options.mcpServers?.['jarvis'] ?? Object.values(options.mcpServers ?? {})[0];
+      const server = (config as unknown as { instance: McpServer }).instance;
       const [a, b] = InMemoryTransport.createLinkedPair();
       await server.connect(a);
       client = new Client({ name: 'fake-claude-code', version: '1.0.0' });

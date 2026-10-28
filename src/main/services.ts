@@ -78,6 +78,11 @@ import {
   type SessionSource,
 } from './claude-sessions/sessions';
 import { createClaudeSessionTools } from './claude-sessions/tools';
+import { runBoss } from './forge/boss';
+import { createForge } from './forge/forge';
+import { createForgeTools } from './forge/tools';
+import { createGit, createNodeRunner, createWorkspace } from './forge/workspace';
+import { systemNode } from './lib/process';
 import { createScreenTools } from './tools/everyday/screen';
 import { createWebPageTools } from './tools/everyday/web-page';
 import { createYouTubeTools } from './tools/everyday/youtube';
@@ -511,6 +516,31 @@ export function createServices(opts: ServiceOptions) {
     registry.register(tool);
   // Long-term goals on top of Tasks (ruflo goals-plugin idea).
   for (const tool of createGoalTools(planner)) registry.register(tool);
+  // Forge (ADR-046, docs/Forge.md): Jarvis builds changes to itself in its own clone, then every check runs.
+  const forgeDir = join(opts.userData, 'forge');
+  const forge = createForge({
+    workspace: async () => {
+      const node = await systemNode();
+      if (!node)
+        throw new Error('Forge needs Node.js on this PC (the LTS version from nodejs.org).');
+      mkdirSync(forgeDir, { recursive: true });
+      const dir = join(forgeDir, 'repo');
+      const run = createNodeRunner(node.exe, dir);
+      return { ws: createWorkspace({ dir, git: createGit(dir), run }), run };
+    },
+    boss: (input) => runBoss({ rt: claudeCode, ...input }),
+    repoUrl: () => settings.get('forge.repoUrl'),
+    budgetUsd: () => settings.get('forge.budgetUsd'),
+    announce,
+    runsDir: join(forgeDir, 'runs'),
+  });
+  for (const tool of createForgeTools({
+    forge,
+    repoUrl: () => settings.get('forge.repoUrl'),
+    setRepoUrl: (url) => settings.set('forge.repoUrl', url),
+    budgetUsd: () => settings.get('forge.budgetUsd'),
+  }))
+    registry.register(tool);
   // Jarvis Terminal (ADR-032): Sir's own commands, plus every script Jarvis runs.
   const terminal = createTerminal({
     ps: (script, o) => opts.os.ps(script, o),

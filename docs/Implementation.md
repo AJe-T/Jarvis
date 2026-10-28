@@ -11,6 +11,8 @@
 Current phase tracker (Sir updates this line):
 
 > **CURRENT PHASE: 7**
+>
+> **Forge (self-improvement, ADR-046):** its own phase plan F0–F7 lives in [Forge.md](Forge.md) §6. F0–F2 done (2.36.0); next F3.
 
 ---
 

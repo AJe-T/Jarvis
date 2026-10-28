@@ -25,6 +25,7 @@ You are helping Sir build **JARVIS**, a voice-first AI assistant desktop app for
 | `docs/Code-style.md` | Conventions, git, dependency and licensing policy |
 | `docs/Testing.md` | Test plan, security suite, evals, CI |
 | `docs/Integrations.md` | AI provider / gateway / agent CLI status matrix, remaining plan, how to add one |
+| `docs/Forge.md` | Planned self-improvement feature: levels, pipeline, safety rules, phases F0–F7 |
 | `docs/Implementation.md` | Phase-by-phase tasks and prompts |
 
 ## Commands

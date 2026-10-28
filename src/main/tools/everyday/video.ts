@@ -1,9 +1,10 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { ToolError } from '../../errors';
+import { runProcess, systemNode } from '../../lib/process';
 import { defineTool, fail, ok, type Tool } from '../types';
 
 /**
@@ -93,52 +94,6 @@ export function checkComposition(html: string): string | null {
   return null;
 }
 
-/** Kills a process and everything it started (npx → node → Chrome, FFmpeg). */
-function killTree(pid: number | undefined): void {
-  if (!pid) return;
-  execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => undefined);
-}
-
-function run(
-  file: string,
-  args: string[],
-  opts: { cwd: string; signal: AbortSignal; timeoutMs: number; env: NodeJS.ProcessEnv },
-): Promise<{ code: number | null; out: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(file, args, { cwd: opts.cwd, env: opts.env, windowsHide: true });
-    let out = '';
-    const keep = (d: Buffer): void => {
-      out = (out + d.toString('utf8')).slice(-MAX_LOG * 4);
-    };
-    const stop = (): void => killTree(child.pid);
-    const timer = setTimeout(stop, opts.timeoutMs);
-    opts.signal.addEventListener('abort', stop, { once: true });
-    child.stdout.on('data', keep);
-    child.stderr.on('data', keep);
-    child.on('error', reject);
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      opts.signal.removeEventListener('abort', stop);
-      resolve({ code, out });
-    });
-  });
-}
-
-/** `[path to node.exe, version]` of the Node on PATH, or null. */
-function systemNode(): Promise<{ exe: string; version: string } | null> {
-  return new Promise((resolve) => {
-    execFile(
-      'node',
-      ['-p', 'process.execPath + "|" + process.version'],
-      { windowsHide: true, timeout: 5_000 },
-      (err, stdout) => {
-        const [exe, version] = stdout.trim().split('|');
-        resolve(err || !exe || !version ? null : { exe, version });
-      },
-    );
-  });
-}
-
 function hasFfmpeg(): Promise<boolean> {
   return new Promise((resolve) => {
     execFile('ffmpeg', ['-version'], { windowsHide: true, timeout: 10_000 }, (err) =>
@@ -176,11 +131,12 @@ function npxRender(nodeExe: string) {
   return (args: string[], cwd: string, signal: AbortSignal) => {
     const npx = join(dirname(nodeExe), 'node_modules', 'npm', 'bin', 'npx-cli.js');
     if (!existsSync(npx)) throw new ToolError(`npm's npx was not found next to ${nodeExe}.`);
-    return run(nodeExe, [npx, '-y', HYPERFRAMES_PACKAGE, ...args], {
+    return runProcess(nodeExe, [npx, '-y', HYPERFRAMES_PACKAGE, ...args], {
       cwd,
       signal,
       timeoutMs: RENDER_TIMEOUT_MS,
       env: renderEnv(),
+      maxOut: MAX_LOG * 4,
     });
   };
 }

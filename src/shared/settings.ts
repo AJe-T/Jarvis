@@ -43,6 +43,7 @@ import {
   type WakeEngineId,
 } from './speech-engines';
 import { DEFAULT_PERSONA, PERSONA_IDS } from './personas';
+import { FORGE_REPO_RE } from './forge';
 
 export const PriceSchema = z.object({
   inPerMTok: z.number().nonnegative(),
@@ -502,6 +503,13 @@ export const SETTINGS = {
     schema: z.record(z.string().max(80), z.string().max(16)),
     default: {} as Record<string, string>,
   },
+  /** Forge (docs/Forge.md): Sir's Jarvis repository on GitHub, set only through forge_setup (asks first). */
+  'forge.repoUrl': {
+    schema: z.union([z.literal(''), z.string().regex(FORGE_REPO_RE)]),
+    default: '',
+  },
+  /** Forge: most Claude may spend on one run (Agent SDK estimate, also on Sir's plan). */
+  'forge.budgetUsd': { schema: z.number().min(0.5).max(50), default: 5 },
   /** Password manager: lock after this many idle minutes (0 = only when Sir locks it or Windows locks). */
   'passwords.autoLockMinutes': { schema: z.number().int().min(0).max(240), default: 5 },
   /** Copied passwords are wiped from the clipboard after this many seconds. */
@@ -519,6 +527,7 @@ export const MAIN_ONLY_SETTINGS: readonly SettingKey[] = [
   'telegram.chatId',
   'mini.dock',
   'copilot.contacts',
+  'forge.repoUrl',
 ];
 
 /** Applied live, but a restart gives these a clean start (the Save bar offers one). */
@@ -550,4 +559,5 @@ export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   'voice.stt.serverUrl',
   'voice.tts.serverUrl',
   'pool.abilities.voiceHearing', // Sir's recorded voice to Groq / OpenAI when on-device speech fails
+  'forge.repoUrl', // whose code Forge runs on this PC
 ];
