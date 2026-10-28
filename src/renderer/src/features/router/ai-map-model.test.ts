@@ -89,17 +89,25 @@ describe('AI map', () => {
     expect(group(root, 'g-pool')).toMatchObject({ muted: true, sub: 'switched off' });
   });
 
-  it('lays out one row per leaf, left to right, with nothing overlapping', () => {
-    const { nodes, width, height } = layoutMap(buildMap(base).root);
-    const leaves = nodes.filter((n) => n.node.children.length === 0);
-    const ys = leaves.map((n) => n.y);
-    expect(new Set(ys).size).toBe(ys.length);
+  it('lays out a tree from the top down: parents above children, no two boxes overlapping', () => {
+    const { nodes, edges, width, height } = layoutMap(buildMap(base).root);
     for (const n of nodes) {
+      expect(n.x).toBeGreaterThanOrEqual(0);
       expect(n.x + n.w).toBeLessThanOrEqual(width);
       expect(n.y).toBeLessThan(height);
     }
-    // Each parent sits to the left of its children.
+    // Every wire goes down: a child is always below its parent.
+    for (const e of edges) expect(e.to.y).toBeGreaterThan(e.from.y);
+    // The root is on top and centred over the whole tree.
     const root = nodes.find((n) => n.node.kind === 'root');
-    expect(nodes.every((n) => n === root || n.x > (root?.x ?? 0))).toBe(true);
+    expect(Math.min(...nodes.map((n) => n.y))).toBe(root?.y);
+    // No two boxes overlap.
+    const boxes = nodes.map((n) => ({ l: n.x, r: n.x + n.w, t: n.y - 14, b: n.y + 14 }));
+    boxes.forEach((a, i) =>
+      boxes.slice(i + 1).forEach((b) => {
+        const apart = a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t;
+        expect(apart).toBe(true);
+      }),
+    );
   });
 });

@@ -1,23 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PoolSnapshot } from '@shared/free-pool';
 import type { Res } from '@shared/ipc-contract';
 import { call } from '../../lib/api';
 import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
-import { buildMap, layoutMap, type MapNode, type Placed, type RouterTab } from './ai-map-model';
+import {
+  buildMap,
+  halfHeight,
+  layoutMap,
+  type Edge,
+  type MapNode,
+  type Placed,
+  type RouterTab,
+} from './ai-map-model';
 
-/** Curved wire from a parent's right edge to a child's left edge. */
-const wire = (a: Placed, b: Placed): string => {
-  const x1 = a.x + a.w;
-  const x2 = b.x;
-  const mx = (x1 + x2) / 2;
-  return `M${x1},${a.y} C${mx},${a.y} ${mx},${b.y} ${x2},${b.y}`;
+/** Square tree wires: parent bottom → down → across → child top; models off the column spine. */
+const wire = ({ from: a, to: b, kind }: Edge): string => {
+  const bottom = a.y + halfHeight(a.node);
+  if (kind === 'leaf') {
+    const x = a.x + 11;
+    return `M${x},${bottom} V${b.y} H${b.x}`;
+  }
+  const x1 = a.x + a.w / 2;
+  const x2 = b.x + b.w / 2;
+  const mid = (bottom + b.y - halfHeight(b.node)) / 2;
+  return `M${x1},${bottom} V${mid} H${x2} V${b.y - halfHeight(b.node)}`;
 };
 
 const fit = (text: string, max: number): string =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
 
 /**
- * Every AI Jarvis can use, as a left-to-right map drawn at full size (it scrolls instead of
+ * Every AI Jarvis can use, as a tree from the top down, drawn at full size (it scrolls instead of
  * shrinking). Click a node to open the AI Router tab that changes it.
  */
 export function AiMap({
@@ -72,28 +85,38 @@ export function AiMap({
     apps: apps.filter((a) => a.installed && a.signedIn).map((a) => ({ id: a.id, label: a.label })),
   });
   const layout = layoutMap(root);
+  // A wide tree opens centred on JARVIS, not on its left edge.
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (el) el.scrollLeft = Math.max(0, (layout.width - el.clientWidth) / 2);
+  }, [layout.width]);
   const summary = root.children
     .map((g) => `${g.label}: ${g.children.map((c) => c.label).join(', ') || 'none'}`)
     .join('; ');
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="max-h-[75vh] overflow-auto rounded-lg border border-line bg-surface-1">
+      <div
+        ref={box}
+        className="max-h-[75vh] overflow-auto rounded-lg border border-line bg-surface-1"
+      >
         <svg
           width={layout.width}
           height={layout.height}
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           role="img"
-          aria-label={`Jarvis's AI map. ${summary}`}
+          aria-label={`Jarvis's AI tree. ${summary}`}
           className="block"
         >
           {layout.edges.map((e) => (
             <path
               key={`${e.from.node.id}>${e.to.node.id}`}
-              d={wire(e.from, e.to)}
+              d={wire(e)}
               fill="none"
               stroke={e.to.node.color}
               strokeWidth={e.from.node.kind === 'root' ? 2 : 1.4}
+              strokeLinejoin="round"
               strokeOpacity={e.to.node.muted ? 0.25 : 0.6}
               strokeDasharray={e.to.node.muted ? '3 4' : undefined}
             />

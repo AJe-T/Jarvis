@@ -23,19 +23,26 @@ export function registerPoolHandlers(s: Services): void {
         'Your own providers always stay in tier 3.',
       );
     const all = s.settings.get('pool.providers');
-    const cur = all[req.id] ?? {};
+    const { tpd, rpd, ...cur } = all[req.id] ?? {};
+    // undefined keeps Sir's number, null clears it, a number replaces it.
+    const ownTpd = req.tpd === undefined ? tpd : (req.tpd ?? undefined);
+    const ownRpd = req.rpd === undefined ? rpd : (req.rpd ?? undefined);
     s.settings.set('pool.providers', {
       ...all,
       [req.id]: {
         ...cur,
         ...(req.enabled !== undefined ? { enabled: req.enabled } : {}),
         ...(req.tier !== undefined ? { tier: req.tier } : {}),
+        ...(ownTpd !== undefined ? { tpd: ownTpd } : {}),
+        ...(ownRpd !== undefined ? { rpd: ownRpd } : {}),
       },
     });
     s.audit.append('user', 'pool.provider', {
       provider: req.id,
       ...(req.enabled !== undefined ? { enabled: req.enabled } : {}),
       ...(req.tier !== undefined ? { tier: req.tier } : {}),
+      ...(req.tpd !== undefined ? { tpd: req.tpd } : {}),
+      ...(req.rpd !== undefined ? { rpd: req.rpd } : {}),
     });
     return s.pool.snapshot();
   });

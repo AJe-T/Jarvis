@@ -11,6 +11,7 @@ import {
   type CloudProviderId,
   type ConnectionModel,
 } from '@shared/llm-providers';
+import { FREE_PROVIDERS, allowanceHint, freeProvider } from '@shared/free-pool';
 import type { Req, Res } from '@shared/ipc-contract';
 import { Button, IconButton } from '../../components/ui/button';
 import { confirmAction } from '../../components/ui/confirm-modal';
@@ -286,7 +287,7 @@ function ConnectionPanel({
 export function ConnectionsCard(): React.JSX.Element {
   const { list, act } = useConnections();
   const [open, setOpen] = useState<string | null>(null);
-  const [provider, setProvider] = useState<CloudProviderId>('openai');
+  const [provider, setProvider] = useState<CloudProviderId>(FREE_PROVIDERS[0]?.id ?? 'openai');
   const [label, setLabel] = useState('');
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
@@ -373,11 +374,22 @@ export function ConnectionsCard(): React.JSX.Element {
               onChange={(e) => setProvider(e.target.value as CloudProviderId)}
               className="min-h-9 rounded-md border border-line bg-surface-2 px-2 text-ink-100"
             >
-              {CLOUD_PROVIDERS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
+              {/* Free (trusted) first, with what each gives free; then paid, billed per use. */}
+              <optgroup label="Free (trusted, tier 2): joins the free pool">
+                {FREE_PROVIDERS.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {cloudProvider(f.id).label.replace(/\s*\(.*\)$/, '')} ·{' '}
+                    {allowanceHint(f.allowance)}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Paid: billed per use on your account">
+                {CLOUD_PROVIDERS.filter((p) => !freeProvider(p.id)).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </label>
           <label className="flex min-w-64 flex-1 flex-col gap-1 text-sm text-ink-100">
@@ -412,6 +424,9 @@ export function ConnectionsCard(): React.JSX.Element {
             {busy ? 'Saving…' : 'Save and load models'}
           </Button>
         </div>
+        {freeProvider(provider) && (
+          <span className="text-xs text-ink-500">{freeProvider(provider)?.note}</span>
+        )}
         {count >= MAX_CONNECTIONS_PER_PROVIDER && (
           <span className="text-sm text-ink-300">
             At most {MAX_CONNECTIONS_PER_PROVIDER} keys per provider.

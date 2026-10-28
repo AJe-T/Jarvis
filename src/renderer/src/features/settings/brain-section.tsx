@@ -1,3 +1,4 @@
+import { Button } from '../../components/ui/button';
 import { Section } from '../../components/ui/field';
 import { call } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
@@ -5,30 +6,27 @@ import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { AgentClisCard } from './agent-clis-card';
 import { ConnectionsCard } from './connections-card';
 import { ConnectionPicker, LocalModelCard, SubscriptionApps } from './connection';
-import { AiMap } from '../router/ai-map';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
 
 /**
- * Settings → Models & AI. The same parts make up AI Router → Main brain and API keys, so a change
- * made in either place is the same setting.
+ * Settings → Models & AI (2.35): a signpost only. Every AI setting lives in AI Router, so there is
+ * one place to change it; the parts below are drawn there (Main brain, API keys).
  */
 export function BrainSection(): React.JSX.Element {
   const go = useUiStore((s) => s.go);
   return (
-    <>
-      <Section
-        title="Your AI map"
-        description="Every AI Jarvis can use, and the models each one runs. AI Router has all of this too, in tabs: Main brain, API keys and the free pool."
-      >
-        <AiMap onOpen={(tab) => go('router', tab)} />
-      </Section>
-      <BrainConnection />
-      <ApiKeysSection />
-      <ClaudeModels />
-      <OtherAis />
-      <BudgetSection />
-      <FastCommands />
-    </>
+    <Section
+      title="Models & AI live in AI Router"
+      description="Your main brain, Claude's models, the budget, every API key and the free AI pool are in one place now: AI Router in the sidebar."
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" onClick={() => go('router', 'brain')}>
+          Open Main brain
+        </Button>
+        <Button onClick={() => go('router', 'keys')}>Open API keys</Button>
+        <Button onClick={() => go('router', 'usage')}>See free usage</Button>
+      </div>
+    </Section>
   );
 }
 
@@ -86,7 +84,7 @@ export function ApiKeysSection(): React.JSX.Element {
       <div id="brain-connections" className="scroll-mt-4">
         <Section
           title="API keys and their models"
-          description="Every AI provider key you saved, and more than one per provider if you like (work and personal). Each has its own model list: refresh it from the provider, star favourites, hide the ones you don't want. Keys stay encrypted on this PC."
+          description="Each key has its own model list: refresh it, star favourites, hide the rest. Keys stay encrypted on this PC."
         >
           <ConnectionsCard />
         </Section>

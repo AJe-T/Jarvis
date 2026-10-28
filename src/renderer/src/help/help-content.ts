@@ -66,30 +66,101 @@ export const HELP: Record<string, HelpEntry> = {
   },
   router: {
     title: 'AI Router',
-    what: 'Every AI Jarvis uses, in one place: the main brain that answers you (Claude), all your API keys, and the free AI pool Claude can hand non-private work to. Three tiers: tier 1 is Claude and your local model (gets everything, including private data), tier 2 is trusted free providers (non-private work only), tier 3 is third-party relays (last resort, only after you say yes, never private data).',
+    what: 'Every AI Jarvis uses, in one place: how much free AI your keys give you, all your API keys, the free models, the main brain that answers you (Claude), and the rules for who may see what. Since 2.35 this is the only place for these settings; Settings → Models & AI just links here.',
     how: [
-      'Overview: today’s numbers and your AI map: Jarvis, the main brain and its models, every free-pool provider with its models, paid helpers and abilities. Click any box to open the tab that changes it.',
-      'Main brain: who answers you (Claude by API key or your plan, the local model, or another AI), which Claude model does each job, your other AI plans, coding agents, the budget and fast commands. Changes wait in the bar at the bottom until you press Save.',
-      'API keys: add a key in one step (pick the provider, paste the key, optionally name it, Save and load models). A free provider’s key joins the free pool with every free chat model it can use. Below: each free provider’s keys and health, tiers, free search keys, .env import and custom tier-3 relays.',
-      'Free models: how requests are routed (Priority, Balanced, Smartest, Fastest, Most reliable or Custom with your own weights), filters for tools, vision, tier and context size, each model’s doors and limits, and Test this model.',
-      'Smarter routing: scores learn from the last week (newer days count more), long prompts are trimmed for small free limits, and a model too small for a request is skipped. Named chains give a kind of job its own order of models.',
-      'Tiers & privacy: the private-data rule (always on), what happens when tiers 1 and 2 run out, and "Ask every time for third-party AIs".',
-      'Delegation: Claude hands heavy, non-private work to free AIs; the front door (off until you switch it on) sends short, plain, non-private questions straight to a free AI; each side covers when the other is out.',
-      'Abilities: free web search, free pictures saved to your vault, the fusion brain, and a voice backup chain that always tells you which engine is in use.',
-      'Analytics: requests, success, speed and tokens over the last 24 hours to 90 days, per provider and per model, and each provider’s outlook for today ("runs out around 19:40 at this pace").',
+      'Usage (first tab): free tokens and requests your keys get today, this week and this month, how many you used and how many are left, per provider.',
+      'API keys: add a key in one step. Free providers are listed first with what each gives free; their keys join the free pool by themselves.',
+      'Free models: the order requests go in, filters, each model’s limits, and Test this model.',
+      'Abilities: free web search, free pictures, the fusion brain and the voice backup chain.',
+      'After the divider, the things you set once: Main brain (Claude, its models, budget), Rules (tiers, private data, how Claude shares work), the AI tree, and History (charts).',
     ],
     tips: [
       'The tier depends on who receives your text, not the model: Gemini through Google is tier 2, Gemini through an unknown relay is tier 3.',
       'OpenRouter keys only ever use models ending in :free; its other models cost money.',
-      'Hearing backup sends your recorded voice to Groq or OpenAI when Whisper on this PC fails, so it stays off until you switch it on and confirm.',
       'Never paste a key into a name box: Jarvis refuses names that look like keys.',
     ],
     say: [
       'Use the free pool to summarise these three pages',
       'Ask a free AI to translate this into Hindi',
       'Draw a logo for my bakery',
-      'Use the fusion brain to compare green and black tea',
       'Use the Coding chain to write a regex for email addresses',
+    ],
+  },
+  'router:usage': {
+    title: 'Free usage',
+    what: 'How many free tokens and requests your keys get, and how many you used, for today, this week and this month. A week is seven days of the daily allowance; a month is this month’s days of it.',
+    how: [
+      'The two big numbers are what is left across all your free keys. A provider whose cap isn’t known is listed under the total instead of being counted as zero.',
+      'Groq, Gemini and Cerebras give each model its own daily cap, so a key’s allowance is the sum over the models it lends the pool. OpenRouter, Cloudflare and Mistral have one cap for the whole key.',
+      'The tag on each provider says where its numbers come from: Live (read from the provider at the last key check: OpenRouter), Learned (from the provider’s replies: Groq), Published (the provider’s limits page), Estimate (the provider shows it only after sign-in), or Yours.',
+      'Press the pencil to type the numbers you see in the provider’s own console. They replace Jarvis’s for that provider.',
+      'Check now asks every key again (no tokens used) and refreshes the live counts.',
+    ],
+    tips: [
+      'Why not ask an AI or search the web for the limits? Jarvis did that once, when this page was built, and checked each number against the provider’s own docs. A live AI answer would often be out of date or made up, so the numbers here are dated and labelled instead.',
+      'Gemini counts requests, not tokens, and resets at midnight Pacific time; most others reset at midnight UTC.',
+      'NVIDIA has no daily cap (about 40 requests a minute), so it never shows as running out.',
+    ],
+  },
+  'router:keys': {
+    title: 'API keys',
+    what: 'Every AI key you saved. Keys are encrypted on this PC with Windows DPAPI; only their last four characters are ever shown.',
+    how: [
+      'Add an API key: pick the provider, paste the key, optionally name it, press Save and load models.',
+      'Free (trusted, tier 2) providers are listed first with what each gives free. Their keys join the free pool with every free chat model they can use.',
+      'Paid providers (OpenAI, DeepSeek…) are used only when you pick one as the main brain or Claude hands it a task.',
+      'Below the list: the free providers you added, their health and tier, free search keys, .env import and your own tier-3 relays.',
+    ],
+    tips: [
+      'Up to 5 keys per provider (work and personal). With several, Jarvis uses the one with the most room left.',
+    ],
+  },
+  'router:brain': {
+    title: 'Main brain',
+    what: 'Claude (by API key or your Claude plan) is Jarvis’s main brain: it reads your memory, uses your tools and decides what to hand to free AIs.',
+    how: [
+      'Connection: Claude by API key, your Claude plan, a local model, or another AI.',
+      'Claude’s models: which model does conversation, deep thinking, background jobs and computer control.',
+      'Budget: Claude requests stop when a daily or monthly budget is used up.',
+      'Changes wait in the bar at the bottom until you press Save.',
+    ],
+  },
+  'router:rules': {
+    title: 'Rules',
+    what: 'Who may receive which work. Tier 1 is Claude and your local model (gets everything). Tier 2 is trusted free providers (non-private work only). Tier 3 is third-party relays (last resort, only after you say yes, never private data).',
+    how: [
+      'The tier cards show only AIs you have set up. Move a provider between tier 2 and 3 on API keys.',
+      'Private data never leaves tier 1: if a task used memory, files, the screen, passwords, the clipboard or your messages, Claude or your local model answers. Checked in code on every request, with no off switch.',
+      'How a request is shared out: the front door sends short, plain, non-private questions straight to a free AI; Claude does private or important work itself and hands heavy, harmless parts to the free pool, reading only the short report.',
+      'Examples: “What’s 15% of 2,400?” and “Summarise these three articles” go free (tier 2). “What did I note about my loan?” and “Reply to Priya on WhatsApp” stay with Claude (tier 1).',
+      'When everything free is busy, Jarvis says plainly why (“7 routes checked, 5 rate limited, soonest back in 2 min”) and Claude can do it instead.',
+    ],
+  },
+  'router:models': {
+    title: 'Free models',
+    what: 'Every free chat model your keys can use, shown in the order requests would go to them right now.',
+    how: [
+      'Routing strategy: Priority (your order), Balanced, Smartest, Fastest, Most reliable, or Custom weights.',
+      'Filter by tools, pictures, tier or context size; open a model to see each door (provider), its limits and Test this model.',
+      'Smarter routing: scores learn from the last week, long prompts are trimmed for small free limits, and a model too small for a request is skipped.',
+      'Named chains give a kind of job (“Coding”) its own order of models.',
+    ],
+  },
+  'router:abilities': {
+    title: 'Abilities',
+    what: 'Free extras on top of chat: free web search (paid Claude search only as a last resort), free pictures saved to your vault, the fusion brain (several free AIs draft, one judges), and a voice backup chain.',
+    how: [
+      'Each one has its own switch. Search keys go on API keys → Free search keys.',
+      'Hearing backup sends your recorded voice to Groq or OpenAI only when Whisper on this PC fails, so it stays off until you switch it on.',
+    ],
+  },
+  'router:tree': {
+    title: 'AI tree',
+    what: 'Every AI Jarvis can use, from the top down: Jarvis, then the main brain, the free pool, paid helpers and abilities, each provider as a branch and its models listed under it.',
+    how: [
+      'Click any box to open the tab that changes it.',
+      'Faded boxes with dashed wires are set up but not working (no key yet, or switched off).',
+      'A provider shows up to 6 models; the rest are one “+N more” line (all of them are on Free models).',
     ],
   },
   npcs: {

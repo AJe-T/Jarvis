@@ -1,4 +1,11 @@
-import type { PoolModel, PoolProvider, PoolRoute, PoolSnapshot } from '@shared/free-pool';
+import type {
+  AllowancePeriods,
+  PoolAllowance,
+  PoolModel,
+  PoolProvider,
+  PoolRoute,
+  PoolSnapshot,
+} from '@shared/free-pool';
 
 /**
  * Sample data in the real snapshot shape: the router tests' stand-in for `pool:snapshot`
@@ -173,6 +180,89 @@ export function previewSnapshot(now = Date.now()): PoolSnapshot {
     pressure: [
       { providerId: 'groq', modelLabel: 'Gpt Oss 120B', reason: 'rate limited', until: ahead(1) },
     ],
+    allowance: PREVIEW_ALLOWANCE,
     today: { requests: 184, successRate: 0.962, tokens: 412_000, savedUsd: 1.86 },
   };
 }
+
+/** Daily caps scaled to a 7-day week and a 31-day month, with some use in each. */
+function periods(perDay: number | null, used: [number, number, number]): AllowancePeriods {
+  const cell = (n: number | null, u: number): AllowancePeriods['day'] => ({ limit: n, used: u });
+  return {
+    day: cell(perDay, used[0]),
+    week: cell(perDay === null ? null : perDay * 7, used[1]),
+    month: cell(perDay === null ? null : perDay * 31, used[2]),
+  };
+}
+
+function allowanceRow(
+  id: string,
+  label: string,
+  tokens: AllowancePeriods,
+  requests: AllowancePeriods,
+  over: Partial<PoolAllowance['providers'][number]> = {},
+): PoolAllowance['providers'][number] {
+  return {
+    id,
+    label,
+    keys: 1,
+    enabled: true,
+    tokens,
+    requests,
+    source: 'published',
+    partial: false,
+    unlimited: false,
+    perMinute: '30 requests',
+    resets: 'midnight UTC',
+    note: '',
+    docsUrl: 'https://example.com',
+    yours: {},
+    ...over,
+  };
+}
+
+const ROWS: PoolAllowance['providers'] = [
+  allowanceRow(
+    'groq',
+    'Groq',
+    periods(400_000, [120_000, 610_000, 2_300_000]),
+    periods(2_000, [64, 380, 1_420]),
+  ),
+  allowanceRow(
+    'cerebras',
+    'Cerebras',
+    periods(1_000_000, [80_000, 300_000, 900_000]),
+    periods(null, [22, 140, 510]),
+    { resets: 'continuously (rolling)' },
+  ),
+  allowanceRow(
+    'openrouter',
+    'OpenRouter',
+    periods(null, [9_000, 41_000, 160_000]),
+    periods(50, [12, 70, 290]),
+    {
+      source: 'live',
+    },
+  ),
+  allowanceRow('nvidia', 'NVIDIA NIM', periods(null, [0, 0, 0]), periods(null, [0, 0, 0]), {
+    unlimited: true,
+    source: 'estimate',
+    perMinute: '40 requests',
+  }),
+];
+
+function total(pick: (r: (typeof ROWS)[number]) => AllowancePeriods): AllowancePeriods {
+  const sum = (k: keyof AllowancePeriods): AllowancePeriods['day'] => {
+    const known = ROWS.map((r) => pick(r)[k].limit).filter((n): n is number => n !== null);
+    return {
+      limit: known.length ? known.reduce((a, b) => a + b, 0) : null,
+      used: ROWS.reduce((n, r) => n + pick(r)[k].used, 0),
+    };
+  };
+  return { day: sum('day'), week: sum('week'), month: sum('month') };
+}
+
+export const PREVIEW_ALLOWANCE: PoolAllowance = {
+  providers: ROWS,
+  totals: { tokens: total((r) => r.tokens), requests: total((r) => r.requests) },
+};

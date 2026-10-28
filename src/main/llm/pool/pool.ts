@@ -3,6 +3,7 @@ import {
   freeProvider,
   isCustomProvider,
   isFreeChatModel,
+  modelCap,
   routeKey,
   type AnalyticsRange,
   type PoolAbilities,
@@ -39,6 +40,8 @@ import { rankRoutes, summarizeExhaustion, type RouteState } from './router';
 import { buildSnapshot, providerName } from './snapshot';
 import { estimateTokens, shrinkRequest } from './shrink';
 import { buildAnalytics } from './analytics';
+import { buildAllowance } from './allowance';
+import { readOpenRouterKey } from './openrouter-key';
 
 /**
  * AI Router Phase 1 (Security.md §16.15): the free pool behind the "free" brain. Tries tier-2
@@ -182,6 +185,8 @@ export function createFreePool(deps: PoolDeps) {
   const now = (): number => deps.now?.() ?? Date.now();
   const cooling = new Map<string, { until: number; reason: string; strikes: number }>();
   const learnedLimits = new Map<string, PoolLimits>();
+  /** OpenRouter's own count of today's free requests, read on every key check (2.35). */
+  const liveFree = new Map<string, { used: number; limit: number; day: string }>();
   const caps = new Map<string, { tools?: boolean; vision?: boolean }>();
   const health = new Map<string, { health: 'healthy' | 'issue'; at: string }>();
   const lastUsed = new Map<string, number>();
@@ -246,6 +251,7 @@ export function createFreePool(deps: PoolDeps) {
       .filter((c) => providerBaseUrl(cloudProvider(c.provider), account) !== '')
       .flatMap((c) => {
         const prov = providerSettings(c.provider);
+        const def = freeProvider(c.provider);
         return c.poolModels.map((model) => ({
           connectionId: c.id,
           provider: c.provider,
@@ -253,7 +259,8 @@ export function createFreePool(deps: PoolDeps) {
           context: c.models.find((m) => m.model === model)?.context ?? undefined,
           // Groq reports its caps per model, so learned limits are kept per route.
           limits: {
-            ...freeProvider(c.provider)?.limits,
+            ...def?.limits,
+            ...(def ? modelCap(def.allowance, model) : {}),
             ...learnedLimits.get(c.id),
             ...learnedLimits.get(routeKey(c.id, model)),
           },
@@ -285,6 +292,12 @@ export function createFreePool(deps: PoolDeps) {
       const pauses = [cooling.get(key), cooling.get(id)].filter((p) => p && p.until > t);
       const cool = pauses.sort((a, b) => (b?.until ?? 0) - (a?.until ?? 0))[0];
       const capsNow = caps.get(key) ?? {};
+      // A cap shared by every model of the key (OpenRouter's 50 a day) counts the whole key.
+      const shared = freeProvider(s.provider)?.allowance.scope === 'account';
+      const today = (sum: string): number =>
+        shared
+          ? count(`SELECT ${sum} AS n FROM pool_calls WHERE connection_id = ? AND day = ?`, id, day)
+          : count(`SELECT ${sum} AS n ${where} AND day = ?`, id, model, day);
       return {
         key,
         connectionId: id,
@@ -296,19 +309,14 @@ export function createFreePool(deps: PoolDeps) {
         limits: s.limits,
         used: {
           rpm: count(`SELECT COUNT(*) AS n ${where} AND at >= ?`, id, model, minuteAgo),
-          rpd: count(`SELECT COUNT(*) AS n ${where} AND day = ?`, id, model, day),
+          rpd: today('COUNT(*)'),
           tpm: count(
             `SELECT SUM(input_tokens + output_tokens) AS n ${where} AND at >= ?`,
             id,
             model,
             minuteAgo,
           ),
-          tpd: count(
-            `SELECT SUM(input_tokens + output_tokens) AS n ${where} AND day = ?`,
-            id,
-            model,
-            day,
-          ),
+          tpd: today('SUM(input_tokens + output_tokens)'),
         },
         ...(cool && cool.until > t ? { coolingUntil: cool.until, coolingReason: cool.reason } : {}),
         stats,
@@ -740,6 +748,15 @@ export function createFreePool(deps: PoolDeps) {
         secrets: deps.secrets,
         routes: routes(),
         connections: poolConnections(),
+        allowance: buildAllowance({
+          db,
+          now: now(),
+          overrides: settings.get('pool.providers'),
+          connections: poolConnections(),
+          learned: (key) => learnedLimits.get(key),
+          live: liveFree,
+          label: providerName,
+        }),
         custom: deps.custom.list(),
         health,
         cooling,
@@ -772,6 +789,14 @@ export function createFreePool(deps: PoolDeps) {
             else if (t.custom) await client.listModels();
             else deps.connections.syncLive(c.id, await client.listModelsDetailed());
             health.set(c.id, { health: 'healthy', at });
+            if (c.provider === 'openrouter' && t.key) {
+              // Its live free-request count (shared by every :free model) feeds Usage and the router.
+              const free = await readOpenRouterKey(baseFetch(), t.key, AbortSignal.timeout(15_000));
+              if (free) {
+                liveFree.set(c.id, { ...free, day: utcDay(now()) });
+                learnedLimits.set(c.id, { ...learnedLimits.get(c.id), rpd: free.limit });
+              }
+            }
             if (cooling.get(c.id)?.reason === 'key rejected') cooling.delete(c.id);
           } catch (err) {
             // A rejected key, or (Cloudflare) no Account ID yet: both need Sir.

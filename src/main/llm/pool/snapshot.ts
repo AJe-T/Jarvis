@@ -11,6 +11,7 @@ import {
   DELEGATION_KEYS,
   type PoolAbilities,
   type PoolAbilitySettings,
+  type PoolAllowance,
   type PoolDelegation,
 } from '@shared/free-pool';
 import { cloudProvider, type AiConnection, type CloudProviderId } from '@shared/llm-providers';
@@ -51,6 +52,7 @@ export function buildSnapshot(x: {
   routes: RouteState[];
   connections: Array<AiConnection & { poolModels: string[] }>;
   custom: CustomProvider[];
+  allowance: PoolAllowance;
   health: Map<string, { health: 'healthy' | 'issue'; at: string }>;
   cooling: Map<string, { until: number; reason: string }>;
   now: number;
@@ -276,6 +278,7 @@ export function buildSnapshot(x: {
     models,
     recent,
     pressure,
+    allowance: x.allowance,
     today: {
       requests: t['answers'] ?? 0,
       successRate: t['n'] ? (t['ok'] ?? 0) / t['n'] : 0,

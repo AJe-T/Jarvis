@@ -119,12 +119,41 @@ export const PoolLimitsSchema = z.object({
 });
 export type PoolLimits = z.infer<typeof PoolLimitsSchema>;
 
+/** A daily cap for one model (or every model of an account). */
+export interface DailyCap {
+  tpd?: number;
+  rpd?: number;
+}
+
+/**
+ * The free allowance a provider gives, as AI Router → Usage adds it up (2.35).
+ * - `model`: every model has its own daily cap, so a key's allowance is the sum over its models.
+ * - `account`: one daily cap shared by every model of the key.
+ * `source` says where the numbers come from: the provider's own docs, or an estimate (third-party
+ * lists, or our arithmetic from a credit unit) that Sir can replace with his console's numbers.
+ */
+export interface AllowanceDef {
+  scope: 'model' | 'account';
+  /** Daily cap for the account, or for any model not in `models`. */
+  daily: DailyCap;
+  /** Per-model caps, matched by the longest id prefix ("gemma-" covers every Gemma). */
+  models?: Record<string, DailyCap>;
+  /** A monthly token allowance instead of a daily one (Mistral). */
+  tokensMonth?: number;
+  /** No daily cap at all, only a per-minute one (NVIDIA). */
+  unlimited?: boolean;
+  perMinute?: string;
+  resets: string;
+  source: 'published' | 'estimate';
+}
+
 export interface FreeProviderDef {
   id: CloudProviderId;
   /** Default tier; Sir can move a provider between 2 and 3 (`pool.providers`). */
   tier: 2 | 3;
-  /** Free-tier caps where the provider publishes them; the rest are learned from its replies. */
+  /** Per-minute caps the router obeys; daily caps come from `allowance` (per model or account). */
   limits: PoolLimits;
+  allowance: AllowanceDef;
   /** Where the limits (or their absence) were read. */
   limitsUrl: string;
   /** ⚠️ Date the limits page was checked. */
@@ -133,69 +162,155 @@ export interface FreeProviderDef {
 }
 
 /**
- * Providers whose keys join the pool. ⚠️ Checked 2026-10-27 against each limits page: Groq and
- * Gemini show free limits only in the signed-in console, NVIDIA's page lists none, so those are
- * learned (429 + retry-after, Groq's x-ratelimit-* headers). Cloudflare Workers AI (2.31) has
- * Sir's account id inside its fixed address, filled in by code (ADR-045).
+ * Providers whose keys join the pool. ⚠️ Checked 2026-10-28 against each limits page. Groq's table
+ * is public (and its x-ratelimit-* headers report each model's daily requests); OpenRouter's
+ * GET /api/v1/key reports the live free-request count; Cerebras publishes per-model caps.
+ * Gemini, Mistral and NVIDIA show free limits only in the signed-in console, and Cloudflare counts
+ * "neurons", so those are estimates marked as such. Cloudflare Workers AI (2.31) has Sir's
+ * account id inside its fixed address, filled in by code (ADR-045).
  */
 export const FREE_PROVIDERS: readonly FreeProviderDef[] = [
   {
     id: 'gemini',
     tier: 2,
     limits: {},
+    allowance: {
+      scope: 'model',
+      // ⚠️ Estimate: Google shows free limits only in AI Studio; third-party lists agree on these.
+      daily: { rpd: 20 },
+      models: { 'gemma-': { rpd: 1_000 } },
+      perMinute: '10–15 requests',
+      resets: 'midnight Pacific time',
+      source: 'estimate',
+    },
     limitsUrl: 'https://ai.google.dev/gemini-api/docs/rate-limits',
-    checked: '2026-10-27',
-    note: 'Free limits are shown per account in AI Studio; learned from replies.',
+    checked: '2026-10-28',
+    note: 'Free limits are shown per project in AI Studio, by requests (no daily token cap). Numbers here are estimates: type yours from AI Studio.',
   },
   {
     id: 'groq',
     tier: 2,
     limits: {},
+    allowance: {
+      scope: 'model',
+      daily: {},
+      models: {
+        'openai/gpt-oss-120b': { rpd: 1_000, tpd: 200_000 },
+        'openai/gpt-oss-20b': { rpd: 1_000, tpd: 200_000 },
+        'openai/gpt-oss-safeguard-20b': { rpd: 1_000, tpd: 200_000 },
+        'qwen/qwen3.8-27b': { rpd: 1_000, tpd: 200_000 },
+      },
+      perMinute: '30 requests',
+      resets: 'every day',
+      source: 'published',
+    },
     limitsUrl: 'https://console.groq.com/docs/rate-limits',
-    checked: '2026-10-27',
-    note: 'Free limits are shown per account in the console; learned from x-ratelimit-* headers.',
+    checked: '2026-10-28',
+    note: 'Caps are per model for your organisation. Models not in the docs table are learned from x-ratelimit-* headers (requests per day).',
   },
   {
     id: 'cerebras',
     tier: 2,
-    limits: { rpm: 5, tpm: 30_000, tpd: 1_000_000 },
+    limits: { rpm: 5, tpm: 30_000 },
+    allowance: {
+      scope: 'model',
+      daily: { tpd: 1_000_000 },
+      perMinute: '5 requests, 30K tokens',
+      resets: 'continuously (rolling)',
+      source: 'published',
+    },
     limitsUrl: 'https://inference-docs.cerebras.ai/support/rate-limits',
-    checked: '2026-10-27',
-    note: 'Free Trial: 5 requests and 30K uncached tokens per minute, 1M tokens per day.',
+    checked: '2026-10-28',
+    note: 'Free Trial: 5 requests and 30K uncached tokens per minute, 1M tokens per day, per model.',
   },
   {
     id: 'openrouter',
     tier: 2,
-    limits: { rpm: 20, rpd: 50 },
+    limits: { rpm: 20 },
+    allowance: {
+      scope: 'account',
+      daily: { rpd: 50 },
+      perMinute: '20 requests',
+      resets: 'midnight UTC',
+      source: 'published',
+    },
     limitsUrl: 'https://openrouter.ai/docs/api-reference/limits',
-    checked: '2026-10-27',
-    note: 'Free models (ids ending :free): 20 per minute, 50 per day (1,000 after buying 10 credits).',
+    checked: '2026-10-28',
+    note: 'Free models (ids ending :free): 50 requests a day across all of them (1,000 after buying 10 credits). Key checks read the live count from OpenRouter.',
   },
   {
     id: 'nvidia',
     tier: 2,
     limits: {},
+    allowance: {
+      scope: 'account',
+      daily: {},
+      unlimited: true,
+      perMinute: '40 requests',
+      resets: 'no daily cap',
+      source: 'estimate',
+    },
     limitsUrl: 'https://docs.api.nvidia.com/nim/reference/llm-apis',
-    checked: '2026-10-27',
-    note: 'No free limits published; learned from replies.',
+    checked: '2026-10-28',
+    note: 'No daily cap published; developer forums report 40 requests a minute. Free for prototyping, not production.',
   },
   {
     id: 'mistral',
     tier: 2,
-    limits: {},
-    limitsUrl: 'https://docs.mistral.ai/deployment/laplateforme/tier/',
-    checked: '2026-10-27',
-    note: 'Limits depend on the workspace plan; learned from replies.',
+    limits: { rpm: 60 },
+    allowance: {
+      scope: 'account',
+      daily: {},
+      tokensMonth: 1_000_000_000,
+      perMinute: '1 request a second',
+      resets: 'every month',
+      source: 'estimate',
+    },
+    limitsUrl: 'https://docs.mistral.ai/deployment/laplateforme/tier',
+    checked: '2026-10-28',
+    note: 'The free Experiment plan shows its limits only in the console; third-party lists say about 1 billion tokens a month.',
   },
   {
     id: 'cloudflare',
     tier: 2,
     limits: {},
+    allowance: {
+      scope: 'account',
+      // 10,000 neurons/day ÷ ~40,000 neurons per million mixed tokens (3:1 in:out, Llama 3.1 8B /
+      // gpt-oss-120b rows of the pricing table) ≈ 250K; 70B models get about half.
+      daily: { tpd: 250_000 },
+      resets: 'midnight UTC',
+      source: 'estimate',
+    },
     limitsUrl: 'https://developers.cloudflare.com/workers-ai/platform/pricing/',
-    checked: '2026-10-27',
-    note: 'Free: 10,000 neurons a day, reset at 00:00 UTC. A request costs neurons by model and length, so the cap is learned from replies. Needs your Account ID in Settings → Models & AI.',
+    checked: '2026-10-28',
+    note: 'Free: 10,000 neurons a day, reset at 00:00 UTC. A request costs neurons by model and length; 250K tokens is an average (big models get about half). Needs your Account ID.',
   },
 ];
+
+const short = (n: number): string =>
+  n >= 1e9 ? `${n / 1e9}B` : n >= 1e6 ? `${n / 1e6}M` : n >= 1e3 ? `${n / 1e3}K` : String(n);
+
+/** One line for the Add a key list: "1M tokens a day per model", "~1B tokens a month". */
+export function allowanceHint(a: AllowanceDef): string {
+  const est = a.source === 'estimate' ? '~' : '';
+  if (a.unlimited) return `no daily cap, ${a.perMinute ?? 'limited'} a minute`;
+  if (a.tokensMonth) return `${est}${short(a.tokensMonth)} tokens a month`;
+  const cap = { ...Object.values(a.models ?? {})[0], ...a.daily };
+  const per = a.scope === 'model' ? ' per model' : '';
+  if (cap.tpd) return `${est}${short(cap.tpd)} tokens a day${per}`;
+  if (cap.rpd) return `${est}${short(cap.rpd)} requests a day${per}`;
+  return 'free tier';
+}
+
+/** A model's own daily cap: the longest matching prefix in `models`, else the default. */
+export function modelCap(a: AllowanceDef, model: string): DailyCap {
+  const id = model.replace(/^models\//, '');
+  const hit = Object.keys(a.models ?? {})
+    .filter((k) => id === k || id.startsWith(k))
+    .sort((x, y) => y.length - x.length)[0];
+  return hit ? (a.models?.[hit] ?? a.daily) : a.daily;
+}
 
 /** Model-list entries that aren't chat models: speech, embeddings, pictures, safety filters. */
 const NOT_CHAT =
@@ -533,6 +648,55 @@ export const PoolAbilitiesSchema = z.object({
 });
 export type PoolAbilities = z.infer<typeof PoolAbilitiesSchema>;
 
+// ── AI Router → Usage (2.35): free allowance against use, per day, week and month ─────────────
+
+/** limit null = not known (no published cap, nothing learned, nothing typed by Sir). */
+const AllowanceCell = z.object({ limit: z.number().nullable(), used: z.number() });
+const AllowancePeriods = z.object({
+  day: AllowanceCell,
+  week: AllowanceCell,
+  month: AllowanceCell,
+});
+export type AllowancePeriods = z.infer<typeof AllowancePeriods>;
+export const ALLOWANCE_PERIODS = ['day', 'week', 'month'] as const;
+export type AllowancePeriod = (typeof ALLOWANCE_PERIODS)[number];
+
+/** Where a provider's numbers come from, strongest first. */
+export const AllowanceSourceSchema = z.enum([
+  'yours',
+  'live',
+  'learned',
+  'published',
+  'estimate',
+  'unknown',
+]);
+export type AllowanceSource = z.infer<typeof AllowanceSourceSchema>;
+
+export const PoolAllowanceSchema = z.object({
+  providers: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      keys: z.number().int(),
+      enabled: z.boolean(),
+      tokens: AllowancePeriods,
+      requests: AllowancePeriods,
+      source: AllowanceSourceSchema,
+      /** Some of the key's models have no known cap: the limit counts only the known ones. */
+      partial: z.boolean(),
+      unlimited: z.boolean(),
+      perMinute: z.string(),
+      resets: z.string(),
+      note: z.string(),
+      docsUrl: z.string(),
+      /** Sir's own daily numbers from the provider's console (they win). */
+      yours: z.object({ tpd: z.number().optional(), rpd: z.number().optional() }),
+    }),
+  ),
+  totals: z.object({ tokens: AllowancePeriods, requests: AllowancePeriods }),
+});
+export type PoolAllowance = z.infer<typeof PoolAllowanceSchema>;
+
 export const PoolSnapshotSchema = z.object({
   /** True while the numbers are samples (2.29 layout); false when main serves them. */
   preview: z.boolean(),
@@ -554,6 +718,7 @@ export const PoolSnapshotSchema = z.object({
   models: z.array(PoolModelSchema),
   recent: z.array(PoolAnswerSchema),
   pressure: z.array(PoolPressureSchema),
+  allowance: PoolAllowanceSchema,
   today: z.object({
     requests: z.number(),
     successRate: z.number(),

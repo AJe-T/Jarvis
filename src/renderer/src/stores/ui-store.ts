@@ -76,7 +76,7 @@ function writeRailHidden(hidden: boolean): void {
 
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'chat',
-  settingsSection: 'brain',
+  settingsSection: 'general',
   routerTab: null,
   spaceTarget: null,
   // §5.1: the conversation log owns the right edge of Core now, so activity starts closed.

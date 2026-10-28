@@ -123,9 +123,12 @@ export const SETTINGS = {
       z.object({
         enabled: z.boolean().optional(),
         tier: z.union([z.literal(2), z.literal(3)]).optional(),
+        /** Sir's own daily free allowance from the provider's console (AI Router → Usage). */
+        tpd: z.number().int().positive().max(1e12).optional(),
+        rpd: z.number().int().positive().max(1e9).optional(),
       }),
     ),
-    default: {} as Record<string, { enabled?: boolean; tier?: 2 | 3 }>,
+    default: {} as Record<string, { enabled?: boolean; tier?: 2 | 3; tpd?: number; rpd?: number }>,
   },
   /** Per model id (every provider serving it): switched off, and its place in the Priority order. */
   'pool.models': {

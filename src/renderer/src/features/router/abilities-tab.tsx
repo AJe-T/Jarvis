@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/button';
 import { confirmAction } from '../../components/ui/confirm-modal';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
-import { Panel, TierTag, Toggle } from './parts';
+import { Panel, TabIntro, TierTag, Toggle } from './parts';
 import type { PoolActions } from './router-view';
 
 type Abilities = PoolSnapshot['abilities'];
@@ -32,11 +32,16 @@ export function AbilitiesTab({
   const a = snap.abilities;
   const set = (k: Setting, v: boolean): void => actions.settings({ abilities: { [k]: v } });
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <SearchPanel a={a} set={set} onKeys={onKeys} />
-      <ImagePanel a={a} set={set} reload={actions.reload} />
-      <FusionPanel a={a} set={set} />
-      <VoicePanel a={a} set={set} />
+    <div className="flex flex-col gap-4">
+      <TabIntro help="router:abilities">
+        Free extras: web search, pictures, the fusion brain and a voice backup.
+      </TabIntro>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SearchPanel a={a} set={set} onKeys={onKeys} />
+        <ImagePanel a={a} set={set} reload={actions.reload} />
+        <FusionPanel a={a} set={set} />
+        <VoicePanel a={a} set={set} />
+      </div>
     </div>
   );
 }

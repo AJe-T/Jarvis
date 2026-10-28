@@ -10,9 +10,12 @@ import { HELP } from './help-content';
 export function HelpButton({
   topic,
   className,
+  label,
 }: {
   topic: string;
   className?: string;
+  /** Shown beside the icon ("Learn more"); without it the button is the bare "?". */
+  label?: string;
 }): React.JSX.Element | null {
   const h = HELP[topic];
   if (!h) return null;
@@ -21,14 +24,16 @@ export function HelpButton({
       <Dialog.Trigger asChild>
         <button
           type="button"
-          aria-label={`Help: ${h.title}`}
+          aria-label={label ? `${label}: ${h.title}` : `Help: ${h.title}`}
           title={`What is ${h.title}?`}
           className={clsx(
-            'inline-flex size-7 shrink-0 items-center justify-center rounded-pill text-ink-500 transition-colors duration-[120ms] hover:bg-hover hover:text-accent-300 focus-visible:outline-2 focus-visible:outline-accent-500',
+            'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-pill text-ink-500 transition-colors duration-[120ms] hover:bg-hover hover:text-accent-300 focus-visible:outline-2 focus-visible:outline-accent-500',
+            label ? 'h-7 px-2.5 text-xs font-medium text-accent-300' : 'size-7',
             className,
           )}
         >
-          <CircleHelp size={16} aria-hidden />
+          <CircleHelp size={label ? 14 : 16} aria-hidden />
+          {label}
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>

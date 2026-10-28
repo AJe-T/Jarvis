@@ -1,43 +1,56 @@
 import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Check, Lock, ShieldAlert } from 'lucide-react';
+import { Lock, Plus, ShieldAlert } from 'lucide-react';
 import { PRIVATE_SOURCES, type PoolSnapshot, type PoolTier } from '@shared/free-pool';
 import { Button } from '../../components/ui/button';
-import { Panel, ProviderDot, SettingRow, TIER_NAME, TierTag, Toggle } from './parts';
+import type { RouterTab } from './ai-map-model';
+import { DelegationRules } from './delegation-rules';
+import { Panel, ProviderDot, SettingRow, TIER_NAME, TabIntro, TierTag, Toggle } from './parts';
+import type { PoolActions } from './router-view';
 
 const TIER_RULE: Record<PoolTier, string> = {
-  1: 'Gets everything, including private data. First choice for anything important.',
-  2: 'Gets only non-private work. Normal home of free work.',
-  3: 'Last resort. Only after you say yes, and never private data, even then.',
+  1: 'Gets everything, including private data.',
+  2: 'Gets only non-private work.',
+  3: 'Only after you say yes; never private data.',
 };
 
-/** Tiers & privacy: who sits in which tier, the locked private-data rule, the tier-3 question. */
-export function TiersTab({
+/**
+ * Rules: who sits in which tier (only AIs you have set up), the locked private-data rule,
+ * how Claude shares work, and the tier-3 question. Explanations live behind "Learn more".
+ */
+export function RulesTab({
   snap,
-  onChange,
+  actions,
+  onOpen,
 }: {
   snap: PoolSnapshot;
-  onChange: (patch: { tier3?: 'ask' | 'never'; tier3EveryTime?: boolean }) => void;
+  actions: PoolActions;
+  onOpen: (tab: RouterTab) => void;
 }): React.JSX.Element {
   const [preview, setPreview] = useState(false);
+  const keyed = snap.providers.filter((p) => p.keys.length > 0);
   const members: Record<PoolTier, Array<{ id: string; label: string }>> = {
     1: [
       { id: 'claude', label: 'Claude (main brain)' },
       { id: 'local', label: 'Local model on this PC' },
     ],
-    2: snap.providers.filter((p) => p.tier === 2).map((p) => ({ id: p.id, label: p.label })),
-    3: snap.providers.filter((p) => p.tier === 3).map((p) => ({ id: p.id, label: p.label })),
+    2: keyed.filter((p) => p.tier === 2).map((p) => ({ id: p.id, label: p.label })),
+    3: keyed.filter((p) => p.tier === 3).map((p) => ({ id: p.id, label: p.label })),
   };
+  const onChange = actions.settings;
   return (
     <div className="flex flex-col gap-4">
+      <TabIntro help="router:rules">
+        Who may receive which work. Private data always stays with Claude.
+      </TabIntro>
       <div className="grid gap-3 lg:grid-cols-3">
         {([1, 2, 3] as const).map((t) => (
-          <section key={t} aria-label={`Tier ${t}`} className="card flex flex-col gap-3 p-4">
+          <section key={t} aria-label={`Tier ${t}`} className="card flex flex-col gap-2 p-4">
             <div className="flex items-center gap-2">
               <TierTag tier={t} short />
               <h2 className="font-semibold text-ink-100">{TIER_NAME[t]}</h2>
             </div>
-            <p className="text-sm text-ink-300">{TIER_RULE[t]}</p>
+            <p className="text-xs text-ink-500">{TIER_RULE[t]}</p>
             <ul className="flex flex-col gap-1.5">
               {members[t].map((m) => (
                 <li
@@ -49,37 +62,41 @@ export function TiersTab({
                 </li>
               ))}
             </ul>
+            {members[t].length === 0 && (
+              <button
+                type="button"
+                onClick={() => onOpen('keys')}
+                className="inline-flex items-center gap-1.5 self-start text-sm text-accent-300 hover:underline"
+              >
+                <Plus size={14} aria-hidden />
+                {t === 2 ? 'Add a free key' : 'None set up'}
+              </button>
+            )}
           </section>
         ))}
       </div>
-      <p className="text-xs text-ink-500">
-        Move a provider between tier 2 and tier 3 on the API keys tab. The tier follows
-        the provider, not the model: Gemini through Google is tier 2, Gemini through an unknown
-        relay is tier 3.
-      </p>
 
       <Panel
-        title="Private data stays in tier 1"
+        title="Private data never leaves tier 1"
         aside={
           <span className="inline-flex items-center gap-1.5 text-ok-400">
             <Lock size={14} aria-hidden /> Always on
           </span>
         }
       >
-        <p className="text-sm text-ink-300">
-          If a task used any of these, no free AI gets it: Claude or your local model answers. This
-          is checked in code on every request, not left to an AI&apos;s judgement, and it has no off
-          switch.
-        </p>
-        <ul className="grid gap-2 sm:grid-cols-2">
+        <ul className="flex flex-wrap gap-1.5">
           {PRIVATE_SOURCES.map((s) => (
-            <li key={s.id} className="flex items-center gap-2 text-sm text-ink-100">
-              <Check size={14} aria-hidden className="text-ok-400" />
+            <li key={s.id} className="tag bg-neutral-tint text-ink-300">
               {s.label}
             </li>
           ))}
         </ul>
       </Panel>
+
+      <DelegationRules
+        delegation={snap.delegation}
+        onChange={(patch) => actions.settings({ delegation: patch })}
+      />
 
       <Panel title="When tiers 1 and 2 are out of limits">
         <SettingRow

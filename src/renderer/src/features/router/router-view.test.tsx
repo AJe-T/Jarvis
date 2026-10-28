@@ -13,6 +13,7 @@ const settings = vi.fn(async (patch: Record<string, unknown>) => ({
   ...patch,
 }));
 const setModel = vi.fn(async () => ({ ...previewSnapshot(0), preview: false }));
+const setProvider = vi.fn(async () => ({ ...previewSnapshot(0), preview: false }));
 
 const EMPTY: Record<string, unknown> = {
   'secrets:status': {},
@@ -37,6 +38,7 @@ const mocks = (): Record<string, unknown> => ({
   'pool:snapshot': snapshot,
   'pool:settings': settings,
   'pool:setModel': setModel,
+  'pool:setProvider': setProvider,
 });
 
 beforeEach(() => {
@@ -81,22 +83,45 @@ describe('sample snapshot', () => {
 });
 
 describe('RouterView', () => {
-  it('loads the live snapshot and shows all eight tabs, no preview banner', async () => {
+  it('loads the live snapshot: everyday tabs first, then the set-once ones; opens on Usage', async () => {
     await renderView();
     expect(snapshot).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Numbers are samples/)).toBeNull();
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Overview',
-      'Main brain',
+      'Usage',
       'API keys',
       'Free models',
-      'Tiers & privacy',
-      'Delegation',
       'Abilities',
-      'Analytics',
+      'Main brain',
+      'Rules',
+      'AI tree',
+      'History',
     ]);
-    // The AI map is on the Overview, drawn at full size.
-    expect(screen.getByRole('img', { name: /Jarvis's AI map/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Usage' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('Usage: totals left for today, week and month; per provider, with where each number comes from', async () => {
+    await renderView();
+    const tokens = screen.getByRole('region', { name: 'Free tokens' });
+    // Groq 400K + Cerebras 1M a day; 200K used.
+    expect(tokens.textContent).toMatch(/1.2Ms*left of 1.4M/);
+    // OpenRouter and NVIDIA publish no token cap: named, not counted as zero.
+    expect(tokens.textContent).toMatch(/not in the total.*OpenRouter, NVIDIA NIM/);
+    fireEvent.click(screen.getByRole('radio', { name: 'This month' }));
+    expect(tokens.textContent).toMatch(/left of 43.4M/);
+    expect(screen.getByText('Live')).toBeTruthy();
+    expect(screen.getAllByText('no daily cap').length).toBeGreaterThan(0);
+    // Sir types his console's numbers; they go to main as his own.
+    fireEvent.click(screen.getByRole('button', { name: "Set Groq's free allowance" }));
+    fireEvent.change(screen.getByLabelText('Free tokens a day'), { target: { value: '500,000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(setProvider).toHaveBeenCalledWith({ id: 'groq', tpd: 500_000, rpd: null });
+  });
+
+  it('AI tree: drawn top down from Jarvis', async () => {
+    await renderView();
+    fireEvent.click(screen.getByRole('tab', { name: 'AI tree' }));
+    expect(screen.getByRole('img', { name: /Jarvis's AI tree/ })).toBeTruthy();
   });
 
   it('renders every tab without crashing', async () => {
@@ -110,7 +135,7 @@ describe('RouterView', () => {
 
   it('lists every private source under the always-on rule and saves the tier-3 choice', async () => {
     await renderView();
-    fireEvent.click(screen.getByRole('tab', { name: 'Tiers & privacy' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Rules' }));
     for (const s of PRIVATE_SOURCES) expect(screen.getByText(s.label)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Third-party AIs'), { target: { value: 'never' } });
     expect(settings).toHaveBeenCalledWith({ tier3: 'never' });
@@ -118,7 +143,7 @@ describe('RouterView', () => {
 
   it('wires every delegation rule to its setting (front door off by default)', async () => {
     await renderView();
-    fireEvent.click(screen.getByRole('tab', { name: 'Delegation' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Rules' }));
     const door = screen.getByRole('switch', { name: 'Front door' });
     expect(door.getAttribute('aria-checked')).toBe('false');
     expect(door.hasAttribute('disabled')).toBe(false);
@@ -160,7 +185,7 @@ describe('RouterView', () => {
 
   it('opens the tier-3 question with its three answers', async () => {
     await renderView();
-    fireEvent.click(screen.getByRole('tab', { name: 'Tiers & privacy' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Rules' }));
     fireEvent.click(screen.getByRole('button', { name: /Preview the question/ }));
     expect(screen.getByRole('alertdialog').textContent).toMatch(/Private work never goes to them/);
     for (const label of ['No, wait', 'Until Jarvis restarts', 'Just this once'])
@@ -207,14 +232,14 @@ describe('RouterView', () => {
     expect(chains).toHaveBeenCalledWith({ chains: [{ name: 'Coding', models: [] }] });
   });
 
-  it('the Main brain and API keys tabs hold what Settings → Models & AI holds', async () => {
+  it('the Main brain and API keys tabs are the only home of these settings', async () => {
     await renderView();
     fireEvent.click(screen.getByRole('tab', { name: 'Main brain' }));
-    expect(screen.getByText('The brain that answers you')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Learn more: Main brain/ })).toBeTruthy();
     expect(screen.getByText("Claude's models")).toBeTruthy();
     expect(screen.getByText('Budget')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'API keys' }));
-    expect(screen.getByText('All your API keys')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Learn more: API keys/ })).toBeTruthy();
     expect(screen.getByText('API keys and their models')).toBeTruthy();
     expect(screen.getByText('Free search keys')).toBeTruthy();
   });

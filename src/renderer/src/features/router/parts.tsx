@@ -3,6 +3,7 @@ import * as RadixSwitch from '@radix-ui/react-switch';
 import clsx from 'clsx';
 import { Eye } from 'lucide-react';
 import type { KeyHealth, PoolPhase, PoolTier } from '@shared/free-pool';
+import { HelpButton } from '../../help/help-button';
 import { PROVIDER_COLORS } from './colors';
 
 /** Building blocks shared by the AI Router tabs. */
@@ -245,6 +246,28 @@ export function SettingRow({
         {detail && <p className="mt-0.5 max-w-[62ch] text-sm text-ink-300">{detail}</p>}
       </div>
       <div className="shrink-0 pt-0.5">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * The one line under a tab's name: what the tab is for. The long explanation lives behind
+ * "Learn more" (help/help-content.ts), so the tab shows controls and numbers, not prose.
+ */
+export function TabIntro({
+  help,
+  children,
+  aside,
+}: {
+  help: string;
+  children: ReactNode;
+  aside?: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <p className="text-sm text-ink-300">{children}</p>
+      <HelpButton topic={help} label="Learn more" className="-ml-1" />
+      {aside && <div className="ml-auto flex flex-wrap items-center gap-2">{aside}</div>}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useUiStore, type Toast } from '../../stores/ui-store';
 
 const ICONS = { info: Info, warn: AlertTriangle, error: AlertTriangle } as const;
 const ACTION_LABEL: Record<NonNullable<Toast['action']>, string> = {
-  'settings:brain': 'Open Settings → Brain',
+  'settings:brain': 'Open AI Router → Main brain',
   'settings:voice': 'Open Settings → Voice',
   memory: 'Open Memory',
   connections: 'Open Connections',
@@ -11,7 +11,7 @@ const ACTION_LABEL: Record<NonNullable<Toast['action']>, string> = {
 
 function runAction(action: NonNullable<Toast['action']>): void {
   const go = useUiStore.getState().go;
-  if (action === 'settings:brain') go('settings', 'brain');
+  if (action === 'settings:brain') go('router', 'brain');
   else if (action === 'settings:voice') go('settings', 'voice');
   else go(action);
 }

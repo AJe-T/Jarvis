@@ -465,6 +465,9 @@ export const INVOKE = {
       id: z.union([z.enum(CLOUD_PROVIDER_IDS), z.string().regex(CUSTOM_ID_RE)]),
       enabled: z.boolean().optional(),
       tier: z.union([z.literal(2), z.literal(3)]).optional(),
+      /** Sir's own daily allowance (Usage tab); null clears it back to Jarvis's numbers. */
+      tpd: z.number().int().positive().max(1e12).nullable().optional(),
+      rpd: z.number().int().positive().max(1e9).nullable().optional(),
     }),
     PoolSnapshotSchema,
   ),

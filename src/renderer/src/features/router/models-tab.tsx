@@ -22,6 +22,7 @@ import {
   ProviderDot,
   Segmented,
   SettingRow,
+  TabIntro,
   TierTag,
   Toggle,
   fmtTokens,
@@ -61,6 +62,9 @@ export function ModelsTab({
 
   return (
     <div className="flex flex-col gap-4">
+      <TabIntro help="router:models">
+        Every free model your keys can use, in the order requests go to them.
+      </TabIntro>
       <Panel title="Routing strategy" aside={active?.weights}>
         <Segmented
           label="Routing strategy"

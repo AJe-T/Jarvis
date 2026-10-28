@@ -25,7 +25,9 @@ test('E1 + E2 + E8 + E10: onboarding, streaming chat, masked key, history after 
   await expect(page.locator('.stream-caret')).toHaveCount(0);
 
   // E8: the secret field shows only the last 4 characters; Replace offers a new input.
-  await page.getByRole('button', { name: 'Settings' }).click();
+  // 2.35: the key lives in AI Router → Main brain (Settings → Models & AI links there).
+  await page.getByRole('button', { name: 'AI Router', exact: true }).click();
+  await page.getByRole('tab', { name: 'Main brain' }).click();
   await expect(page.getByTestId('secret-anthropic')).toHaveText('•••• 0000');
   await page.getByRole('button', { name: 'Replace' }).click();
   await expect(page.getByLabel('Anthropic API key')).toHaveValue('');

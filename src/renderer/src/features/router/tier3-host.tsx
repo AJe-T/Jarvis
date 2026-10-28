@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { call } from '../../lib/api';
-import { Tier3Question } from './tiers-tab';
+import { Tier3Question } from './rules-tab';
 
 /** Main's "may a third-party AI answer?" question (pool:ask), wherever Sir is in the app. */
 export const useTier3 = create<{

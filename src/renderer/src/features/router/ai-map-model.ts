@@ -3,13 +3,12 @@ import { CLOUD_PROVIDERS, cloudProvider, type CloudProviderId } from '@shared/ll
 import { PROVIDER_COLORS } from './colors';
 
 /**
- * The AI map (AI Router → Overview, Settings → Models & AI): Jarvis, the groups of AIs he can
- * use, each provider and the models it runs. Built from settings, keys and the pool snapshot
- * only (no network), then laid out left to right so a long list of models stays readable.
+ * The AI tree (AI Router → AI tree): Jarvis, the groups of AIs he can use, each provider and the
+ * models it runs. Built from settings, keys and the pool snapshot only (no network).
  */
 
 export type RouterTab =
-  'overview' | 'brain' | 'keys' | 'models' | 'tiers' | 'delegation' | 'abilities' | 'analytics';
+  'usage' | 'keys' | 'models' | 'abilities' | 'brain' | 'rules' | 'tree' | 'history';
 
 export interface MapNode {
   id: string;
@@ -300,49 +299,83 @@ export function buildMap(t: MapInput): {
   };
 }
 
-// ── Layout: left to right, one row per leaf, a parent centred on its children ───────────────
+// ── Layout: a tree from the top down (2.35). Jarvis on top, the groups under him, each
+// provider as a column, and a provider's models listed under it like folders in a file tree.
 
-export const ROW = 34;
-export const COLUMNS = [16, 136, 330, 556] as const;
-export const WIDTHS = { root: 100, group: 168, provider: 196, leaf: 300 } as const;
+export const COL_W = 184;
+const GAP = 14;
+const LEVEL_H = 86;
+const LEAF_STEP = 34;
+const PAD = 20;
+const ROOT_W = 120;
+
+/** Half the drawn height of a node, so wires meet its top and bottom edges. */
+export const halfHeight = (n: MapNode): number => (n.kind === 'root' ? 18 : n.sub ? 15 : 12);
 
 export interface Placed {
   node: MapNode;
+  /** Left edge. */
   x: number;
+  /** Vertical centre. */
   y: number;
   w: number;
 }
+
+export interface Edge {
+  from: Placed;
+  to: Placed;
+  /** branch: elbow from a parent's bottom to a child's top; leaf: down the column's spine. */
+  kind: 'branch' | 'leaf';
+}
+
+const isColumn = (n: MapNode): boolean =>
+  n.children.length === 0 || n.children.every((c) => c.kind === 'leaf');
 
 export function layoutMap(root: MapNode): {
   width: number;
   height: number;
   nodes: Placed[];
-  edges: Array<{ from: Placed; to: Placed }>;
+  edges: Edge[];
 } {
   const nodes: Placed[] = [];
-  const edges: Array<{ from: Placed; to: Placed }> = [];
-  let row = 0;
-  const place = (n: MapNode, depth: number): Placed => {
-    const x = COLUMNS[Math.min(depth, COLUMNS.length - 1)] ?? 0;
-    const w = WIDTHS[n.kind];
-    if (n.children.length === 0) {
-      const p = { node: n, x, y: 24 + row * ROW, w };
-      row += 1;
-      nodes.push(p);
+  const edges: Edge[] = [];
+
+  /** Width a subtree needs: one column, or its children side by side. */
+  const span = (n: MapNode): number =>
+    isColumn(n) ? COL_W : n.children.reduce((w, c, i) => w + span(c) + (i ? GAP : 0), 0);
+
+  const place = (n: MapNode, depth: number, left: number): Placed => {
+    const width = span(n);
+    const w = n.kind === 'root' ? ROOT_W : COL_W;
+    const p: Placed = { node: n, x: left + (width - w) / 2, y: PAD + 18 + depth * LEVEL_H, w };
+    nodes.push(p);
+    if (isColumn(n)) {
+      // Models hang under their provider, indented, one per row.
+      n.children.forEach((c, i) => {
+        const leaf: Placed = {
+          node: c,
+          x: p.x + 22,
+          y: p.y + halfHeight(n) + 22 + i * LEAF_STEP,
+          w: COL_W - 22,
+        };
+        nodes.push(leaf);
+        edges.push({ from: p, to: leaf, kind: 'leaf' });
+      });
       return p;
     }
-    const kids = n.children.map((c) => place(c, depth + 1));
-    const first = kids[0] as Placed;
-    const last = kids[kids.length - 1] as Placed;
-    const p = { node: n, x, y: (first.y + last.y) / 2, w };
-    nodes.push(p);
-    for (const k of kids) edges.push({ from: p, to: k });
-    // A little air between groups.
-    if (depth === 1) row += 0.5;
+    let x = left;
+    for (const c of n.children) {
+      edges.push({ from: p, to: place(c, depth + 1, x), kind: 'branch' });
+      x += span(c) + GAP;
+    }
     return p;
   };
-  place(root, 0);
-  const width = Math.max(...nodes.map((p) => p.x + p.w)) + 16;
-  const height = Math.max(...nodes.map((p) => p.y)) + 30;
-  return { width, height, nodes, edges };
+
+  place(root, 0, PAD);
+  return {
+    width: Math.max(...nodes.map((p) => p.x + p.w)) + PAD,
+    height: Math.max(...nodes.map((p) => p.y + halfHeight(p.node))) + PAD,
+    nodes,
+    edges,
+  };
 }

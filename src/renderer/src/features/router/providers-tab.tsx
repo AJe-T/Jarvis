@@ -14,7 +14,6 @@ import clsx from 'clsx';
 import type { KeyHealth, PoolProvider, PoolSnapshot, PoolTier } from '@shared/free-pool';
 import { ENV_KEY_NAMES } from '@shared/free-pool';
 import type { Res } from '@shared/ipc-contract';
-import { MAX_CONNECTIONS_PER_PROVIDER } from '@shared/llm-providers';
 import { confirmAction } from '../../components/ui/confirm-modal';
 import { Button, IconButton } from '../../components/ui/button';
 import { call, cleanError } from '../../lib/api';
@@ -65,7 +64,9 @@ export function ProvidersTab({
       .getElementById('brain-connections')
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const shown = snap.providers.filter((p) => {
+  // Only providers Sir set up: free ones without a key are offered in the Add a key list instead.
+  const mine = snap.providers.filter((p) => p.keys.length > 0 || p.custom);
+  const shown = mine.filter((p) => {
     if (query && !p.label.toLowerCase().includes(query.toLowerCase())) return false;
     const h = summary(p).health;
     if (filter === 'healthy') return p.enabled && h === 'healthy';
@@ -97,7 +98,7 @@ export function ProvidersTab({
           </FilterChip>
         ))}
         <span className="ml-auto font-code text-xs text-ink-500">
-          {snap.providers.length} providers · {keyCount} keys
+          {mine.length} providers · {keyCount} keys
         </span>
       </div>
 
@@ -132,6 +133,12 @@ export function ProvidersTab({
             actions.reload();
           }}
         />
+      )}
+
+      {mine.length === 0 && (
+        <p className="text-sm text-ink-300">
+          No free provider key yet. Pick one under “Free (trusted)” in Add an API key above.
+        </p>
       )}
 
       {([2, 3] as const).map((tier) => {
@@ -202,14 +209,6 @@ export function ProvidersTab({
               <option value="24">Once a day</option>
               <option value="0">Only when I click</option>
             </select>
-          </SettingRow>
-          <SettingRow
-            title="Keys per provider"
-            detail="Add or remove keys and pick each key's model at the top of this tab. Keys are encrypted on this PC; only their last four characters are ever shown."
-          >
-            <span className="font-code text-sm text-ink-100">
-              up to {MAX_CONNECTIONS_PER_PROVIDER}
-            </span>
           </SettingRow>
         </div>
       </Panel>
