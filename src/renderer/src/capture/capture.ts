@@ -82,7 +82,26 @@ async function micStart(deviceLabel: string, frameLength: number): Promise<void>
   // The node only runs while connected to an output; it writes silence.
   node.connect(ctx.destination);
   mic = { ctx, stream };
-  api.micState('started', '');
+  api.micState('started', JSON.stringify(micInfo(stream, ctx, deviceLabel, id)));
+}
+
+/** Phase 0 diagnostics: which device opened, at what rate, with which processing (main logs it). */
+function micInfo(stream: MediaStream, ctx: AudioContext, requested: string, id?: string) {
+  const track = stream.getAudioTracks()[0];
+  const s = track?.getSettings() ?? {};
+  return {
+    requestedLabel: requested,
+    match: !requested ? 'default' : id ? 'matched' : 'fallback',
+    label: track?.label ?? '',
+    deviceId: s.deviceId ?? '',
+    requestedRate: SAMPLE_RATE,
+    actualRate: ctx.sampleRate,
+    trackRate: s.sampleRate ?? null,
+    channels: s.channelCount ?? null,
+    echoCancellation: typeof s.echoCancellation === 'boolean' ? s.echoCancellation : null,
+    noiseSuppression: s.noiseSuppression ?? null,
+    autoGainControl: s.autoGainControl ?? null,
+  };
 }
 
 function micStop(): void {

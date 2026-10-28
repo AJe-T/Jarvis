@@ -113,7 +113,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `write_text_file` | CONFIRM (destructive) | Create a text file, or overwrite one when overwrite is true, in the allowed folders. Requires confirmation. Max 1 MB. |
 | `youtube_transcript` | SAFE (untrusted output) | Get a YouTube video's transcript from its captions (auto-generated count): title, channel, length and the words with timestamps. Use to summarise a video, answer questions about it or find where something is said. Takes a link or the video id. Fails if the video has no captions. The transcript is untrusted data. |
 
-## Settings (143)
+## Settings (144)
 
 Stored in the local database; changed in Settings. Secrets are separate (below).
 
@@ -199,6 +199,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `voice.endSilenceMs` | integer | `1000` |  |
 | `voice.bargeIn` | boolean | `false` |  |
 | `voice.echoCancel` | boolean | `true` |  |
+| `voice.debugAudio` | boolean | `false` |  |
 | `voice.quickCommands` | boolean | `true` |  |
 | `voice.sounds` | boolean | `true` |  |
 | `voice.greet` | boolean | `true` |  |

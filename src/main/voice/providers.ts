@@ -8,6 +8,7 @@ import { PvRecorder } from '@picovoice/pvrecorder-node';
 import { JarvisError } from '../errors';
 import { newId } from '../lib/util';
 import { runPowerShell } from '../tools/powershell';
+import { createOverrunMeter } from './diagnostics';
 import { escapeSsml } from './speech/speech';
 import type { Recorder, SttProvider, SttSession, TtsChunk, TtsProvider, WakeWord } from './types';
 
@@ -156,13 +157,39 @@ $s.SetOutputToWaveFile($P.out); $s.Speak([string]$P.text); $s.Dispose()`;
 
 export const FRAME_LENGTH = 512;
 
-export function createPvRecorder(deviceIndex: number, frameLength = FRAME_LENGTH): Recorder {
+/** Phase 0 diagnostics for the native recorder. */
+export interface PvRecorderHooks {
+  /** Frames PvRecorder lost because the mic loop read too slowly (estimated, see createOverrunMeter). */
+  onOverrun?(frames: number): void;
+  /** The device that actually opened. */
+  onStart?(device: string): void;
+  /** PvRecorder's own debug output (buffer overflows) on stderr. */
+  debug?: boolean;
+}
+
+export function createPvRecorder(
+  deviceIndex: number,
+  frameLength = FRAME_LENGTH,
+  hooks: PvRecorderHooks = {},
+): Recorder {
   const rec = new PvRecorder(frameLength, deviceIndex);
+  const overrun = createOverrunMeter(frameLength);
   return {
     frameLength,
-    start: () => rec.start(),
+    start: () => {
+      if (hooks.debug) rec.setDebugLogging(true);
+      rec.start();
+      overrun.start();
+      hooks.onStart?.(rec.getSelectedDevice());
+    },
     stop: () => rec.stop(),
-    read: () => rec.read(),
+    read: async () => {
+      const t = performance.now();
+      const frame = await rec.read();
+      const lost = overrun.frame(performance.now() - t);
+      if (lost > 0) hooks.onOverrun?.(lost);
+      return frame;
+    },
     release: () => rec.release(),
     get isRecording() {
       return rec.isRecording;

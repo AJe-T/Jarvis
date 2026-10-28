@@ -22,6 +22,27 @@ const Frame = z
   .instanceof(Uint8Array)
   .refine((b) => b.length > 0 && b.length <= 32_768 && b.length % 2 === 0);
 
+/** What capture.html reports once the microphone is open (Phase 0 diagnostics). */
+const MicInfo = z.object({
+  requestedLabel: z.string().max(300),
+  /** matched = the Windows name was found; fallback = it wasn't, so the default mic opened. */
+  match: z.enum(['default', 'matched', 'fallback']),
+  label: z.string().max(300),
+  deviceId: z.string().max(300),
+  requestedRate: z.number(),
+  actualRate: z.number(),
+  trackRate: z.number().nullable(),
+  channels: z.number().nullable(),
+  echoCancellation: z.boolean().nullable(),
+  noiseSuppression: z.boolean().nullable(),
+  autoGainControl: z.boolean().nullable(),
+});
+
+/** Diagnostics for one echo-cancelled recorder: a frame was thrown away (and why). */
+export interface MicHooks {
+  onDrop?(reason: 'queue' | 'length'): void;
+}
+
 export function isCaptureUrl(raw: string): boolean {
   return isAppPage(raw, 'capture.html');
 }
@@ -46,7 +67,7 @@ function captureSession(): Session {
 
 export interface CaptureWindow {
   /** A Recorder fed by the echo-cancelled microphone (device by Windows name; '' = default). */
-  recorder(deviceLabel: string, frameLength: number): Recorder;
+  recorder(deviceLabel: string, frameLength: number, hooks?: MicHooks): Recorder;
   /** One JPEG still from the camera ('' = default camera). */
   snapshot(deviceLabel?: string): Promise<{ jpegBase64: string }>;
   /** The echo-cancelled microphone failed on this PC; the voice system falls back to the native one. */
@@ -61,6 +82,7 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
   let win: BrowserWindow | null = null;
   let loaded: Promise<void> | null = null;
   let active: ReturnType<typeof createStreamRecorder> | null = null;
+  let activeHooks: MicHooks = {};
   let isBroken = false;
   const brokenListeners = new Set<() => void>();
   const snaps = new Map<
@@ -82,9 +104,12 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
     // previous microphone may have another length (wake engines need exact frames): drop those.
     const frame = new Int16Array(new Uint8Array(bytes.data).buffer);
     if (frame.length === active.frameLength) active.push(frame);
+    else activeHooks.onDrop?.('length');
   });
   ipcMain.on('capture:mic', (e, state: unknown, detail: unknown) => {
-    if (!fromCapture(e) || state !== 'failed') return;
+    if (!fromCapture(e)) return;
+    if (state === 'started') return logStarted(detail);
+    if (state !== 'failed') return;
     const why = String(detail).slice(0, 300);
     log.warn({ why }, 'echo-cancelled microphone failed; using the native one');
     isBroken = true;
@@ -105,6 +130,23 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
       p.reject(new Error(why.slice(0, 300)));
     }
   });
+
+  function logStarted(detail: unknown): void {
+    let info: z.infer<typeof MicInfo> | null = null;
+    try {
+      const parsed = MicInfo.safeParse(JSON.parse(String(detail).slice(0, 4000)));
+      if (parsed.success) info = parsed.data;
+    } catch {
+      // an older capture page sends no details
+    }
+    if (!info) return log.info('echo-cancelled microphone started');
+    if (info.match === 'fallback')
+      log.warn(
+        info,
+        'echo-cancelled microphone: the chosen device was not found, using the default',
+      );
+    else log.info(info, 'echo-cancelled microphone started');
+  }
 
   function ensure(): Promise<void> {
     if (win && !win.isDestroyed() && loaded) return loaded;
@@ -149,16 +191,19 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
   }
 
   return {
-    recorder(deviceLabel, frameLength) {
+    recorder(deviceLabel, frameLength, hooks = {}) {
       const rec = createStreamRecorder({
         frameLength,
+        onDrop: () => hooks.onDrop?.('queue'),
         onStart: () => {
           active = rec;
+          activeHooks = hooks;
           command({ type: 'mic-start', deviceLabel, frameLength });
         },
         onStop: () => {
           if (active !== rec) return;
           active = null;
+          activeHooks = {};
           // No window, no open mic. Opening one just to stop it (at quit) failed and was logged as
           // "capture window failed to load" in every session.
           if (win && !win.isDestroyed()) command({ type: 'mic-stop' });

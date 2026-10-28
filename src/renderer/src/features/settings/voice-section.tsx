@@ -138,6 +138,12 @@ export function VoiceSection(): React.JSX.Element {
           />
           <SettingInput k="voice.tts.rate" label="Speaking speed (e.g. +5% faster, -10% slower)" />
         </Section>
+        <Section title="Diagnostics">
+          <SettingSwitch
+            k="voice.debugAudio"
+            label={`Record what ${name} hears: saves the exact microphone audio given to the wake word and to speech recognition as WAV files in %APPDATA%\\Jarvis\\debug-audio (one file per wake and per request), so choppy or missing audio can be heard. Your voice, kept on this PC only; switch it off when done and the files are deleted at the next start`}
+          />
+        </Section>
         <LayaSection />
       </details>
     </>

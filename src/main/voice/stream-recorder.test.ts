@@ -27,6 +27,19 @@ describe('stream recorder (echo-cancelled mic from the capture window)', () => {
     expect(rec.isRecording).toBe(true);
   });
 
+  it('reports every frame it throws away once the queue is full', () => {
+    let dropped = 0;
+    const rec = createStreamRecorder({
+      frameLength: 512,
+      onStart: () => undefined,
+      onStop: () => undefined,
+      onDrop: () => dropped++,
+    });
+    rec.start();
+    for (let i = 0; i < 205; i++) rec.push(frame(i));
+    expect(dropped).toBe(5);
+  });
+
   it('stop ends a pending read so the voice loop can finish, and stops the microphone once', async () => {
     const { rec, calls } = setup();
     rec.start();

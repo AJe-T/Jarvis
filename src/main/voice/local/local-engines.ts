@@ -19,6 +19,7 @@ import {
   loadSpotterModel,
   spotterThreshold,
   wakePhrases,
+  type KeywordEngine,
   type SpotterModel,
 } from './spotter';
 import {
@@ -81,6 +82,8 @@ export function createLocalEngines(
     onSlow?(): void;
     onNearMiss?(info: Record<string, unknown>): void;
     onSpotted?(info: Record<string, unknown>): void;
+    /** Phase 0: how long each keyword-spotter decode took (it runs synchronously in main). */
+    onSpotterDecode?(ms: number): void;
   } = {},
 ) {
   let vad: Promise<Vad> | null = null;
@@ -194,7 +197,19 @@ export function createLocalEngines(
       const engine = await model.open(
         keywordsText(wakePhrases(name, learned), model.pieces, threshold),
       );
-      return createSpotterWake(engine, {
+      const timed = hooks.onSpotterDecode;
+      const measured: KeywordEngine = timed
+        ? {
+            accept(samples) {
+              const started = performance.now();
+              const heard = engine.accept(samples);
+              timed(performance.now() - started);
+              return heard;
+            },
+            reset: () => engine.reset(),
+          }
+        : engine;
+      return createSpotterWake(measured, {
         onHeard: (phrase) => hooks.onSpotted?.({ phrase, threshold }),
       });
     },

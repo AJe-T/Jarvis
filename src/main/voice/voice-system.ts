@@ -15,7 +15,11 @@ import {
 
 /** The capture window's echo-cancelled microphone (windows/capture-window.ts). */
 export interface MicCapture {
-  recorder(deviceLabel: string, frameLength: number): Recorder;
+  recorder(
+    deviceLabel: string,
+    frameLength: number,
+    hooks?: { onDrop?(reason: 'queue' | 'length'): void },
+  ): Recorder;
   broken(): boolean;
   onBroken(listener: () => void): void;
 }
@@ -30,6 +34,7 @@ import { createVoiceController, type VoiceFactories } from './voice-controller';
 import { clearSpeechCache } from './tts-pipeline';
 import { createEngineReporter, hearingChain, whyOf, type EngineReport } from './backup';
 import { decodeAudio } from './audio-decode';
+import { createVoiceDiagnostics, type VoiceDiagnostics } from './diagnostics';
 import { createElevenLabsTts } from './tts/elevenlabs';
 import { createKokoroTts } from './tts/kokoro';
 import { createAuraTts, createGroqTts, createOpenAiTts, createServerTts } from './tts/cloud-tts';
@@ -148,12 +153,19 @@ function hasKey(s: Services, id: SttEngineId): boolean {
   return !info?.key || id === 'server' || !!s.secrets.get(info.key);
 }
 
+/** The engine that will really hear Sir: a cloud engine without its key falls back to on-device speech. */
+function effectiveStt(s: Services, local: Pick<LocalEngines, 'ready'>): SttEngineId {
+  const chosen = s.settings.get('voice.stt.provider');
+  return chosen !== 'whisper' && !hasKey(s, chosen) && local.ready() ? 'whisper' : chosen;
+}
+
 /** ADR-011: wake word and speech-to-text engines are chosen separately in Settings → Voice. */
 export function realFactories(
   s: Services,
   local: LocalEngines,
   models: ModelStore,
   capture?: MicCapture,
+  diag?: VoiceDiagnostics,
 ): VoiceFactories {
   const captureOn = (): boolean =>
     !!capture && s.settings.get('voice.echoCancel') && !capture.broken();
@@ -173,10 +185,8 @@ export function realFactories(
   const stt: SttProvider = {
     id: 'selected',
     start: async (o) => {
-      const chosen = s.settings.get('voice.stt.provider');
       // A cloud engine chosen but no key: fall back to free on-device speech when it is downloaded.
-      const engine =
-        chosen !== 'whisper' && !hasKey(s, chosen) && local.ready() ? 'whisper' : chosen;
+      const engine = effectiveStt(s, local);
       if (engine === 'whisper') {
         const cloud = cloudHearing();
         if (cloud.length && local.vadReady()) {
@@ -224,8 +234,14 @@ export function realFactories(
     // Echo-cancelled microphone from the capture window when on (and working); else the native one.
     recorder: (deviceIndex, frameLength) =>
       captureOn()
-        ? (capture as MicCapture).recorder(listAudioDevices()[deviceIndex] ?? '', frameLength)
-        : createPvRecorder(deviceIndex, frameLength),
+        ? (capture as MicCapture).recorder(listAudioDevices()[deviceIndex] ?? '', frameLength, {
+            onDrop: (reason) => diag?.drop(reason),
+          })
+        : createPvRecorder(deviceIndex, frameLength, {
+            onOverrun: (frames) => diag?.drop('overrun', frames),
+            onStart: (device) => logger.info({ device, deviceIndex }, 'native microphone started'),
+            debug: s.settings.get('voice.debugAudio'),
+          }),
     echoCancelled: captureOn,
     wake: (sensitivity) => {
       const engine = s.settings.get('voice.wake.provider');
@@ -380,6 +396,11 @@ export function createVoiceSystem(
   } = {},
 ) {
   let activeConversation: string | null = null;
+  const diag = createVoiceDiagnostics({
+    dir: join(s.userData, 'debug-audio'),
+    enabled: () => s.settings.get('voice.debugAudio'),
+    logger,
+  });
   const models: ModelStore = createModelStore({
     root: join(s.userData, 'models'),
     onProgress: (p) => s.emit('models:progress', p),
@@ -397,7 +418,29 @@ export function createVoiceSystem(
     // A "Hey Jarvis" that almost woke him: the log shows how close it came (tune the sensitivity).
     onNearMiss: (info) => logger.info(info, 'wake word near miss'),
     onSpotted: (info) => logger.info(info, 'wake word heard'),
+    onSpotterDecode: diag.timer('spotter.decode'),
   });
+  /** Phase 0: the voice setup actually in effect (keys only as present / absent). */
+  function logVoiceSetup(reason: string): void {
+    const deviceIndex = s.settings.get('voice.deviceIndex');
+    const echoCancel = s.settings.get('voice.echoCancel');
+    logger.info(
+      {
+        reason,
+        mode: s.settings.get('voice.mode'),
+        sttProvider: s.settings.get('voice.stt.provider'),
+        sttEffective: effectiveStt(s, local),
+        wakeProvider: s.settings.get('voice.wake.provider'),
+        echoCancel,
+        echoCancelActive: echoCancel && !!opts.capture && !opts.capture.broken(),
+        deviceIndex,
+        device: s.isTest ? '' : (listAudioDevices()[deviceIndex] ?? 'default'),
+        deepgramKey: !!s.secrets.get('deepgram'),
+        debugAudio: s.settings.get('voice.debugAudio'),
+      },
+      'voice setup',
+    );
+  }
   /** After the personal wake word goes away: the instant spotter when downloaded (any name). */
   const fallbackWake = (): WakeEngineId =>
     local.spotterReady()
@@ -441,7 +484,8 @@ export function createVoiceSystem(
     logger,
     factories:
       opts.factories ??
-      (s.isTest ? testFactories() : realFactories(s, local, models, opts.capture)),
+      (s.isTest ? testFactories() : realFactories(s, local, models, opts.capture, diag)),
+    diag,
     activeConversation: () => activeConversation ?? undefined,
     quick: (text) => matchQuickCommand(text, routineTriggers()),
     onDictation: (text) =>
@@ -530,10 +574,12 @@ export function createVoiceSystem(
       key === 'voice.stt.whisperModel' ||
       key === 'voice.deviceIndex' ||
       key === 'voice.echoCancel' ||
+      key === 'voice.debugAudio' || // closes open recordings, restarts the mic with debug output
       key === 'assistant.name'
     )
       // A wake word that can't start must say so (it used to fail silently and simply never hear Sir).
       void voice.applyMode().then((r) => {
+        logVoiceSetup(key);
         if (!r.ok && r.error && key !== 'voice.mode')
           // voice:setMode shows its own error
           s.emit('notify', { level: 'warn', message: r.error, action: 'settings:voice' });
@@ -627,6 +673,12 @@ export function createVoiceSystem(
     },
     start: () => {
       if (!s.isTest) local.preload();
+      // Debug recordings are Sir's voice: kept only while he has them switched on.
+      if (!s.settings.get('voice.debugAudio'))
+        void diag.clear().catch((err: unknown) => {
+          logger.warn({ err: String(err) }, 'old debug recordings could not be deleted');
+        });
+      logVoiceSetup('start');
       // Voice Match on: load its model now, so the first "Hey Jarvis" isn't slowed by it.
       if (!s.isTest && s.settings.get('voice.speaker.verify') && models.installed('wavlm-speaker'))
         void inference()

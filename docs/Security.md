@@ -255,6 +255,7 @@ Rules:
 | Imported ChatGPT / Claude chats | No | — | Read from the file Sir picks; stored as notes in his vault |
 | Claude Code session titles and states | No | — | Read-only via the Agent SDK session API; titles are marked untrusted tool output. `start_claude_session` is CONFIRM, path-guarded, strips `ANTHROPIC_*`, and refuses briefs starting with `-` |
 | Wake-word audio | No | — | Porcupine runs on-device |
+| Debug recordings (`voice.debugAudio`, off by default) | No | — | The exact frames given to the wake word and to speech-to-text, as WAV files in `<userData>/debug-audio`. Only while Sir has it on; the folder is deleted at the next start once it is off. Never logged, sent or put in the vault. |
 | Vault, DB, logs | No | — | Local only; back up yourself |
 | MCP tool data | Depends on server | That service | Review each server's privacy |
 

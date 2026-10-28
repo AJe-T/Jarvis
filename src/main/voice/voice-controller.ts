@@ -24,6 +24,7 @@ import type { ContinuousTranscriber, HeardSegment } from './local/continuous';
 import { Utterance, warmSpeech } from './tts-pipeline';
 import { speakingFallbacks, ttsName, whyOf, type EngineReport } from './backup';
 import { createLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
+import type { AudioTap, VoiceDiagnostics } from './diagnostics';
 import {
   rms,
   type Recorder,
@@ -81,6 +82,8 @@ export interface VoiceDeps {
   report?: EngineReport;
   /** Instant commands (routine triggers, time, date): answered without the model. */
   quick?(text: string): QuickMatch | null;
+  /** Phase 0: dropped-frame counts, inference timing and (voice.debugAudio) WAV recordings. */
+  diag?: Pick<VoiceDiagnostics, 'tap' | 'drop' | 'timer' | 'flush'>;
   /** Overridable for tests. */
   timeouts?: {
     silenceMs?: number;
@@ -100,7 +103,7 @@ const SAMPLE_MAX_MS = 5_000;
 const SAMPLE_END_SILENCE_MS = 700;
 /** Frame loudness that counts as speech while enrolling. */
 const SAMPLE_SPEECH_RMS = 0.02;
-const MAX_EARLY_FRAMES = 250; // ≥ 8 s at 512 samples per frame
+const MAX_EARLY_FRAMES = 250; // 8 s at 512 samples per frame, 20 s at 1280
 /** Dictation lets Sir pause to think mid-sentence. */
 const DICTATION_PAUSE_MS = 1500;
 const DICTATION_MAX_MS = 120_000;
@@ -152,6 +155,8 @@ export function createVoiceController(d: VoiceDeps) {
     retried: boolean;
     /** Audio captured while the speech-to-text session is still starting ("Hey Jarvis, what time…"). */
     early: Int16Array[];
+    /** voice.debugAudio: the frames this session's speech-to-text was given. */
+    tap: AudioTap | null;
     /** Opened by itself after a spoken reply: no chime, gives up quietly. */
     followUp: boolean;
     /** The wake greeting playing while this session listens (echo-cancelled mic). */
@@ -194,6 +199,10 @@ export function createVoiceController(d: VoiceDeps) {
   let ack: Utterance | null = null;
   /** Utterances the renderer is playing right now. */
   const playing = new Set<string>();
+  /** voice.debugAudio: what the wake engine / always-listening transcriber hears (one file per wake). */
+  let wakeTap: AudioTap | null = null;
+  let ambientTap: AudioTap | null = null;
+  const wakeTiming = d.diag?.timer('wake.process');
   const wakeLine = createLinePicker(WAKE_LINES);
   const workingLine = createLinePicker(WORKING_LINES);
   /** The "Yes, sir?" playing before listening starts (no echo cancellation). */
@@ -425,8 +434,17 @@ export function createVoiceController(d: VoiceDeps) {
     void loop(rec);
   }
 
+  function closeTaps(): void {
+    wakeTap?.close();
+    wakeTap = null;
+    ambientTap?.close();
+    ambientTap = null;
+  }
+
   function releaseRecorder(): void {
     if (!recorder) return;
+    closeTaps();
+    d.diag?.flush();
     try {
       recorder.stop();
       recorder.release();
@@ -455,19 +473,33 @@ export function createVoiceController(d: VoiceDeps) {
         if (sample) {
           feedSample(frame, (frame.length / 16000) * 1000);
         } else if (listening) {
-          if (listening.session) listening.session.write(frame);
-          else if (listening.early.length < MAX_EARLY_FRAMES) listening.early.push(frame);
+          if (listening.session) {
+            listening.session.write(frame);
+            listening.tap?.write(frame);
+          } else if (listening.early.length < MAX_EARLY_FRAMES) listening.early.push(frame);
+          else d.diag?.drop('early');
         } else if (ambient && transcribing()) {
+          ambientTap ??= d.diag?.tap('ambient') ?? null;
+          ambientTap?.write(frame);
           ambient.write(frame);
         } else if (wake && mode() === 'wake' && !sleeping) {
           const w = wake;
+          wakeTap ??= d.diag?.tap('wake') ?? null;
+          wakeTap?.write(frame);
           let heard = false;
+          const started = performance.now();
           try {
             heard = await w.process(frame);
           } catch (err) {
             if (wake === w) throw err; // a replaced engine may fail on its way out; ignore that
           }
-          if (heard && wake === w && recorder === rec) onWake();
+          wakeTiming?.(performance.now() - started);
+          if (heard && wake === w && recorder === rec) {
+            // One recording per wake: it ends with the phrase that fired.
+            wakeTap?.close();
+            wakeTap = null;
+            onWake();
+          }
         }
       }
     } catch (err) {
@@ -557,6 +589,7 @@ export function createVoiceController(d: VoiceDeps) {
       heard: false,
       retried: isRetry,
       early: [],
+      tap: d.diag?.tap('stt') ?? null,
       followUp,
       ...(greetingLine ? { greeting: greetingLine } : {}),
       ...(dictation ? { dictation: { parts: [], target: dictation } } : {}),
@@ -638,7 +671,10 @@ export function createVoiceController(d: VoiceDeps) {
         });
         cancelListening();
       });
-      for (const f of current.early) session.write(f);
+      for (const f of current.early) {
+        session.write(f);
+        current.tap?.write(f);
+      }
       current.early = [];
     } catch (err) {
       log.warn({ err: errorMessage(err) }, 'speech-to-text connect failed');
@@ -699,6 +735,7 @@ export function createVoiceController(d: VoiceDeps) {
     listening = null;
     clearTimeout(l.silence);
     clearTimeout(l.max);
+    l.tap?.close();
     l.abort.abort();
     void l.session?.close().catch(() => undefined);
     if (!needRecorder()) releaseRecorder();
@@ -1047,6 +1084,7 @@ export function createVoiceController(d: VoiceDeps) {
       const gen = ++modeGeneration;
       const m = mode();
       cancelListening();
+      closeTaps();
       wake?.release();
       wake = null;
       ambient?.close();

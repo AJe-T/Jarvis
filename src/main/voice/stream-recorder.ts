@@ -1,6 +1,6 @@
 import type { Recorder } from './types';
 
-/** About 6 s of 512-sample frames; older frames are dropped if nobody reads them. */
+/** About 6 s of 512-sample frames (16 s of 1280); older frames are dropped if nobody reads them. */
 const MAX_QUEUE = 200;
 
 /**
@@ -12,6 +12,8 @@ export function createStreamRecorder(opts: {
   frameLength: number;
   onStart(): void;
   onStop(): void;
+  /** A frame was thrown away because nobody read the queue in time. */
+  onDrop?(): void;
 }): Recorder & { push(frame: Int16Array): void; fail(err: Error): void } {
   const queue: Int16Array[] = [];
   let waiter: { resolve(f: Int16Array): void; reject(e: Error): void } | null = null;
@@ -60,7 +62,10 @@ export function createStreamRecorder(opts: {
         return;
       }
       queue.push(frame);
-      if (queue.length > MAX_QUEUE) queue.shift();
+      if (queue.length > MAX_QUEUE) {
+        queue.shift();
+        opts.onDrop?.();
+      }
     },
     fail(err) {
       failed = err;

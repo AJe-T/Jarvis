@@ -335,6 +335,12 @@ export const SETTINGS = {
    * 'voice.bargeIn'). Falls back to the native recorder by itself if the capture window can't open the mic.
    */
   'voice.echoCancel': { schema: z.boolean(), default: true },
+  /**
+   * Voice diagnostics: records the exact microphone frames given to speech-to-text and to the wake
+   * word as WAV files in <userData>/debug-audio (Sir's voice, on this PC only; deleted at the next
+   * start once switched off). Dropped frames and inference times are logged either way.
+   */
+  'voice.debugAudio': { schema: z.boolean(), default: false },
   /** Priler/jarvis-style instant commands: routine trigger phrases, time and date answered offline. */
   'voice.quickCommands': { schema: z.boolean(), default: true },
   'voice.sounds': { schema: z.boolean(), default: true },
