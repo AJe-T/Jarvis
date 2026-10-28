@@ -13,7 +13,7 @@ interface CaptureApi {
 }
 
 type Command =
-  | { type: 'mic-start'; deviceLabel: string; frameLength: number }
+  | { type: 'mic-start'; deviceLabel: string; deviceId: string; frameLength: number }
   | { type: 'mic-stop' }
   | { type: 'snap'; id: string; deviceLabel: string };
 
@@ -37,13 +37,36 @@ async function deviceId(kind: MediaDeviceKind, label: string): Promise<string | 
   return devices.find((d) => d.kind === kind && d.label.toLowerCase().includes(want))?.deviceId;
 }
 
+type MicMatch = 'default' | 'id' | 'matched' | 'fallback';
+
+/**
+ * The microphone to open: the saved Chromium deviceId when it is still plugged in, else the one whose
+ * label contains Windows's name for it. Neither found = the default, reported as 'fallback' so main
+ * warns and Settings → Voice offers the list (never a silent switch to another mic).
+ */
+async function pickMic(
+  label: string,
+  savedId: string,
+): Promise<{ id?: string; match: MicMatch; inputs: MediaDeviceInfo[] }> {
+  const inputs = (await navigator.mediaDevices.enumerateDevices()).filter(
+    (d) => d.kind === 'audioinput',
+  );
+  if (savedId && inputs.some((d) => d.deviceId === savedId))
+    return { id: savedId, match: 'id', inputs };
+  if (!label) return { match: 'default', inputs };
+  const want = label.toLowerCase();
+  const found = inputs.find((d) => d.label.toLowerCase().includes(want));
+  return found ? { id: found.deviceId, match: 'matched', inputs } : { match: 'fallback', inputs };
+}
+
 /** Bumped by every start and stop, so a start that finishes after a newer command gives up. */
 let generation = 0;
 
-async function micStart(deviceLabel: string, frameLength: number): Promise<void> {
+async function micStart(deviceLabel: string, savedId: string, frameLength: number): Promise<void> {
   micStop();
   const mine = ++generation;
-  const id = await deviceId('audioinput', deviceLabel);
+  const picked = await pickMic(deviceLabel, savedId);
+  const id = picked.id;
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       ...(id ? { deviceId: { exact: id } } : {}),
@@ -82,17 +105,28 @@ async function micStart(deviceLabel: string, frameLength: number): Promise<void>
   // The node only runs while connected to an output; it writes silence.
   node.connect(ctx.destination);
   mic = { ctx, stream };
-  api.micState('started', JSON.stringify(micInfo(stream, ctx, deviceLabel, id)));
+  // Unplugged or turned off in Windows: say so, so main falls back and retries (voice fix 1A).
+  stream.getAudioTracks()[0]?.addEventListener('ended', () => {
+    if (mine !== generation) return;
+    micStop();
+    api.micState('failed', 'the microphone was disconnected or turned off');
+  });
+  api.micState('started', JSON.stringify(micInfo(stream, ctx, deviceLabel, picked)));
 }
 
-/** Phase 0 diagnostics: which device opened, at what rate, with which processing (main logs it). */
-function micInfo(stream: MediaStream, ctx: AudioContext, requested: string, id?: string) {
+/** Which device opened, at what rate, with which processing (main logs it; Settings shows it). */
+function micInfo(
+  stream: MediaStream,
+  ctx: AudioContext,
+  requested: string,
+  picked: { match: MicMatch; inputs: MediaDeviceInfo[] },
+) {
   const track = stream.getAudioTracks()[0];
   const s = track?.getSettings() ?? {};
   return {
-    requestedLabel: requested,
-    match: !requested ? 'default' : id ? 'matched' : 'fallback',
-    label: track?.label ?? '',
+    requestedLabel: requested.slice(0, 300),
+    match: picked.match,
+    label: (track?.label ?? '').slice(0, 300),
     deviceId: s.deviceId ?? '',
     requestedRate: SAMPLE_RATE,
     actualRate: ctx.sampleRate,
@@ -101,6 +135,9 @@ function micInfo(stream: MediaStream, ctx: AudioContext, requested: string, id?:
     echoCancellation: typeof s.echoCancellation === 'boolean' ? s.echoCancellation : null,
     noiseSuppression: s.noiseSuppression ?? null,
     autoGainControl: s.autoGainControl ?? null,
+    inputs: picked.inputs
+      .slice(0, 16)
+      .map((d) => ({ deviceId: d.deviceId, label: d.label.slice(0, 300) })),
   };
 }
 
@@ -145,7 +182,7 @@ async function snap(id: string, deviceLabel: string): Promise<void> {
 api.onCommand((raw) => {
   const cmd = raw as Command;
   if (cmd.type === 'mic-start')
-    micStart(cmd.deviceLabel, cmd.frameLength).catch((e: unknown) => {
+    micStart(cmd.deviceLabel, cmd.deviceId ?? '', cmd.frameLength).catch((e: unknown) => {
       micStop();
       api.micState('failed', message(e));
     });

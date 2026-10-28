@@ -25,8 +25,11 @@ const Frame = z
 /** What capture.html reports once the microphone is open (Phase 0 diagnostics). */
 const MicInfo = z.object({
   requestedLabel: z.string().max(300),
-  /** matched = the Windows name was found; fallback = it wasn't, so the default mic opened. */
-  match: z.enum(['default', 'matched', 'fallback']),
+  /**
+   * id = the saved Chromium deviceId opened; matched = the Windows name was found; fallback = neither
+   * was found, so the default mic opened (shown in Settings → Voice); default = none was chosen.
+   */
+  match: z.enum(['default', 'id', 'matched', 'fallback']),
   label: z.string().max(300),
   deviceId: z.string().max(300),
   requestedRate: z.number(),
@@ -36,11 +39,21 @@ const MicInfo = z.object({
   echoCancellation: z.boolean().nullable(),
   noiseSuppression: z.boolean().nullable(),
   autoGainControl: z.boolean().nullable(),
+  /** The microphones Chromium can open, so Sir can pick one directly when the name didn't match. */
+  inputs: z.array(z.object({ deviceId: z.string().max(300), label: z.string().max(300) })).max(16),
 });
+export type CaptureMicInfo = z.infer<typeof MicInfo>;
 
-/** Diagnostics for one echo-cancelled recorder: a frame was thrown away (and why). */
+/** One echo-cancelled recorder's reports: a frame was thrown away (and why); the mic opened. */
 export interface MicHooks {
   onDrop?(reason: 'queue' | 'length'): void;
+  onStarted?(info: CaptureMicInfo): void;
+}
+
+/** Which microphone to open: its Chromium deviceId when known, else its Windows name ('' = default). */
+export interface CaptureDevice {
+  label: string;
+  id: string;
 }
 
 export function isCaptureUrl(raw: string): boolean {
@@ -66,14 +79,16 @@ function captureSession(): Session {
 }
 
 export interface CaptureWindow {
-  /** A Recorder fed by the echo-cancelled microphone (device by Windows name; '' = default). */
-  recorder(deviceLabel: string, frameLength: number, hooks?: MicHooks): Recorder;
+  /** A Recorder fed by the echo-cancelled microphone. */
+  recorder(device: CaptureDevice, frameLength: number, hooks?: MicHooks): Recorder;
   /** One JPEG still from the camera ('' = default camera). */
   snapshot(deviceLabel?: string): Promise<{ jpegBase64: string }>;
   /** The echo-cancelled microphone failed on this PC; the voice system falls back to the native one. */
   broken(): boolean;
   /** Called once the echo-cancelled microphone fails, so the voice system can switch to the native one. */
-  onBroken(listener: () => void): void;
+  onBroken(listener: (why: string) => void): void;
+  /** Try the echo-cancelled microphone again (the voice system's retry after a failure). */
+  reset(): void;
   destroy(): void;
 }
 
@@ -84,7 +99,7 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
   let active: ReturnType<typeof createStreamRecorder> | null = null;
   let activeHooks: MicHooks = {};
   let isBroken = false;
-  const brokenListeners = new Set<() => void>();
+  const brokenListeners = new Set<(why: string) => void>();
   const snaps = new Map<
     string,
     { resolve(v: { jpegBase64: string }): void; reject(e: Error): void }
@@ -114,7 +129,7 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
     log.warn({ why }, 'echo-cancelled microphone failed; using the native one');
     isBroken = true;
     active?.fail(new Error(`microphone: ${why}`));
-    for (const l of brokenListeners) l();
+    for (const l of brokenListeners) l(why);
   });
   ipcMain.on('capture:snapped', (e, id: unknown, data: unknown, error: unknown) => {
     if (!fromCapture(e) || typeof id !== 'string') return;
@@ -134,18 +149,20 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
   function logStarted(detail: unknown): void {
     let info: z.infer<typeof MicInfo> | null = null;
     try {
-      const parsed = MicInfo.safeParse(JSON.parse(String(detail).slice(0, 4000)));
+      const parsed = MicInfo.safeParse(JSON.parse(String(detail).slice(0, 20_000)));
       if (parsed.success) info = parsed.data;
     } catch {
       // an older capture page sends no details
     }
     if (!info) return log.info('echo-cancelled microphone started');
+    const { inputs, ...rest } = info;
     if (info.match === 'fallback')
       log.warn(
-        info,
+        { ...rest, inputs: inputs.length },
         'echo-cancelled microphone: the chosen device was not found, using the default',
       );
-    else log.info(info, 'echo-cancelled microphone started');
+    else log.info({ ...rest, inputs: inputs.length }, 'echo-cancelled microphone started');
+    activeHooks.onStarted?.(info);
   }
 
   function ensure(): Promise<void> {
@@ -186,19 +203,24 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
         log.warn({ err: String(err) }, 'capture window failed to load');
         isBroken = true;
         active?.fail(new Error('the capture window failed to load'));
-        for (const l of brokenListeners) l();
+        for (const l of brokenListeners) l('the capture window failed to load');
       });
   }
 
   return {
-    recorder(deviceLabel, frameLength, hooks = {}) {
+    recorder(device, frameLength, hooks = {}) {
       const rec = createStreamRecorder({
         frameLength,
         onDrop: () => hooks.onDrop?.('queue'),
         onStart: () => {
           active = rec;
           activeHooks = hooks;
-          command({ type: 'mic-start', deviceLabel, frameLength });
+          command({
+            type: 'mic-start',
+            deviceLabel: device.label,
+            deviceId: device.id,
+            frameLength,
+          });
         },
         onStop: () => {
           if (active !== rec) return;
@@ -234,6 +256,9 @@ export function createCaptureWindow(logger: Logger): CaptureWindow {
     },
 
     broken: () => isBroken,
+    reset() {
+      isBroken = false;
+    },
     onBroken(l) {
       brokenListeners.add(l);
     },

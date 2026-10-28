@@ -6,6 +6,7 @@ import { call } from '../../lib/api';
 import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { MicCheck } from '../onboarding/mic-check';
 import { LayaSection } from './laya-section';
+import { MicStatus } from './mic-status';
 import { offerRestart } from './save-bar';
 import { VoiceEngines } from './voice-engines';
 import { VoiceOutput } from './tts-engines';
@@ -73,6 +74,7 @@ export function VoiceSection(): React.JSX.Element {
           description="Speak and watch the bar move. No movement means Windows is using another microphone."
         >
           <MicCheck />
+          <MicStatus />
         </Section>
       </div>
       <div id="voice-engines" className="scroll-mt-4">

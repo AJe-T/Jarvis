@@ -341,6 +341,12 @@ export const SETTINGS = {
    * start once switched off). Dropped frames and inference times are logged either way.
    */
   'voice.debugAudio': { schema: z.boolean(), default: false },
+  /**
+   * The echo-cancelled mic's Chromium deviceId for the chosen microphone, learned the first time
+   * its Windows name matched (or picked in Settings → Voice when it didn't). Cleared when Sir
+   * chooses another microphone.
+   */
+  'voice.captureDeviceId': { schema: z.string().max(300), default: '' },
   /** Priler/jarvis-style instant commands: routine trigger phrases, time and date answered offline. */
   'voice.quickCommands': { schema: z.boolean(), default: true },
   'voice.sounds': { schema: z.boolean(), default: true },

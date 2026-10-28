@@ -315,6 +315,7 @@ async function boot(): Promise<void> {
     {
       setActiveConversation: voice.setActiveConversation,
       isTest,
+      mic: voice.mic,
     },
     {
       models: voice.local.models,

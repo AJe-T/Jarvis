@@ -16,12 +16,33 @@ import {
 /** The capture window's echo-cancelled microphone (windows/capture-window.ts). */
 export interface MicCapture {
   recorder(
-    deviceLabel: string,
+    device: { label: string; id: string },
     frameLength: number,
-    hooks?: { onDrop?(reason: 'queue' | 'length'): void },
+    hooks?: {
+      onDrop?(reason: 'queue' | 'length'): void;
+      onStarted?(info: CaptureStarted): void;
+    },
   ): Recorder;
   broken(): boolean;
-  onBroken(listener: () => void): void;
+  onBroken(listener: (why: string) => void): void;
+  reset(): void;
+}
+
+/** Tells `onStop` when the controller closes this recorder (the mic status shows it closed). */
+function onStopped(rec: Recorder, onStop: () => void): Recorder {
+  return {
+    frameLength: rec.frameLength,
+    start: () => rec.start(),
+    stop: () => {
+      rec.stop();
+      onStop();
+    },
+    read: () => rec.read(),
+    release: () => rec.release(),
+    get isRecording() {
+      return rec.isRecording;
+    },
+  };
 }
 import { pickModel } from '../agent/model-router';
 import { INTENT_JUDGE_PROMPT, parseIntent, type Intent, type JudgeContext } from './conversation';
@@ -35,6 +56,7 @@ import { clearSpeechCache } from './tts-pipeline';
 import { createEngineReporter, hearingChain, whyOf, type EngineReport } from './backup';
 import { decodeAudio } from './audio-decode';
 import { createVoiceDiagnostics, type VoiceDiagnostics } from './diagnostics';
+import { createMicSupervisor, type CaptureStarted, type MicSupervisor } from './mic-supervisor';
 import { createElevenLabsTts } from './tts/elevenlabs';
 import { createKokoroTts } from './tts/kokoro';
 import { createAuraTts, createGroqTts, createOpenAiTts, createServerTts } from './tts/cloud-tts';
@@ -165,8 +187,9 @@ export function realFactories(
   local: LocalEngines,
   models: ModelStore,
   capture?: MicCapture,
-  diag?: VoiceDiagnostics,
+  extras: { diag?: VoiceDiagnostics; mic?: MicSupervisor } = {},
 ): VoiceFactories {
+  const { diag, mic } = extras;
   const captureOn = (): boolean =>
     !!capture && s.settings.get('voice.echoCancel') && !capture.broken();
   const deepgram = createDeepgramStt(() => s.secrets.get('deepgram'));
@@ -233,15 +256,29 @@ export function realFactories(
   return {
     // Echo-cancelled microphone from the capture window when on (and working); else the native one.
     recorder: (deviceIndex, frameLength) =>
-      captureOn()
-        ? (capture as MicCapture).recorder(listAudioDevices()[deviceIndex] ?? '', frameLength, {
-            onDrop: (reason) => diag?.drop(reason),
-          })
-        : createPvRecorder(deviceIndex, frameLength, {
-            onOverrun: (frames) => diag?.drop('overrun', frames),
-            onStart: (device) => logger.info({ device, deviceIndex }, 'native microphone started'),
-            debug: s.settings.get('voice.debugAudio'),
-          }),
+      onStopped(
+        captureOn()
+          ? (capture as MicCapture).recorder(
+              {
+                label: listAudioDevices()[deviceIndex] ?? '',
+                id: s.settings.get('voice.captureDeviceId'),
+              },
+              frameLength,
+              {
+                onDrop: (reason) => diag?.drop(reason),
+                onStarted: (info) => mic?.started(info),
+              },
+            )
+          : createPvRecorder(deviceIndex, frameLength, {
+              onOverrun: (frames) => diag?.drop('overrun', frames),
+              onStart: (device) => {
+                logger.info({ device, deviceIndex }, 'native microphone started');
+                mic?.nativeStarted(device);
+              },
+              debug: s.settings.get('voice.debugAudio'),
+            }),
+        () => mic?.stopped(),
+      ),
     echoCancelled: captureOn,
     wake: (sensitivity) => {
       const engine = s.settings.get('voice.wake.provider');
@@ -401,6 +438,19 @@ export function createVoiceSystem(
     enabled: () => s.settings.get('voice.debugAudio'),
     logger,
   });
+  const mic = createMicSupervisor({
+    ...(opts.capture ? { capture: opts.capture } : {}),
+    echoCancel: () => s.settings.get('voice.echoCancel'),
+    busy: () => voice.isListening() || s.state.get() === 'SPEAKING',
+    restart: () => void voice.applyMode(),
+    learnDevice: (id) => {
+      if (s.settings.get('voice.captureDeviceId') !== id)
+        s.settings.set('voice.captureDeviceId', id);
+    },
+    emit: (status) => s.emit('voice:status', status),
+    notify: (level, message) => s.emit('notify', { level, message, action: 'settings:voice' }),
+    logger,
+  });
   const models: ModelStore = createModelStore({
     root: join(s.userData, 'models'),
     onProgress: (p) => s.emit('models:progress', p),
@@ -484,7 +534,7 @@ export function createVoiceSystem(
     logger,
     factories:
       opts.factories ??
-      (s.isTest ? testFactories() : realFactories(s, local, models, opts.capture, diag)),
+      (s.isTest ? testFactories() : realFactories(s, local, models, opts.capture, { diag, mic })),
     diag,
     activeConversation: () => activeConversation ?? undefined,
     quick: (text) => matchQuickCommand(text, routineTriggers()),
@@ -536,7 +586,8 @@ export function createVoiceSystem(
   });
   s.confirmShowListeners.add((e) => voice.onConfirmShown(e));
   // The echo-cancelled mic failed: start again on the native one, so the wake word keeps hearing Sir.
-  opts.capture?.onBroken(() => void voice.applyMode());
+  // Voice fix 1A: the native mic takes over at once and the echo-cancelled one is retried (1 s, 3 s, 10 s).
+  opts.capture?.onBroken((why) => mic.broken(why));
   s.killSwitch.onKill(() => voice.onKill());
   s.reminderListeners.add((text, missed) => {
     if (s.settings.get('voice.mode') !== 'off' && s.settings.get('quiet.until') <= Date.now())
@@ -546,6 +597,11 @@ export function createVoiceSystem(
     if (s.settings.get('voice.mode') !== 'off') voice.notice(text);
   });
   s.settings.onChange((key) => {
+    // The learned Chromium id belonged to the old microphone.
+    if (key === 'voice.deviceIndex' && s.settings.get('voice.captureDeviceId'))
+      s.settings.set('voice.captureDeviceId', '');
+    // Echo cancellation switched (back) on: give the capture window a fresh start.
+    if (key === 'voice.echoCancel') mic.retry();
     // Spellings learned for the old name would wake Jarvis on the wrong word.
     if (key === 'assistant.name' && s.settings.get('voice.wake.learned').length)
       s.settings.set('voice.wake.learned', []);
@@ -667,6 +723,12 @@ export function createVoiceSystem(
         s.laya.warm();
         void voice.applyMode();
       },
+    },
+    /** Voice fix 1A: the microphone in use, Try again, and picking the echo-cancelled mic's device. */
+    mic: {
+      status: () => mic.status(),
+      retry: () => mic.retry(),
+      useDevice: (deviceId: string) => mic.useDevice(deviceId),
     },
     setActiveConversation: (id: string | null) => {
       activeConversation = id;

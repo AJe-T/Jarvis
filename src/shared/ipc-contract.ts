@@ -81,6 +81,27 @@ import {
 } from './planner';
 
 const Ok = z.object({ ok: z.literal(true) });
+
+/**
+ * Voice fix 1A: the microphone in use, shown in Settings → Voice. echo = the echo-cancelled mic in
+ * the capture window; native = PvRecorder (no echo cancellation). idle = closed (press to talk).
+ */
+export const VoiceStatus = z.object({
+  mic: z.object({
+    source: z.enum(['echo', 'native']),
+    state: z.enum(['ok', 'idle', 'retrying', 'failed']),
+    /** Why the echo-cancelled mic failed, or '' */
+    detail: z.string(),
+    /** The device that opened ('' until it has). */
+    device: z.string(),
+    /** The chosen microphone wasn't found, so the default one opened. */
+    deviceMismatch: z.boolean(),
+    /** Microphones the echo-cancelled mic can open, to pick one directly. */
+    inputs: z.array(z.object({ deviceId: z.string(), label: z.string() })),
+    retryInMs: z.number().nullable(),
+  }),
+});
+export type VoiceStatus = z.infer<typeof VoiceStatus>;
 const Empty = z.object({}).strict();
 /** AI Router: a custom provider as Sir types it (main checks it again before use). */
 const CustomProviderInput = z.object({
@@ -797,7 +818,11 @@ export const INVOKE = {
     z.object({ mode: z.enum(VOICE_MODES) }),
     z.object({ ok: z.boolean(), error: z.string().optional() }),
   ),
-  'voice:mic': contract(z.object({ action: z.enum(['start', 'stop', 'meter']) }), Ok),
+  'voice:mic': contract(z.object({ action: z.enum(['start', 'stop', 'meter', 'retry']) }), Ok),
+  /** The microphone in use (voice fix 1A); changes arrive as voice:status events. */
+  'voice:status': contract(Empty, VoiceStatus),
+  /** Open this Chromium microphone for echo cancellation from now on (when the name didn't match). */
+  'voice:captureDevice': contract(z.object({ deviceId: z.string().max(300) }), Ok),
   /** Phone-keyboard dictation into the message box: words stream in as voice:compose events. */
   'voice:compose': contract(z.object({ action: z.enum(['start', 'stop']) }), Ok),
   /** One click: download Whisper base.en + the voice detector and switch speech to on-device. */
@@ -1198,6 +1223,7 @@ export const EVENTS = {
   }),
   'confirm:resolved': z.object({ requestId: z.string(), decision: z.enum(['approve', 'deny']) }),
   'voice:level': z.object({ rms: z.number() }),
+  'voice:status': VoiceStatus,
   'music:level': z.object({ rms: z.number() }),
   'voice:transcript': z.object({ text: z.string(), isFinal: z.boolean() }),
   'voice:compose': z.object({ text: z.string(), final: z.boolean() }),

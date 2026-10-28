@@ -4,6 +4,7 @@ import type { DictationRepo } from '../../voice/dictation';
 import type { ModelStore } from '../../voice/local/model-store';
 import { listAudioDevices } from '../../voice/providers';
 import type { VoiceController } from '../../voice/voice-controller';
+import type { VoiceStatus } from '@shared/ipc-contract';
 import { handle, onSend } from '../handle';
 import { ENROL_PHRASES, type Enrolment } from '../../voice/enrolment';
 
@@ -18,7 +19,11 @@ interface VoiceMatch {
 export function registerVoiceHandlers(
   s: Services,
   voice: VoiceController,
-  ui: { setActiveConversation(id: string | null): void; isTest: boolean },
+  ui: {
+    setActiveConversation(id: string | null): void;
+    isTest: boolean;
+    mic: { status(): VoiceStatus; retry(): void; useDevice(deviceId: string): void };
+  },
   local: { models: ModelStore; changed(): void },
   dictations: DictationRepo,
   match: VoiceMatch,
@@ -68,7 +73,14 @@ export function registerVoiceHandlers(
     }
   });
   handle('voice:mic', (req) => {
-    voice.mic(req.action);
+    if (req.action === 'retry') ui.mic.retry();
+    else voice.mic(req.action);
+    return { ok: true };
+  });
+  handle('voice:status', () => ui.mic.status());
+  handle('voice:captureDevice', (req) => {
+    s.audit.append('user', 'voice.captureDevice', {});
+    ui.mic.useDevice(req.deviceId);
     return { ok: true };
   });
   handle('voice:compose', (req) => {
