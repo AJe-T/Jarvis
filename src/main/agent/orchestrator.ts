@@ -636,6 +636,53 @@ ${detail.trim()}`;
       return { summarizedMessages: pending.length };
     },
 
+    /**
+     * Voice fix 3: a conversation held outside the agent loop (realtime voice) is saved like a turn,
+     * and the turn-end listeners (daily log, memory curator) see it.
+     */
+    async recordExternalTurn(r: {
+      conversationId: string;
+      lines: Array<{ role: 'user' | 'assistant'; text: string }>;
+      toolSummaries: string[];
+    }): Promise<void> {
+      const conv = deps.conversations.get(r.conversationId);
+      const lines = r.lines.filter((l) => l.text.trim());
+      if (!conv || lines.length === 0) return;
+      persist(
+        conv.id,
+        lines.map((l) => ({
+          role: l.role,
+          content: [{ type: 'text', text: l.text }],
+          textPlain: l.text,
+          source: 'voice',
+        })),
+      );
+      deps.conversations.touch(conv.id, 'voice');
+      const updated = deps.conversations.get(conv.id) ?? conv;
+      deps.emit('conversation:updated', toSummary(updated));
+      const userText = lines
+        .filter((l) => l.role === 'user')
+        .map((l) => l.text)
+        .join('\n');
+      const replyText = lines
+        .filter((l) => l.role === 'assistant')
+        .map((l) => l.text)
+        .join('\n');
+      const info: TurnInfo = {
+        turnId: newId('t_'),
+        conversationId: conv.id,
+        mode: 'voice',
+        userText,
+        isPrivate: conv.is_private === 1,
+        purpose: 'chat',
+      };
+      await notifyEnd({ ...info, outcome: 'end_turn', replyText, toolSummaries: r.toolSummaries });
+      if (userText)
+        void maybeTitle(updated, userText, replyText).catch((e: unknown) =>
+          log.warn({ err: errorMessage(e) }, 'titler failed'),
+        );
+    },
+
     isBusy: () => running !== null || queue.length > 0,
     currentTurn: () => running?.info ?? null,
     onDelta: (l: (turn: TurnInfo, delta: string) => void) => (

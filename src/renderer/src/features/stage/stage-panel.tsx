@@ -144,6 +144,7 @@ const VOICE = {
   ptt: 'Press to talk',
   wake: 'Wake word',
   ambient: 'Always on',
+  realtime: 'Realtime',
 } as const;
 
 /** Jarvis's own dashboard: everything here is read live from the app. */

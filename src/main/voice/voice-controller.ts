@@ -26,6 +26,7 @@ import { speakingFallbacks, ttsName, whyOf, type EngineReport } from './backup';
 import { createLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
 import type { AudioTap, VoiceDiagnostics } from './diagnostics';
 import { createEchoCheck, type EchoState } from './echo-check';
+import type { RealtimeSession } from './realtime/session';
 import {
   rms,
   type Recorder,
@@ -83,6 +84,8 @@ export interface VoiceDeps {
   report?: EngineReport;
   /** Instant commands (routine triggers, time, date): answered without the model. */
   quick?(text: string): QuickMatch | null;
+  /** Voice fix 3: opens a realtime conversation (voice.mode 'realtime'); absent in tests. */
+  realtime?: { start(): Promise<RealtimeSession> };
   /** Voice fix 2A: whether echo cancellation was seen keeping Jarvis's voice out of the mic. */
   onEcho?(state: EchoState): void;
   /** Phase 0: dropped-frame counts, inference timing and (voice.debugAudio) WAV recordings. */
@@ -237,6 +240,44 @@ export function createVoiceController(d: VoiceDeps) {
   }
   /** When a failed wake engine was last reopened. */
   let wakeReopenedAt = 0;
+  /** Voice fix 3: the realtime conversation in progress (the mic streams to it). */
+  let realtime: RealtimeSession | null = null;
+  let realtimeStarting = false;
+  /** Modes in which the wake word runs: 'wake', and 'realtime' (it opens the conversation). */
+  const wakeMode = (): boolean => mode() === 'wake' || mode() === 'realtime';
+
+  async function startRealtime(): Promise<void> {
+    if (realtime || realtimeStarting || !d.realtime) return;
+    realtimeStarting = true;
+    stopSpeaking();
+    cancelListening();
+    d.state.set('LISTENING', 'realtime');
+    ensureRecorder();
+    try {
+      const session = await d.realtime.start();
+      realtime = session;
+      void session.ended.then(() => {
+        if (realtime !== session) return;
+        realtime = null;
+        wake?.reset(); // the wake word wasn't fed during the conversation
+        if (!needRecorder()) releaseRecorder();
+      });
+    } catch (err) {
+      log.warn({ err: errorMessage(err) }, 'realtime conversation could not start');
+      d.emit('notify', {
+        level: 'error',
+        message:
+          err instanceof JarvisError && err.userMessage
+            ? err.userMessage
+            : `The realtime conversation could not start: ${errorMessage(err)}`,
+        action: 'settings:voice',
+      });
+      if (d.state.get() === 'LISTENING') d.state.set('IDLE');
+      if (!needRecorder()) releaseRecorder();
+    } finally {
+      realtimeStarting = false;
+    }
+  }
   const wakeLine = createLinePicker(WAKE_LINES);
   const workingLine = createLinePicker(WORKING_LINES);
   /** The "Yes, sir?" playing before listening starts (no echo cancellation). */
@@ -280,7 +321,7 @@ export function createVoiceController(d: VoiceDeps) {
   };
   /** Whisper hears every phrase: always-listening, or wake mode waiting for the name. */
   const transcribing = (): boolean =>
-    ambient !== null && !sleeping && (mode() === 'ambient' || (mode() === 'wake' && spotting));
+    ambient !== null && !sleeping && (mode() === 'ambient' || (wakeMode() && spotting));
 
   // ── TTS ─────────────────────────────────────────────────────────────────────────────────
   const voiceOf = {
@@ -453,7 +494,9 @@ export function createVoiceController(d: VoiceDeps) {
   // ── mic loop ────────────────────────────────────────────────────────────────────────────
   function needRecorder(): boolean {
     return (
-      (mode() === 'wake' && !sleeping && wake !== null) ||
+      (wakeMode() && !sleeping && wake !== null) ||
+      realtime !== null ||
+      realtimeStarting ||
       transcribing() ||
       listening !== null ||
       sample !== null ||
@@ -560,7 +603,7 @@ export function createVoiceController(d: VoiceDeps) {
           d.emit('voice:level', { rms: level });
         }
         // Voice fix 2A: Jarvis's replies tell whether echo cancellation works (not while Sir talks).
-        if (listening || sample) echo.skipReply();
+        if (listening || sample || realtime) echo.skipReply();
         else echo.frame(level, d.state.get() === 'SPEAKING', now);
         if (sample) {
           feedSample(frame, (frame.length / 16000) * 1000);
@@ -570,11 +613,13 @@ export function createVoiceController(d: VoiceDeps) {
             listening.tap?.write(frame);
           } else if (listening.early.length < MAX_EARLY_FRAMES) listening.early.push(frame);
           else d.diag?.drop('early');
+        } else if (realtime) {
+          realtime.write(frame); // voice fix 3: straight to the service, no wake word meanwhile
         } else if (ambient && transcribing()) {
           ambientTap ??= d.diag?.tap('ambient') ?? null;
           ambientTap?.write(frame);
           ambient.write(frame);
-        } else if (wake && mode() === 'wake' && !sleeping) {
+        } else if (wake && wakeMode() && !sleeping && !realtimeStarting) {
           wakeTap ??= d.diag?.tap('wake') ?? null;
           wakeTap?.write(frame);
           feedWake(wake, frame, rec);
@@ -646,6 +691,7 @@ export function createVoiceController(d: VoiceDeps) {
     // Without echo cancellation the mic hears Jarvis's own voice; that "wake" cut him off mid-reply.
     if (audible() && !canBargeIn()) return log.info('wake word ignored while speaking');
     timings.wakeAt = Date.now();
+    if (mode() === 'realtime') return void startRealtime();
     greetThenListen();
   }
 
@@ -988,6 +1034,7 @@ export function createVoiceController(d: VoiceDeps) {
     if (Date.now() - spokenEndedAt < ECHO_MEMORY_MS && isEcho(text, recentSpoken)) return;
     if (audible() && !canBargeIn()) return log.info('name heard while speaking; ignored');
     if (!(await isSir(seg))) return log.info('name heard in another voice; ignored');
+    if (mode() === 'realtime') return void startRealtime();
     const request = stripName(text, names());
     if (!request || isUnclear(request)) {
       timings.wakeAt = Date.now();
@@ -1076,6 +1123,7 @@ export function createVoiceController(d: VoiceDeps) {
 
     /** Renderer playback lifecycle (tts:playback). */
     onPlayback(utteranceId: string, event: 'started' | 'finished' | 'level'): void {
+      if (realtime?.owns(utteranceId)) return realtime.playback(utteranceId, event);
       if (event === 'started') playing.add(utteranceId);
       if (event === 'started' && pendingLatency?.turnId === utteranceId) logLatency(pendingLatency);
       if (event === 'started' && d.state.get() !== 'LISTENING') d.state.set('SPEAKING');
@@ -1128,6 +1176,12 @@ export function createVoiceController(d: VoiceDeps) {
         });
         return;
       }
+      // Realtime mode: the hotkey opens a conversation, or ends the one in progress.
+      if (mode() === 'realtime') {
+        if (realtime) realtime.end('ended with the hotkey', true);
+        else void startRealtime();
+        return;
+      }
       if (listening) cancelListening();
       else void startListening(false);
     },
@@ -1171,6 +1225,7 @@ export function createVoiceController(d: VoiceDeps) {
     async applyMode(): Promise<{ ok: boolean; error?: string }> {
       const gen = ++modeGeneration;
       const m = mode();
+      realtime?.end('voice settings changed', true);
       cancelListening();
       closeTaps();
       wake?.release();
@@ -1180,7 +1235,7 @@ export function createVoiceController(d: VoiceDeps) {
       spotting = false;
       heardBuffer.clear();
       sleeping = false;
-      const byName = m === 'wake' && spotsName();
+      const byName = (m === 'wake' || m === 'realtime') && spotsName();
       if (m === 'ambient' || byName) {
         if (!d.factories.ambient)
           return { ok: false, error: 'Listening with on-device Whisper is not available here.' };
@@ -1208,7 +1263,7 @@ export function createVoiceController(d: VoiceDeps) {
         }
         releaseRecorder();
         ensureRecorder();
-      } else if (m === 'wake') {
+      } else if (m === 'wake' || m === 'realtime') {
         try {
           const next = await d.factories.wake(d.settings.get('voice.wake.sensitivity'));
           // A newer applyMode (setting changed again while the model loaded) wins.
@@ -1246,6 +1301,7 @@ export function createVoiceController(d: VoiceDeps) {
     },
 
     onKill(): void {
+      realtime?.end('stopped', true);
       cancelListening();
       stopSpeaking();
       afterSpeechWaiters.clear();
@@ -1254,6 +1310,7 @@ export function createVoiceController(d: VoiceDeps) {
     },
 
     shutdown(): void {
+      realtime?.end('Jarvis closed', true);
       warming?.abort();
       cancelListening();
       stopSpeaking();

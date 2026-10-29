@@ -81,7 +81,7 @@ const asBytes = (data: unknown): Uint8Array | null =>
       ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
       : null;
 
-function waitOpen(sock: StreamSocket, timeoutMs: number): Promise<void> {
+export function waitOpen(sock: StreamSocket, timeoutMs: number): Promise<void> {
   if (sock.readyState === OPEN) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('the voice did not connect')), timeoutMs);

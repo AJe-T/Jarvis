@@ -27,6 +27,7 @@ const MODE_ICONS: Record<VoiceMode, LucideIcon> = {
   ptt: Keyboard,
   wake: Ear,
   ambient: Radio,
+  realtime: AudioLines,
 };
 
 /** Voice mode as four tiles; the chosen one glows and its explanation shows underneath. */

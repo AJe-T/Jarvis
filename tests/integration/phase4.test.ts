@@ -109,6 +109,74 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     expect(t.states()).toContain('SPEAKING');
   });
 
+  it('realtime mode: the wake word opens a conversation, the mic streams to it, and ending it returns to the wake word (voice fix 3)', async () => {
+    const t = setupServices({ rules: [] });
+    t.services.settings.set('voice.mode', 'realtime');
+    t.services.settings.set('voice.wake.provider', 'openwakeword');
+    t.services.settings.set('voice.greet', false);
+    const wake = createFakeWake();
+    let frames = 0;
+    let finish: () => void = () => undefined;
+    let starts = 0;
+    const v = createVoiceSystem(t.services, {
+      factories: {
+        recorder: (_d, n) => createFakeRecorder(n),
+        wake: () => wake,
+        stt: createFakeStt([]),
+        edge: createFakeTts('edge'),
+        sapi: createFakeTts('sapi'),
+      },
+      realtime: {
+        start: async () => {
+          starts++;
+          return {
+            write: () => void frames++,
+            end: () => finish(),
+            owns: () => false,
+            playback: () => undefined,
+            ended: new Promise<void>((r) => (finish = r)),
+          };
+        },
+      },
+    });
+    expect(await v.start()).toEqual({ ok: true });
+    wake.trigger();
+    await until(() => frames >= 3);
+    expect(starts).toBe(1);
+    const resetsBefore = wake.resets;
+    finish(); // the conversation ended (goodbye, quiet, the hotkey)
+    await until(() => wake.resets > resetsBefore);
+    wake.trigger();
+    await until(() => starts === 2);
+    v.voice.shutdown();
+  });
+
+  it('a realtime conversation is saved like a turn, so the daily log and memory curator see it (voice fix 3)', async () => {
+    const t = setupServices({ rules: [] });
+    const conv = t.services.conversations.create('voice', false);
+    const ended: Array<{ userText: string; replyText: string; mode: string }> = [];
+    t.services.orchestrator.onTurnEnd((e) => void ended.push(e));
+    await t.services.orchestrator.recordExternalTurn({
+      conversationId: conv.id,
+      lines: [
+        { role: 'user', text: 'Set the volume to thirty' },
+        { role: 'assistant', text: 'Done, sir.' },
+      ],
+      toolSummaries: ['set_volume'],
+    });
+    expect(ended).toEqual([
+      expect.objectContaining({
+        userText: 'Set the volume to thirty',
+        replyText: 'Done, sir.',
+        mode: 'voice',
+      }),
+    ]);
+    expect(t.services.conversations.messages(conv.id).map((m) => m.text_plain)).toEqual([
+      'Set the volume to thirty',
+      'Done, sir.',
+    ]);
+  });
+
   it('the mic loop keeps reading while the wake engine is still thinking (voice fix 1B)', async () => {
     const t = setupServices({ rules: [] });
     t.services.settings.set('voice.mode', 'wake');

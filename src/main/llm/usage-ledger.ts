@@ -144,6 +144,41 @@ export function createUsageLedger(deps: {
         outputTokens: tokens.output,
       };
     },
+
+    /**
+     * Voice fix 3: a realtime voice reply, priced from voice.realtime.prices (its audio tokens cost
+     * far more than text); an unknown model is priced like the dearest listed one. Always pay-per-use.
+     */
+    recordRealtime(
+      model: string,
+      usage: { input: number; output: number },
+      conversationId: string | null,
+    ): number {
+      const prices = settings.get('voice.realtime.prices');
+      const price =
+        prices[model] ??
+        Object.values(prices).reduce((a, b) => (b.outPerMTok > a.outPerMTok ? b : a), {
+          inPerMTok: 32,
+          outPerMTok: 64,
+        });
+      const costUsd = (usage.input * price.inPerMTok + usage.output * price.outPerMTok) / 1e6;
+      repo.insert({
+        model,
+        purpose: 'chat',
+        conversationId,
+        inputTokens: usage.input,
+        outputTokens: usage.output,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        estCostUsd: costUsd,
+        billing: 'api',
+        source: 'realtime',
+        price: prices[model] ? 'table' : 'fallback',
+      });
+      const t = totals();
+      deps.onUpdate?.({ dayCostUsd: t.day, monthCostUsd: t.month, model, purpose: 'chat' });
+      return costUsd;
+    },
   };
 }
 

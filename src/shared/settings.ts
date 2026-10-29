@@ -67,6 +67,22 @@ const serverName = z.string().regex(/^[\w.:/@+-]{1,100}$/);
  * Every persisted setting: key → schema + default (API-Guide.md §10).
  * Paths that depend on the machine (vault, allowed roots) default to empty and are seeded by main on first run.
  */
+/** OpenAI Realtime models offered in Settings → Voice (voice fix 3). */
+export const REALTIME_OPENAI_MODELS = [
+  'gpt-realtime-mini',
+  'gpt-realtime',
+  'gpt-realtime-2.1',
+] as const;
+
+/**
+ * Rough cost of one minute of realtime conversation: about 1,500 input tokens (Sir's audio plus the
+ * conversation so far, re-read each reply) and 600 output tokens (the spoken answers). Grows in long
+ * conversations.
+ */
+export function realtimeUsdPerMinute(p: { inPerMTok: number; outPerMTok: number }): number {
+  return (1500 * p.inPerMTok + 600 * p.outPerMTok) / 1e6;
+}
+
 export const SETTINGS = {
   /**
    * ADR-010/013: 'api' = Anthropic API key; 'subscription' = Sir's Claude plan via Claude Code;
@@ -354,6 +370,42 @@ export const SETTINGS = {
    */
   'voice.capture.noiseSuppression': { schema: z.boolean(), default: false },
   'voice.capture.autoGain': { schema: z.boolean(), default: false },
+  /**
+   * Voice fix 3: realtime conversation (voice.mode 'realtime'). Sir's voice streams to this service
+   * for the whole conversation and it answers in its own voice; paid per use, counted in the budgets.
+   */
+  'voice.realtime.provider': {
+    schema: z.enum(['openai', 'gemini']),
+    default: 'openai' as 'openai' | 'gemini',
+  },
+  'voice.realtime.openaiModel': {
+    schema: z.enum(REALTIME_OPENAI_MODELS),
+    default: 'gpt-realtime-mini' as (typeof REALTIME_OPENAI_MODELS)[number],
+  },
+  'voice.realtime.openaiVoice': { schema: z.string().regex(/^[a-z]{2,20}$/), default: 'cedar' },
+  'voice.realtime.geminiModel': {
+    schema: z.string().regex(/^[a-z0-9.-]{3,60}$/),
+    default: 'gemini-3.8-live',
+  },
+  'voice.realtime.geminiVoice': { schema: z.string().regex(/^[A-Za-z]{2,20}$/), default: 'Charon' },
+  /** A conversation ends by itself after this long (Gemini allows 15 minutes of audio). */
+  'voice.realtime.maxMinutes': { schema: z.number().int().min(1).max(60), default: 10 },
+  /**
+   * Price per million tokens of each realtime model (audio dominates), used for the budget and the
+   * per-minute estimate. Estimates as of 2026-10; correct them from the provider's pricing page.
+   */
+  'voice.realtime.prices': {
+    schema: z.record(
+      z.string(),
+      z.object({ inPerMTok: z.number().min(0), outPerMTok: z.number().min(0) }),
+    ),
+    default: {
+      'gpt-realtime-2.1': { inPerMTok: 32, outPerMTok: 64 },
+      'gpt-realtime': { inPerMTok: 32, outPerMTok: 64 },
+      'gpt-realtime-mini': { inPerMTok: 10, outPerMTok: 20 },
+      'gemini-3.8-live': { inPerMTok: 3, outPerMTok: 12 },
+    } as Record<string, { inPerMTok: number; outPerMTok: number }>,
+  },
   /** Priler/jarvis-style instant commands: routine trigger phrases, time and date answered offline. */
   'voice.quickCommands': { schema: z.boolean(), default: true },
   'voice.sounds': { schema: z.boolean(), default: true },
@@ -579,6 +631,7 @@ export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   // ADR-038: these decide where microphone audio and reply text are sent, so the audit keeps the value.
   'voice.stt.provider',
   'voice.tts.provider',
+  'voice.realtime.provider', // where Sir's voice streams during a realtime conversation
   'voice.stt.serverUrl',
   'voice.tts.serverUrl',
   'pool.abilities.voiceHearing', // Sir's recorded voice to Groq / OpenAI when on-device speech fails

@@ -13,6 +13,7 @@ import { VoiceOutput } from './tts-engines';
 import { VoiceProfile } from './voice-profile';
 import { ModeTiles, VoiceFlow, type ModeInfo } from './voice-flow';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
+import { REALTIME_OPENAI_MODELS, realtimeUsdPerMinute } from '@shared/settings';
 
 /** Voice modes, worded with the assistant's name (Settings → General → Name). */
 function modes(name: string): ModeInfo[] {
@@ -32,6 +33,11 @@ function modes(name: string): ModeInfo[] {
       value: 'ambient',
       label: 'Always listening',
       hint: `Say “${name}” anywhere in a sentence (“…what do you think, ${name}?”) and ${name} uses the last two minutes of talk as context. Everything is transcribed on this PC and forgotten after 2 minutes; each mention costs one small model call.`,
+    },
+    {
+      value: 'realtime',
+      label: 'Realtime conversation (paid)',
+      hint: `Say “${name}” (or press the hotkey) and just talk, like a phone call: interrupt any time, no pauses between turns. Your voice streams to OpenAI or Google for the whole conversation and their voice answers; costs per minute (below) and counts in your budget. Ends after 30 s of quiet, on “goodbye”, or the hotkey.`,
     },
   ];
 }
@@ -68,6 +74,7 @@ export function VoiceSection(): React.JSX.Element {
       >
         <VoiceFlow mode={mode} />
       </Section>
+      {mode === 'realtime' && <RealtimeSettings />}
       <div id="voice-mic" className="scroll-mt-4">
         <Section
           title="Microphone"
@@ -161,5 +168,56 @@ export function VoiceSection(): React.JSX.Element {
         <LayaSection />
       </details>
     </>
+  );
+}
+
+/** Voice fix 3: which realtime service, model and voice, and what a minute roughly costs. */
+function RealtimeSettings(): React.JSX.Element {
+  const provider = useDraftSetting('voice.realtime.provider') ?? 'openai';
+  const openaiModel = useDraftSetting('voice.realtime.openaiModel') ?? 'gpt-realtime-mini';
+  const geminiModel = useDraftSetting('voice.realtime.geminiModel') ?? 'gemini-3.8-live';
+  const prices = useDraftSetting('voice.realtime.prices') ?? {};
+  const model = provider === 'gemini' ? geminiModel : openaiModel;
+  const price = prices[model];
+  return (
+    <Section
+      title="Realtime conversation"
+      description="Needs the provider's API key (Settings → AI Router → Providers). Tools still ask before anything risky (approve on screen), and the conversation is saved to your history and memory afterwards."
+    >
+      <SettingSelect
+        k="voice.realtime.provider"
+        label="Service"
+        options={[
+          { value: 'openai', label: 'OpenAI Realtime' },
+          { value: 'gemini', label: 'Google Gemini Live' },
+        ]}
+      />
+      {provider === 'openai' ? (
+        <>
+          <SettingSelect
+            k="voice.realtime.openaiModel"
+            label="Model"
+            options={REALTIME_OPENAI_MODELS.map((m) => ({ value: m, label: m }))}
+          />
+          <SettingInput k="voice.realtime.openaiVoice" label="Voice (e.g. cedar, marin, ash)" />
+        </>
+      ) : (
+        <>
+          <SettingInput k="voice.realtime.geminiModel" label="Model" />
+          <SettingInput k="voice.realtime.geminiVoice" label="Voice (e.g. Charon, Puck, Kore)" />
+        </>
+      )}
+      <SettingInput
+        k="voice.realtime.maxMinutes"
+        label="End a conversation after this many minutes"
+        type="number"
+        step={1}
+      />
+      <p className="max-w-xl text-sm text-ink-300">
+        {price
+          ? `About $${realtimeUsdPerMinute(price).toFixed(3)} per minute with ${model} (an estimate from $${price.inPerMTok} / $${price.outPerMTok} per million tokens; long conversations cost more per minute). Check the provider's pricing page.`
+          : `No price set for ${model}: it is counted at the dearest listed realtime price until you add one (voice.realtime.prices).`}
+      </p>
+    </Section>
   );
 }

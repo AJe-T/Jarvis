@@ -107,6 +107,7 @@ const VOICE_WORDS = {
   ptt: 'press to talk',
   wake: 'wake word',
   ambient: 'always listening',
+  realtime: 'realtime conversation',
 } as const;
 
 /** Corner readouts around the orb: clock, model, voice, spend (the app has no status bar). */

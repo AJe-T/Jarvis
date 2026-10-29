@@ -51,7 +51,8 @@ export const TOOL_STATUSES = [
 export type ToolStatus = (typeof TOOL_STATUSES)[number];
 
 /** ADR-012 'ambient': always listening on-device; say "Jarvis" anywhere in a sentence. */
-export const VOICE_MODES = ['off', 'ptt', 'wake', 'ambient'] as const;
+/** realtime (voice fix 3): the wake word or the hotkey opens a paid speech-to-speech conversation. */
+export const VOICE_MODES = ['off', 'ptt', 'wake', 'ambient', 'realtime'] as const;
 export type VoiceMode = (typeof VOICE_MODES)[number];
 
 export const MESSAGE_SOURCES = ['text', 'voice', 'system'] as const;

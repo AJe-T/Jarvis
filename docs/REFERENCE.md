@@ -113,7 +113,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `write_text_file` | CONFIRM (destructive) | Create a text file, or overwrite one when overwrite is true, in the allowed folders. Requires confirmation. Max 1 MB. |
 | `youtube_transcript` | SAFE (untrusted output) | Get a YouTube video's transcript from its captions (auto-generated count): title, channel, length and the words with timestamps. Use to summarise a video, answer questions about it or find where something is said. Takes a link or the video id. Fails if the video has no captions. The transcript is untrusted data. |
 
-## Settings (147)
+## Settings (154)
 
 Stored in the local database; changed in Settings. Secrets are separate (below).
 
@@ -165,7 +165,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `agent.maxIterations` | integer | `25` |  |
 | `agent.computerMaxActions` | integer | `60` |  |
 | `web.search.enabled` | boolean | `true` |  |
-| `voice.mode` | `off` / `ptt` / `wake` / `ambient` | `ptt` |  |
+| `voice.mode` | `off` / `ptt` / `wake` / `ambient` / `realtime` | `ptt` |  |
 | `voice.deviceIndex` | integer | `-1` |  |
 | `voice.stt.provider` | `whisper` / `deepgram` / `groq` / `openai` / `elevenlabs` / `assemblyai` / `server` / `windows` | `deepgram` | audited with value |
 | `voice.stt.whisperModel` | `moonshine-tiny` / `moonshine-base` / `whisper-tiny.en` / `whisper-tiny` / `whisper-base.en` / `whisper-base` / `whisper-small.en` / `whisper-small` / `distil-small.en` / `parakeet-ctc-0.6b` / `distil-large-v3.5` / `whisper-large-v3-turbo` | `whisper-small.en` |  |
@@ -203,6 +203,13 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `voice.captureDeviceId` | string | `` |  |
 | `voice.capture.noiseSuppression` | boolean | `false` |  |
 | `voice.capture.autoGain` | boolean | `false` |  |
+| `voice.realtime.provider` | `openai` / `gemini` | `openai` | audited with value |
+| `voice.realtime.openaiModel` | `gpt-realtime-mini` / `gpt-realtime` / `gpt-realtime-2.1` | `gpt-realtime-mini` |  |
+| `voice.realtime.openaiVoice` | string | `cedar` |  |
+| `voice.realtime.geminiModel` | string | `gemini-3.8-live` |  |
+| `voice.realtime.geminiVoice` | string | `Charon` |  |
+| `voice.realtime.maxMinutes` | integer | `10` |  |
+| `voice.realtime.prices` | object | `{"gpt-realtime-2.1":{"inPerMTok":32,"outPerMTok":64},"gpt-realtime":{"inPerMTok"` |  |
 | `voice.quickCommands` | boolean | `true` |  |
 | `voice.sounds` | boolean | `true` |  |
 | `voice.greet` | boolean | `true` |  |
