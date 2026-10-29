@@ -51,12 +51,18 @@ import { createDictationRepo, finishDictation } from './dictation';
 import { createLocalEngines, type LocalEngines } from './local/local-engines';
 import { createModelStore, type ModelStore } from './local/model-store';
 import { matchQuickCommand, type RoutineTriggers } from './quick-commands';
-import type { Recorder, SttProvider, TtsProvider } from './types';
+import type { Recorder, SttProvider, TtsProvider, WakeWord } from './types';
+import { withAutoGain } from './v2/gain';
+import { V2_WAKE_SENSITIVITY, v2LocalModel } from './v2/policy';
+import { eitherWake } from './v2/wake';
 import { createVoiceController, type VoiceFactories } from './voice-controller';
 import { clearSpeechCache } from './tts-pipeline';
 import { createEngineReporter, hearingChain, whyOf, type EngineReport } from './backup';
 import { decodeAudio } from './audio-decode';
 import { speakToFile, type SpeechFile } from './speech-file';
+import { deepgramFile } from './stt/deepgram-file';
+import { adviceFor, speechLevelDb, wakeHears, type VoiceCheckResult } from './v2/check';
+import { encodeWav } from './wav';
 import { createVoiceDiagnostics, type VoiceDiagnostics } from './diagnostics';
 import { createAudioWorker, utilityLink } from './audio-worker/client';
 import { createBudgetGuard } from '../llm/budget-guard';
@@ -192,10 +198,36 @@ function fallbackWhy(chosen: SttEngineId, engine: SttEngineId): string {
   return `${sttName(chosen)} is chosen but has no ${info?.keyLabel ?? 'key'}, so ${LOCAL_HEARING} is listening instead. Add the key in Settings → Voice to use ${sttName(chosen)}.`;
 }
 
+/** Voice v2 (src/main/voice/v2): fixed, measured engines instead of the classic settings matrix. */
+const isV2 = (s: Services): boolean => s.settings.get('voice.engine') === 'v2';
+
 /** The engine that will really hear Sir: a cloud engine without its key falls back to on-device speech. */
 function effectiveStt(s: Services, local: Pick<LocalEngines, 'ready'>): SttEngineId {
+  // v2: Deepgram streams when its key is set (fast, accurate); otherwise the best on-device model.
+  if (isV2(s)) return s.secrets.get('deepgram') ? 'deepgram' : 'whisper';
   const chosen = s.settings.get('voice.stt.provider');
   return chosen !== 'whisper' && !hasKey(s, chosen) && local.ready() ? 'whisper' : chosen;
+}
+
+/**
+ * Voice v2's wake word: the keyword spotter and the "hey jarvis" classifier together, in the audio
+ * worker, at a measured sensitivity; no recording of Sir's voice needed. Either alone if only one is
+ * downloaded.
+ */
+async function v2Wake(local: LocalEngines): Promise<WakeWord> {
+  const spotter = local.spotterReady();
+  const oww = local.wakeReady();
+  if (!spotter && !oww)
+    throw new JarvisError(
+      'INVALID',
+      'no wake word model',
+      'The wake word needs the free on-device models: Settings → Voice → "Set up free on-device speech" (once).',
+    );
+  const [a, b] = await Promise.all([
+    spotter ? local.spotterWake(V2_WAKE_SENSITIVITY, 'Jarvis', []) : null,
+    oww ? local.wake(V2_WAKE_SENSITIVITY) : null,
+  ]);
+  return a && b ? eitherWake(a, b) : ((a ?? b) as WakeWord);
 }
 
 /** ADR-011: wake word and speech-to-text engines are chosen separately in Settings → Voice. */
@@ -207,8 +239,10 @@ export function realFactories(
   extras: { diag?: VoiceDiagnostics; mic?: MicSupervisor } = {},
 ): VoiceFactories {
   const { diag, mic } = extras;
+  /** v2: quiet laptop mic arrays get software gain on the native recorder too. */
+  const nativeGain = (rec: Recorder): Recorder => (isV2(s) ? withAutoGain(rec) : rec);
   const showHearing = (engine: SttEngineId): void => {
-    const chosen = s.settings.get('voice.stt.provider');
+    const chosen = isV2(s) ? engine : s.settings.get('voice.stt.provider');
     mic?.hearing({
       chosen: sttName(chosen),
       engine: sttName(engine),
@@ -288,8 +322,9 @@ export function realFactories(
               {
                 label: listAudioDevices()[deviceIndex] ?? '',
                 id: s.settings.get('voice.captureDeviceId'),
-                noiseSuppression: s.settings.get('voice.capture.noiseSuppression'),
-                autoGainControl: s.settings.get('voice.capture.autoGain'),
+                // v2: Chromium's full clean-up, like every call app; classic: Sir's switches.
+                noiseSuppression: isV2(s) || s.settings.get('voice.capture.noiseSuppression'),
+                autoGainControl: isV2(s) || s.settings.get('voice.capture.autoGain'),
               },
               frameLength,
               {
@@ -297,18 +332,21 @@ export function realFactories(
                 onStarted: (info) => mic?.started(info),
               },
             )
-          : createPvRecorder(deviceIndex, frameLength, {
-              onOverrun: (frames) => diag?.drop('overrun', frames),
-              onStart: (device) => {
-                logger.info({ device, deviceIndex }, 'native microphone started');
-                mic?.nativeStarted(device);
-              },
-              debug: s.settings.get('voice.debugAudio'),
-            }),
+          : nativeGain(
+              createPvRecorder(deviceIndex, frameLength, {
+                onOverrun: (frames) => diag?.drop('overrun', frames),
+                onStart: (device) => {
+                  logger.info({ device, deviceIndex }, 'native microphone started');
+                  mic?.nativeStarted(device);
+                },
+                debug: s.settings.get('voice.debugAudio'),
+              }),
+            ),
         () => mic?.stopped(),
       ),
     echoCancelled: captureOn,
     wake: (sensitivity) => {
+      if (isV2(s)) return v2Wake(local);
       const engine = s.settings.get('voice.wake.provider');
       if (engine === 'spotter')
         return local.spotterWake(
@@ -545,6 +583,7 @@ export function createVoiceSystem(
       ? createAudioWorker({ logger, connect: () => utilityLink(audioHost, logger) })
       : undefined;
   const local = createLocalEngines(models, s.settings, {
+    sttModel: () => (isV2(s) ? v2LocalModel((id) => models.installed(id)) : null),
     ...(worker ? { worker } : {}),
     onWakeTiming: diag.timer('worker.wake'),
     onWakeBacklog: () => diag.drop('backlog'),
@@ -564,8 +603,8 @@ export function createVoiceSystem(
   });
   /** Phase 0: the voice setup actually in effect (keys only as present / absent). */
   function logVoiceSetup(reason: string): void {
-    const chosen = s.settings.get('voice.stt.provider');
     const engine = effectiveStt(s, local);
+    const chosen = isV2(s) ? engine : s.settings.get('voice.stt.provider');
     mic.hearing({
       chosen: sttName(chosen),
       engine: sttName(engine),
@@ -791,6 +830,7 @@ export function createVoiceSystem(
       key === 'voice.debugAudio' || // closes open recordings, restarts the mic with debug output
       key === 'voice.capture.noiseSuppression' ||
       key === 'voice.capture.autoGain' ||
+      key === 'voice.engine' ||
       key === 'assistant.name'
     )
       // A wake word that can't start must say so (it used to fail silently and simply never hear Sir).
@@ -800,7 +840,8 @@ export function createVoiceSystem(
           // voice:setMode shows its own error
           s.emit('notify', { level: 'warn', message: r.error, action: 'settings:voice' });
       });
-    if (key === 'voice.stt.provider' || key === 'voice.stt.whisperModel') local.preload();
+    if (key === 'voice.stt.provider' || key === 'voice.stt.whisperModel' || key === 'voice.engine')
+      local.preload(isV2(s) && !s.secrets.get('deepgram'));
     if (key.startsWith('voice.tts.')) {
       clearSpeechCache();
       voice.warmLines();
@@ -817,6 +858,14 @@ export function createVoiceSystem(
     async transcribeClip(data: Uint8Array, mime: string): Promise<string | null> {
       const chosen = s.settings.get('voice.stt.provider');
       const lang = s.settings.get('voice.stt.language');
+      const fetchFn = s.fetch ? { fetch: s.fetch } : {};
+      // v2: Deepgram when its key is set, else on this PC.
+      if (isV2(s)) {
+        const dg = s.secrets.get('deepgram');
+        if (dg) return deepgramFile({ key: dg, data, mime, language: lang, ...fetchFn });
+        if (!local.ready()) return null;
+        return local.transcribe((await decodeAudio(data, mime)).slice(0, 16000 * 120), lang);
+      }
       if (chosen !== 'whisper' && chosen !== 'deepgram' && hasKey(s, chosen)) {
         const samples = await decodeAudio(data, mime);
         return withLocalFallback(clipTranscribers[chosen], local).transcribe(
@@ -834,18 +883,53 @@ export function createVoiceSystem(
           s.settings.get('voice.stt.language'),
         );
       }
-      const url = `https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language=${encodeURIComponent(lang === 'auto' ? 'multi' : lang)}`;
-      const res = await (s.fetch ?? fetch)(url, {
-        method: 'POST',
-        headers: { authorization: `Token ${key}`, 'content-type': mime },
-        body: Buffer.from(data),
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (!res.ok) throw new Error(`Deepgram: HTTP ${res.status}`);
-      const j = (await res.json()) as {
-        results?: { channels?: Array<{ alternatives?: Array<{ transcript?: string }> }> };
-      };
-      return j.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? '';
+      return deepgramFile({ key, data, mime, language: lang, ...fetchFn });
+    },
+    /**
+     * Voice v2 check (Settings → Voice): records one phrase, then reports what speech recognition
+     * heard, whether the wake word fired on it, the level, and how long recognition took.
+     */
+    async check(): Promise<VoiceCheckResult> {
+      const audio = await voice.recordSample();
+      const engine = effectiveStt(s, local);
+      const name = s.settings.get('assistant.name');
+      const levelDb = speechLevelDb(audio);
+      const base = { recorded: audio.length > 0, engine: sttName(engine), levelDb };
+      if (!base.recorded) {
+        const r = { ...base, heard: '', wake: null, ms: 0 };
+        return { ...r, advice: adviceFor(r, name) };
+      }
+      const t0 = Date.now();
+      const lang = s.settings.get('voice.stt.language');
+      const dg = s.secrets.get('deepgram');
+      const heard = await (
+        engine === 'deepgram' && dg
+          ? deepgramFile({
+              key: dg,
+              data: encodeWav(audio, 16_000),
+              mime: 'audio/wav',
+              language: lang,
+              ...(s.fetch ? { fetch: s.fetch } : {}),
+            })
+          : local.ready()
+            ? local.transcribe(audio, lang)
+            : Promise.resolve('')
+      ).catch((err: unknown) => `(speech recognition failed: ${String(err).slice(0, 120)})`);
+      const ms = Date.now() - t0;
+      let wake: boolean | null;
+      try {
+        const w = await factories.wake(V2_WAKE_SENSITIVITY);
+        try {
+          wake = await wakeHears(w, audio);
+        } finally {
+          w.release();
+        }
+      } catch {
+        wake = null; // not set up
+      }
+      const r = { ...base, heard, wake, ms };
+      logger.info({ levelDb, wake, ms, engine, words: heard.split(/s+/).length }, 'voice check');
+      return { ...r, advice: adviceFor(r, name) };
     },
     /**
      * Text → one audio file in the voice chosen in Settings → Voice (then Edge, then Windows), for
@@ -883,7 +967,7 @@ export function createVoiceSystem(
       models,
       /** A model was downloaded: warm Whisper and Laya, and (re)start the wake word if it was waiting for it. */
       changed: () => {
-        local.preload();
+        local.preload(isV2(s) && !s.secrets.get('deepgram'));
         s.laya.warm();
         void voice.applyMode();
       },
@@ -898,7 +982,7 @@ export function createVoiceSystem(
       activeConversation = id;
     },
     start: () => {
-      if (!s.isTest) local.preload();
+      if (!s.isTest) local.preload(isV2(s) && !s.secrets.get('deepgram'));
       // Debug recordings are Sir's voice: kept only while he has them switched on.
       if (!s.settings.get('voice.debugAudio'))
         void diag.clear().catch((err: unknown) => {

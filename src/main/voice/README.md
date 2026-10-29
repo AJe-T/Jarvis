@@ -2,6 +2,14 @@
 
 Main-process voice pipeline (ADR-007). Audio never reaches the main window's renderer; it only plays there.
 
+**Two engine sets** (`voice.engine`): **v2** (default, `v2/`) is one measured set: Chromium echo
+cancellation + noise suppression + auto gain on the capture mic, software gain (`v2/gain.ts`) on the native
+mic, both on-device wake words together (`v2/wake.ts`, no voice recording needed), Deepgram streaming when
+its key is set else the best downloaded on-device model (`v2/policy.ts`), never Windows speech, and a
+"Check my voice" self-test (`v2/check.ts`). The choices come from `tests/integration/voice-bench.real.test.ts`.
+**classic** keeps every engine choice in Settings → Voice. Both share the controller, the mic loop, the
+audio worker and the reply pipeline below, so pieces can be mixed later by swapping a factory.
+
 **Microphone** (16 kHz mono Int16 frames, 512 samples, or 1280 for the openWakeWord-style engines):
 - `voice.echoCancel` on (default): the hidden capture window (`windows/capture-window.ts`,
   `renderer/src/capture/capture.ts` + `mic-worklet.ts`) opens the mic with Chromium's echo

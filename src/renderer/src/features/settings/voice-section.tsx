@@ -7,6 +7,7 @@ import { useDraftSetting, useSettingsStore } from '../../stores/settings-store';
 import { MicCheck } from '../onboarding/mic-check';
 import { LayaSection } from './laya-section';
 import { MicStatus } from './mic-status';
+import { VoiceCheck, VoiceEngineChoice } from './voice-v2';
 import { offerRestart } from './save-bar';
 import { VoiceEngines } from './voice-engines';
 import { VoiceOutput } from './tts-engines';
@@ -44,6 +45,7 @@ function modes(name: string): ModeInfo[] {
 
 export function VoiceSection(): React.JSX.Element {
   const mode = useDraftSetting('voice.mode') ?? 'off';
+  const v2 = (useDraftSetting('voice.engine') ?? 'v2') === 'v2';
   const name = useDraftSetting('assistant.name') ?? DEFAULT_NAME;
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +59,7 @@ export function VoiceSection(): React.JSX.Element {
 
   return (
     <>
+      <VoiceEngineChoice v2={v2} />
       <Section
         title="Voice mode"
         description={`How you start talking to ${name}. Not sure? Press to talk always works; Wake word is hands-free.`}
@@ -85,12 +88,12 @@ export function VoiceSection(): React.JSX.Element {
         </Section>
       </div>
       <div id="voice-engines" className="scroll-mt-4">
-        <VoiceEngines />
+        {v2 ? <VoiceCheck /> : <VoiceEngines />}
       </div>
       <div id="voice-output" className="scroll-mt-4">
         <VoiceOutput name={name} />
       </div>
-      <VoiceProfile />
+      {!v2 && <VoiceProfile />}
       <details className="group rounded-md border border-line bg-surface-1 open:pb-2">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-ink-100 select-none hover:bg-hover">
           <span className="mr-2 inline-block transition-transform group-open:rotate-90">›</span>

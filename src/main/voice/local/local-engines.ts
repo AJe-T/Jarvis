@@ -98,6 +98,8 @@ export function createLocalEngines(
     onWakeTiming?(ms: number): void;
     /** A wake frame dropped because the worker fell behind. */
     onWakeBacklog?(): void;
+    /** Voice v2: the on-device speech model to use instead of voice.stt.whisperModel. */
+    sttModel?(): ModelId | null;
   } = {},
 ) {
   const worker = hooks.worker;
@@ -135,8 +137,10 @@ export function createLocalEngines(
     return spotterModel;
   }
 
+  const sttModelId = (): ModelId => hooks.sttModel?.() ?? settings.get('voice.stt.whisperModel');
+
   function transcriber(): Promise<Transcriber> {
-    const id = settings.get('voice.stt.whisperModel');
+    const id = sttModelId();
     if (whisper?.id === id) return whisper.model;
     if (!store.installed(id)) return Promise.reject(notReady('Whisper model'));
     const old = whisper;
@@ -188,8 +192,7 @@ export function createLocalEngines(
     transcribe: async (audio: Float32Array, language: string): Promise<string> =>
       (await transcriber()).transcribe(audio, language),
     /** On-device speech is usable: the voice detector and the chosen Whisper model are downloaded. */
-    ready: (): boolean =>
-      store.installed('silero-vad') && store.installed(settings.get('voice.stt.whisperModel')),
+    ready: (): boolean => store.installed('silero-vad') && store.installed(sttModelId()),
     async wake(sensitivity: number): Promise<WakeWord> {
       const threshold = thresholdFor(sensitivity);
       if (worker) {
@@ -333,8 +336,9 @@ export function createLocalEngines(
       };
     },
     /** Loads Whisper in the background when it is selected, so the first command isn't slow. */
-    preload(): void {
-      if (settings.get('voice.stt.provider') !== 'whisper') return;
+    /** `force`: voice v2 decides on-device speech is in use whatever voice.stt.provider says. */
+    preload(force = false): void {
+      if (!force && settings.get('voice.stt.provider') !== 'whisper') return;
       void Promise.all([voiceActivity(), transcriber()]).catch(() => undefined);
     },
   };

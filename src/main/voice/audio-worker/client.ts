@@ -7,10 +7,12 @@ import type { FromWorker, ToWorker, WakeSpec } from './protocol';
 /** How long a model may take to load in the worker before the open fails. */
 const OPEN_TIMEOUT_MS = 60_000;
 /**
- * Wake frames waiting for an answer before new ones are dropped (25 × 80 ms = 2 s): a worker that
- * can't keep up must not build an ever-growing queue. Each drop is counted (diagnostics 'backlog').
+ * Wake frames waiting for an answer before new ones are dropped (100 × 80 ms = 8 s): a worker that
+ * can't keep up must not build an ever-growing queue, but a main-process stall delivers frames in a
+ * burst the worker clears in a fraction of a second, and dropping those cut phrases in half. Each
+ * drop is counted (diagnostics 'backlog').
  */
-export const MAX_WAKE_BACKLOG = 25;
+export const MAX_WAKE_BACKLOG = 100;
 
 /** The pipe to the worker: a utility process in the app, the host itself in tests. */
 export interface AudioLink {

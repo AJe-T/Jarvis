@@ -5,6 +5,8 @@ import type { ModelStore } from '../../voice/local/model-store';
 import { listAudioDevices } from '../../voice/providers';
 import type { VoiceController } from '../../voice/voice-controller';
 import type { VoiceStatus } from '@shared/ipc-contract';
+import type { VoiceCheckResult } from '../../voice/v2/check';
+import { V2_SETUP_MODELS } from '../../voice/v2/policy';
 import { handle, onSend } from '../handle';
 import { ENROL_PHRASES, type Enrolment } from '../../voice/enrolment';
 
@@ -23,6 +25,7 @@ export function registerVoiceHandlers(
     setActiveConversation(id: string | null): void;
     isTest: boolean;
     mic: { status(): VoiceStatus; retry(): void; useDevice(deviceId: string): void };
+    check(): Promise<VoiceCheckResult>;
   },
   local: { models: ModelStore; changed(): void },
   dictations: DictationRepo,
@@ -78,6 +81,7 @@ export function registerVoiceHandlers(
     return { ok: true };
   });
   handle('voice:status', () => ui.mic.status());
+  handle('voice:check', () => ui.check());
   handle('voice:captureDevice', (req) => {
     s.audit.append('user', 'voice.captureDevice', {});
     ui.mic.useDevice(req.deviceId);
@@ -90,9 +94,9 @@ export function registerVoiceHandlers(
   handle('voice:setupLocal', () => {
     s.audit.append('user', 'voice.setupLocal', {});
     void (async () => {
-      for (const id of ['silero-vad', 'whisper-base.en', 'kws-zipformer-en'] as const)
-        if (!models.installed(id)) await models.download(id);
-      s.settings.set('voice.stt.whisperModel', 'whisper-base.en');
+      // Voice v2's set (voice/v2/policy.ts): voice detector, speech model, both wake words.
+      for (const id of V2_SETUP_MODELS) if (!models.installed(id)) await models.download(id);
+      s.settings.set('voice.stt.whisperModel', 'moonshine-base'); // fastest accurate one (voice v2 bench)
       s.settings.set('voice.stt.provider', 'whisper');
       // ADR-044: the instant wake word replaces the slower Whisper name spotting.
       if (s.settings.get('voice.wake.provider') === 'name')

@@ -108,7 +108,12 @@ const METER_MS = 5_000;
 const SAMPLE_MAX_MS = 5_000;
 const SAMPLE_END_SILENCE_MS = 700;
 /** Frame loudness that counts as speech while enrolling. */
-const SAMPLE_SPEECH_RMS = 0.02;
+/**
+ * Speech while enrolling: louder than this AND clearly louder than the room (the first frames). A fixed
+ * 0.02 never triggered on quiet laptop mic arrays (~0.01 at rest), so enrolment waited and failed.
+ */
+const SAMPLE_SPEECH_RMS = 0.004;
+const SAMPLE_OVER_ROOM = 2.5;
 const MAX_EARLY_FRAMES = 250; // 8 s at 512 samples per frame, 20 s at 1280
 /** A wake engine that fails again within this long of being reopened stays off (Sir is told). */
 const WAKE_REOPEN_MS = 30_000;
@@ -196,6 +201,7 @@ export function createVoiceController(d: VoiceDeps) {
   /** Voice Match enrolment: the phrase being recorded. */
   let sample: {
     frames: Int16Array[];
+    room: number;
     heard: boolean;
     quietMs: number;
     done(audio: Float32Array): void;
@@ -659,7 +665,11 @@ export function createVoiceController(d: VoiceDeps) {
   function feedSample(frame: Int16Array, frameMs: number): void {
     if (!sample) return;
     sample.frames.push(frame);
-    if (rms(frame) >= SAMPLE_SPEECH_RMS) {
+    const level = rms(frame);
+    // The room's level: the quietest of the first frames (Sir starts talking a moment later).
+    if (sample.frames.length <= 8) sample.room = Math.min(sample.room, level);
+    // Never stricter than the old fixed 0.02, in case Sir was already talking during those frames.
+    if (level >= Math.max(SAMPLE_SPEECH_RMS, Math.min(0.02, sample.room * SAMPLE_OVER_ROOM))) {
       sample.heard = true;
       sample.quietMs = 0;
     } else if (sample.heard) {
@@ -1202,6 +1212,7 @@ export function createVoiceController(d: VoiceDeps) {
       return new Promise<Float32Array>((resolve) => {
         sample = {
           frames: [],
+          room: Infinity,
           heard: false,
           quietMs: 0,
           done: resolve,

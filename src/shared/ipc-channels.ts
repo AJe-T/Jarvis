@@ -41,6 +41,7 @@ export const INVOKE_CHANNELS = [
   'voice:devices',
   'voice:status',
   'voice:captureDevice',
+  'voice:check',
   'voice:enrol',
   'voice:profile',
   'app:killSwitch',

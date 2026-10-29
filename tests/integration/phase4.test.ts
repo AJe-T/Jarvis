@@ -488,9 +488,24 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
 });
 
 describe('voice engine selection (ADR-011)', () => {
+  it('voice v2 says what to set up when its models are missing', async () => {
+    const t = setupServices();
+    const s = t.services;
+    expect(s.settings.get('voice.engine')).toBe('v2');
+    const store = createModelStore({ root: join(t.dir, 'models'), onProgress: () => undefined });
+    const f = realFactories(s, createLocalEngines(store, s.settings), store);
+    await expect(f.wake(0.6)).rejects.toMatchObject({ userMessage: /free on-device models/ });
+    // Windows speech (classic) is never used by v2, whatever voice.stt.provider says.
+    s.settings.set('voice.stt.provider', 'windows');
+    await expect(
+      f.stt.start({ sampleRate: 16000, language: 'en-IN', signal: new AbortController().signal }),
+    ).rejects.toMatchObject({ userMessage: /on-device speech|Whisper/ });
+  });
+
   it('explains what is missing for each engine instead of failing silently', async () => {
     const t = setupServices();
     const s = t.services;
+    s.settings.set('voice.engine', 'classic');
     const store = createModelStore({ root: join(t.dir, 'models'), onProgress: () => undefined });
     const f = realFactories(s, createLocalEngines(store, s.settings), store);
     const signal = new AbortController().signal;

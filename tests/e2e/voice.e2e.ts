@@ -22,6 +22,14 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
 
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Voice', exact: true }).click();
+  // Voice v2 (the default): no engine matrix, a voice check instead of the five-phrase training.
+  await expect(page.getByRole('button', { name: 'Check my voice' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Set up free on-device speech' })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Keyword model: “Hey Jarvis” only/ })).toHaveCount(
+    0,
+  );
+  // Classic: every engine is chosen by hand, as before.
+  await page.getByLabel('Engine', { exact: true }).selectOption('classic');
   // ADR-011: on-device engines show what they need (downloads aren't started in tests).
   await page.getByRole('radio', { name: /Keyword model: “Hey Jarvis” only/ }).click();
   await expect(page.getByRole('button', { name: /^Download \(4 MB\)$/ })).toBeVisible();
@@ -44,6 +52,7 @@ test('voice turn: mic button → transcript → spoken reply plays → back to i
   // 2.28 (ADR-044): the instant wake word, the saved default, comes first and needs its download.
   await page.getByRole('radio', { name: /^Best: instant “Hey Jarvis”/ }).click();
   await expect(page.getByRole('button', { name: /^Download \(18 MB\)$/ })).toBeVisible();
+  await page.getByLabel('Engine', { exact: true }).selectOption('v2'); // back to the saved engine
   await page.getByRole('radio', { name: 'Press to talk' }).click();
   // 2.20: a new voice mode offers a clean restart; not now.
   await expect(page.getByText('Restart Jarvis now?')).toBeVisible();

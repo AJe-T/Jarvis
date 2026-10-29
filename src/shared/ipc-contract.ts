@@ -828,6 +828,19 @@ export const INVOKE = {
   'voice:mic': contract(z.object({ action: z.enum(['start', 'stop', 'meter', 'retry']) }), Ok),
   /** The microphone in use (voice fix 1A); changes arrive as voice:status events. */
   'voice:status': contract(Empty, VoiceStatus),
+  /** Voice v2: record one phrase and report what was heard, the wake word, the level and the time. */
+  'voice:check': contract(
+    Empty,
+    z.object({
+      recorded: z.boolean(),
+      heard: z.string(),
+      engine: z.string(),
+      wake: z.boolean().nullable(),
+      levelDb: z.number(),
+      ms: z.number(),
+      advice: z.string(),
+    }),
+  ),
   /** Open this Chromium microphone for echo cancellation from now on (when the name didn't match). */
   'voice:captureDevice': contract(z.object({ deviceId: z.string().max(300) }), Ok),
   /** Phone-keyboard dictation into the message box: words stream in as voice:compose events. */

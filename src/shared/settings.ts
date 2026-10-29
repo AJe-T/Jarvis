@@ -240,6 +240,13 @@ export const SETTINGS = {
   'agent.computerMaxActions': { schema: z.number().int().min(1).max(200), default: 60 },
   'web.search.enabled': { schema: z.boolean(), default: true },
   'voice.mode': { schema: z.enum(VOICE_MODES), default: 'ptt' as (typeof VOICE_MODES)[number] },
+  /**
+   * Voice v2 (default): a fixed, measured set of engines (src/main/voice/v2): the echo-cancelled mic
+   * with Chromium's noise suppression and auto gain, software gain on the native mic, both on-device
+   * wake words together, Deepgram when its key is set else the best on-device model, never Windows
+   * speech. 'classic' keeps every engine choice of Settings → Voice as before.
+   */
+  'voice.engine': { schema: z.enum(['v2', 'classic']), default: 'v2' as 'v2' | 'classic' },
   'voice.deviceIndex': { schema: z.number().int().min(-1), default: -1 },
   // ADR-011/038: cloud, on-device or Sir's own server, chosen separately (shared/speech-engines.ts).
   'voice.stt.provider': {
