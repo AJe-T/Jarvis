@@ -40,7 +40,7 @@ export interface VoiceFactories {
   recorder(deviceIndex: number, frameLength: number): Recorder;
   /** True when the microphone in use cancels Jarvis's own voice, so he can be interrupted by voice. */
   echoCancelled?(): boolean;
-  /** The engine chosen in Settings → Voice (Picovoice or local openWakeWord); throws JarvisError if not ready. */
+  /** The wake engine chosen in Settings → Voice (spotter, "Hey Jarvis", personal, Picovoice); throws JarvisError if not ready. */
   wake(sensitivity: number): WakeWord | Promise<WakeWord>;
   stt: SttProvider;
   edge: TtsProvider;

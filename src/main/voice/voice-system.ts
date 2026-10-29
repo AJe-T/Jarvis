@@ -51,11 +51,12 @@ import { createDictationRepo, finishDictation } from './dictation';
 import { createLocalEngines, type LocalEngines } from './local/local-engines';
 import { createModelStore, type ModelStore } from './local/model-store';
 import { matchQuickCommand, type RoutineTriggers } from './quick-commands';
-import type { Recorder, SttProvider } from './types';
+import type { Recorder, SttProvider, TtsProvider } from './types';
 import { createVoiceController, type VoiceFactories } from './voice-controller';
 import { clearSpeechCache } from './tts-pipeline';
 import { createEngineReporter, hearingChain, whyOf, type EngineReport } from './backup';
 import { decodeAudio } from './audio-decode';
+import { speakToFile, type SpeechFile } from './speech-file';
 import { createVoiceDiagnostics, type VoiceDiagnostics } from './diagnostics';
 import { createAudioWorker, utilityLink } from './audio-worker/client';
 import { createBudgetGuard } from '../llm/budget-guard';
@@ -660,6 +661,9 @@ export function createVoiceSystem(
         logger,
       }),
   };
+  const factories: VoiceFactories =
+    opts.factories ??
+    (s.isTest ? testFactories() : realFactories(s, local, models, opts.capture, { diag, mic }));
   const voice = createVoiceController({
     realtime: opts.realtime ?? realtime,
     settings: s.settings,
@@ -675,9 +679,7 @@ export function createVoiceSystem(
     emit: s.emit,
     report: createEngineReporter({ engines: s.voiceEngines, emit: s.emit }),
     logger,
-    factories:
-      opts.factories ??
-      (s.isTest ? testFactories() : realFactories(s, local, models, opts.capture, { diag, mic })),
+    factories,
     diag,
     onEcho: (state) => mic.echo(state),
     activeConversation: () => activeConversation ?? undefined,
@@ -804,7 +806,6 @@ export function createVoiceSystem(
       voice.warmLines();
     }
   });
-  const edge = createEdgeTts();
   const clipTranscribers = phraseTranscribers(s);
   return {
     voice,
@@ -846,16 +847,21 @@ export function createVoiceSystem(
       };
       return j.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? '';
     },
-    /** Text → MP3 in Jarvis's voice (Edge), for voice replies on Telegram. */
-    async speakMp3(text: string): Promise<Uint8Array> {
-      const parts: Uint8Array[] = [];
-      for await (const c of edge.synthesize(text, {
+    /**
+     * Text → one audio file in the voice chosen in Settings → Voice (then Edge, then Windows), for
+     * voice replies on Telegram (voice fix 4: it used to be Edge whatever Sir had chosen).
+     */
+    async speak(text: string): Promise<SpeechFile> {
+      const chosen = (factories as unknown as Record<string, TtsProvider | undefined>)[
+        s.settings.get('voice.tts.provider')
+      ];
+      const voices = [...new Set([chosen, factories.edge, factories.sapi])].filter(
+        (v): v is TtsProvider => v !== undefined,
+      );
+      return speakToFile(text, voices, {
         voice: s.settings.get('voice.tts.voice'),
         rate: s.settings.get('voice.tts.rate'),
-        signal: AbortSignal.timeout(60_000),
-      }))
-        parts.push(c.data);
-      return Buffer.concat(parts);
+      });
     },
     /** ADR-039 Voice Match: enrolment and the saved profile. */
     voiceMatch: {

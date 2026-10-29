@@ -221,7 +221,7 @@ export const LOCAL_STT_MODELS: readonly LocalSttModel[] = [
   {
     id: 'whisper-base.en',
     label: 'Whisper base.en',
-    hint: 'Fast (~1 s) and dependable. The default for the wake word by name, which hears every phrase. English only.',
+    hint: 'Fast (~1 s) and dependable: what one-click on-device setup installs, and the best choice for the wake word by name, which hears every phrase. English only.',
     multilingual: false,
     speed: 'Fast',
     accuracy: 'Good',
@@ -239,7 +239,7 @@ export const LOCAL_STT_MODELS: readonly LocalSttModel[] = [
   {
     id: 'whisper-small.en',
     label: 'Whisper small.en',
-    hint: 'More accurate with Indian-accented English, but 2–4 s per sentence; on a slow PC the wake word lags. English only.',
+    hint: 'The default setting: more accurate with Indian-accented English, but 2–4 s per sentence; on a slow PC the wake word by name lags (choose base.en then). English only.',
     multilingual: false,
     speed: 'Medium',
     accuracy: 'Very good',

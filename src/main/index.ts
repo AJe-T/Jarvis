@@ -376,7 +376,7 @@ async function boot(): Promise<void> {
   if (!isTest) automation.start();
   // Telegram channel (ideas from OpenJarvis): only when Sir turned it on and gave a bot token.
   const telegram = createTelegramChannel(services, {
-    voice: { transcribeClip: voice.transcribeClip, speakMp3: voice.speakMp3 },
+    voice: { transcribeClip: voice.transcribeClip, speak: voice.speak },
   });
   registerTelegramHandlers(services, telegram);
   if (!isTest) void telegram.start();

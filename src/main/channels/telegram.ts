@@ -64,7 +64,8 @@ export function chunkMessage(text: string, max = MAX_MESSAGE): string[] {
 /** Voice-note support, provided by the voice system (absent in some tests). */
 export interface TelegramVoice {
   transcribeClip(data: Uint8Array, mime: string): Promise<string | null>;
-  speakMp3(text: string): Promise<Uint8Array>;
+  /** The reply in Jarvis's chosen voice: MP3 is sent as a voice note, WAV as an audio file. */
+  speak(text: string): Promise<{ mime: 'audio/mpeg' | 'audio/wav'; data: Uint8Array }>;
 }
 
 const MAX_VOICE_SECONDS = 300;
@@ -156,14 +157,22 @@ export function createTelegramChannel(
     return heard.trim();
   }
 
-  /** Sends a spoken reply as a Telegram voice message (MP3 is accepted by sendVoice). */
+  /**
+   * Sends a spoken reply in the chosen voice: MP3 as a voice message (sendVoice accepts MP3), WAV
+   * (Windows, Kokoro, Piper, streamed voices) as an audio file, since sendVoice doesn't take WAV.
+   */
   async function sendVoiceReply(chat: number, text: string): Promise<void> {
     if (!deps.voice || !text.trim()) return;
-    const mp3 = await deps.voice.speakMp3(text.slice(0, 1200));
+    const file = await deps.voice.speak(text.slice(0, 1200));
+    const mp3 = file.mime === 'audio/mpeg';
     const form = new FormData();
     form.append('chat_id', String(chat));
-    form.append('voice', new Blob([Buffer.from(mp3)], { type: 'audio/mpeg' }), 'jarvis.mp3');
-    const res = await f(`${API}/bot${token() ?? ''}/sendVoice`, {
+    form.append(
+      mp3 ? 'voice' : 'audio',
+      new Blob([Buffer.from(file.data)], { type: file.mime }),
+      mp3 ? 'jarvis.mp3' : 'jarvis.wav',
+    );
+    const res = await f(`${API}/bot${token() ?? ''}/${mp3 ? 'sendVoice' : 'sendAudio'}`, {
       method: 'POST',
       body: form,
       signal: AbortSignal.timeout(60_000),

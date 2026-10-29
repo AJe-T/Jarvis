@@ -87,7 +87,7 @@ flowchart TB
 | `security/` | Policy engine, path guard, shell guard, redaction, untrusted wrapping, audit log, kill switch | `policy-engine.ts`, `path-guard.ts`, `shell-guard.ts`, `redact.ts`, `audit.ts`, `kill-switch.ts` |
 | `mcp/` | Spawn/connect MCP servers, list tools, namespace them, call them, health | `manager.ts`, `config.ts` |
 | `memory/` | Vault I/O, memory tool handler, curator, retriever, indexer, watcher, conversation logger | `vault-service.ts`, `memory-tool-handler.ts`, `curator.ts`, `retriever.ts`, `indexer.ts`, `conversation-logger.ts` |
-| `voice/` | PvRecorder capture, Porcupine wake, STT providers, TTS providers, sentence chunker, voice state machine | `recorder.ts`, `wake-word.ts`, `stt/*.ts`, `tts/*.ts`, `voice-controller.ts` |
+| `voice/` | Mic (echo-cancelled capture window or PvRecorder), wake words (spotter / openWakeWord / personal in the audio worker, Porcupine), STT and TTS providers (incl. streamed PCM), sentence chunker, voice state machine, echo check, realtime conversations, diagnostics (see `src/main/voice/README.md`) | `voice-controller.ts`, `voice-system.ts`, `mic-supervisor.ts`, `audio-worker/*`, `local/*`, `stt/*`, `tts/*`, `realtime/*`, `diagnostics.ts` |
 | `db/` | Connection, migrations, repositories | `connection.ts`, `migrations/*.sql`, `repos/*.ts` |
 | `settings/` | Settings CRUD, secrets via safeStorage | `settings-service.ts`, `secrets.ts` |
 | `scheduler/` | Reminders and timers (persisted), routine runner | `scheduler.ts`, `routines.ts` |
@@ -214,7 +214,7 @@ Vault layout is defined in [Database.md](Database.md) §8.
 
 ```mermaid
 flowchart LR
-    MIC["PvRecorder<br/>16 kHz PCM frames"] --> WAKE["Porcupine<br/>'Jarvis'"]
+    MIC["Echo-cancelled mic (capture window)<br/>or PvRecorder · 16 kHz PCM frames"] --> WAKE["Wake word<br/>(audio worker: spotter / openWakeWord / personal;<br/>or Porcupine)"]
     HK["Hotkey PTT"] --> GATE
     WAKE --> GATE["Voice controller<br/>(state machine)"]
     GATE -- LISTENING --> STT["STT stream<br/>(Deepgram, endpointing)"]

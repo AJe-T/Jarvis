@@ -40,7 +40,7 @@
 | Memory files | **Obsidian vault** (plain Markdown + YAML frontmatter) | Human-readable, editable, graph view, Sir owns the data |
 | File watching | **chokidar** | Detect Sir's edits in Obsidian |
 | Mic capture | **`@picovoice/pvrecorder-node`** | Cross-platform PCM capture in main process, no SoX |
-| Wake word | **`@picovoice/porcupine-node`** (built-in keyword `JARVIS`) | On-device, accurate, free AccessKey |
+| Wake word | **`sherpa-onnx-node`** keyword spotter (default since 2.28, any name, ADR-044), openWakeWord and the personal wake word on `onnxruntime-node`, all in the audio worker (2.43); `@picovoice/porcupine-node` (built-in `JARVIS`) as an option | On-device; the original Porcupine choice is kept as an engine |
 | STT | Provider interface → **Deepgram streaming** (default) · OpenAI transcription (alt) · local whisper.cpp (P2) | Streaming + endpointing gives low latency |
 | TTS | Provider interface → **Edge TTS** (`msedge-tts`, MIT, voice `en-GB-RyanNeural`) · Windows SAPI fallback · ElevenLabs (optional) | Free, natural British voice; offline fallback. `@travisvn/edge-tts` is AGPL-3.0, so it is not allowed |
 | Fuzzy search | **fuse.js** | Matching spoken app names to installed apps |

@@ -357,7 +357,7 @@ Talk to Jarvis from your phone.
 - `/stop` stops everything.
 - Briefings can be forwarded to your phone.
 - Replies pass through Telegram's servers.
-- **Voice notes:** hold the mic in Telegram and talk. Jarvis downloads the note, transcribes it (Deepgram if you have a key, otherwise on-device Whisper — the Jarvis window decodes the Opus audio, nothing extra is installed), shows "🎤 what he heard", answers in text **and** sends back a voice message in his own voice (Settings → Phone & chat apps → Telegram voice notes). Notes up to 5 minutes.
+- **Voice notes:** hold the mic in Telegram and talk. Jarvis downloads the note, transcribes it (Deepgram if you have a key, otherwise on-device Whisper — the Jarvis window decodes the Opus audio, nothing extra is installed), shows "🎤 what he heard", answers in text **and** sends back a voice message in the voice chosen in Settings → Voice (2.48; it used to be Edge whatever you chose; Windows, Kokoro, Piper and the streamed voices arrive as an audio file, since Telegram voice messages take MP3 or OGG only) (Settings → Phone & chat apps → Telegram voice notes). Notes up to 5 minutes.
 
 ### 3.10 Reply copilot (desktop take on jev-chat-jarvis)
 Open a chat (WhatsApp, Telegram, Slack…) and press `Ctrl+Alt+R`, or say "help me reply".

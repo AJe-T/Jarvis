@@ -50,7 +50,10 @@ export interface Recorder {
 
 export interface WakeWord {
   readonly frameLength: number;
-  /** Porcupine answers synchronously; openWakeWord (ONNX) asynchronously. */
+  /**
+   * Porcupine and the in-process spotter answer synchronously; engines in the audio worker (and
+   * openWakeWord in tests) asynchronously. May be called again before the last answer came back.
+   */
   process(frame: Int16Array): boolean | Promise<boolean>;
   /**
    * Forget the audio heard so far. Called when listening ends: the engine was not fed while Sir

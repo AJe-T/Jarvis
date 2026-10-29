@@ -151,9 +151,9 @@ describe('Telegram channel (ideas from OpenJarvis)', () => {
       pollTimeoutSec: 0,
       voice: {
         transcribeClip: async (data) => (data.length === 3 ? 'what is the weather' : ''),
-        speakMp3: async (text) => {
+        speak: async (text) => {
           spoken.push(text);
-          return new Uint8Array([9]);
+          return { mime: 'audio/mpeg' as const, data: new Uint8Array([9]) };
         },
       },
     });

@@ -75,7 +75,11 @@ export function watchSpeed(t: Transcriber, onSlow: () => void, now = Date.now): 
   };
 }
 
-/** ADR-011: on-device openWakeWord and Whisper. Models load once and stay warm. */
+/**
+ * ADR-011/044: the on-device wake words (spotter, openWakeWord, personal), the Silero voice detector
+ * and Whisper. Wake words and the detector run in the audio worker when there is one (voice fix 1B),
+ * Whisper in the inference host. Models load once and stay warm.
+ */
 export function createLocalEngines(
   store: ModelStore,
   settings: SettingsService,

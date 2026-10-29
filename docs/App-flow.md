@@ -34,7 +34,7 @@ flowchart TB
 4. Ensure vault skeleton exists; start vault watcher; index changed files.
 5. Start MCP servers (enabled ones) in parallel; status events stream to UI.
 6. Register global hotkeys; create tray.
-7. If voice mode = wake → start recorder + Porcupine.
+7. If voice mode = wake (or realtime) → start the microphone + the chosen wake engine (keyword spotter by default, in the audio worker).
 8. Start scheduler (fire overdue reminders with "missed" note).
 9. Show main window (or start minimised to tray if "start hidden" is set).
 
