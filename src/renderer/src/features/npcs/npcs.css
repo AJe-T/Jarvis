@@ -221,15 +221,23 @@
   }
 }
 
-/* ── 3D office (2.51) ─────────────────────────────────────────────────────── */
+/* ── 3D office (2.51) · "Holo-Ops" game look (2.52) ─────────────────────────── */
 
 .office3d {
-  background:
-    radial-gradient(ellipse 80% 60% at 55% 40%, var(--accent-tint), transparent 70%),
-    linear-gradient(180deg, var(--bg-app), color-mix(in oklab, var(--bg-app) 70%, #000));
+  --holo-edge: color-mix(in oklab, var(--accent-500) 55%, transparent);
+  --holo-fill: rgba(5, 10, 20, 0.72);
+  background: #03060c;
+  color: #e6f1ff;
 }
 
-/* A tag sits at a head's screen position (set every frame in OverlaySync). */
+/* Darkened corners and faint scanlines: the screen of a command deck. */
+.office3d-vignette {
+  background:
+    radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+}
+
+/* A plate sits at a head's screen position (set every frame in OverlaySync). */
 .office3d-tag {
   position: absolute;
   left: 0;
@@ -241,27 +249,30 @@
   will-change: transform;
 }
 
+/* Chevron name plates: angled holographic glass with a state gem. */
 .office3d-name {
   pointer-events: auto;
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 8px 2px 6px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--npc) 55%, transparent);
-  background: color-mix(in oklab, var(--bg-app) 78%, transparent);
-  backdrop-filter: blur(6px);
-  color: var(--ink-100);
+  gap: 6px;
+  padding: 3px 12px 3px 9px;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--npc) 38%, transparent), transparent 70%),
+    var(--holo-fill);
+  color: #f2f7ff;
   font-family: var(--font-code);
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: 0 0 14px -6px var(--npc);
+  text-shadow: 0 0 6px color-mix(in oklab, var(--npc) 70%, transparent);
+  border-bottom: 2px solid var(--npc);
   transition:
     scale 120ms ease,
-    box-shadow 120ms ease;
+    filter 120ms ease;
 }
 .office3d-name:not(:disabled) {
   cursor: pointer;
@@ -269,27 +280,33 @@
 .office3d-name:not(:disabled):hover,
 .office3d-name:focus-visible,
 .office3d-name.is-selected {
-  scale: 1.12;
-  box-shadow: 0 0 18px -2px var(--npc);
+  scale: 1.14;
+  filter: drop-shadow(0 0 8px var(--npc));
 }
-.office3d-name.is-selected {
-  border-color: var(--npc);
+.office3d-gem {
+  width: 7px;
+  height: 7px;
+  rotate: 45deg;
+  background: var(--gem);
+  box-shadow: 0 0 6px var(--gem);
 }
 .office3d-tag[data-state='off'] .office3d-name {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .office3d-bubble {
-  max-width: 220px;
-  padding: 6px 9px;
-  border-radius: 10px;
-  border: 1px solid var(--npc);
-  background: var(--surface-1);
-  color: var(--ink-100);
+  max-width: 230px;
+  padding: 7px 10px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  border-left: 2px solid var(--npc);
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--npc) 22%, transparent), transparent 60%),
+    rgba(6, 12, 24, 0.9);
+  color: #eef5ff;
   font-size: 11px;
-  line-height: 1.35;
-  box-shadow: 0 6px 18px -8px var(--npc);
-  animation: office3d-pop 160ms ease-out;
+  line-height: 1.4;
+  box-shadow: 0 8px 22px -10px var(--npc);
+  animation: office3d-pop 180ms ease-out;
 }
 
 .office3d-btn {
@@ -297,33 +314,311 @@
   align-items: center;
   gap: 5px;
   height: 28px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--line-subtle);
-  background: color-mix(in oklab, var(--bg-app) 75%, transparent);
+  padding: 0 12px;
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  background: var(--holo-fill);
+  border-bottom: 1px solid var(--holo-edge);
   backdrop-filter: blur(6px);
-  color: var(--ink-300);
+  color: #b9cbe6;
   font-family: var(--font-code);
   font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.office3d-btn:hover {
-  color: var(--ink-100);
-  background: var(--hover);
+.office3d-btn:hover,
+.office3d-btn[aria-pressed='true'] {
+  color: #ffffff;
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--accent-500) 30%, transparent), transparent),
+    var(--holo-fill);
+}
+
+/* Angled HUD frame with lit corners. */
+.holo-frame {
+  position: relative;
+  padding: 10px 14px 12px;
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in oklab, var(--accent-500) 14%, transparent),
+      transparent 55%
+    ),
+    var(--holo-fill);
+  clip-path: polygon(
+    0 0,
+    calc(100% - 14px) 0,
+    100% 14px,
+    100% 100%,
+    14px 100%,
+    0 calc(100% - 14px)
+  );
+  backdrop-filter: blur(8px);
+  border-left: 2px solid var(--accent-500);
+}
+.holo-frame::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(225deg, var(--accent-500) 0 30%, transparent 31%);
+  opacity: 0.85;
+}
+.holo-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  color: #9fb6d6;
+  font-family: var(--font-code);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.holo-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: holo-blink 1.6s ease-in-out infinite;
+}
+.holo-squad ul {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 4px 16px;
+}
+.holo-squad li {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  column-gap: 6px;
+}
+.holo-gem {
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  box-shadow: 0 0 8px currentColor;
+}
+.holo-count {
+  font-family: var(--font-code);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: 0 0 12px color-mix(in oklab, var(--accent-500) 70%, transparent);
+}
+.holo-label {
+  grid-column: 1 / -1;
+  color: #8ea3c2;
+  font-family: var(--font-code);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Party bar: hex portraits along the bottom. */
+.holo-party {
+  position: absolute;
+  z-index: 20000;
+  left: 50%;
+  bottom: 14px;
+  translate: -50% 0;
+  display: flex;
+  gap: 10px;
+  max-width: calc(100% - 40px);
+  padding: 8px 14px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: linear-gradient(0deg, rgba(3, 6, 12, 0.85), rgba(3, 6, 12, 0.35));
+  clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 100%, 0 100%);
+}
+.holo-member {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 64px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: translate 140ms ease;
+}
+.holo-member:hover,
+.holo-member:focus-visible,
+.holo-member.is-selected {
+  translate: 0 -4px;
+}
+.holo-hex {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(160deg, var(--npc), color-mix(in oklab, var(--npc) 30%, #000));
+}
+.holo-member.is-selected .holo-hex {
+  background: linear-gradient(160deg, #ffffff, var(--npc));
+}
+.holo-hex-inner {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 48px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: radial-gradient(
+    circle at 50% 35%,
+    color-mix(in oklab, var(--npc) 35%, #0a1222),
+    #050a14 75%
+  );
+  font-size: 20px;
+}
+.holo-member[data-state='off'] .holo-hex {
+  filter: grayscale(1) brightness(0.6);
+}
+.holo-member-name {
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #dfe9f7;
+  font-family: var(--font-code);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.holo-meter {
+  width: 44px;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+}
+.holo-meter > span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--gem);
+  box-shadow: 0 0 6px var(--gem);
+}
+.holo-member[data-state='working'] .holo-meter > span {
+  width: 45%;
+  animation: holo-scan 1.1s linear infinite;
+}
+.holo-member[data-state='off'] .holo-meter > span {
+  width: 0;
+}
+
+/* Radar minimap with a sweeping beam. */
+.holo-radar {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px var(--holo-edge),
+    0 0 24px -6px var(--accent-500);
+  overflow: hidden;
+}
+.holo-sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    color-mix(in oklab, var(--accent-500) 45%, transparent),
+    transparent 70deg
+  );
+  mix-blend-mode: screen;
+  animation: holo-spin 3.2s linear infinite;
+}
+
+/* Achievement toasts. */
+.holo-toasts {
+  position: absolute;
+  z-index: 20001;
+  top: 16px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.holo-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  padding: 9px 18px 9px 12px;
+  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--npc) 45%, transparent),
+    rgba(5, 10, 20, 0.9) 60%
+  );
+  border-top: 1px solid var(--npc);
+  color: #ffffff;
+  animation: holo-toast-in 380ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.holo-toast b {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.holo-toast b + span {
+  display: block;
+  color: #b8c7de;
+  font-size: 11px;
+}
+.holo-toast-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  rotate: 45deg;
+  background: var(--npc);
+  color: #04070d;
+  font-weight: 900;
+  box-shadow: 0 0 14px var(--npc);
+}
+.holo-toast-icon {
+  font-size: 13px;
+}
+.holo-toast.is-error {
+  --npc: #fb7185;
 }
 
 @keyframes office3d-pop {
   from {
     opacity: 0;
-    translate: 0 4px;
+    translate: 0 6px;
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .office3d-bubble {
-    animation: none;
+@keyframes holo-blink {
+  50% {
+    opacity: 0.35;
   }
-  .office3d-name {
-    transition: none;
+}
+@keyframes holo-scan {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 230% 0;
+  }
+}
+@keyframes holo-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes holo-toast-in {
+  from {
+    opacity: 0;
+    translate: 0 -14px;
+    scale: 0.92;
   }
 }
 
@@ -335,5 +630,19 @@
   display: none;
 }
 .office3d-tag[data-far='1'] .office3d-name:not(:hover, :focus-visible, .is-selected) {
-  padding: 2px 5px;
+  padding: 3px 9px 3px 7px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .office3d-bubble,
+  .holo-toast,
+  .holo-sweep,
+  .holo-dot,
+  .holo-member[data-state='working'] .holo-meter > span {
+    animation: none;
+  }
+  .office3d-name,
+  .holo-member {
+    transition: none;
+  }
 }

@@ -138,3 +138,133 @@ export function themeColor(name: string, fallback: string): string {
   // THREE.Color reads hex, rgb() and hsl(); anything else falls back.
   return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(v) || /^(rgb|hsl)\(/i.test(v) ? v : fallback;
 }
+
+// ── 2.52 "Holo-Ops" look ──────────────────────────────────────────────────
+
+/**
+ * Hexagon tiles for the deck: dark fill, thin bright seams (used as the emissive map, so only the
+ * seams glow and bloom), a few brighter tiles for life. Tiles once per `scale` metres.
+ */
+export function hexTexture(): THREE.CanvasTexture | null {
+  const W = 256;
+  const r = 32;
+  const h = Math.sqrt(3) * r;
+  const t = canvasTexture(W, Math.round(h * 4), (g) => {
+    g.fillStyle = '#000000';
+    g.fillRect(0, 0, W, h * 4);
+    let seed = 7;
+    const rand = (): number => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+    for (let row = -1; row < 6; row++)
+      for (let col = -1; col < 6; col++) {
+        const cx = col * r * 1.5;
+        const cy = row * h + (col % 2 === 0 ? 0 : h / 2);
+        g.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = (Math.PI / 3) * k;
+          const x = cx + Math.cos(a) * (r - 2);
+          const y = cy + Math.sin(a) * (r - 2);
+          if (k === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
+        }
+        g.closePath();
+        const lit = rand();
+        if (lit > 0.93) {
+          g.fillStyle = 'rgba(255,255,255,0.10)';
+          g.fill();
+        }
+        g.strokeStyle = 'rgba(255,255,255,0.8)';
+        g.lineWidth = 3;
+        g.stroke();
+      }
+  });
+  if (t) {
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+  }
+  return t;
+}
+
+/** A soft round glow (white centre fading out), for sprites, thruster light and fake contact shadows. */
+export function glowTexture(): THREE.CanvasTexture | null {
+  return canvasTexture(128, 128, (g) => {
+    const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+  });
+}
+
+let glow: THREE.CanvasTexture | null | undefined;
+/** One shared glow texture. */
+export function sharedGlow(): THREE.CanvasTexture | null {
+  glow ??= glowTexture();
+  return glow;
+}
+
+/** Ring desks and pills: a lathe of a rounded rectangle (rounded edges catch the light). */
+export function ringDeskGeometry(
+  inner: number,
+  outer: number,
+  height: number,
+): THREE.LatheGeometry {
+  const r = Math.min(0.04, height / 2);
+  const pts: THREE.Vector2[] = [];
+  const corner = (cx: number, cy: number, a0: number): void => {
+    for (let k = 0; k <= 4; k++) {
+      const a = a0 + (Math.PI / 2) * (k / 4);
+      pts.push(new THREE.Vector2(cx + Math.cos(a) * r, cy + Math.sin(a) * r));
+    }
+  };
+  corner(outer - r, r, -Math.PI / 2);
+  corner(outer - r, height - r, 0);
+  corner(inner + r, height - r, Math.PI / 2);
+  corner(inner + r, r, Math.PI);
+  pts.push(pts[0]!.clone());
+  return new THREE.LatheGeometry(pts, 64);
+}
+
+export const GEO2 = {
+  ringDesk: ringDeskGeometry(0.5, 0.98, 0.07),
+  torus: new THREE.TorusGeometry(1, 0.03, 12, 96),
+  thinTorus: new THREE.TorusGeometry(1, 0.012, 8, 96),
+  octa: new THREE.OctahedronGeometry(1, 0),
+  /** A curved holo-screen: a slice of an open cylinder. */
+  screen: new THREE.CylinderGeometry(0.62, 0.62, 0.36, 24, 1, true, -0.42, 0.84),
+  dome: new THREE.SphereGeometry(1, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2),
+  hexagon: new THREE.CylinderGeometry(1, 1, 1, 6),
+  pill: new THREE.CapsuleGeometry(0.17, 0.22, 8, 20),
+  headSphere: new THREE.SphereGeometry(0.21, 32, 20),
+  // A slice of a slightly larger sphere, centred on +z (three's phi starts at -x): the glass visor.
+  facePlate: new THREE.SphereGeometry(0.214, 32, 16, Math.PI / 2 - 0.95, 1.9, 0.75, 1.1),
+  eye: new THREE.CapsuleGeometry(0.022, 0.035, 4, 8),
+  hand: new THREE.SphereGeometry(0.055, 16, 10),
+};
+
+/** A new additive "light" material: glows under bloom. The caller owns it (animate it, dispose it). */
+export function newGlowMat(color: string, opacity = 0.9): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
+const glowCache = new Map<string, THREE.MeshBasicMaterial>();
+/** A shared, never-changed glow material per colour and strength (safe to use in render). */
+export function glowMat(color: string, opacity = 0.9): THREE.MeshBasicMaterial {
+  const key = `${color}|${opacity.toFixed(2)}`;
+  let m = glowCache.get(key);
+  if (!m) {
+    m = newGlowMat(color, opacity);
+    glowCache.set(key, m);
+  }
+  return m;
+}

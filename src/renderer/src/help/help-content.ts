@@ -191,7 +191,7 @@ export const HELP: Record<string, HelpEntry> = {
     what: 'Your team of single-purpose agents (Marketing, Finance, Developers, Research…). Each has its own AI, tools and memory. Jarvis is their head: he gives them work, reads their memories and runs their meetings.',
     how: [
       'Hire an NPC from a template or from scratch; switch it off any time.',
-      'Office: a 3D office. Drag to orbit, right-drag to pan, scroll to zoom; click someone to fly to them and open their file. They type while working, walk to the meeting room for meetings, and a glowing packet flies between people when one tags another. “Classic” switches to the flat office.',
+      'Office: your team as hover-bots on a 3D command deck. Drag to orbit, right-drag to pan, scroll to zoom; click someone (or their portrait in the party bar) to fly to them and open their file. The gem over each bot shows what it is doing; they glide to the war-room for meetings, a beam flies when one tags another, and a toast pops when someone finishes a job. “Performance” turns off glow and shadows for older PCs; “Classic” is the flat office.',
       'Team chat: #office is everyone. Tag someone (@Maya) to give them work; with no tag, Jarvis decides who does it. NPCs tag each other too.',
       'Meeting room: pick NPCs and a topic. They talk in turns, then Jarvis posts decisions and action items; the minutes go to your vault (NPCs/Meetings).',
       'Each NPC keeps its own memory note (NPCs/<name>/Memory.md). Jarvis can read all of them.',

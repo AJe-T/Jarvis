@@ -1,137 +1,324 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { NpcState } from '@shared/npcs';
-import { deskSpot, seatAt, type Plan } from './layout';
-import { codeTexture, GEO, GLASS, gridTexture, mat } from './materials';
+import { deskSpot, podCentre, seatAt, type Plan } from './layout';
+import {
+  codeTexture,
+  GEO,
+  GEO2,
+  glowMat,
+  hexTexture,
+  mat,
+  newGlowMat,
+  sharedGlow,
+} from './materials';
 
 /**
- * The room around the team (2.51): a neon-grid floor, windows that follow the clock, desk pods with
- * chairs and monitors (a monitor scrolls code while its NPC works, glows softly when it is idle, and
- * is dark when nobody sits there or its NPC is off), the glass meeting room and Jarvis's core.
+ * The world (2.52, "Holo-Ops"): a floating deck with glowing hex seams over a starfield; round work
+ * islands with curved holo-screens and a hologram projector each; a domed war-room; Jarvis's arc
+ * reactor; a round lounge. Built from code (lathes, tori, shapes), no model files. Bright parts are
+ * additive or strongly emissive so the bloom pass makes them glow.
  */
 
-const DESK_TOP = 0.74;
+const DECK_Y = 0;
+const SEAT_TOP = 0.42;
 
-export function Floor({ plan, accent }: { plan: Plan; accent: string }): React.JSX.Element {
-  const { min, max } = plan.bounds;
-  const w = max.x - min.x;
-  const d = max.z - min.z;
-  const tex = useMemo(() => {
-    const t = gridTexture(accent);
-    t?.repeat.set(w, d);
-    return t;
-  }, [accent, w, d]);
-  return (
-    <mesh
-      rotation-x={-Math.PI / 2}
-      position={[(min.x + max.x) / 2, 0, (min.z + max.z) / 2]}
-      scale={[w, d, 1]}
-      geometry={GEO.plane}
-    >
-      <meshStandardMaterial map={tex} color="#ffffff" roughness={0.9} metalness={0.05} />
-    </mesh>
-  );
+function roundedRect(w: number, d: number, r: number): THREE.Shape {
+  const s = new THREE.Shape();
+  const x = -w / 2;
+  const y = -d / 2;
+  s.moveTo(x + r, y);
+  s.lineTo(x + w - r, y);
+  s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + d - r);
+  s.quadraticCurveTo(x + w, y + d, x + w - r, y + d);
+  s.lineTo(x + r, y + d);
+  s.quadraticCurveTo(x, y + d, x, y + d - r);
+  s.lineTo(x, y + r);
+  s.quadraticCurveTo(x, y, x + r, y);
+  return s;
 }
 
-/** A low back wall and side wall with window panes: bright by day, city lights at night. */
-export function Walls({ plan, day }: { plan: Plan; day: number }): React.JSX.Element {
+/** The floating deck: rounded slab, glowing hex seams, a light rim, and a glow underneath. */
+export function Deck({ plan, accent }: { plan: Plan; accent: string }): React.JSX.Element {
   const { min, max } = plan.bounds;
-  // One material for every pane, so day and night change them all.
-  const pane = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: '#05080f', roughness: 0.2 }),
-    [],
+  const w = max.x - min.x + 1;
+  const d = max.z - min.z + 1;
+  const cx = (min.x + max.x) / 2;
+  const cz = (min.z + max.z) / 2;
+  const { slab, rim, top, hex } = useMemo(() => {
+    const shape = roundedRect(w, d, 2.2);
+    const slab = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.5,
+      bevelEnabled: true,
+      bevelThickness: 0.08,
+      bevelSize: 0.08,
+      bevelSegments: 3,
+      curveSegments: 24,
+    });
+    const pts = shape.getSpacedPoints(160).map((p) => new THREE.Vector3(p.x, 0, p.y));
+    const rim = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 320, 0.035, 8, true);
+    const top = new THREE.ShapeGeometry(shape, 24);
+    const hex = hexTexture();
+    hex?.repeat.set(w / 3.2, d / 3.2);
+    // ShapeGeometry UVs are in metres: scale them to 0..1 so the repeat above means tiles per deck.
+    const uv = top.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++)
+      uv.setXY(i, (uv.getX(i) + w / 2) / w, (uv.getY(i) + d / 2) / d);
+    return { slab, rim, top, hex };
+  }, [w, d]);
+  useEffect(
+    () => () => {
+      slab.dispose();
+      rim.dispose();
+      top.dispose();
+      hex?.dispose();
+    },
+    [slab, rim, top, hex],
   );
-  useEffect(() => () => pane.dispose(), [pane]);
-  useLayoutEffect(() => {
-    pane.emissive.set(new THREE.Color('#0b1a33').lerp(new THREE.Color('#9fd3ff'), day));
-    pane.emissiveIntensity = 0.35 + day * 0.9;
-  }, [day, pane]);
-  const backW = max.x - min.x;
-  const sideD = max.z - min.z;
-  const panes = Math.max(3, Math.floor(backW / 3));
+  const seams = useRef<THREE.MeshStandardMaterial>(null);
+  useFrame(({ clock }) => {
+    if (seams.current)
+      seams.current.emissiveIntensity = 0.55 + Math.sin(clock.elapsedTime * 0.8) * 0.12;
+  });
   return (
-    <group>
+    <group position={[cx, DECK_Y, cz]}>
+      {/* the slab: extruded down from the top face */}
       <mesh
-        geometry={GEO.box}
-        material={mat('#111a2b')}
-        position={[(min.x + max.x) / 2, 1.3, min.z]}
-        scale={[backW, 2.6, 0.12]}
+        geometry={slab}
+        material={mat('#0a0f1a', { metalness: 0.6, roughness: 0.45 })}
+        rotation-x={Math.PI / 2}
+        position={[0, -0.02, 0]}
+        receiveShadow
       />
-      <mesh
-        geometry={GEO.box}
-        material={mat('#111a2b')}
-        position={[min.x, 1.3, (min.z + max.z) / 2]}
-        scale={[0.12, 2.6, sideD]}
-      />
-      {Array.from({ length: panes }, (_, i) => (
-        <mesh
-          key={i}
-          geometry={GEO.plane}
-          position={[min.x + ((i + 0.5) * backW) / panes, 1.5, min.z + 0.07]}
-          scale={[(backW / panes) * 0.8, 1.3, 1]}
-          material={pane}
+      <mesh geometry={top} rotation-x={-Math.PI / 2} position={[0, 0.001, 0]} receiveShadow>
+        <meshStandardMaterial
+          ref={seams}
+          color="#04070d"
+          metalness={0.4}
+          roughness={0.5}
+          emissive={accent}
+          emissiveMap={hex}
+          emissiveIntensity={0.55}
         />
-      ))}
+      </mesh>
+      <mesh geometry={rim} position={[0, 0.03, 0]} material={glowMat(accent, 0.95)} />
+      <mesh geometry={rim} position={[0, -0.6, 0]} material={glowMat(accent, 0.35)} />
+      {/* hover glow under the deck */}
+      <mesh
+        geometry={GEO.plane}
+        rotation-x={-Math.PI / 2}
+        position={[0, -1.4, 0]}
+        scale={[w * 1.3, d * 1.3, 1]}
+      >
+        <meshBasicMaterial
+          map={sharedGlow()}
+          color={accent}
+          transparent
+          opacity={0.22}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
     </group>
   );
 }
 
-/** Every desk and chair as two instanced meshes: a big team costs two draw calls, not hundreds. */
-export function Desks({ plan, count }: { plan: Plan; count: number }): React.JSX.Element {
-  const tops = useRef<THREE.InstancedMesh>(null);
-  const chairs = useRef<THREE.InstancedMesh>(null);
-  const dividers = useRef<THREE.InstancedMesh>(null);
-  const pods = Math.ceil(count / 4);
-  useLayoutEffect(() => {
-    const o = new THREE.Object3D();
-    for (let i = 0; i < count; i++) {
-      const s = deskSpot(i, plan);
-      o.position.set(s.desk.x, DESK_TOP, s.desk.z);
-      o.rotation.set(0, 0, 0);
-      o.scale.set(1.5, 0.06, 0.78);
-      o.updateMatrix();
-      tops.current?.setMatrixAt(i, o.matrix);
-      o.position.set(s.chair.x, 0.42, s.chair.z);
-      o.rotation.set(0, s.facing, 0);
-      o.scale.set(0.46, 0.08, 0.46);
-      o.updateMatrix();
-      chairs.current?.setMatrixAt(i, o.matrix);
-    }
-    for (let p = 0; p < pods; p++) {
-      const a = deskSpot(p * 4, plan);
-      o.position.set(
-        a.desk.x + 0.9,
-        DESK_TOP + 0.22,
-        (a.desk.z + deskSpot(p * 4 + 2, plan).desk.z) / 2,
+/** Stars around the deck and motes drifting up over it. */
+export function Atmosphere({
+  plan,
+  accent,
+  motes,
+}: {
+  plan: Plan;
+  accent: string;
+  motes: boolean;
+}): React.JSX.Element {
+  const c = plan.bounds.centre;
+  const { stars, dust } = useMemo(() => {
+    const n = 900;
+    const a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const u = Math.random() * Math.PI * 2;
+      const v = Math.acos(2 * Math.random() - 1);
+      const r = 60 + Math.random() * 60;
+      a.set(
+        [Math.sin(v) * Math.cos(u) * r, Math.cos(v) * r * 0.6 - 10, Math.sin(v) * Math.sin(u) * r],
+        i * 3,
       );
-      o.rotation.set(0, 0, 0);
-      o.scale.set(3.4, 0.38, 0.04);
-      o.updateMatrix();
-      dividers.current?.setMatrixAt(p, o.matrix);
     }
-    for (const m of [tops.current, chairs.current, dividers.current])
-      if (m) m.instanceMatrix.needsUpdate = true;
-  }, [plan, count, pods]);
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(a, 3));
+    const stars = new THREE.Points(
+      sg,
+      new THREE.PointsMaterial({
+        color: '#cfe8ff',
+        size: 0.35,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false,
+        fog: false,
+      }),
+    );
+    const m = 160;
+    const b = new Float32Array(m * 3);
+    const span = Math.max(
+      plan.bounds.max.x - plan.bounds.min.x,
+      plan.bounds.max.z - plan.bounds.min.z,
+    );
+    for (let i = 0; i < m; i++)
+      b.set([(Math.random() - 0.5) * span, Math.random() * 4, (Math.random() - 0.5) * span], i * 3);
+    const dg = new THREE.BufferGeometry();
+    dg.setAttribute('position', new THREE.BufferAttribute(b, 3));
+    const dust = new THREE.Points(
+      dg,
+      new THREE.PointsMaterial({
+        color: accent,
+        size: 0.05,
+        transparent: true,
+        opacity: 0.7,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        map: sharedGlow(),
+      }),
+    );
+    return { stars, dust };
+  }, [plan, accent]);
+  useEffect(
+    () => () => {
+      for (const p of [stars, dust]) {
+        p.geometry.dispose();
+        (p.material as THREE.Material).dispose();
+      }
+    },
+    [stars, dust],
+  );
+  useFrame((_, dt) => {
+    stars.rotation.y += dt * 0.004;
+    if (!motes) return;
+    const pos = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      let y = pos.getY(i) + dt * 0.18;
+      if (y > 4) y = 0;
+      pos.setY(i, y);
+    }
+    pos.needsUpdate = true;
+  });
   return (
     <group>
-      <instancedMesh
-        ref={tops}
-        args={[GEO.box, mat('#1c2638', { roughness: 0.4, metalness: 0.3 }), Math.max(count, 1)]}
-        count={count}
-      />
-      <instancedMesh
-        ref={chairs}
-        args={[GEO.box, mat('#2a3347', { roughness: 0.8 }), Math.max(count, 1)]}
-        count={count}
-      />
-      <instancedMesh ref={dividers} args={[GEO.box, GLASS, Math.max(pods, 1)]} count={pods} />
+      <primitive object={stars} position={[c.x, 0, c.z]} />
+      {motes && <primitive object={dust} position={[c.x, 0, c.z]} />}
     </group>
   );
 }
 
-/** One monitor, driven by its NPC's state. */
-export function Monitor({
+/** Work islands: a ring desk with a glowing rim, a hologram projector at the centre, hover stools. */
+export function Islands({
+  plan,
+  count,
+  accent,
+}: {
+  plan: Plan;
+  count: number;
+  accent: string;
+}): React.JSX.Element {
+  const pods = Math.ceil(count / 4);
+  const holos = useRef<Array<THREE.Mesh | null>>([]);
+  useFrame((_, dt) => {
+    for (const h of holos.current) if (h) h.rotation.y += dt * 0.6;
+  });
+  return (
+    <group>
+      {Array.from({ length: pods }, (_, p) => {
+        const c = podCentre(p, plan);
+        return (
+          <group key={p} position={[c.x, 0, c.z]}>
+            <mesh
+              geometry={GEO2.ringDesk}
+              material={mat('#121a2a', { metalness: 0.55, roughness: 0.25 })}
+              position={[0, 0.7, 0]}
+              castShadow
+              receiveShadow
+            />
+            <mesh
+              geometry={GEO2.torus}
+              material={glowMat(accent, 0.85)}
+              rotation-x={Math.PI / 2}
+              position={[0, 0.77, 0]}
+              scale={[0.98, 0.98, 1]}
+            />
+            <mesh
+              geometry={GEO.cylinder}
+              material={mat('#0c1220', { metalness: 0.7, roughness: 0.3 })}
+              position={[0, 0.35, 0]}
+              scale={[0.07, 0.7, 0.07]}
+            />
+            <mesh
+              geometry={GEO.cylinder}
+              material={mat('#0c1220', { metalness: 0.7, roughness: 0.3 })}
+              position={[0, 0.74, 0]}
+              scale={[0.22, 0.06, 0.22]}
+            />
+            <mesh
+              geometry={GEO.cylinder}
+              position={[0, 0.98, 0]}
+              scale={[0.2, 0.42, 0.2]}
+              material={glowMat(accent, 0.12)}
+            />
+            <mesh
+              ref={(m) => void (holos.current[p] = m)}
+              geometry={GEO2.octa}
+              position={[0, 1.22, 0]}
+              scale={0.13}
+            >
+              <meshBasicMaterial
+                color={accent}
+                wireframe
+                transparent
+                opacity={0.9}
+                blending={THREE.AdditiveBlending}
+              />
+            </mesh>
+          </group>
+        );
+      })}
+      {Array.from({ length: count }, (_, d) => {
+        const s = deskSpot(d, plan);
+        return (
+          <group key={d} position={[s.chair.x, 0, s.chair.z]}>
+            <mesh
+              geometry={GEO.cylinder}
+              material={mat('#1d2740', { metalness: 0.4, roughness: 0.4 })}
+              position={[0, SEAT_TOP, 0]}
+              scale={[0.22, 0.06, 0.22]}
+              castShadow
+            />
+            <mesh
+              geometry={GEO.plane}
+              rotation-x={-Math.PI / 2}
+              position={[0, 0.02, 0]}
+              scale={0.7}
+            >
+              <meshBasicMaterial
+                map={sharedGlow()}
+                color={accent}
+                transparent
+                opacity={0.25}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+              />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+/** A curved holo-screen in front of a seat: scrolls code while its NPC works. */
+export function HoloScreen({
   plan,
   desk,
   color,
@@ -144,49 +331,46 @@ export function Monitor({
 }): React.JSX.Element {
   const s = deskSpot(desk, plan);
   const tex = useMemo(() => codeTexture(desk + 1), [desk]);
-  const screen = useRef<THREE.MeshStandardMaterial>(null);
+  useEffect(() => () => tex?.dispose(), [tex]);
+  const m = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        map: tex,
+        color: color ?? '#000000',
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    [tex, color],
+  );
+  useEffect(() => () => m.dispose(), [m]);
+  const edge = useMemo(() => newGlowMat(color ?? '#000000', 0), [color]);
+  useEffect(() => () => edge.dispose(), [edge]);
   useFrame((_, dt) => {
-    const m = screen.current;
-    if (!m) return;
     const working = state === 'working';
-    if (working && tex) tex.offset.y = (tex.offset.y + dt * 0.12) % 1;
+    if (working && tex) tex.offset.y = (tex.offset.y + dt * 0.14) % 1;
     const target =
-      !color || state === 'off' ? 0 : working ? 1.6 : state === 'meeting' ? 0.15 : 0.45;
-    m.emissiveIntensity += (target - m.emissiveIntensity) * Math.min(1, dt * 4);
+      !color || state === 'off' ? 0 : working ? 0.95 : state === 'meeting' ? 0.12 : 0.35;
+    m.opacity += (target - m.opacity) * Math.min(1, dt * 4);
+    edge.opacity = m.opacity * 0.9;
   });
-  // The screen faces the chair: back row screens face -z, front row +z.
-  const towardsChair = s.facing === 0 ? Math.PI : 0;
-  const dz = s.facing === 0 ? 0.12 : -0.12;
   return (
-    <group position={[s.desk.x, DESK_TOP, s.desk.z + dz]} rotation-y={towardsChair}>
+    <group position={[s.chair.x, 1.02, s.chair.z]} rotation-y={s.facing}>
+      <mesh geometry={GEO2.screen} material={m} />
       <mesh
         geometry={GEO.box}
-        material={mat('#0d131f')}
-        position={[0, 0.08, 0]}
-        scale={[0.06, 0.16, 0.06]}
+        material={edge}
+        position={[0, -0.19, 0.6]}
+        scale={[0.5, 0.012, 0.012]}
       />
-      <mesh
-        geometry={GEO.box}
-        material={mat('#0d131f', { metalness: 0.4 })}
-        position={[0, 0.33, 0]}
-        scale={[0.66, 0.4, 0.035]}
-      />
-      <mesh geometry={GEO.plane} position={[0, 0.33, 0.019]} scale={[0.6, 0.34, 1]}>
-        <meshStandardMaterial
-          ref={screen}
-          color="#02040a"
-          emissive={color ?? '#000000'}
-          emissiveMap={tex}
-          emissiveIntensity={0}
-          roughness={0.3}
-        />
-      </mesh>
     </group>
   );
 }
 
-/** The glass meeting room: four walls with a door gap, a round table and stools. */
-export function MeetingRoom({
+/** The war-room: a glowing floor ring, a wire dome, a round table with a hologram over it in session. */
+export function WarRoom({
   plan,
   active,
   accent,
@@ -195,87 +379,117 @@ export function MeetingRoom({
   active: boolean;
   accent: string;
 }): React.JSX.Element {
-  const { x0, z0, size, table, tableR, door } = plan.room;
-  const h = 2.4;
-  const ring = useRef<THREE.MeshStandardMaterial>(null);
-  useFrame(({ clock }) => {
+  const { table, tableR, size } = plan.room;
+  const R = size / 2;
+  const globe = useRef<THREE.Group>(null);
+  const ring = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame(({ clock }, dt) => {
+    if (globe.current) {
+      globe.current.rotation.y += dt * (active ? 0.8 : 0.2);
+      const k = active ? 1 : 0.35;
+      globe.current.scale.setScalar(
+        globe.current.scale.x + (k - globe.current.scale.x) * Math.min(1, dt * 3),
+      );
+    }
     if (ring.current)
-      ring.current.emissiveIntensity = active
-        ? 1.2 + Math.sin(clock.elapsedTime * 2.4) * 0.5
-        : 0.25;
+      ring.current.opacity = active ? 0.7 + Math.sin(clock.elapsedTime * 3) * 0.25 : 0.35;
   });
-  const gap = 1.2;
-  const leftA = door.z - gap / 2 - z0;
-  const leftB = z0 + size - (door.z + gap / 2);
   return (
-    <group>
-      {/* walls: back, front, right, and the left one split around the door */}
-      <mesh
-        geometry={GEO.box}
-        material={GLASS}
-        position={[x0 + size / 2, h / 2, z0]}
-        scale={[size, h, 0.05]}
-      />
-      <mesh
-        geometry={GEO.box}
-        material={GLASS}
-        position={[x0 + size / 2, h / 2, z0 + size]}
-        scale={[size, h, 0.05]}
-      />
-      <mesh
-        geometry={GEO.box}
-        material={GLASS}
-        position={[x0 + size, h / 2, z0 + size / 2]}
-        scale={[0.05, h, size]}
-      />
-      <mesh
-        geometry={GEO.box}
-        material={GLASS}
-        position={[x0, h / 2, z0 + leftA / 2]}
-        scale={[0.05, h, leftA]}
-      />
-      <mesh
-        geometry={GEO.box}
-        material={GLASS}
-        position={[x0, h / 2, z0 + size - leftB / 2]}
-        scale={[0.05, h, leftB]}
-      />
+    <group position={[table.x, 0, table.z]}>
       <mesh
         geometry={GEO.cylinder}
-        material={mat('#1a2436', { roughness: 0.35, metalness: 0.4 })}
-        position={[table.x, 0.72, table.z]}
-        scale={[tableR, 0.06, tableR]}
+        material={mat('#0b1120', { metalness: 0.7, roughness: 0.3 })}
+        position={[0, 0.03, 0]}
+        scale={[R, 0.06, R]}
+        receiveShadow
       />
       <mesh
-        geometry={GEO.cylinder}
-        material={mat('#0f1726')}
-        position={[table.x, 0.36, table.z]}
-        scale={[0.18, 0.72, 0.18]}
-      />
-      <mesh
-        position={[table.x, 0.755, table.z]}
-        rotation-x={-Math.PI / 2}
-        scale={[tableR * 1.6, tableR * 1.6, 1]}
-        geometry={GEO.ring}
+        geometry={GEO2.torus}
+        rotation-x={Math.PI / 2}
+        position={[0, 0.07, 0]}
+        scale={[R, R, 2]}
       >
-        <meshStandardMaterial
+        <meshBasicMaterial
           ref={ring}
-          color="#000000"
-          emissive={accent}
-          emissiveIntensity={0.25}
+          color={accent}
           transparent
-          opacity={0.9}
+          opacity={0.35}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
         />
       </mesh>
+      <mesh geometry={GEO2.dome} position={[0, 0.06, 0]} scale={[R, R * 0.85, R]}>
+        <meshBasicMaterial
+          color={accent}
+          wireframe
+          transparent
+          opacity={0.07}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh
+        geometry={GEO.cylinder}
+        material={mat('#121a2a', { metalness: 0.6, roughness: 0.22 })}
+        position={[0, 0.72, 0]}
+        scale={[tableR, 0.07, tableR]}
+        castShadow
+        receiveShadow
+      />
+      <mesh
+        geometry={GEO2.torus}
+        material={glowMat(accent, 0.9)}
+        rotation-x={Math.PI / 2}
+        position={[0, 0.76, 0]}
+        scale={[tableR, tableR, 1]}
+      />
+      <mesh
+        geometry={GEO.cylinder}
+        material={mat('#0c1220', { metalness: 0.7 })}
+        position={[0, 0.36, 0]}
+        scale={[0.2, 0.72, 0.2]}
+      />
+      <group ref={globe} position={[0, 1.5, 0]}>
+        <mesh geometry={GEO.sphere} scale={0.42}>
+          <meshBasicMaterial
+            color={accent}
+            wireframe
+            transparent
+            opacity={0.55}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+        <mesh
+          geometry={GEO2.thinTorus}
+          rotation-x={Math.PI / 2}
+          scale={0.6}
+          material={glowMat(accent, 0.9)}
+        />
+        <mesh
+          geometry={GEO2.thinTorus}
+          rotation-x={1.1}
+          rotation-y={0.5}
+          scale={0.68}
+          material={glowMat(accent, 0.6)}
+        />
+      </group>
+      <mesh
+        geometry={GEO.cylinder}
+        position={[0, 1.1, 0]}
+        scale={[0.35, 0.7, 0.35]}
+        material={glowMat(accent, active ? 0.1 : 0.03)}
+      />
       {Array.from({ length: 8 }, (_, i) => {
         const s = seatAt(i, 8, plan);
         return (
           <mesh
             key={i}
             geometry={GEO.cylinder}
-            material={mat('#2a3347')}
-            position={[s.x, 0.42, s.z]}
-            scale={[0.22, 0.08, 0.22]}
+            material={mat('#1d2740', { metalness: 0.4, roughness: 0.4 })}
+            position={[s.x - table.x, SEAT_TOP, s.z - table.z]}
+            scale={[0.22, 0.06, 0.22]}
+            castShadow
           />
         );
       })}
@@ -283,8 +497,8 @@ export function MeetingRoom({
   );
 }
 
-/** Jarvis's core: a pedestal with a slowly turning lattice around a glowing heart. */
-export function Core({
+/** Jarvis's arc reactor: a hex pedestal, three spinning rings, a blazing heart and a beam of light. */
+export function Reactor({
   plan,
   accent,
   busy,
@@ -293,63 +507,129 @@ export function Core({
   accent: string;
   busy: boolean;
 }): React.JSX.Element {
-  const lattice = useRef<THREE.Mesh>(null);
-  const heart = useRef<THREE.MeshStandardMaterial>(null);
+  const rings = useRef<Array<THREE.Mesh | null>>([]);
+  const heart = useRef<THREE.Mesh>(null);
   useFrame(({ clock }, dt) => {
-    if (lattice.current) {
-      lattice.current.rotation.y += dt * (busy ? 1.2 : 0.35);
-      lattice.current.rotation.x += dt * 0.15;
-    }
+    const speed = busy ? 2.2 : 0.7;
+    const [a, b, c] = rings.current;
+    if (a) a.rotation.x += dt * speed;
+    if (b) b.rotation.y += dt * speed * 0.8;
+    if (c) c.rotation.z += dt * speed * 1.2;
     if (heart.current)
-      heart.current.emissiveIntensity =
-        (busy ? 2.4 : 1.4) + Math.sin(clock.elapsedTime * (busy ? 5 : 1.6)) * 0.4;
+      heart.current.scale.setScalar(0.26 + Math.sin(clock.elapsedTime * (busy ? 6 : 2)) * 0.03);
   });
   const { x, z } = plan.core;
   return (
     <group position={[x, 0, z]}>
       <mesh
-        geometry={GEO.cylinder}
-        material={mat('#141d2e', { metalness: 0.6, roughness: 0.3 })}
-        position={[0, 0.25, 0]}
-        scale={[0.9, 0.5, 0.9]}
+        geometry={GEO2.hexagon}
+        material={mat('#0c1220', { metalness: 0.8, roughness: 0.25 })}
+        position={[0, 0.18, 0]}
+        scale={[1, 0.36, 1]}
+        castShadow
+        receiveShadow
       />
       <mesh
-        geometry={GEO.cylinder}
-        material={mat('#0b111c', { emissive: accent, emissiveIntensity: 0.6 })}
-        position={[0, 0.51, 0]}
-        scale={[0.75, 0.02, 0.75]}
+        geometry={GEO2.hexagon}
+        material={glowMat(accent, 0.3)}
+        position={[0, 0.37, 0]}
+        scale={[0.92, 0.01, 0.92]}
       />
-      <mesh geometry={GEO.sphere} position={[0, 1.35, 0]} scale={0.28}>
-        <meshStandardMaterial
-          ref={heart}
-          color="#000000"
-          emissive={accent}
-          emissiveIntensity={1.4}
-        />
-      </mesh>
-      <mesh ref={lattice} geometry={GEO.ico} position={[0, 1.35, 0]} scale={0.55}>
-        <meshStandardMaterial
+      <group position={[0, 1.45, 0]}>
+        <mesh ref={heart} geometry={GEO.sphere} scale={0.26}>
+          <meshBasicMaterial color="#ffffff" />
+        </mesh>
+        <mesh geometry={GEO.sphere} scale={0.42} material={glowMat(accent, 0.35)} />
+        {[0.6, 0.78, 0.96].map((r, i) => (
+          <mesh
+            key={r}
+            ref={(m) => void (rings.current[i] = m)}
+            geometry={GEO2.torus}
+            scale={[r, r, 1.4]}
+            rotation={[i * 0.9, i * 0.5, 0]}
+            material={glowMat(accent, 0.9 - i * 0.15)}
+          />
+        ))}
+      </group>
+      <mesh
+        geometry={GEO.cylinder}
+        position={[0, 4.5, 0]}
+        scale={[0.08, 9, 0.08]}
+        material={glowMat(accent, 0.25)}
+      />
+      <mesh geometry={GEO.plane} rotation-x={-Math.PI / 2} position={[0, 0.39, 0]} scale={3}>
+        <meshBasicMaterial
+          map={sharedGlow()}
           color={accent}
-          emissive={accent}
-          emissiveIntensity={0.5}
-          wireframe
           transparent
-          opacity={0.7}
+          opacity={0.28}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
         />
       </mesh>
-      <pointLight color={accent} intensity={busy ? 6 : 3} distance={6} position={[0, 1.4, 0]} />
+      <pointLight color={accent} intensity={busy ? 9 : 5} distance={8} position={[0, 1.5, 0]} />
     </group>
   );
 }
 
-/** A few plants so it feels lived in. */
+/** The lounge: a glowing ring rug, two curved sofas, a round table and a floor lamp. */
+export function Lounge({ plan, accent }: { plan: Plan; accent: string }): React.JSX.Element {
+  const { centre, d } = plan.lounge;
+  const sofa = useMemo(() => new THREE.TorusGeometry(1.0, 0.2, 12, 32, Math.PI * 0.6), []);
+  useEffect(() => () => sofa.dispose(), [sofa]);
+  const R = Math.min(d / 2, 1.7);
+  return (
+    <group position={[centre.x, 0, centre.z]}>
+      <mesh
+        geometry={GEO.cylinder}
+        material={mat('#0e1626', { roughness: 0.95 })}
+        position={[0, 0.012, 0]}
+        scale={[R, 0.02, R]}
+        receiveShadow
+      />
+      <mesh
+        geometry={GEO2.torus}
+        rotation-x={Math.PI / 2}
+        position={[0, 0.03, 0]}
+        scale={[R, R, 1]}
+        material={glowMat(accent, 0.6)}
+      />
+      {[0, Math.PI].map((rot) => (
+        <mesh
+          key={rot}
+          geometry={sofa}
+          material={mat('#2a2f52', { roughness: 0.85 })}
+          rotation={[-Math.PI / 2, 0, rot + Math.PI * 0.19]}
+          position={[0, 0.3, 0]}
+          castShadow
+        />
+      ))}
+      <mesh
+        geometry={GEO.cylinder}
+        material={mat('#1a2436', { metalness: 0.6, roughness: 0.2 })}
+        position={[0, 0.34, 0]}
+        scale={[0.45, 0.05, 0.45]}
+        castShadow
+      />
+      <mesh
+        geometry={GEO2.torus}
+        material={glowMat('#ffd9a0', 0.8)}
+        rotation-x={Math.PI / 2}
+        position={[0, 0.37, 0]}
+        scale={[0.45, 0.45, 1]}
+      />
+    </group>
+  );
+}
+
+/** Stylised plants: a pot and round glowing-tipped foliage. */
 export function Plants({ plan }: { plan: Plan }): React.JSX.Element {
   const { min, max } = plan.bounds;
   const spots: Array<[number, number]> = [
-    [min.x + 0.6, min.z + 0.6],
-    [plan.room.x0 - 0.6, min.z + 0.6],
-    [min.x + 0.6, max.z - 0.6],
-    [max.x - 0.6, max.z - 0.6],
+    [min.x + 0.9, min.z + 0.9],
+    [plan.room.x0 - 0.9, min.z + 0.9],
+    [min.x + 0.9, max.z - 0.9],
+    [max.x - 0.9, max.z - 0.9],
   ];
   return (
     <group>
@@ -357,99 +637,29 @@ export function Plants({ plan }: { plan: Plan }): React.JSX.Element {
         <group key={`${x}-${z}`} position={[x, 0, z]}>
           <mesh
             geometry={GEO.cylinder}
-            material={mat('#3a2f2a')}
-            position={[0, 0.2, 0]}
-            scale={[0.22, 0.4, 0.22]}
-          />
-          <mesh
-            geometry={GEO.ico}
-            material={mat('#1f7a4d', { roughness: 0.8 })}
-            position={[0, 0.75, 0]}
-            scale={[0.42, 0.55, 0.42]}
-          />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-/** The lounge: a rug, two sofas round a coffee table, and a floor lamp. */
-export function Lounge({ plan, accent }: { plan: Plan; accent: string }): React.JSX.Element {
-  const { centre, w, d } = plan.lounge;
-  const sofa = mat('#283247', { roughness: 0.9 });
-  const cushion = mat('#323d55', { roughness: 0.95 });
-  return (
-    <group position={[centre.x, 0, centre.z]}>
-      <mesh
-        geometry={GEO.plane}
-        rotation-x={-Math.PI / 2}
-        position={[0, 0.01, 0]}
-        scale={[w, d, 1]}
-      >
-        <meshStandardMaterial color={accent} transparent opacity={0.08} roughness={1} />
-      </mesh>
-      {[-1, 1].map((side) => (
-        <group
-          key={side}
-          position={[0, 0, side * (d / 2 - 0.55)]}
-          rotation-y={side > 0 ? Math.PI : 0}
-        >
-          <mesh
-            geometry={GEO.box}
-            material={sofa}
+            material={mat('#141b2c', { metalness: 0.5, roughness: 0.4 })}
             position={[0, 0.22, 0]}
-            scale={[2.2, 0.44, 0.8]}
+            scale={[0.26, 0.44, 0.26]}
+            castShadow
           />
-          <mesh
-            geometry={GEO.box}
-            material={cushion}
-            position={[0, 0.5, -0.32]}
-            scale={[2.2, 0.55, 0.18]}
-          />
-          <mesh
-            geometry={GEO.box}
-            material={sofa}
-            position={[-1.15, 0.4, 0]}
-            scale={[0.14, 0.36, 0.8]}
-          />
-          <mesh
-            geometry={GEO.box}
-            material={sofa}
-            position={[1.15, 0.4, 0]}
-            scale={[0.14, 0.36, 0.8]}
-          />
+          {(
+            [
+              [0, 0.85, 0, 0.36],
+              [0.18, 0.7, 0.1, 0.24],
+              [-0.15, 0.75, -0.12, 0.26],
+            ] as const
+          ).map(([px, py, pz, r]) => (
+            <mesh key={`${px}`} geometry={GEO.sphere} position={[px, py, pz]} scale={r} castShadow>
+              <meshStandardMaterial
+                color="#0f5132"
+                roughness={0.6}
+                emissive="#34d399"
+                emissiveIntensity={0.25}
+              />
+            </mesh>
+          ))}
         </group>
       ))}
-      <mesh
-        geometry={GEO.cylinder}
-        material={mat('#1a2436', { metalness: 0.4, roughness: 0.3 })}
-        position={[0, 0.36, 0]}
-        scale={[0.6, 0.04, 0.6]}
-      />
-      <mesh
-        geometry={GEO.cylinder}
-        material={mat('#0f1726')}
-        position={[0, 0.18, 0]}
-        scale={[0.08, 0.36, 0.08]}
-      />
-      <mesh
-        geometry={GEO.cylinder}
-        material={mat('#e7ecf5', { roughness: 0.4 })}
-        position={[0.15, 0.43, 0.05]}
-        scale={[0.05, 0.1, 0.05]}
-      />
-      <group position={[w / 2 - 0.3, 0, 0]}>
-        <mesh
-          geometry={GEO.cylinder}
-          material={mat('#0f1726')}
-          position={[0, 0.8, 0]}
-          scale={[0.025, 1.6, 0.025]}
-        />
-        <mesh geometry={GEO.sphere} position={[0, 1.65, 0]} scale={0.14}>
-          <meshStandardMaterial color="#000000" emissive="#ffd9a0" emissiveIntensity={1.6} />
-        </mesh>
-        <pointLight color="#ffd9a0" intensity={2.5} distance={4} position={[0, 1.5, 0]} />
-      </group>
     </group>
   );
 }
