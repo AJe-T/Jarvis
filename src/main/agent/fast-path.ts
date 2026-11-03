@@ -48,6 +48,25 @@ export function ruleMatch(raw: string): DirectAction | null {
   return null;
 }
 
+/**
+ * Forge F9: "Jarvis, learn to …", "teach yourself …", "use Forge to …", "Forge: …" go straight to the
+ * Forge desk (forge_chat relays Sir's own words, so nothing Jarvis knows goes with them). Before, the
+ * orchestrator prompt alone decided, and a voice request could end anywhere. Checked even when the fast
+ * path is off: it is routing, not a PC command, and the desk still asks before anything runs.
+ */
+const FORGE_INTENT =
+  /^(?:i (?:want|need) you to\s+)?(?:learn (?:how )?to|teach yourself(?: how)?(?: to)?|use forge to|ask forge to|tell forge to)\s+\S/;
+const FORGE_PREFIX = /^\s*(?:(?:hey|ok|okay)\s+)?(?:jarvis[\s,]*)?forge\s*[:,]\s*\S/i;
+
+export function forgeMatch(raw: string): DirectAction | null {
+  if (!FORGE_PREFIX.test(raw) && !FORGE_INTENT.test(normalizePhrase(raw))) return null;
+  return {
+    tool: 'forge_chat',
+    input: {},
+    ack: 'Over to Forge, sir. The Forge desk is answering on the Forge page.',
+  };
+}
+
 /** "What is 2+2?" → the calculator beside the orb with the sum worked out, and the answer said. */
 export function mathMatch(raw: string): DirectAction | null {
   const expression = mathQuestion(raw);
@@ -107,7 +126,6 @@ export function createFastPath(deps: {
   const log = deps.logger.child({ module: 'fast-path' });
   return async function fastPath(said: string): Promise<DirectAction | null> {
     const mode = deps.mode();
-    if (mode === 'off') return null;
     const name = deps.assistantName?.().trim().toLowerCase();
     const text =
       name && said.trim().toLowerCase().startsWith(name)
@@ -116,6 +134,12 @@ export function createFastPath(deps: {
             .slice(name.length)
             .replace(/^[\s,.!:-]+/, '')
         : said;
+    const forge = forgeMatch(text);
+    if (forge) {
+      log.info({ tool: forge.tool, by: 'forge' }, 'fast path');
+      return forge;
+    }
+    if (mode === 'off') return null;
     const rule = mathMatch(text) ?? ruleMatch(text);
     if (rule) {
       log.info({ tool: rule.tool, by: 'rules' }, 'fast path');

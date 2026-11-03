@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { FORGE_REPO_RE } from '@shared/forge';
-import { defineTool, fail, ok, type Tool } from '../tools/types';
+import { defineTool, fail, ok, type Tool, type ToolContext } from '../tools/types';
 import type { ConfirmDetails } from '../tools/types';
 import { describeRun, type Forge, type ForgeRun } from './forge';
 import { isProtected } from './protected';
@@ -68,8 +68,7 @@ export function approvalDetails(r: ForgeRun | null, runId: string): Partial<Conf
       `Claude cost: about $${(r.costUsd ?? 0).toFixed(2)}. Run ${r.id}, branch ${r.branch ?? ''}, commit ${(r.head ?? '').slice(0, 10)}. Forge also adds the version bump and, if missing, a BIBLE row; if ${BASE_BRANCH} moved meanwhile, a merge commit.`,
     ].join('\n\n'),
     detailsKind: 'text',
-    purpose:
-      `Forge bumps the version, builds the installer, backs up your data, merges into ${BASE_BRANCH}, tags it and pushes to GitHub. It never installs: you run the installer.`,
+    purpose: `Forge bumps the version, builds the installer, backs up your data, merges into ${BASE_BRANCH}, tags it and pushes to GitHub. It never installs: you run the installer.`,
   };
 }
 
@@ -82,6 +81,11 @@ export function createForgeTools(deps: {
   repoUrl(): string;
   setRepoUrl(url: string): void;
   budgetUsd(): number;
+  /**
+   * F9: a reason to refuse starting a build from this conversation, or null. Only the Forge desk starts
+   * builds, so a goal is never text Jarvis wrote with his memories in context (rule 2026-11-03).
+   */
+  refuseStart?(ctx: ToolContext): string | null;
   now?: () => number;
 }): Tool[] {
   const now = deps.now ?? Date.now;
@@ -110,7 +114,7 @@ export function createForgeTools(deps: {
     defineTool({
       name: 'forge_start',
       description:
-        "Build a change to Jarvis itself with Forge: Claude Code works headless in Forge's own copy of the source on a new branch, with file tools only, then every check runs (protected files, typecheck, lint, related and full tests, build, e2e, secret scan). Takes from minutes to an hour; sir is told when it ends. Agree the goal with sir first and write it completely: what to build, how it should behave, edge cases. allowProtected: protected files sir explicitly approved by name for this run (normally empty). One run at a time.",
+        "Build a change to Jarvis itself with Forge: Claude Code works headless in Forge's own copy of the source on a new branch, with file tools only, then every check runs (protected files, typecheck, lint, related and full tests, build, e2e, secret scan). Takes from minutes to an hour; sir is told when it ends. Agree the goal with sir first and write it completely: what to build, how it should behave, edge cases. allowProtected: protected files sir explicitly approved by name for this run (normally empty). One run at a time. Only the Forge desk (Sidebar → Forge chat) can start builds: anywhere else, call forge_chat instead.",
       input: z.object({
         goal: z.string().trim().min(20).max(6000),
         allowProtected: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
@@ -127,7 +131,9 @@ export function createForgeTools(deps: {
         purpose:
           "Claude Code edits files only in Forge's own copy and cannot run commands; Forge runs the checks. Nothing is installed or pushed.",
       }),
-      async run({ goal, allowProtected, studyApp }) {
+      async run({ goal, allowProtected, studyApp }, ctx) {
+        const refused = deps.refuseStart?.(ctx);
+        if (refused) return fail(refused);
         const notProtected = allowProtected.filter((p) => !isProtected(p));
         if (notProtected.length)
           return fail(
@@ -148,7 +154,7 @@ export function createForgeTools(deps: {
     defineTool({
       name: 'forge_build_tool',
       description:
-        "Build a new ability for Jarvis as a self-built tool, with no reinstall (Forge phase F3): Claude Code writes a small sandboxed Node.js tool (it can use the internet, read only its own folder and write only its data folder; no programs, no npm packages), tests it, and checks it loads. Prefer this over forge_start when the ability needs no change to Jarvis's own screens or core: fetching or converting data, calling a public API, calculations. Agree the goal with sir first and write it completely. Same name again updates that tool. Installing needs forge_install_tool after it passes.",
+        "Build a new ability for Jarvis as a self-built tool, with no reinstall (Forge phase F3): Claude Code writes a small sandboxed Node.js tool (it can use the internet, read only its own folder and write only its data folder; no programs, no npm packages), tests it, and checks it loads. Prefer this over forge_start when the ability needs no change to Jarvis's own screens or core: fetching or converting data, calling a public API, calculations. Agree the goal with sir first and write it completely. Same name again updates that tool. Installing needs forge_install_tool after it passes. Only the Forge desk (Sidebar → Forge chat) can start builds: anywhere else, call forge_chat instead.",
       input: z.object({
         name: z
           .string()
@@ -168,7 +174,9 @@ export function createForgeTools(deps: {
         purpose:
           'Claude Code writes the tool in its own folder and Forge tests it in a sandbox. Nothing is added to Jarvis until you install it.',
       }),
-      async run({ name, goal, studyApp }) {
+      async run({ name, goal, studyApp }, ctx) {
+        const refused = deps.refuseStart?.(ctx);
+        if (refused) return fail(refused);
         try {
           const r = deps.forge.start({ kind: 'tool', goal, name, studyApp });
           return Promise.resolve(

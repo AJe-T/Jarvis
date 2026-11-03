@@ -80,7 +80,7 @@ import {
 } from './claude-sessions/sessions';
 import { createClaudeSessionTools } from './claude-sessions/tools';
 import { runBoss } from './forge/boss';
-import { createForge } from './forge/forge';
+import { createForge, type ForgeRun } from './forge/forge';
 import { createForgeTools } from './forge/tools';
 import { createToolRunner, type McpAccess } from './forge/tool-build';
 import { nodeRunsTools } from './forge/tool-runtime';
@@ -527,7 +527,12 @@ export function createServices(opts: ServiceOptions) {
   const forgeDir = join(opts.userData, 'forge');
   /** Filled in by mcp/mcp-system.ts once the connections manager exists. */
   const forgeSlots: { mcp: McpAccess | null } = { mcp: null };
+  /** F9: the Forge page and the Forge chat follow runs live (index.ts adds them). */
+  const forgeListeners = new Set<(r: ForgeRun) => void>();
   const forge = createForge({
+    onUpdate: (r) => {
+      for (const l of forgeListeners) l(r);
+    },
     workspace: async () => {
       const node = await systemNode();
       if (!node)
@@ -603,6 +608,11 @@ export function createServices(opts: ServiceOptions) {
     repoUrl: () => settings.get('forge.repoUrl'),
     setRepoUrl: (url) => settings.set('forge.repoUrl', url),
     budgetUsd: () => settings.get('forge.budgetUsd'),
+    // F9: only the Forge desk starts builds, so a goal is never text written with Jarvis's memories.
+    refuseStart: (ctx) =>
+      conversations.get(ctx.conversationId)?.kind === 'forge'
+        ? null
+        : 'Only the Forge desk starts builds. Call forge_chat to hand sir\'s request to it.',
   }))
     registry.register(tool);
   // Jarvis Terminal (ADR-032): Sir's own commands, plus every script Jarvis runs.
@@ -875,6 +885,8 @@ export function createServices(opts: ServiceOptions) {
     appIndex,
     reminderListeners,
     announceListeners,
+    announce,
+    forgeListeners,
     sessionWatcher,
     remindersChangedListeners,
     confirmShowListeners,

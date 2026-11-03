@@ -592,6 +592,11 @@ export const SETTINGS = {
   'forge.budgetUsd': { schema: z.number().min(0.5).max(50), default: 5 },
   /** Forge F4: Claude hands small edits to free AIs (no-training ones first; the others only after Sir's yes). */
   'forge.freeWorkers': { schema: z.boolean(), default: true },
+  /** Forge F10: Forge's own notebooks (<vault>/Forge/Spaces), icon per space name. */
+  'forge.spaceIcons': {
+    schema: z.record(z.string().max(80), z.string().max(16)),
+    default: {} as Record<string, string>,
+  },
   /** Password manager: lock after this many idle minutes (0 = only when Sir locks it or Windows locks). */
   'passwords.autoLockMinutes': { schema: z.number().int().min(0).max(240), default: 5 },
   /** Copied passwords are wiped from the clipboard after this many seconds. */

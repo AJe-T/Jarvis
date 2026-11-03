@@ -66,9 +66,11 @@ export const HELP: Record<string, HelpEntry> = {
   },
   forge: {
     title: 'Forge',
-    what: 'Jarvis improving itself: a new tool (no reinstall) or a change to its own code, built and checked by your Claude Code in Forge’s own copy of the source. This page lists every run, what it cost and what shipped.',
+    what: 'Jarvis improving itself: a new tool (no reinstall) or a change to its own code, built and checked by your Claude Code in Forge’s own copy of the source. Chat with Forge here, follow each run live, and see what it cost and what shipped.',
     how: [
-      'Ask: Jarvis agrees the goal with you, then asks before it starts (budget per run in Settings, default $5 of Claude).',
+      'Chat: tell Forge what Jarvis should learn. It agrees the goal with you, then asks before it starts (budget per run in Settings, default $5 of Claude). Saying “Jarvis, learn to …” anywhere brings you here too.',
+      'While a run works, its steps show in the chat and on the card above it.',
+      'Memory: Forge keeps its own notes, a note per run, its notebooks and these chats in the Forge folder of your vault. Jarvis can read them; Forge can’t see your memory, Spaces or chats.',
       'A change that passes every check waits for you: say “approve it” to see the files and cost, then it builds the installer, backs up your data, merges and pushes. You run the installer yourself.',
       'Name an app, a website or a GitHub repo to build it like: Claude studies it first and writes our own version; copied code fails the run.',
       'Open a run for its checks, study notes, shipping steps, installer path and Claude’s summary.',

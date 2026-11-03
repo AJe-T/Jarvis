@@ -16,7 +16,11 @@ export interface ConversationRow {
   source: ConversationSource;
   is_private: number;
   vault_log_path: string | null;
+  /** 'chat' (Sir's chats), 'npc' (NPC work, migration 013) or 'forge' (the Forge desk, F9). */
+  kind?: ConversationKind;
 }
+
+export type ConversationKind = 'chat' | 'npc' | 'forge';
 
 export interface MessageRow {
   id: string;
@@ -59,7 +63,7 @@ export function createConversationsRepo(db: Db) {
     create(
       source: ConversationSource,
       isPrivate = false,
-      kind: 'chat' | 'npc' = 'chat',
+      kind: ConversationKind = 'chat',
     ): ConversationRow {
       const id = newId('c_');
       const now = nowIso();
@@ -73,7 +77,7 @@ export function createConversationsRepo(db: Db) {
 
     list(limit: number, beforeLastActive?: string): ConversationRow[] {
       const params: SqlValue[] = [];
-      // NPC work conversations (migration 013) hold tool calls and costs, not chats with Sir.
+      // NPC work (migration 013) and Forge desk conversations hold tool calls and costs, not chats with Sir.
       let where = "WHERE kind = 'chat'";
       if (beforeLastActive) {
         where += ' AND last_active_at < ?';

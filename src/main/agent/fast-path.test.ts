@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { logger } from '../logging/logger';
-import { LAYA_ACTIONS, createFastPath, mathMatch, ruleMatch } from './fast-path';
+import { LAYA_ACTIONS, createFastPath, forgeMatch, mathMatch, ruleMatch } from './fast-path';
 
 describe('fast path rules', () => {
   it.each([
@@ -85,5 +85,40 @@ describe('sums go straight to the calculator (ADR-040)', () => {
     });
     expect(mathMatch('fifteen percent of 2400')?.ack).toBe("That's 360, sir.");
     expect(mathMatch('what is the capital of France')).toBeNull();
+  });
+});
+
+describe('Forge requests go straight to the Forge desk (F9)', () => {
+  it('catches "learn to", "teach yourself", "use Forge to" and "Forge:"', () => {
+    for (const said of [
+      'Jarvis, learn to convert currencies',
+      'Hey Jarvis can you learn how to read my bank PDFs',
+      'teach yourself to summarise YouTube videos',
+      'Teach yourself how to track parcels.',
+      'use Forge to add a dark mode switch',
+      'Forge: add a weather card to the home page',
+      'jarvis, forge, make the Tasks page sortable',
+      'I want you to learn to book trains',
+    ])
+      expect(forgeMatch(said)?.tool, said).toBe('forge_chat');
+  });
+
+  it('leaves everything else alone', () => {
+    for (const said of [
+      'what did you learn today',
+      'I learned to cook yesterday',
+      'forge a signature',
+      'open forge',
+      'learn',
+      'how does Forge work?',
+    ])
+      expect(forgeMatch(said), said).toBeNull();
+  });
+
+  it('routes even when the fast path is off, and passes no text (forge_chat reads Sir’s words)', async () => {
+    const fast = createFastPath({ mode: () => 'off', logger });
+    const a = await fast('Jarvis, learn to convert currencies');
+    expect(a).toMatchObject({ tool: 'forge_chat', input: {} });
+    expect(await fast('open spotify')).toBeNull();
   });
 });

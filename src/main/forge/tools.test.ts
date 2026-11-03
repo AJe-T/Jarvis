@@ -203,3 +203,45 @@ describe('Forge tools', () => {
     expect(out.content[0]).toMatchObject({ text: 'Forge has not run since Jarvis started.' });
   });
 });
+
+describe('only the Forge desk starts builds (F9, rule 2026-11-03)', () => {
+  it('forge_start and forge_build_tool refuse outside the desk, and start nothing', async () => {
+    const start = vi.fn(() => ({ id: 'forge_1' }) as ForgeRun);
+    const forge = {
+      start,
+      status: vi.fn(() => null),
+      cancel: vi.fn(() => false),
+      installTool: vi.fn(),
+      approve: vi.fn(),
+      lastShip: vi.fn(() => null),
+      rollback: vi.fn(),
+      history: vi.fn(() => []),
+    } as unknown as Forge;
+    const tools = createForgeTools({
+      forge,
+      repoUrl: () => 'git@github.com:o/Jarvis.git',
+      setRepoUrl: vi.fn(),
+      budgetUsd: () => 5,
+      refuseStart: (c) =>
+        c.conversationId === 'desk' ? null : 'Only the Forge desk starts builds.',
+    });
+    const t = (n: string): Tool => tools.find((x) => x.name === n)!;
+    const jarvis = { conversationId: 'c_main' } as never;
+    const desk = { conversationId: 'desk' } as never;
+    const goal = { goal: 'Add a currency converter with ECB rates' };
+    for (const [name, input] of [
+      ['forge_start', goal],
+      ['forge_build_tool', { ...goal, name: 'currency' }],
+    ] as const) {
+      const out = await t(name).run(t(name).input.parse(input), jarvis);
+      expect(out.isError).toBe(true);
+      expect(JSON.stringify(out.content)).toContain('Only the Forge desk');
+    }
+    expect(start).not.toHaveBeenCalled();
+    await t('forge_build_tool').run(
+      t('forge_build_tool').input.parse({ ...goal, name: 'currency' }),
+      desk,
+    );
+    expect(start).toHaveBeenCalledOnce();
+  });
+});

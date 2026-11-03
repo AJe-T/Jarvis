@@ -47,6 +47,8 @@ import { JARVIS_APP_INFO } from '@shared/jarvis-apps';
 import type { StagePanel } from '@shared/stage';
 import { registerSkillHandlers } from './ipc/handlers/skills';
 import { registerNpcHandlers } from './ipc/handlers/npcs';
+import { registerForgeHandlers } from './ipc/handlers/forge';
+import { createForgeDesk } from './forge/desk';
 import { createNpcRepo } from './npcs/npc-repo';
 import { createNpcRuntime } from './npcs/npc-runtime';
 import { createNpcTools } from './npcs/npc-tools';
@@ -351,6 +353,16 @@ async function boot(): Promise<void> {
   const npcs = createNpcRuntime({ s: services, repo: npcRepo, vault: () => memory.vault, emit });
   for (const tool of createNpcTools(npcs, npcRepo)) services.registry.register(tool);
   registerNpcHandlers(services, npcs, npcRepo);
+  // Forge F9–F10: the Forge chat (the desk builds Jarvis) and Forge's own memory, apart from Jarvis's.
+  const forgeDesk = createForgeDesk(services, {
+    vault: () => memory.vault,
+    emit,
+    openForge: () => {
+      showMainWindow();
+      emit('nav:open', { view: 'forge' });
+    },
+  });
+  registerForgeHandlers(forgeDesk);
   const integrations = services.slots.providers.integrations;
   services.slots.providers = {
     ...services.slots.providers,

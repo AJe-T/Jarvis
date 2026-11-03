@@ -9,6 +9,7 @@ import { AGENT_CLIS } from '@shared/agent-clis';
 import { CLOUD_PROVIDERS } from '@shared/llm-providers';
 import { createResearchTool } from '@main/agent/research';
 import { createAutomation } from '@main/automation/automation';
+import { createForgeDesk } from '@main/forge/desk';
 import { copilotTool, createCopilot } from '@main/copilot/copilot';
 import { createMemorySystem } from '@main/memory/memory-system';
 import { createComputerSystem } from '@main/tools/computer/computer-system';
@@ -37,8 +38,14 @@ function buildReference(): string {
   const t = setupServices();
   const s = t.services;
   // The same composition as src/main/index.ts, with fakes for the screen.
-  createMemorySystem(s);
+  const memory = createMemorySystem(s);
   createAutomation(s);
+  // Forge F9–F10: forge_chat, forge_memory and the desk's forge_spaces.
+  createForgeDesk(s, {
+    vault: () => memory.vault,
+    emit: () => undefined,
+    openForge: () => undefined,
+  });
   s.registry.register(createResearchTool(s));
   s.registry.register(copilotTool(createCopilot(s), () => undefined));
   createComputerSystem(s, {

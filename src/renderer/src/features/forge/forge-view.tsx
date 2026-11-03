@@ -6,6 +6,9 @@ import { IconButton } from '../../components/ui/button';
 import { PageBody, PageHeader } from '../../components/ui/page';
 import { call, cleanError } from '../../lib/api';
 import { StatTile } from '../router/parts';
+import { useForgeStore } from '../../stores/forge-store';
+import { ForgeChat } from './forge-chat';
+import { ForgeMemory } from './forge-memory';
 
 type Run = Res<'forge:runs'>[number];
 
@@ -165,8 +168,10 @@ function RunRow({ run }: { run: Run }): React.JSX.Element {
 }
 
 /** Forge F7: every Forge run on this PC, what it cost, and what shipped (docs/Forge.md). */
-export function ForgeView(): React.JSX.Element {
+function ForgeRuns(): React.JSX.Element {
   const [runs, setRuns] = useState<Run[] | null>(null);
+  // F9: a run that ends (live, from forge:update) reloads the list straight away.
+  const runsVersion = useForgeStore((s) => s.runsVersion);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
     call('forge:runs', {})
@@ -176,7 +181,7 @@ export function ForgeView(): React.JSX.Element {
       })
       .catch((err: unknown) => setError(cleanError(err)));
   }, []);
-  useEffect(load, [load]);
+  useEffect(load, [load, runsVersion]);
   const working = runs?.some((r) => !FINISHED.has(r.state) || r.ship?.state === 'running');
   useEffect(() => {
     if (!working) return undefined;
@@ -185,38 +190,82 @@ export function ForgeView(): React.JSX.Element {
   }, [working, load]);
   const t = totals(runs ?? []);
   return (
-    <>
-      <PageHeader title="Forge" help="forge">
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
         <IconButton label="Refresh" onClick={load}>
           <RefreshCw size={16} aria-hidden />
         </IconButton>
-      </PageHeader>
-      <PageBody className="flex flex-col gap-4">
-        <p className="text-sm text-ink-300">
-          Jarvis building changes and tools for itself. Say &quot;Jarvis, learn to …&quot; to start
-          one; Jarvis asks before it builds, before it ships, and never installs by itself.
+      </div>
+      <section aria-label="Totals" className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <StatTile label="Claude this month" value={usd(t.month)} />
+        <StatTile label="Claude in all" value={usd(t.all)} hint="estimates from Claude Code" />
+        <StatTile label="Versions shipped" value={String(t.shipped)} />
+        <StatTile label="Edits done free" value={t.free} />
+      </section>
+      {error && <p className="text-sm text-alarm-500">{error}</p>}
+      {runs === null && !error && <span className="skeleton block h-24 w-full" aria-hidden />}
+      {runs?.length === 0 && (
+        <p className="text-sm text-ink-500">
+          No Forge runs yet. Set it up once with &quot;use git@github.com:&lt;you&gt;/Jarvis.git for
+          Forge&quot;.
         </p>
-        <section aria-label="Totals" className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <StatTile label="Claude this month" value={usd(t.month)} />
-          <StatTile label="Claude in all" value={usd(t.all)} hint="estimates from Claude Code" />
-          <StatTile label="Versions shipped" value={String(t.shipped)} />
-          <StatTile label="Edits done free" value={t.free} />
-        </section>
-        {error && <p className="text-sm text-alarm-500">{error}</p>}
-        {runs === null && !error && <span className="skeleton block h-24 w-full" aria-hidden />}
-        {runs?.length === 0 && (
-          <p className="text-sm text-ink-500">
-            No Forge runs yet. Set it up once with &quot;use git@github.com:&lt;you&gt;/Jarvis.git
-            for Forge&quot;.
-          </p>
-        )}
-        {runs && runs.length > 0 && (
-          <ul aria-label="Forge runs" className="flex flex-col gap-2">
-            {runs.map((r) => (
-              <RunRow key={r.id} run={r} />
-            ))}
-          </ul>
-        )}
+      )}
+      {runs && runs.length > 0 && (
+        <ul aria-label="Forge runs" className="flex flex-col gap-2">
+          {runs.map((r) => (
+            <RunRow key={r.id} run={r} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const TABS = [
+  { id: 'chat', label: 'Chat' },
+  { id: 'runs', label: 'Runs' },
+  { id: 'memory', label: 'Memory' },
+] as const;
+type Tab = (typeof TABS)[number]['id'];
+
+/**
+ * Sidebar → Forge: Jarvis building itself. Chat with the Forge desk (F9), every run (F7), and Forge's
+ * own memory, notebooks and chats, kept apart from Jarvis's (F10).
+ */
+export function ForgeView(): React.JSX.Element {
+  const [tab, setTab] = useState<Tab>('chat');
+  return (
+    <>
+      <PageHeader title="Forge" help="forge" />
+      <PageBody className="flex min-h-0 flex-1 flex-col gap-4">
+        <p className="text-sm text-ink-300">
+          Jarvis building changes and tools for itself. Tell Forge what to learn (or say
+          &quot;Jarvis, learn to …&quot;); it asks before it builds, before it ships, and never
+          installs by itself.
+        </p>
+        <div role="tablist" aria-label="Forge" className="flex gap-5 border-b border-line">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              type="button"
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={clsx(
+                // Design-system §6.6: underline tabs.
+                '-mb-px border-b-2 pb-2.5 text-ui font-medium transition-colors duration-[120ms]',
+                tab === t.id
+                  ? 'border-ink-100 text-ink-100'
+                  : 'border-transparent text-ink-500 hover:text-ink-100',
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {tab === 'chat' && <ForgeChat />}
+        {tab === 'runs' && <ForgeRuns />}
+        {tab === 'memory' && <ForgeMemory />}
       </PageBody>
     </>
   );

@@ -131,6 +131,11 @@ export interface ForgeDeps {
   };
   /** Phase F6: the skills Sir marked "Forge" (injection-scanned and capped by the skill store). */
   skills?(): Promise<{ text: string; skipped: string[] }>;
+  /**
+   * F9: told after every step, state change and end (and while shipping), so the Forge page and the
+   * Forge chat follow a run live instead of polling. Gets a copy; a throwing listener can't stop a run.
+   */
+  onUpdate?(r: ForgeRun): void;
   /** Phase F5: shipping a passed change, and undoing it. */
   ship?: {
     installersDir: string;
@@ -314,8 +319,20 @@ export function createForge(deps: ForgeDeps): Forge {
   });
   const busy = (r: ForgeRun | null): boolean =>
     r !== null && (!FINISHED.includes(r.state) || r.ship?.state === 'running');
+  const changed = (r: ForgeRun): void => {
+    try {
+      deps.onUpdate?.(snapshot(r));
+    } catch {
+      // Live updates are a view; the run goes on.
+    }
+  };
   const progress = (r: ForgeRun, text: string): void => {
     r.log = [...r.log, text].slice(-MAX_LOG);
+    changed(r);
+  };
+  const setState = (r: ForgeRun, state: ForgeState): void => {
+    r.state = state;
+    changed(r);
   };
 
   function save(r: ForgeRun): void {
@@ -330,6 +347,7 @@ export function createForge(deps: ForgeDeps): Forge {
   function finish(r: ForgeRun, state: ForgeState, extra: Partial<ForgeRun> = {}): void {
     Object.assign(r, extra, { state, endedAt: now() });
     save(r);
+    changed(r);
     const what = r.kind === 'tool' ? `The tool "${r.tool?.name ?? ''}"` : `"${r.goal}"`;
     if (state === 'passed' && r.kind === 'tool')
       deps.announce(
@@ -420,13 +438,13 @@ export function createForge(deps: ForgeDeps): Forge {
     const { ws, run } = await deps.workspace();
     const { branch, base } = await ws.prepare(deps.repoUrl(), runSlug(r.goal, r.startedAt));
     r.branch = branch;
-    r.state = 'installing';
+    setState(r, 'installing');
     progress(r, 'Installing dependencies (npm ci)');
     const inst = await ws.install(signal);
     if (signal.aborted) return finish(r, 'cancelled');
     if (!inst.ok) return finish(r, 'failed', { error: `npm ci failed:\n${inst.out.slice(-2000)}` });
 
-    r.state = 'building';
+    setState(r, 'building');
     const check: CheckFn = (c, files) => {
       if (c === 'test') return runGate(run, files.length ? 'related' : 'unit', files, signal, now);
       return runGate(run, c, [], signal, now);
@@ -461,7 +479,7 @@ export function createForge(deps: ForgeDeps): Forge {
     if (!committed)
       return finish(r, 'failed', { error: 'the boss finished without changing any file' });
 
-    r.state = 'checking';
+    setState(r, 'checking');
     // Ignored files the boss wrote (.env, out/…) are not in the diff, so they must not reach the checks.
     await ws.clean();
     const { files, patch, truncated, stat, head } = await ws.changes(base);
@@ -495,7 +513,7 @@ export function createForge(deps: ForgeDeps): Forge {
     const dir = prepareToolBuild(t.forgeDir, name, runSlug('', r.startedAt));
     r.tool = { ...r.tool, buildDir: dir };
     const runner = await t.runner(dir);
-    r.state = 'building';
+    setState(r, 'building');
     const delegate = delegateFor(r, dir, signal);
     const extras = await extrasFor(r, 'study-notes.md', join(dir, 'study-notes.md'));
     const boss = await deps.boss({
@@ -512,7 +530,7 @@ export function createForge(deps: ForgeDeps): Forge {
       onProgress: (text) => progress(r, text),
     });
     if (!afterBoss(r, boss, signal)) return;
-    r.state = 'checking';
+    setState(r, 'checking');
     // The tool's own files, whole, against the studied repository.
     const copied = noCopy(
       r,
@@ -552,6 +570,7 @@ export function createForge(deps: ForgeDeps): Forge {
 
   function saveShip(r: ForgeRun): void {
     save(r);
+    changed(r);
     if (!deps.ship || !r.ship) return;
     try {
       mkdirSync(dirname(deps.ship.file), { recursive: true });
@@ -637,6 +656,7 @@ export function createForge(deps: ForgeDeps): Forge {
       current = r;
       controller = new AbortController();
       const signal = controller.signal;
+      changed(r);
       void (r.kind === 'tool' ? executeTool(r, signal) : executeChange(r, signal)).catch(
         (err: unknown) =>
           finish(r, signal.aborted ? 'cancelled' : 'failed', { error: errorMessage(err) }),

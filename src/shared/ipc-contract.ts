@@ -298,6 +298,20 @@ const ForgeRunViewSchema = z.object({
   summary: z.string(),
   log: z.array(z.string()),
 });
+/** F9: one message of the Forge chat (stored in <vault>/Forge/Chats). */
+const ForgeMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(['sir', 'forge', 'event']),
+  text: z.string(),
+  at: z.string(),
+  tainted: z.boolean(),
+  runId: z.string().optional(),
+});
+/** F10: a path inside Forge's own vault folder (main refuses anything outside Forge/). */
+const ForgePath = z
+  .string()
+  .max(300)
+  .regex(/^Forge(?:\/[^\\:*?"<>|]+)*$/i);
 
 const SkillView = z.object({
   name: z.string(),
@@ -530,6 +544,21 @@ export const INVOKE = {
   'runs:clear': contract(Empty, z.object({ removed: z.number().int() })),
   /** Forge F7: Sidebar → Forge, every saved run (read-only; Forge's own files, checked in main). */
   'forge:runs': contract(Empty, z.array(ForgeRunViewSchema)),
+  /** F9: the Forge chat. Sir's message is saved and returned; the desk's reply arrives as forge:message. */
+  'forge:messages': contract(Empty, z.array(ForgeMessageSchema)),
+  'forge:send': contract(
+    z.object({ text: z.string().trim().min(1).max(8000) }),
+    ForgeMessageSchema,
+  ),
+  /** F10: Forge's memory, notebooks and chats (read-only from the page). */
+  'forge:files': contract(
+    z.object({ dir: ForgePath.optional() }),
+    z.array(z.object({ path: z.string(), name: z.string(), isDir: z.boolean(), size: z.number() })),
+  ),
+  'forge:file': contract(
+    z.object({ path: ForgePath }),
+    z.object({ path: z.string(), markdown: z.string() }),
+  ),
   /** AIs that can take part right now, by name. */
   'runs:brains': contract(Empty, z.array(z.object({ id: BrainRefSchema, label: z.string() }))),
   /** AI Router (2.30): the free pool's live state (no prompts, no answers, no keys). */
@@ -1308,6 +1337,10 @@ export const EVENTS = {
     everyTime: z.boolean(),
   }),
   'npc:meeting': z.object({ meeting: NpcMeetingSchema }),
+  /** F9: a Forge chat message was added (Sir's, the desk's, or a run event). */
+  'forge:message': z.object({ message: ForgeMessageSchema }),
+  /** F9: the current Forge run moved on (a step, a state, the end, shipping). */
+  'forge:update': z.object({ run: ForgeRunViewSchema }),
   'mini:layout': z.object({ side: z.enum(['left', 'right']), tucked: z.boolean() }),
   /** A setting changed in main (e.g. Jarvis switched his personality by voice); the UI follows. */
   'settings:changed': z.object({ key: SettingKeySchema, value: z.unknown() }),
@@ -1326,6 +1359,7 @@ export const EVENTS = {
       'tasks',
       'calendar',
       'apps',
+      'forge',
     ]),
     section: z.string().optional(),
   }),

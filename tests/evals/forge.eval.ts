@@ -1,13 +1,17 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { createForgeDesk } from '@main/forge/desk';
 import { createClaudeClient } from '@main/llm/claude-client';
+import { createMemorySystem } from '@main/memory/memory-system';
 import { idle, setupServices } from '../integration/helpers';
 
 /**
- * Forge F7: plan quality (Testing.md §7). Does Jarvis pick the lowest Forge level that works, name
- * what to study, and write the goal completely? Real Claude; every confirmation is DECLINED, so no
- * Forge run starts and nothing on this PC changes. Run with `npm run evals` (asks first).
+ * Forge plan quality (Testing.md §7), F7 updated for F9. Jarvis must hand a Forge request to the Forge
+ * desk (forge_chat, never forge_start himself: Forge must not get text written with his memories);
+ * then the desk must pick the lowest Forge level that works, name what to study, and write the goal
+ * completely. Real Claude; every confirmation is DECLINED, so no Forge run starts and nothing on this
+ * PC changes. Run with `npm run evals` (asks first).
  */
 const key = process.env['ANTHROPIC_API_KEY'];
 if (!key) throw new Error('Set ANTHROPIC_API_KEY in .env to run evals.');
@@ -16,6 +20,12 @@ const t = setupServices(undefined, { llm: createClaudeClient(() => key) });
 t.services.settings.set('onboarding.complete', true);
 t.services.settings.set('forge.repoUrl', 'git@github.com:sir/Jarvis.git');
 t.services.confirmShowListeners.add((e) => t.services.broker.respond(e.requestId, 'deny', 'click'));
+const memory = createMemorySystem(t.services);
+const desk = createForgeDesk(t.services, {
+  vault: () => memory.vault,
+  emit: () => undefined,
+  openForge: () => undefined,
+});
 
 interface Attempt {
   name: string;
@@ -68,6 +78,21 @@ const CASES: Array<{
 
 const results: Array<{ id: string; pass: boolean; why: string; tools: Attempt[] }> = [];
 
+/** The desk's tool calls since `seen` (it keeps no assistant messages; the audit trail has them). */
+function deskCalls(seen: Set<string>): Attempt[] {
+  return t.services.toolCalls
+    .list(500)
+    .filter(
+      (c) => !seen.has(c.id) && t.services.conversations.get(c.conversation_id)?.kind === 'forge',
+    )
+    .reverse()
+    .map((c) => {
+      seen.add(c.id);
+      return { name: c.tool_name, input: c.input_json };
+    });
+}
+const seenDesk = new Set<string>();
+
 async function run(input: string): Promise<Attempt[]> {
   const { conversationId } = t.services.orchestrator.send({ text: input, source: 'text' });
   await idle(t.services, 120_000);
@@ -89,22 +114,36 @@ async function run(input: string): Promise<Attempt[]> {
 describe('Forge plan quality (F7)', () => {
   for (const c of CASES) {
     it(c.id, async () => {
-      const tools = await run(c.input);
+      const jarvis = await run(c.input);
       const fails: string[] = [];
+      const handOff = c.expect !== 'forge_status';
+      if (handOff && !jarvis.some((x) => x.name === 'forge_chat'))
+        fails.push('Jarvis did not call forge_chat');
+      for (const x of jarvis)
+        if (['forge_start', 'forge_build_tool'].includes(x.name))
+          fails.push(`Jarvis called ${x.name} himself`);
+      // The desk answers what forge_chat handed over.
+      if (handOff) await desk.chat.idle();
+      const tools = handOff ? deskCalls(seenDesk) : jarvis;
       const picked = tools.filter((x) => x.name === c.expect);
       if (picked.length === 0) fails.push(`expected ${c.expect}`);
       for (const re of c.args ?? [])
         if (!picked.some((x) => re.test(x.input))) fails.push(`${c.expect} args !~ ${re}`);
       for (const f of c.forbid ?? [])
         if (tools.some((x) => x.name === f)) fails.push(`forbidden ${f}`);
-      results.push({ id: `forge-${c.id}`, pass: fails.length === 0, why: fails.join('; '), tools });
+      results.push({
+        id: `forge-${c.id}`,
+        pass: fails.length === 0,
+        why: fails.join('; '),
+        tools: [...jarvis, ...(handOff ? tools : [])],
+      });
       expect(fails).toEqual([]);
     });
   }
 
   it('an everyday question never reaches Forge', async () => {
     const tools = await run('What is 15 percent of 2400?');
-    const used = tools.filter((x) => FORGE.includes(x.name));
+    const used = tools.filter((x) => [...FORGE, 'forge_chat'].includes(x.name));
     results.push({ id: 'forge-none', pass: used.length === 0, why: '', tools });
     expect(used).toEqual([]);
   });

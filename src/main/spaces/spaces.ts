@@ -6,7 +6,7 @@ import { sha256 } from '../lib/util';
 import { parseNote, stringifyNote } from '../memory/frontmatter';
 import type { VaultService } from '../memory/vault-service';
 import type { SettingsService } from '../settings/settings-service';
-import { defineTool, fail, ok, type Tool } from '../tools/types';
+import { defineTool, fail, ok, type Tool, type ToolContext } from '../tools/types';
 
 /**
  * Spaces (Notion-style workspace, PRD F18): Sir's own sections — Learning, Finance, Ideas … — each a
@@ -119,14 +119,20 @@ export function createSpaces(deps: {
   vault: VaultService;
   settings: SettingsService;
   onChanged(paths: string[]): void;
+  /** Where the spaces live: Sir's `Spaces` (default), or Forge's own `Forge/Spaces` (F10). */
+  root?: string;
+  /** The setting that holds each space's icon. */
+  iconsKey?: 'spaces.icons' | 'forge.spaceIcons';
 }) {
   const { vault, settings } = deps;
-  const spaceRel = (space: string): string => `${SPACES_DIR}/${clean(space, 'space')}`;
+  const root = deps.root ?? SPACES_DIR;
+  const iconsKey = deps.iconsKey ?? 'spaces.icons';
+  const spaceRel = (space: string): string => `${root}/${clean(space, 'space')}`;
   const pageRel = (space: string, page: string): string =>
     `${spaceRel(space)}/${clean(page, 'page')}.md`;
 
   function icons(): Record<string, string> {
-    return settings.get('spaces.icons');
+    return settings.get(iconsKey);
   }
 
   async function pages(space: string): Promise<PageInfo[]> {
@@ -157,9 +163,9 @@ export function createSpaces(deps: {
   }
 
   async function list(): Promise<SpaceInfo[]> {
-    await mkdir(vault.resolve(SPACES_DIR), { recursive: true });
+    await mkdir(vault.resolve(root), { recursive: true });
     const out: SpaceInfo[] = [];
-    for (const e of await vault.list(SPACES_DIR)) {
+    for (const e of await vault.list(root)) {
       if (!e.isDir) continue;
       const p = await pages(e.name).catch(() => []);
       out.push({
@@ -211,7 +217,7 @@ export function createSpaces(deps: {
       if (vault.exists(rel))
         throw new JarvisError('INVALID', 'exists', `A space called "${name}" already exists.`);
       await mkdir(vault.resolve(rel), { recursive: true });
-      settings.set('spaces.icons', { ...icons(), [clean(name, 'space')]: icon });
+      settings.set(iconsKey, { ...icons(), [clean(name, 'space')]: icon });
       deps.onChanged([rel]);
     },
 
@@ -223,13 +229,13 @@ export function createSpaces(deps: {
       const to = next.name ? clean(next.name, 'space') : from;
       if (to !== from) await move(spaceRel(from), spaceRel(to));
       const { [from]: oldIcon, ...rest } = icons();
-      settings.set('spaces.icons', { ...rest, [to]: next.icon ?? oldIcon ?? '📁' });
+      settings.set(iconsKey, { ...rest, [to]: next.icon ?? oldIcon ?? '📁' });
     },
 
     async remove(name: string): Promise<void> {
       await vault.trash(spaceRel(name));
       const { [clean(name, 'space')]: _gone, ...rest } = icons();
-      settings.set('spaces.icons', rest);
+      settings.set(iconsKey, rest);
       deps.onChanged([spaceRel(name)]);
     },
 
@@ -260,12 +266,25 @@ export function createSpaces(deps: {
 
 export type Spaces = ReturnType<typeof createSpaces>;
 
-/** Lets Jarvis use Spaces as Sir's notebook: list, read, add to a page or start a new one. */
-export function createSpacesTool(spaces: Spaces): Tool {
+const SPACES_DESCRIPTION =
+  "Sir's Spaces: his own notebooks (e.g. Learning, Finance, Ideas), each a set of Markdown pages. action=list_spaces; list_pages (space); read_page (space, page); append (space, page, text: adds to the end, creates the page if missing); create_page (space, page, text). Use when sir says 'add this to my Finance space', 'what did I write in Learning about X'. Never delete or overwrite.";
+
+/**
+ * Lets Jarvis use Spaces as Sir's notebook: list, read, add to a page or start a new one. The same
+ * tool, renamed, is the Forge desk's notebook (F10); `allowed` refuses callers it isn't for.
+ */
+export function createSpacesTool(
+  spaces: Spaces,
+  opts: {
+    name?: string;
+    description?: string;
+    /** A reason to refuse this call (the caller's conversation isn't allowed), or null. */
+    refuse?(ctx: ToolContext): string | null;
+  } = {},
+): Tool {
   return defineTool({
-    name: 'spaces',
-    description:
-      "Sir's Spaces: his own notebooks (e.g. Learning, Finance, Ideas), each a set of Markdown pages. action=list_spaces; list_pages (space); read_page (space, page); append (space, page, text: adds to the end, creates the page if missing); create_page (space, page, text). Use when sir says 'add this to my Finance space', 'what did I write in Learning about X'. Never delete or overwrite.",
+    name: opts.name ?? 'spaces',
+    description: opts.description ?? SPACES_DESCRIPTION,
     input: z.object({
       action: z.enum(['list_spaces', 'list_pages', 'read_page', 'append', 'create_page']),
       space: z.string().max(80).optional(),
@@ -277,7 +296,9 @@ export function createSpacesTool(spaces: Spaces): Tool {
       i.action === 'list_spaces'
         ? 'List Spaces'
         : `${i.action.replace('_', ' ')} ${[i.space, i.page].filter(Boolean).join(' / ')}`,
-    async run(i) {
+    async run(i, ctx) {
+      const refused = opts.refuse?.(ctx);
+      if (refused) return fail(refused);
       const needSpace = (): string => {
         if (!i.space) throw new JarvisError('INVALID', 'space', 'Give the space name.');
         return i.space;

@@ -67,6 +67,10 @@ export const INVOKE_CHANNELS = [
   'runs:clear',
   'runs:brains',
   'forge:runs',
+  'forge:messages',
+  'forge:send',
+  'forge:files',
+  'forge:file',
   'pool:snapshot',
   'pool:setProvider',
   'pool:setModel',
@@ -232,6 +236,8 @@ export const EVENT_CHANNELS = [
   'runs:update',
   'pool:ask',
   'npc:meeting',
+  'forge:message',
+  'forge:update',
 ] as const;
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
 
