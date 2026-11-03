@@ -270,6 +270,16 @@ const RING_GEO = new THREE.TorusGeometry(0.3, 0.012, 8, 64);
 /** A leaf: a flattened, stretched sphere leaning out from its centre. */
 const leafGeo = new THREE.SphereGeometry(1, 12, 8).scale(0.11, 0.3, 0.03).translate(0, 0.27, 0);
 
+/** Where the windows run along the back wall (the room and the light they spill share it). */
+export function windowSpan(plan: Plan): { from: number; to: number; z: number } {
+  const { min, max } = plan.bounds;
+  return {
+    from: Math.max(min.x + (max.x - min.x) * 0.42, plan.room.x0 - 2),
+    to: max.x - 0.5,
+    z: min.z + WALL_T / 2,
+  };
+}
+
 // ── the room ────────────────────────────────────────────────────────────────
 
 export function Room({ plan, day }: { plan: Plan; day: number }): React.JSX.Element {
@@ -294,8 +304,7 @@ export function Room({ plan, day }: { plan: Plan; day: number }): React.JSX.Elem
     pane.color.set(new THREE.Color('#ffffff').lerp(new THREE.Color('#9fc4ff'), day * 0.6));
   }, [day, pane]);
 
-  const winFrom = Math.max(min.x + w * 0.42, plan.room.x0 - 2);
-  const winTo = max.x - 0.5;
+  const { from: winFrom, to: winTo } = windowSpan(plan);
   const panes = Math.max(2, Math.round((winTo - winFrom) / 1.4));
   const paneW = (winTo - winFrom) / panes;
 
@@ -599,12 +608,7 @@ export function MeetingRoom({ plan, active }: { plan: Plan; active: boolean }): 
       const s = seatAt(i, 8, plan);
       chairParts(frameAt(s.x, s.z, s.facing), out);
     }
-    // whiteboard on the back glass, and a plant in the corner
-    out.push({
-      geo: rbox(1.6, 0.9, 0.03, 0.01),
-      mat: M.white(),
-      m: at(id, x0 + size / 2, 1.5, z0 + 0.06),
-    });
+    // a plant in the corner (the wall screen is details.tsx MeetingScreen)
     plantParts(frameAt(x0 + size - 0.45, z0 + size - 0.45, 0), 0.9, out, 3);
     return out;
   }, [x0, z0, size, table, tableR, door, plan]);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { NpcState } from '@shared/npcs';
@@ -81,6 +81,7 @@ export function Avatar({
   const legR = useRef<THREE.Group>(null);
   const eyes = useRef<Array<THREE.Mesh | null>>([]);
   const ring = useRef<THREE.Mesh>(null);
+  const [hovered, setHovered] = useState(false);
 
   const own = useMemo(
     () => ({
@@ -91,6 +92,16 @@ export function Avatar({
         transparent: true,
         opacity: 0.85,
         depthWrite: false,
+      }),
+      // A soft pool of the robot's colour on the floor while it works.
+      pool: new THREE.MeshBasicMaterial({
+        map: sharedGlow(),
+        color,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
       }),
     }),
     [color],
@@ -186,9 +197,12 @@ export function Avatar({
     own.eye.color.set(off ? '#4b5563' : speaking ? '#ffffff' : '#e8f6ff');
     own.led.color.set(STATE_GEM[state]);
     if (ring.current) {
-      ring.current.visible = selected;
+      ring.current.visible = selected || hovered;
       ring.current.rotation.z += dt * 1.2;
+      own.ring.opacity = selected ? 0.85 + Math.sin(time * 4) * 0.12 * k : 0.45;
     }
+    const glow = typing ? 0.32 + Math.sin(time * 3) * 0.06 * k : 0;
+    own.pool.opacity += (glow - own.pool.opacity) * Math.min(1, dt * 3);
 
     const v = heads.get(id) ?? new THREE.Vector3();
     v.set(step.at.x, ((hips.current?.position.y ?? SEAT_Y) + 0.78) * SCALE, step.at.z);
@@ -196,6 +210,13 @@ export function Avatar({
   });
 
   useEffect(() => () => void heads.delete(id), [heads, id]);
+  // Leaving the office while hovering a robot must not leave the pointer cursor behind.
+  useEffect(
+    () => () => {
+      document.body.style.cursor = '';
+    },
+    [],
+  );
 
   const click = (e: ThreeEvent<MouseEvent>): void => {
     e.stopPropagation();
@@ -203,7 +224,26 @@ export function Avatar({
   };
 
   return (
-    <group ref={root} onClick={click}>
+    <group
+      ref={root}
+      onClick={click}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        setHovered(true);
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        setHovered(false);
+        document.body.style.cursor = '';
+      }}
+    >
+      <mesh
+        geometry={GEO.plane}
+        rotation-x={-Math.PI / 2}
+        position={[0, 0.02, 0.25]}
+        scale={1.5}
+        material={own.pool}
+      />
       <mesh geometry={GEO.plane} rotation-x={-Math.PI / 2} position={[0, 0.015, 0]} scale={0.8}>
         <meshBasicMaterial
           map={sharedGlow()}

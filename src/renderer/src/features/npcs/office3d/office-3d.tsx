@@ -10,6 +10,15 @@ import { useSetting } from '../../../stores/settings-store';
 import { HANDOFF_MS, useNpcStore } from '../../../stores/npc-store';
 import { NPC_HEX, STATE_LABEL } from '../npc-kit';
 import { Avatar, STATE_GEM, type AvatarTarget } from './avatar';
+import {
+  CityLife,
+  Dust,
+  MeetingScreen,
+  MonitorGlow,
+  MugSteam,
+  WallClock,
+  WindowLight,
+} from './details';
 import { Burst, BURST_MS, HandoffArc, type BurstInfo } from './effects';
 import {
   JarvisTerminal,
@@ -403,6 +412,8 @@ function Scene({
   const bubbles = useNpcStore((s) => s.bubbles);
   const running = meetings.find((m) => m.status === 'running') ?? null;
   const attendees = running?.attendees ?? null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const meetingStart = useMemo(() => Date.now(), [running?.id]);
   const targets = useTargets(npcs, attendees, running?.id ?? null, plan);
   const stateOf = (n: Npc): NpcState => (n.enabled ? (states[n.id] ?? 'idle') : 'off');
   const deskCount = Math.max(...npcs.map((n) => n.desk + 1), npcs.length, 8);
@@ -462,6 +473,25 @@ function Scene({
       <JarvisTerminal plan={plan} accent={accent} busy={speaking.has('jarvis') && !running} />
       <Lounge plan={plan} />
       <Plants plan={plan} />
+      <MonitorGlow plan={plan} count={deskCount} owners={owners} reduced={reduced} />
+      <WindowLight plan={plan} day={day} />
+      <CityLife plan={plan} reduced={reduced} />
+      <WallClock plan={plan} />
+      <MeetingScreen
+        plan={plan}
+        accent={accent}
+        meeting={
+          running
+            ? {
+                topic: running.topic,
+                attendees: running.attendees.length,
+                since: Date.parse(running.createdAt) || meetingStart,
+              }
+            : null
+        }
+      />
+      {high && !reduced && <Dust plan={plan} count={deskCount} />}
+      {high && !reduced && <MugSteam plan={plan} count={deskCount} />}
       {onSlow && <FpsProbe onSlow={onSlow} />}
       <JarvisPresence
         plan={plan}
@@ -590,6 +620,13 @@ export function Office3D({
   const plan = useMemo(() => planFor(npcs.length, highest), [npcs.length, highest]);
   const running = meetings.find((m) => m.status === 'running');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // The title card when the office opens ("level start"); skipped with reduced motion.
+  const [intro, setIntro] = useState(!reduced);
+  useEffect(() => {
+    if (!intro) return undefined;
+    const t = setTimeout(() => setIntro(false), 2800);
+    return () => clearTimeout(t);
+  }, [intro]);
 
   const pickQuality = (q: Quality): void => {
     setPicked(q);
@@ -768,6 +805,16 @@ export function Office3D({
         </div>
         <Minimap plan={plan} npcs={npcs} heads={heads} selected={selected} accent={accent} />
       </div>
+      {intro && (
+        <div className="office3d-intro" aria-hidden>
+          <span className="office3d-intro-kicker">{name} HQ</span>
+          <span className="office3d-intro-title">The Office</span>
+          <span className="office3d-intro-sub">
+            {npcs.length} {npcs.length === 1 ? 'agent' : 'agents'} · {counts.working} working ·{' '}
+            {new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )}
       <Toasts toasts={toasts} />
       <PartyBar npcs={npcs} stateOf={stateOf} selected={selected} onSelect={onSelect} />
     </div>

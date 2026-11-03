@@ -590,6 +590,69 @@
   --npc: #fb7185;
 }
 
+/* 2.55: the title card when the office opens. */
+.office3d-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 20002;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+  background: radial-gradient(ellipse 60% 45% at 50% 50%, rgba(3, 6, 12, 0.55), transparent 75%);
+  animation: office3d-intro 2.8s ease-in-out forwards;
+}
+.office3d-intro-kicker {
+  color: var(--accent-300);
+  font-family: var(--font-code);
+  font-size: 12px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+}
+.office3d-intro-title {
+  color: #ffffff;
+  font-size: 44px;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 28px color-mix(in oklab, var(--accent-500) 60%, transparent);
+}
+.office3d-intro-sub {
+  color: #b8c7de;
+  font-family: var(--font-code);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+.office3d-intro::after {
+  content: '';
+  width: 180px;
+  height: 1px;
+  margin-top: 6px;
+  background: linear-gradient(90deg, transparent, var(--accent-500), transparent);
+  animation: office3d-intro-line 2.8s ease-out forwards;
+}
+@keyframes office3d-intro {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes office3d-intro-line {
+  from {
+    width: 0;
+  }
+  40% {
+    width: 180px;
+  }
+}
+
 @keyframes office3d-pop {
   from {
     opacity: 0;
