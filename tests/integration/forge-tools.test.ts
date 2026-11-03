@@ -87,7 +87,7 @@ function setup(files: Record<string, string>) {
     runsDir: join(forgeDir, 'runs'),
     tools: {
       forgeDir,
-      runner: (dir) => Promise.resolve(createToolRunner(nodeExe, dir)),
+      runner: (dir) => Promise.resolve(createToolRunner(nodeExe, dir, nodeVersion)),
       mcp: () => mcp,
     },
   });
@@ -107,7 +107,11 @@ describe.skipIf(!nodeRunsTools(nodeVersion))('Forge self-built tools (real Node)
     forge.start({ kind: 'tool', goal: 'A tool that adds two numbers together', name: 'calc' });
     await settle(forge);
     const r = forge.status();
-    expect(r?.error).toBeUndefined();
+    // On failure, show what each check printed (the sandbox's own error), not just "the unit check failed".
+    const why = (r?.report?.results ?? [])
+      .map((g) => `[${g.id} ${g.ok ? 'ok' : 'FAILED'}]\n${g.tail}`)
+      .join('\n');
+    expect(r?.error, why).toBeUndefined();
     expect(r?.state).toBe('passed');
     expect(r?.tool?.tools.map((t) => t.name)).toEqual(['add_numbers', 'read_path']);
     expect(await forge.installTool()).toBe('added');

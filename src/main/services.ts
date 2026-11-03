@@ -557,7 +557,7 @@ export function createServices(opts: ServiceOptions) {
           throw new Error(
             `Self-built tools need Node.js 22.14+ (or 24+) on this PC; ${node ? `you have ${node.version}` : 'none was found'}.`,
           );
-        return createToolRunner(node.exe, dir);
+        return createToolRunner(node.exe, dir, node.version);
       },
       mcp: () => forgeSlots.mcp,
     },

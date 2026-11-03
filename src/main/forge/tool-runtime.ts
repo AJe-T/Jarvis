@@ -185,7 +185,10 @@ export function sandboxArgs(dir: string): string[] {
   return ['--permission', `--allow-fs-read=${real}`, `--allow-fs-write=${join(real, DATA_DIR)}`];
 }
 
-/** `--permission` is stable from Node 22.13 / 23.5, and `--test-isolation` from 22.14 / 23.6. */
+/**
+ * `--permission` is stable from Node 22.13 / 23.5; running the tests in one process (no child
+ * processes, which the sandbox refuses) needs test isolation off, from 22.14 / 23.6.
+ */
 export function nodeRunsTools(version: string): boolean {
   const m = /^v?(\d+)\.(\d+)/.exec(version.trim());
   if (!m) return false;
@@ -213,4 +216,17 @@ How a tool works:
 Checks (run_check): "test" runs ${TEST_FILE} in the sandbox, "typecheck" checks the syntax of every .mjs file, "lint" checks the imports. All three must pass before you finish.
 
 Finish with a short summary for Sir: what each tool does, an example of asking for it, and its limits.`;
+}
+
+/**
+ * The flag that runs a tool's tests in one process (the sandbox refuses the test runner's child
+ * processes). Node 23.6+ and 24+ call it `--test-isolation`; Node 22 only knows
+ * `--experimental-test-isolation`, and stops on the other name with "bad option" (2.55.1: every
+ * self-built tool failed its unit check on Node 22 LTS because of this).
+ */
+export function testIsolationFlag(version: string): string {
+  const m = /^v?(\d+)\.(\d+)/.exec(version.trim());
+  const [major, minor] = m ? [Number(m[1]), Number(m[2])] : [0, 0];
+  const stable = major >= 24 || (major === 23 && minor >= 6);
+  return stable ? '--test-isolation=none' : '--experimental-test-isolation=none';
 }

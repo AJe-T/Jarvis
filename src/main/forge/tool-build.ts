@@ -23,6 +23,7 @@ import {
   RUNTIME_FILE,
   sandboxArgs,
   TEST_FILE,
+  testIsolationFlag,
   TOOL_BUILTINS,
   TOOL_FILE,
   TOOL_GUARD,
@@ -149,15 +150,18 @@ export function toolEnv(env: NodeJS.ProcessEnv = process.env): Record<string, st
 
 export interface ToolRunner {
   nodeExe: string;
+  /** Node's version (`v22.23.4`): some flags have different names across versions. */
+  version: string;
   run(
     args: string[],
     opts: { timeoutMs: number; signal: AbortSignal },
   ): Promise<{ code: number | null; out: string }>;
 }
 
-export function createToolRunner(nodeExe: string, dir: string): ToolRunner {
+export function createToolRunner(nodeExe: string, dir: string, version: string): ToolRunner {
   return {
     nodeExe,
+    version,
     // The real long path: relative files resolve from here, and the sandbox only allows that form.
     run: (args, opts) =>
       runProcess(nodeExe, args, {
@@ -194,7 +198,13 @@ export async function toolCheck(
   // The guard loads first, so the tests run under the same limits as the installed tool.
   const guard = pathToFileURL(join(realpathSync.native(dir), GUARD_FILE)).href;
   const r = await runner.run(
-    [...sandbox, `--import=${guard}`, '--test', '--test-isolation=none', `./${TEST_FILE}`],
+    [
+      ...sandbox,
+      `--import=${guard}`,
+      '--test',
+      testIsolationFlag(runner.version),
+      `./${TEST_FILE}`,
+    ],
     { timeoutMs: 2 * MIN, signal },
   );
   return result('unit', r.code === 0, r.out, Date.now() - start);
