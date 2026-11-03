@@ -24,6 +24,8 @@ bundled third-party assets and separately-run components whose licences require 
 | eSpeak NG (**not bundled**; Sir installs it, Jarvis runs it as a separate program) | https://github.com/espeak-ng/espeak-ng | GPL-3.0 | Text to phonemes for Kokoro and Piper |
 | REA, rea-agents 6.4.0 (optional, **not bundled**; run via npx only when used) | https://github.com/morluto/rea | MIT | Reverse-engineering MCP server for Claude Code sessions and the Connections catalogue |
 | Mermaid 12.2.0 | https://github.com/mermaid-js/mermaid | MIT | Diagrams in chat artifacts (renderer only, bundled by Vite) |
+| three.js 0.186.1 | https://github.com/mrdoob/three.js | MIT | 3D NPC office (renderer only, bundled by Vite, loaded when the office opens) |
+| @react-three/fiber 9.8.2 (pmndrs) | https://github.com/pmndrs/react-three-fiber | MIT | React renderer for the 3D NPC office |
 | HyperFrames, hyperframes 0.8.157 (optional, **not bundled**; run via npx only when `create_video` is used) | https://github.com/heygen-com/hyperframes | Apache-2.0 | Renders HTML compositions to video |
 | unpdf 1.8.1 (bundles Mozilla pdf.js, Apache-2.0) | https://github.com/unjs/unpdf · https://github.com/mozilla/pdf.js | MIT (unpdf), Apache-2.0 (pdf.js) | `read_document`: text of PDF files |
 | ms-marco-MiniLM-L-6-v2 cross-encoder, ONNX by Xenova (downloaded on demand) | https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2 | Apache-2.0 | Memory re-ranking |
@@ -43,6 +45,8 @@ npm dependencies keep their own licence files inside `node_modules`; all product
 dependencies are MIT / Apache-2.0 / BSD / ISC / OFL (checked at Phase 0, see docs/TRD.md §4).
 
 ## Projects whose ideas JARVIS re-implements (no code copied)
+
+- **3D NPC office (2.51), six agent-office projects studied, ideas only, no code or art used** (every model and texture in the office is generated in code): **Agentshire** (MIT code; KayKit/Kenney art not used): NPCs that walk between desk and meeting, day and night from the clock, completion fireworks, click for a status card. **JuniorXcoder/hermes-virtual-office** (MIT): division pods with desks, avatars walking to a colleague during agent-to-agent calls, a light sprite mode. **arturitu/the-delegation** (MIT code; CC BY-NC 4.0 assets not used): a state machine of walking/sitting/working/talking with speech bubbles and a status overlay per agent. **pablodelucca/pixel-agents** (MIT): a pose per activity (typing, reading, waiting) and a sign when an agent needs you. **a16z-infra/ai-town** (MIT): agents in a living place rather than a list. **Claw3D** (MIT, already credited for 2.21): a 3D workspace for agents.
 
 - **Tencent/WeKnora** — MIT (third-party parts under their own licences). Idea: read Office and PDF documents into plain text for the assistant.
 - **vectorize-io/hindsight** — MIT. Ideas: re-rank fused memory search results with a cross-encoder; a "reflect" pass that turns many facts into evidence-linked observations.

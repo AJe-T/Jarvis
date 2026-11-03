@@ -13,6 +13,22 @@ export interface Bubble {
   at: number;
 }
 
+/**
+ * Someone tagged someone (2.51): the 3D office flies a packet from one desk to the other. `from` and
+ * `to` are NPC ids, 'jarvis' or 'sir'; `error` when the message was a failure note.
+ */
+export interface Handoff {
+  id: string;
+  from: string;
+  to: string;
+  at: number;
+  error: boolean;
+}
+
+/** Hand-offs live this long, and only the newest few are kept (a busy office stays readable). */
+export const HANDOFF_MS = 2500;
+const MAX_HANDOFFS = 16;
+
 interface NpcStoreState {
   npcs: Npc[];
   states: Record<string, NpcState>;
@@ -24,6 +40,7 @@ interface NpcStoreState {
   channels: Record<string, NpcMessage[]>;
   meetings: NpcMeeting[];
   bubbles: Record<string, Bubble>;
+  handoffs: Handoff[];
   load(): Promise<void>;
   loadChannel(channel: string): Promise<void>;
   loadMeetings(): Promise<void>;
@@ -69,6 +86,7 @@ export const useNpcStore = create<NpcStoreState>((set, get) => ({
   channels: {},
   meetings: [],
   bubbles: {},
+  handoffs: [],
 
   async load() {
     const r = await guarded(call('npcs:list', {}));
@@ -111,8 +129,22 @@ export const useNpcStore = create<NpcStoreState>((set, get) => ({
       m.author.startsWith('npc_') || m.author === 'jarvis'
         ? { ...get().bubbles, [m.author]: { text: m.text, at: Date.now() } }
         : get().bubbles;
+    const now = Date.now();
+    const handoffs = [
+      ...get().handoffs.filter((h) => now - h.at < HANDOFF_MS),
+      ...m.mentions
+        .filter((to) => to !== m.author)
+        .map((to) => ({
+          id: `${m.id}:${to}`,
+          from: m.author,
+          to,
+          at: now,
+          error: m.text.startsWith('⚠️'),
+        })),
+    ].slice(-MAX_HANDOFFS);
     set({
       bubbles,
+      handoffs,
       // The channel may have loaded this message already (load and event racing).
       ...(list && !list.some((x) => x.id === m.id)
         ? { channels: { ...get().channels, [m.channel]: [...list, m] } }

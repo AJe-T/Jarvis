@@ -220,3 +220,120 @@
     animation: none !important;
   }
 }
+
+/* ── 3D office (2.51) ─────────────────────────────────────────────────────── */
+
+.office3d {
+  background:
+    radial-gradient(ellipse 80% 60% at 55% 40%, var(--accent-tint), transparent 70%),
+    linear-gradient(180deg, var(--bg-app), color-mix(in oklab, var(--bg-app) 70%, #000));
+}
+
+/* A tag sits at a head's screen position (set every frame in OverlaySync). */
+.office3d-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  will-change: transform;
+}
+
+.office3d-name {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--npc) 55%, transparent);
+  background: color-mix(in oklab, var(--bg-app) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--ink-100);
+  font-family: var(--font-code);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 0 14px -6px var(--npc);
+  transition:
+    scale 120ms ease,
+    box-shadow 120ms ease;
+}
+.office3d-name:not(:disabled) {
+  cursor: pointer;
+}
+.office3d-name:not(:disabled):hover,
+.office3d-name:focus-visible,
+.office3d-name.is-selected {
+  scale: 1.12;
+  box-shadow: 0 0 18px -2px var(--npc);
+}
+.office3d-name.is-selected {
+  border-color: var(--npc);
+}
+.office3d-tag[data-state='off'] .office3d-name {
+  opacity: 0.6;
+}
+
+.office3d-bubble {
+  max-width: 220px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--npc);
+  background: var(--surface-1);
+  color: var(--ink-100);
+  font-size: 11px;
+  line-height: 1.35;
+  box-shadow: 0 6px 18px -8px var(--npc);
+  animation: office3d-pop 160ms ease-out;
+}
+
+.office3d-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--line-subtle);
+  background: color-mix(in oklab, var(--bg-app) 75%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--ink-300);
+  font-family: var(--font-code);
+  font-size: 11px;
+}
+.office3d-btn:hover {
+  color: var(--ink-100);
+  background: var(--hover);
+}
+
+@keyframes office3d-pop {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .office3d-bubble {
+    animation: none;
+  }
+  .office3d-name {
+    transition: none;
+  }
+}
+
+/* Far away (a big team, zoomed out): the badge only; the name comes back on hover, focus or selection. */
+.office3d-tag[data-far='1']
+  .office3d-name:not(:hover, :focus-visible, .is-selected)
+  .office3d-label,
+.office3d-tag[data-far='1'] .office3d-name:not(:hover, :focus-visible, .is-selected) .npc-typing {
+  display: none;
+}
+.office3d-tag[data-far='1'] .office3d-name:not(:hover, :focus-visible, .is-selected) {
+  padding: 2px 5px;
+}

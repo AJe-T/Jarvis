@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Building2, MessagesSquare, Plus, Users, Contact } from 'lucide-react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { Box, Building2, MessagesSquare, Plus, Users, Contact } from 'lucide-react';
 import clsx from 'clsx';
 import { OFFICE, type Npc } from '@shared/npcs';
 import { Button } from '../../components/ui/button';
@@ -8,6 +8,10 @@ import { useNpcStore } from '../../stores/npc-store';
 import { NpcEditor } from './npc-editor';
 import { MeetingRoom } from './meeting-room';
 import { OfficeFloor } from './office-floor';
+import { hasWebGL } from './office3d/webgl';
+
+// three.js loads only when the 3D office is opened, not with the app.
+const Office3D = lazy(() => import('./office3d/office-3d').then((m) => ({ default: m.Office3D })));
 import { Dossier, Roster } from './roster';
 import { ChannelLog, Composer, TeamChat } from './team-chat';
 import './npcs.css';
@@ -25,6 +29,17 @@ const TABS: Array<{ id: Tab; label: string; Icon: typeof Users }> = [
   { id: 'roster', label: 'Roster', Icon: Contact },
 ];
 const TAB_KEY = 'jarvis.npcs.tab';
+const OFFICE_KEY = 'jarvis.npcs.office';
+
+/** 2.51: the 3D office unless this PC can't draw it or Sir picked the classic one. */
+function savedOffice(): '3d' | 'classic' {
+  try {
+    if (localStorage.getItem(OFFICE_KEY) === 'classic') return 'classic';
+  } catch {
+    // not remembered: use the default
+  }
+  return hasWebGL() ? '3d' : 'classic';
+}
 
 function savedTab(): Tab {
   try {
@@ -45,6 +60,15 @@ export function NpcsView(): React.JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
   const [meeting, setMeeting] = useState<string | null>(null);
   const [editing, setEditing] = useState<Npc | 'new' | null>(null);
+  const [office, setOffice] = useState<'3d' | 'classic'>(savedOffice);
+  const pickOffice = (o: '3d' | 'classic'): void => {
+    setOffice(o);
+    try {
+      localStorage.setItem(OFFICE_KEY, o);
+    } catch {
+      // not remembered
+    }
+  };
   useEffect(() => {
     void load();
     void loadMeetings();
@@ -109,7 +133,39 @@ export function NpcsView(): React.JSX.Element {
 
       {tab === 'office' && (
         <div className="flex min-h-0 flex-1">
-          <OfficeFloor selected={selected} onSelect={setSelected} />
+          {office === '3d' ? (
+            <Suspense
+              fallback={
+                <div
+                  className="office3d flex min-h-0 flex-1 items-center justify-center"
+                  role="region"
+                  aria-label="Office"
+                >
+                  <span className="hud-label">building the office…</span>
+                </div>
+              }
+            >
+              <Office3D
+                selected={selected}
+                onSelect={setSelected}
+                onClassic={() => pickOffice('classic')}
+              />
+            </Suspense>
+          ) : (
+            <div className="relative flex min-h-0 flex-1">
+              <OfficeFloor selected={selected} onSelect={setSelected} />
+              {hasWebGL() && (
+                <button
+                  type="button"
+                  className="office3d-btn absolute top-3 right-3"
+                  onClick={() => pickOffice('3d')}
+                  title="The 3D office"
+                >
+                  <Box size={14} aria-hidden /> 3D office
+                </button>
+              )}
+            </div>
+          )}
           <aside className="flex w-96 shrink-0 flex-col border-l border-line-subtle bg-app max-lg:hidden">
             {current ? (
               <Dossier
