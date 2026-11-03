@@ -21,7 +21,7 @@ import { fakeEncryptor, setupServices } from './helpers';
 
 /**
  * Forge phase F5 against real git: a bare "GitHub" repository stands in for origin through git's
- * url.insteadOf. Shipping bumps, commits, merges into dev, tags and pushes; a conflict stops it with
+ * url.insteadOf. Shipping bumps, commits, merges into main, tags and pushes; a conflict stops it with
  * nothing pushed; a poisoned .git/config can't redirect the push. Rollback goes through the real
  * services wiring and the next start restores Sir's data.
  */
@@ -39,14 +39,14 @@ function sh(cwd: string, ...args: string[]): string {
   });
 }
 
-/** Another PC pushing to dev while Forge works. */
+/** Another PC pushing to main while Forge works. */
 function pushFromElsewhere(name: string, file: string, text: string): void {
   const other = join(root, name);
-  sh(root, 'clone', '--branch', 'dev', origin, other);
+  sh(root, 'clone', '--branch', 'main', origin, other);
   writeFileSync(join(other, file), text);
   sh(other, 'add', '-A');
   sh(other, 'commit', '-m', `elsewhere: ${name}`);
-  sh(other, 'push', 'origin', 'dev');
+  sh(other, 'push', 'origin', 'main');
 }
 
 beforeAll(() => {
@@ -55,14 +55,14 @@ beforeAll(() => {
   const config = join(root, 'gitconfig');
   writeFileSync(
     config,
-    `[user]\n\tname = Test\n\temail = test@example.com\n[url "${origin.replace(/\\/g, '/')}"]\n\tinsteadOf = ${URL}\n[init]\n\tdefaultBranch = dev\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n[core]\n\tfsmonitor = false\n`,
+    `[user]\n\tname = Test\n\temail = test@example.com\n[url "${origin.replace(/\\/g, '/')}"]\n\tinsteadOf = ${URL}\n[init]\n\tdefaultBranch = main\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n[core]\n\tfsmonitor = false\n`,
   );
   for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM']) saved[k] = process.env[k];
   process.env['GIT_CONFIG_GLOBAL'] = config;
   process.env['GIT_CONFIG_NOSYSTEM'] = '1';
-  sh(root, 'init', '--bare', '-b', 'dev', origin);
+  sh(root, 'init', '--bare', '-b', 'main', origin);
   const seed = join(root, 'seed');
-  sh(root, 'init', '-b', 'dev', seed);
+  sh(root, 'init', '-b', 'main', seed);
   writeFileSync(join(seed, 'package.json'), '{\n  "name": "jarvis",\n  "version": "2.37.0"\n}\n');
   writeFileSync(
     join(seed, 'package-lock.json'),
@@ -77,7 +77,7 @@ beforeAll(() => {
   writeFileSync(join(seed, 'src', 'a.ts'), 'export const a = 1;\n');
   sh(seed, 'add', '-A');
   sh(seed, 'commit', '-m', 'init');
-  sh(seed, 'push', origin, 'dev');
+  sh(seed, 'push', origin, 'main');
 });
 
 afterAll(() => {
@@ -142,25 +142,25 @@ function evilCommit(dir: string): string {
 }
 
 describe('Forge shipping (real git)', { timeout: 60_000 }, () => {
-  it('bumps, merges into dev, tags and pushes; the installer is kept', async () => {
+  it('bumps, merges into main, tags and pushes; the installer is kept', async () => {
     const { ship, deps } = await runOnce('one', (d) =>
       writeFileSync(join(d, 'src', 'a.ts'), 'export const a = 2;\n'),
     );
     await shipChange(deps, ship);
     expect(ship.done).toEqual(['bumped', 'built', 'backed-up', 'merged', 'tagged', 'pushed']);
     expect(ship).toMatchObject({ version: '2.38.0', merge: 'fast-forward' });
-    expect(sh(origin, 'show', 'dev:package.json')).toContain('"version": "2.38.0"');
-    expect(sh(origin, 'show', 'dev:package-lock.json')).toContain('"version": "2.38.0"');
-    expect(sh(origin, 'show', 'dev:docs/BIBLE.md')).toContain(
+    expect(sh(origin, 'show', 'main:package.json')).toContain('"version": "2.38.0"');
+    expect(sh(origin, 'show', 'main:package-lock.json')).toContain('"version": "2.38.0"');
+    expect(sh(origin, 'show', 'main:docs/BIBLE.md')).toContain(
       '| 2.38 | **Built by Forge:** Add one |',
     );
-    expect(sh(origin, 'show', 'dev:src/a.ts')).toBe('export const a = 2;\n');
+    expect(sh(origin, 'show', 'main:src/a.ts')).toBe('export const a = 2;\n');
     expect(sh(origin, 'tag', '--list')).toContain('v2.38.0');
-    expect(sh(origin, 'log', '-1', '--format=%s', 'dev')).toBe('chore(release): v2.38.0\n');
+    expect(sh(origin, 'log', '-1', '--format=%s', 'main')).toBe('chore(release): v2.38.0\n');
     expect(ship.installer).toBe(join(root, 'installers', 'Jarvis-Setup-2.38.0.exe'));
   });
 
-  it('makes a merge commit when dev moved, and a poisoned .git/config cannot redirect the push', async () => {
+  it('makes a merge commit when main moved, and a poisoned .git/config cannot redirect the push', async () => {
     const { ship, deps, dir } = await runOnce('two', (d) =>
       writeFileSync(join(d, 'src', 'b.ts'), 'export const b = 1;\n'),
     );
@@ -173,22 +173,22 @@ describe('Forge shipping (real git)', { timeout: 60_000 }, () => {
     );
     await shipChange(deps, ship);
     expect(ship).toMatchObject({ version: '2.39.0', merge: 'merge commit' });
-    expect(sh(origin, 'show', 'dev:src/b.ts')).toBe('export const b = 1;\n');
-    expect(sh(origin, 'show', 'dev:src/c.ts')).toBe('export const c = 1;\n');
+    expect(sh(origin, 'show', 'main:src/b.ts')).toBe('export const b = 1;\n');
+    expect(sh(origin, 'show', 'main:src/c.ts')).toBe('export const c = 1;\n');
     expect(sh(origin, 'tag', '--list')).toContain('v2.39.0');
     expect(sh(decoy, 'for-each-ref')).toBe('');
     expect(ship.previousInstaller).toBe(join(root, 'installers', 'Jarvis-Setup-2.38.0.exe'));
   });
 
-  it('a conflict stops before the tag and the push; dev on GitHub is unchanged', async () => {
+  it('a conflict stops before the tag and the push; main on GitHub is unchanged', async () => {
     const { ship, deps } = await runOnce('three', (d) =>
       writeFileSync(join(d, 'src', 'a.ts'), 'export const a = 3;\n'),
     );
     pushFromElsewhere('pc3', 'src/a.ts', 'export const a = 99;\n');
-    const before = sh(origin, 'rev-parse', 'dev');
+    const before = sh(origin, 'rev-parse', 'main');
     await expect(shipChange(deps, ship)).rejects.toThrow(/conflict/);
     expect(ship.done).toEqual(['bumped', 'built', 'backed-up']);
-    expect(sh(origin, 'rev-parse', 'dev')).toBe(before);
+    expect(sh(origin, 'rev-parse', 'main')).toBe(before);
     expect(sh(origin, 'tag', '--list')).not.toContain('v2.40.0');
   });
 });
@@ -202,33 +202,33 @@ describe(
         writeFileSync(join(d, 'src', 'd.ts'), 'export const d = 1;\n'),
       );
       sh(dir, 'update-ref', 'refs/heads/forge/four', evilCommit(dir));
-      const before = sh(origin, 'rev-parse', 'dev');
+      const before = sh(origin, 'rev-parse', 'main');
       await expect(shipChange(deps, ship)).rejects.toThrow(/changed since its checks/);
-      expect(sh(origin, 'rev-parse', 'dev')).toBe(before);
+      expect(sh(origin, 'rev-parse', 'main')).toBe(before);
     });
 
-    it('a tag or branch named like the run branch or origin/dev is never picked instead', async () => {
+    it('a tag or branch named like the run branch or origin/main is never picked instead', async () => {
       const { ship, deps, dir } = await runOnce('five', (d) =>
         writeFileSync(join(d, 'src', 'e.ts'), 'export const e = 1;\n'),
       );
       const evil = evilCommit(dir);
       sh(dir, 'tag', 'forge/five', evil);
-      sh(dir, 'branch', 'origin/dev', evil);
-      sh(dir, 'tag', 'dev', evil);
+      sh(dir, 'branch', 'origin/main', evil);
+      sh(dir, 'tag', 'main', evil);
       await shipChange(deps, ship);
-      expect(sh(origin, 'show', 'dev:src/e.ts')).toBe('export const e = 1;\n');
-      expect(() => sh(origin, 'show', 'dev:src/evil.ts')).toThrow();
+      expect(sh(origin, 'show', 'main:src/e.ts')).toBe('export const e = 1;\n');
+      expect(() => sh(origin, 'show', 'main:src/evil.ts')).toThrow();
     });
 
     it('npm scripts that rewrite .git/config cannot change what is fetched and merged', async () => {
       const decoy = join(root, 'decoy2.git');
       sh(root, 'clone', '-q', '--bare', origin, decoy);
       const other = join(root, 'pc-decoy');
-      sh(root, 'clone', '-q', '--branch', 'dev', decoy, other);
+      sh(root, 'clone', '-q', '--branch', 'main', decoy, other);
       writeFileSync(join(other, 'src', 'decoy.ts'), 'export const decoy = 1;\n');
       sh(other, 'add', '-A');
       sh(other, 'commit', '-q', '-m', 'decoy');
-      sh(other, 'push', '-q', 'origin', 'dev');
+      sh(other, 'push', '-q', 'origin', 'main');
       let dir = '';
       const {
         ship,
@@ -244,8 +244,8 @@ describe(
       );
       dir = d0;
       await shipChange(deps, ship);
-      expect(sh(origin, 'show', 'dev:src/f.ts')).toBe('export const f = 1;\n');
-      expect(() => sh(origin, 'show', 'dev:src/decoy.ts')).toThrow();
+      expect(sh(origin, 'show', 'main:src/f.ts')).toBe('export const f = 1;\n');
+      expect(() => sh(origin, 'show', 'main:src/decoy.ts')).toThrow();
     });
   },
 );

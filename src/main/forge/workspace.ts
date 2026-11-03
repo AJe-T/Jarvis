@@ -10,7 +10,7 @@ import { parseNameStatus, type ChangedFile } from './protected';
 /**
  * Forge's own copy of Jarvis's source (Sir's decision 2026-10-28: a separate clone only Jarvis uses,
  * so its experiments and Sir's own work never mix). One clone; each run gets a fresh branch
- * `forge/<slug>` from origin/dev and a fresh `npm ci`. Git and npm run as programs with argument
+ * `forge/<slug>` from origin/main and a fresh `npm ci`. Git and npm run as programs with argument
  * arrays, never through a shell.
  *
  * The checks run the changed code, which could write into `.git` or `node_modules`, so nothing there
@@ -18,7 +18,11 @@ import { parseNameStatus, type ChangedFile } from './protected';
  * never runs hooks or an fsmonitor, and `npm ci` reinstalls every package from the lockfile.
  */
 
-export const BASE_BRANCH = 'dev';
+/**
+ * The branch every run starts from and every approved change is merged into. `main` since 2.50
+ * (Sir, 2026-11-03: main is the only trunk); it was `dev`, which drifted behind main.
+ */
+export const BASE_BRANCH = 'main';
 const MAX_PATCH = 2_000_000;
 const MAX_OUT = 20_000;
 const MIN = 60_000;
@@ -106,7 +110,7 @@ export function parseNumstat(out: string): DiffStat[] {
 
 export interface Workspace {
   dir: string;
-  /** Clone (first time) or fetch, then a clean branch `forge/<slug>` at origin/dev. Returns its base commit. */
+  /** Clone (first time) or fetch, then a clean branch `forge/<slug>` at origin/main. Returns its base commit. */
   prepare(repoUrl: string, slug: string): Promise<{ branch: string; base: string }>;
   /** `npm ci`: every run starts from the lockfile, never from a previous run's node_modules. */
   install(signal: AbortSignal): Promise<{ ok: boolean; out: string }>;
@@ -165,7 +169,7 @@ export function createWorkspace(deps: { dir: string; git: GitFn; run: GateRunner
       const branch = `forge/${slug}`;
       await git(['reset', '--hard']);
       await git(['clean', '-fdx', '-e', 'node_modules']);
-      // The full ref: a branch or tag a previous run's checks named "origin/dev" can't stand in.
+      // The full ref: a branch or tag a previous run's checks named "origin/main" can't stand in.
       await git(['checkout', '-B', branch, `refs/remotes/origin/${BASE_BRANCH}`]);
       return { branch, base: (await git(['rev-parse', 'HEAD'])).trim() };
     },

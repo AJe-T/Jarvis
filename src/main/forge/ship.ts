@@ -16,7 +16,7 @@ import { BASE_BRANCH, type GitFn, type Workspace } from './workspace';
 /**
  * Forge phase F5 (docs/Forge.md §3 step 10): a passed change becomes a real version only after Sir
  * approves it. In Forge's clone, never Sir's folder: bump the version, add the BIBLE row, commit,
- * reinstall from the lockfile and build the installer, back up Sir's data, merge into dev, tag,
+ * reinstall from the lockfile and build the installer, back up Sir's data, merge into main, tag,
  * push. Every step is recorded, so a failed push (or merge, or build) is reported and Sir's next
  * approval resumes at that step; nothing is retried on its own. Installing stays Sir's action.
  */
@@ -39,7 +39,7 @@ export interface ShipInfo {
   /** Sir's database (settings live in it) as it was before this build. */
   backup?: string;
   merge?: 'fast-forward' | 'merge commit';
-  /** The version-bump commit on top of `head`, and what dev became after the merge. */
+  /** The version-bump commit on top of `head`, and what main became after the merge. */
   release?: string;
   merged?: string;
   error?: string;
@@ -177,7 +177,7 @@ async function bump(d: ShipDeps, s: ShipInfo): Promise<void> {
   Object.assign(s, { fromVersion: from, version, release: await sha(d, 'HEAD') });
 }
 
-/** A commit id, never a short name: a tag or branch called "dev" or "origin/dev" can't stand in. */
+/** A commit id, never a short name: a tag or branch called "main" or "origin/main" can't stand in. */
 async function sha(d: ShipDeps, ref: string): Promise<string> {
   return (await d.git(['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`])).trim();
 }
@@ -230,12 +230,12 @@ async function build(d: ShipDeps, s: ShipInfo): Promise<void> {
 }
 
 async function merge(d: ShipDeps, s: ShipInfo): Promise<void> {
-  // dev may have moved while the installer was built.
+  // main may have moved while the installer was built.
   await d.git(['fetch', '--prune', 'origin'], { timeoutMs: 10 * MIN });
   const release = s.release ?? '';
-  const dev = await sha(d, `refs/remotes/origin/${BASE_BRANCH}`);
-  await d.git(['checkout', '-f', '-B', BASE_BRANCH, dev]);
-  const ff = (await d.git(['merge-base', dev, release])).trim() === dev;
+  const base = await sha(d, `refs/remotes/origin/${BASE_BRANCH}`);
+  await d.git(['checkout', '-f', '-B', BASE_BRANCH, base]);
+  const ff = (await d.git(['merge-base', base, release])).trim() === base;
   try {
     if (ff) await d.git(['merge', '--ff-only', release]);
     else

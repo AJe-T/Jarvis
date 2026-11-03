@@ -80,7 +80,7 @@ function setup(opts: {
     readText: (rel) =>
       existsSync(join(repo, rel)) ? readFileSync(join(repo, rel), 'utf8') : `contents of ${rel}`,
   };
-  // A tiny model of the clone: the run's commit, the version bump on top, dev, the merge result.
+  // A tiny model of the clone: the run's commit, the version bump on top, main, the merge result.
   let tip = 'aaa111';
   let merged = false;
   const git: GitFn = (args) => {
@@ -598,7 +598,7 @@ describe('Forge shipping (F5)', () => {
     );
     expect(s.calls).toContain('git:merge --ff-only bbb222');
     expect(s.calls).toContain(
-      'git:push --atomic origin eee333:refs/heads/dev refs/tags/v2.38.0:refs/tags/v2.38.0',
+      'git:push --atomic origin eee333:refs/heads/main refs/tags/v2.38.0:refs/tags/v2.38.0',
     );
     expect(s.calls).toContain('git:add -- package.json package-lock.json docs/BIBLE.md');
     expect(readFileSync(join(s.repo, 'package.json'), 'utf8')).toContain('"version": "2.38.0"');

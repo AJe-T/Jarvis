@@ -8,6 +8,7 @@ import { describeShip } from './ship';
 import { describeStudy, parseStudy } from './study';
 import { REA_PACKAGE } from '../claude-sessions/rea';
 import { connectionName, TOOL_NAME_RE } from './tool-build';
+import { BASE_BRANCH } from './workspace';
 
 const MAX_FILES_SHOWN = 40;
 
@@ -64,11 +65,11 @@ export function approvalDetails(r: ForgeRun | null, runId: string): Partial<Conf
         ? [`PROTECTED FILES YOU ALLOWED:\n${r.approved.map((p) => `- ${p}`).join('\n')}`]
         : []),
       `Claude's summary (its own words, not checked by Forge):\n${(r.summary ?? '').slice(0, 3000)}`,
-      `Claude cost: about $${(r.costUsd ?? 0).toFixed(2)}. Run ${r.id}, branch ${r.branch ?? ''}, commit ${(r.head ?? '').slice(0, 10)}. Forge also adds the version bump and, if missing, a BIBLE row; if dev moved meanwhile, a merge commit.`,
+      `Claude cost: about $${(r.costUsd ?? 0).toFixed(2)}. Run ${r.id}, branch ${r.branch ?? ''}, commit ${(r.head ?? '').slice(0, 10)}. Forge also adds the version bump and, if missing, a BIBLE row; if ${BASE_BRANCH} moved meanwhile, a merge commit.`,
     ].join('\n\n'),
     detailsKind: 'text',
     purpose:
-      'Forge bumps the version, builds the installer, backs up your data, merges into dev, tags it and pushes to GitHub. It never installs: you run the installer.',
+      `Forge bumps the version, builds the installer, backs up your data, merges into ${BASE_BRANCH}, tags it and pushes to GitHub. It never installs: you run the installer.`,
   };
 }
 
@@ -212,7 +213,7 @@ export function createForgeTools(deps: {
     defineTool({
       name: 'forge_approve',
       description:
-        "Ship the Forge change that just passed every check, after sir approves it (Forge phase F5): in Forge's own clone it bumps the version, builds the installer, backs up sir's data, merges the branch into dev, tags it and pushes to GitHub, then reports the installer path. Takes 10–30 minutes; sir is told when it ends. Never installs: sir runs the installer himself. Only when forge_status shows a change run PASSED and sir wants it shipped; runId is the id forge_status shows. After a failed step (push refused, merge conflict) it continues from that step.",
+        "Ship the Forge change that just passed every check, after sir approves it (Forge phase F5): in Forge's own clone it bumps the version, builds the installer, backs up sir's data, merges the branch into main, tags it and pushes to GitHub, then reports the installer path. Takes 10–30 minutes; sir is told when it ends. Never installs: sir runs the installer himself. Only when forge_status shows a change run PASSED and sir wants it shipped; runId is the id forge_status shows. After a failed step (push refused, merge conflict) it continues from that step.",
       input: z.object({ runId: z.string().regex(/^forge_[a-z0-9]+$/) }),
       tier: 'CONFIRM',
       timeoutMs: 10_000,

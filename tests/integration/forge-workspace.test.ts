@@ -24,12 +24,12 @@ beforeAll(() => {
   const config = join(root, 'gitconfig');
   writeFileSync(
     config,
-    `[user]\n\tname = Test\n\temail = test@example.com\n[url "${origin.replace(/\\/g, '/')}"]\n\tinsteadOf = ${URL}\n[init]\n\tdefaultBranch = dev\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n[core]\n\tfsmonitor = false\n`,
+    `[user]\n\tname = Test\n\temail = test@example.com\n[url "${origin.replace(/\\/g, '/')}"]\n\tinsteadOf = ${URL}\n[init]\n\tdefaultBranch = main\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n[core]\n\tfsmonitor = false\n`,
   );
   for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM']) saved[k] = process.env[k];
   process.env['GIT_CONFIG_GLOBAL'] = config;
   process.env['GIT_CONFIG_NOSYSTEM'] = '1';
-  sh(origin, 'init', '-b', 'dev');
+  sh(origin, 'init', '-b', 'main');
   writeFileSync(join(origin, 'package-lock.json'), '{"lockfileVersion":3}');
   writeFileSync(join(origin, 'CLAUDE.md'), '# rules');
   mkdirSync(join(origin, 'src'));
@@ -62,7 +62,7 @@ describe('Forge workspace (real git)', () => {
     });
   };
 
-  it('clones, branches from origin/dev, commits and diffs the change', async () => {
+  it('clones, branches from origin/main, commits and diffs the change', async () => {
     const w = ws();
     const { branch, base } = await w.prepare(URL, 'one');
     expect(branch).toBe('forge/one');
@@ -98,7 +98,7 @@ describe('Forge workspace (real git)', () => {
     expect(w.readText('src/b.ts', 100)).toBe('export const b = 1;\n');
   });
 
-  it('the next run starts clean from origin/dev with .git/config as cloned, node_modules kept', async () => {
+  it('the next run starts clean from origin/main with .git/config as cloned, node_modules kept', async () => {
     const w = ws();
     mkdirSync(join(w.dir, 'node_modules'), { recursive: true });
     writeFileSync(join(w.dir, 'node_modules', 'keep.txt'), 'kept');

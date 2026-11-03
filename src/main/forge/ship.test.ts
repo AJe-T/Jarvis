@@ -117,7 +117,7 @@ describe('Forge shipping (F5) helpers', () => {
       at: 0,
     });
     expect(text).toContain('v2.38.0 (from 2.37.0): FAILED');
-    expect(text).toContain('merged into dev (fast-forward)');
+    expect(text).toContain('merged into main (fast-forward)');
     expect(text).toContain('Installer: C:/i/Jarvis-Setup-2.38.0.exe');
     expect(text).toContain('Stopped: git push: denied');
     expect(text).not.toContain('pushed to GitHub');

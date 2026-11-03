@@ -40,7 +40,7 @@ import {
 } from './tool-build';
 import { toolRules } from './tool-runtime';
 import { createDelegateEdit, type WorkerDeps, type WorkerStats } from './workers';
-import type { DiffStat, GitFn, Workspace } from './workspace';
+import { BASE_BRANCH, type DiffStat, type GitFn, type Workspace } from './workspace';
 
 /**
  * One Forge run (docs/Forge.md §3). A **change** (F1–F2): prepare the clone → npm ci → the boss
@@ -583,7 +583,7 @@ export function createForge(deps: ForgeDeps): Forge {
     saveShip(r);
     deps.announce(
       'Forge',
-      `Jarvis v${s.version ?? ''} is built, merged into dev and pushed to GitHub. Installer: ${s.installer ?? ''}. Close Jarvis and run it when you're ready; your data was backed up first, and "roll back Forge" undoes it. Your own copy of the source catches up with git pull.${s.merge === 'merge commit' ? ' Note: dev had newer commits, so a merge commit was made; the installer was built from the branch before that merge.' : ''}`,
+      `Jarvis v${s.version ?? ''} is built, merged into ${BASE_BRANCH} and pushed to GitHub. Installer: ${s.installer ?? ''}. Close Jarvis and run it when you're ready; your data was backed up first, and "roll back Forge" undoes it. Your own copy of the source catches up with git pull.${s.merge === 'merge commit' ? ` Note: ${BASE_BRANCH} had newer commits, so a merge commit was made; the installer was built from the branch before that merge.` : ''}`,
     );
   }
 
