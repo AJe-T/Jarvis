@@ -362,7 +362,7 @@ async function boot(): Promise<void> {
       emit('nav:open', { view: 'forge' });
     },
   });
-  registerForgeHandlers(forgeDesk);
+  registerForgeHandlers(forgeDesk, services);
   const integrations = services.slots.providers.integrations;
   services.slots.providers = {
     ...services.slots.providers,

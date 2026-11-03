@@ -8,6 +8,7 @@ import { call, cleanError } from '../../lib/api';
 import { StatTile } from '../router/parts';
 import { useForgeStore } from '../../stores/forge-store';
 import { ForgeChat } from './forge-chat';
+import { ForgeCharts } from './forge-charts';
 import { ForgeMemory } from './forge-memory';
 
 type Run = Res<'forge:runs'>[number];
@@ -221,9 +222,28 @@ function ForgeRuns(): React.JSX.Element {
   );
 }
 
+/** F11: charts of every saved run; reloads when a run ends (live, from forge:update). */
+function ChartsTab(): React.JSX.Element {
+  const [runs, setRuns] = useState<Run[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const runsVersion = useForgeStore((s) => s.runsVersion);
+  useEffect(() => {
+    call('forge:runs', {})
+      .then((r) => {
+        setRuns(r);
+        setError(null);
+      })
+      .catch((err: unknown) => setError(cleanError(err)));
+  }, [runsVersion]);
+  if (error) return <p className="text-sm text-alarm-500">{error}</p>;
+  if (!runs) return <span className="skeleton block h-48 w-full" aria-hidden />;
+  return <ForgeCharts runs={runs} />;
+}
+
 const TABS = [
   { id: 'chat', label: 'Chat' },
   { id: 'runs', label: 'Runs' },
+  { id: 'charts', label: 'Charts' },
   { id: 'memory', label: 'Memory' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
@@ -265,6 +285,7 @@ export function ForgeView(): React.JSX.Element {
         </div>
         {tab === 'chat' && <ForgeChat />}
         {tab === 'runs' && <ForgeRuns />}
+        {tab === 'charts' && <ChartsTab />}
         {tab === 'memory' && <ForgeMemory />}
       </PageBody>
     </>

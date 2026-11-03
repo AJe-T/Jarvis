@@ -555,6 +555,22 @@ export const INVOKE = {
     z.object({ dir: ForgePath.optional() }),
     z.array(z.object({ path: z.string(), name: z.string(), isDir: z.boolean(), size: z.number() })),
   ),
+  /** F12: what a real Forge run needs on this PC, each with a fix (read-only). */
+  'forge:readiness': contract(
+    Empty,
+    z.array(
+      z.object({
+        id: z.enum(['repo', 'node', 'git', 'claude', 'vault', 'workers', 'budget']),
+        label: z.string(),
+        state: z.enum(['ok', 'warn', 'missing']),
+        detail: z.string(),
+        fix: z.string(),
+        required: z.boolean(),
+      }),
+    ),
+  ),
+  /** F12: post the suggested first build (fixed text) to the Forge chat as Sir's message. */
+  'forge:firstRun': contract(Empty, ForgeMessageSchema),
   'forge:file': contract(
     z.object({ path: ForgePath }),
     z.object({ path: z.string(), markdown: z.string() }),

@@ -7,6 +7,7 @@ import { IconButton } from '../../components/ui/button';
 import { call } from '../../lib/api';
 import { useSetting } from '../../stores/settings-store';
 import { useForgeStore, type ForgeMessage, type ForgeRunView } from '../../stores/forge-store';
+import { FirstRun } from './forge-first-run';
 
 /**
  * F9: the Forge chat. Sir talks to the Forge desk (it agrees goals, starts and follows builds, ships);
@@ -181,6 +182,7 @@ export function ForgeChat(): React.JSX.Element {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <FirstRun />
       {live && <LiveRun run={live} />}
       <div
         role="log"

@@ -70,6 +70,8 @@ export const HELP: Record<string, HelpEntry> = {
     how: [
       'Chat: tell Forge what Jarvis should learn. It agrees the goal with you, then asks before it starts (budget per run in Settings, default $5 of Claude). Saying “Jarvis, learn to …” anywhere brings you here too.',
       'While a run works, its steps show in the chat and on the card above it.',
+      'First time? The Chat tab checks this PC is ready and starts a small, safe first build with one click.',
+      'Charts: cost per week, runs by outcome, where runs fail and how much free AIs did.',
       'Memory: Forge keeps its own notes, a note per run, its notebooks and these chats in the Forge folder of your vault. Jarvis can read them; Forge can’t see your memory, Spaces or chats.',
       'A change that passes every check waits for you: say “approve it” to see the files and cost, then it builds the installer, backs up your data, merges and pushes. You run the installer yourself.',
       'Name an app, a website or a GitHub repo to build it like: Claude studies it first and writes our own version; copied code fails the run.',

@@ -1,0 +1,251 @@
+/* Forge F11 charts. Outcome colours are status colours, checked with the dataviz palette validator
+   (scripts/validate_palette.js) for both themes: light #178a52/#b0002a (CVD ΔE 7.6, so failures also
+   carry a hatch), dark #2aa874/#c42149 (ΔE 10.6). "Cancelled" is a deliberate neutral grey. */
+.forge-chart {
+  --chart-1: var(--accent-500);
+  --chart-pass: #178a52;
+  --chart-fail: #b0002a;
+  --chart-cancel: #8593a3;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+:root[data-theme='dark'] .forge-chart {
+  --chart-pass: #2aa874;
+  --chart-fail: #c42149;
+  --chart-cancel: #5b6878;
+}
+
+.forge-plot {
+  position: relative;
+}
+.forge-plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.forge-grid {
+  stroke: var(--line-subtle);
+  stroke-width: 1;
+}
+.forge-tick {
+  fill: var(--ink-500);
+  font-family: var(--font-code);
+  font-size: 10px;
+}
+.forge-hit {
+  fill: transparent;
+}
+.forge-bar {
+  fill: var(--chart-1);
+  transition: opacity 120ms;
+}
+.forge-seg {
+  transition: opacity 120ms;
+}
+.forge-seg.is-pass,
+.forge-swatch.is-pass {
+  fill: var(--chart-pass);
+  background: var(--chart-pass);
+}
+.forge-seg.is-fail,
+.forge-swatch.is-fail {
+  fill: var(--chart-fail);
+  background: var(--chart-fail);
+}
+.forge-seg.is-cancel,
+.forge-swatch.is-cancel {
+  fill: var(--chart-cancel);
+  background: var(--chart-cancel);
+}
+.forge-hatch-line {
+  stroke: var(--surface-1);
+  stroke-width: 2;
+  opacity: 0.55;
+}
+/* Hovering one column dims the rest a little: the hovered mark stays at full strength. */
+.forge-plot svg:hover .forge-bar:not(.is-hover),
+.forge-plot svg:hover .forge-seg:not(.is-hover) {
+  opacity: 0.55;
+}
+.forge-line {
+  fill: none;
+  stroke: var(--chart-1);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.forge-dot {
+  fill: var(--chart-1);
+  stroke: var(--surface-1);
+  stroke-width: 2;
+}
+.forge-cross {
+  stroke: var(--ink-500);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.forge-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--ink-300);
+  font-size: 12px;
+}
+.forge-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.forge-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.forge-tip {
+  position: absolute;
+  z-index: 5;
+  translate: -50% calc(-100% - 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 6px;
+  background: var(--surface-1);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
+  color: var(--ink-300);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.forge-tip b {
+  color: var(--ink-100);
+}
+
+.forge-hbars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.forge-hbars li {
+  display: grid;
+  grid-template-columns: 7rem 1fr 2rem;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.forge-hbar-label {
+  overflow: hidden;
+  color: var(--ink-300);
+  font-family: var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.forge-hbar-track {
+  height: 12px;
+}
+.forge-hbar {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--chart-1);
+  transition: opacity 120ms;
+}
+.forge-hbars:hover .forge-hbar:not(.is-hover) {
+  opacity: 0.55;
+}
+.forge-hbar-value {
+  color: var(--ink-100);
+  font-family: var(--font-code);
+  text-align: right;
+}
+
+.forge-chart-toggle {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 4px;
+  color: var(--ink-300);
+  font-size: 11px;
+}
+.forge-chart-toggle:hover,
+.forge-chart-toggle[aria-pressed='true'] {
+  color: var(--ink-100);
+  background: var(--hover);
+}
+.forge-chart-table {
+  max-height: 220px;
+  overflow: auto;
+}
+.forge-chart-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.forge-chart-table th,
+.forge-chart-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line-subtle);
+  color: var(--ink-300);
+  text-align: left;
+}
+.forge-chart-table th {
+  color: var(--ink-500);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forge-bar,
+  .forge-seg,
+  .forge-hbar {
+    transition: none;
+  }
+}
+
+/* F12: the first-run steps. */
+.forge-first {
+  border-left: 2px solid var(--accent-500);
+}
+.forge-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  color: var(--ink-500);
+  font-family: var(--font-code);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.forge-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.forge-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 999px;
+  font-size: 10px;
+}
+.forge-steps li.is-current {
+  color: var(--ink-100);
+}
+.forge-steps li.is-current > span {
+  border-color: var(--accent-500);
+  color: var(--accent-300);
+}
+.forge-steps li.is-done > span {
+  border-color: var(--ok-400);
+  color: var(--ok-400);
+}

@@ -71,6 +71,8 @@ export const INVOKE_CHANNELS = [
   'forge:send',
   'forge:files',
   'forge:file',
+  'forge:readiness',
+  'forge:firstRun',
   'pool:snapshot',
   'pool:setProvider',
   'pool:setModel',
