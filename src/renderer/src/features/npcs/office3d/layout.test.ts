@@ -32,22 +32,16 @@ describe('3D office floor plan (2.51)', () => {
     }
   });
 
-  it('round islands of four: each NPC faces its screen and the island centre', () => {
+  it('pods of four: two facing pairs, each NPC facing its own monitor', () => {
     const plan = planFor(4);
-    const c = podCentre(0, plan);
-    const spots = [0, 1, 2, 3].map((i) => deskSpot(i, plan));
-    const dirs = new Set<string>();
-    for (const s of spots) {
-      expect(s.pod).toBe(0);
-      // On the seat circle, with the screen between the seat and the centre.
-      expect(Math.hypot(s.chair.x - c.x, s.chair.z - c.z)).toBeCloseTo(1.32);
-      expect(Math.hypot(s.desk.x - c.x, s.desk.z - c.z)).toBeCloseTo(0.74);
-      // Facing points at the centre.
-      expect(s.chair.x + Math.sin(s.facing) * 1.32).toBeCloseTo(c.x);
-      expect(s.chair.z + Math.cos(s.facing) * 1.32).toBeCloseTo(c.z);
-      dirs.add(`${Math.sign(s.chair.x - c.x)},${Math.sign(s.chair.z - c.z)}`);
-    }
-    expect(dirs.size).toBe(4);
+    const [a, b, c, d] = [0, 1, 2, 3].map((i) => deskSpot(i, plan));
+    expect(a?.pod).toBe(0);
+    expect(d?.pod).toBe(0);
+    expect(a?.chair.z).toBeLessThan(a?.desk.z ?? 0); // back row sits behind its desk…
+    expect(a?.facing).toBe(0); // …and looks towards +z
+    expect(c?.chair.z).toBeGreaterThan(c?.desk.z ?? 0);
+    expect(c?.facing).toBeCloseTo(Math.PI);
+    expect(a?.chair.x).toBeLessThan(b?.chair.x ?? 0);
     expect(deskSpot(4, plan).pod).toBe(1);
   });
 

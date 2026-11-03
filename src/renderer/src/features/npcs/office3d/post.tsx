@@ -31,7 +31,7 @@ export function Bloom({ strength = 0.6 }: { strength?: number }): null {
   return null;
 }
 
-/** A generated "photo studio" for reflections, plus the dark sky and the fog that gives depth. */
+/** A generated "photo studio" for reflections, and the background colour. */
 export function Environment({ background }: { background: string }): null {
   const { gl, scene } = useThree();
   useEffect(() => {
@@ -39,12 +39,11 @@ export function Environment({ background }: { background: string }): null {
     const room = new RoomEnvironment();
     const env = pmrem.fromScene(room, 0.04).texture;
     scene.environment = env;
-    scene.environmentIntensity = 0.28;
+    // Just enough for glossy screens and metal to catch some light; no fog under an orthographic view.
+    scene.environmentIntensity = 0.22;
     scene.background = new THREE.Color(background);
-    scene.fog = new THREE.FogExp2(background, 0.018);
     return () => {
       scene.environment = null;
-      scene.fog = null;
       env.dispose();
       room.dispose();
       pmrem.dispose();

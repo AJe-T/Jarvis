@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 /**
  * Shared geometry, materials and generated textures for the 3D office (2.51). Everything is built in
@@ -78,31 +79,6 @@ function canvasTexture(
   return t;
 }
 
-/** The neon floor grid, tiled once per metre. */
-export function gridTexture(line: string): THREE.CanvasTexture | null {
-  const t = canvasTexture(128, 128, (g) => {
-    g.fillStyle = '#0b1220';
-    g.fillRect(0, 0, 128, 128);
-    g.strokeStyle = line;
-    g.globalAlpha = 0.35;
-    g.lineWidth = 2;
-    g.strokeRect(0, 0, 128, 128);
-    g.globalAlpha = 0.12;
-    g.lineWidth = 1;
-    g.beginPath();
-    g.moveTo(64, 0);
-    g.lineTo(64, 128);
-    g.moveTo(0, 64);
-    g.lineTo(128, 64);
-    g.stroke();
-  });
-  if (t) {
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-  }
-  return t;
-}
-
 /** Lines of "code" for a working monitor; scrolled by moving the texture. White, tinted per desk. */
 export function codeTexture(seed: number): THREE.CanvasTexture | null {
   let r = seed * 9301 + 49297;
@@ -139,54 +115,6 @@ export function themeColor(name: string, fallback: string): string {
   return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(v) || /^(rgb|hsl)\(/i.test(v) ? v : fallback;
 }
 
-// ── 2.52 "Holo-Ops" look ──────────────────────────────────────────────────
-
-/**
- * Hexagon tiles for the deck: dark fill, thin bright seams (used as the emissive map, so only the
- * seams glow and bloom), a few brighter tiles for life. Tiles once per `scale` metres.
- */
-export function hexTexture(): THREE.CanvasTexture | null {
-  const W = 256;
-  const r = 32;
-  const h = Math.sqrt(3) * r;
-  const t = canvasTexture(W, Math.round(h * 4), (g) => {
-    g.fillStyle = '#000000';
-    g.fillRect(0, 0, W, h * 4);
-    let seed = 7;
-    const rand = (): number => {
-      seed = (seed * 9301 + 49297) % 233280;
-      return seed / 233280;
-    };
-    for (let row = -1; row < 6; row++)
-      for (let col = -1; col < 6; col++) {
-        const cx = col * r * 1.5;
-        const cy = row * h + (col % 2 === 0 ? 0 : h / 2);
-        g.beginPath();
-        for (let k = 0; k < 6; k++) {
-          const a = (Math.PI / 3) * k;
-          const x = cx + Math.cos(a) * (r - 2);
-          const y = cy + Math.sin(a) * (r - 2);
-          if (k === 0) g.moveTo(x, y);
-          else g.lineTo(x, y);
-        }
-        g.closePath();
-        const lit = rand();
-        if (lit > 0.93) {
-          g.fillStyle = 'rgba(255,255,255,0.10)';
-          g.fill();
-        }
-        g.strokeStyle = 'rgba(255,255,255,0.8)';
-        g.lineWidth = 3;
-        g.stroke();
-      }
-  });
-  if (t) {
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-  }
-  return t;
-}
-
 /** A soft round glow (white centre fading out), for sprites, thruster light and fake contact shadows. */
 export function glowTexture(): THREE.CanvasTexture | null {
   return canvasTexture(128, 128, (g) => {
@@ -206,65 +134,86 @@ export function sharedGlow(): THREE.CanvasTexture | null {
   return glow;
 }
 
-/** Ring desks and pills: a lathe of a rounded rectangle (rounded edges catch the light). */
-export function ringDeskGeometry(
-  inner: number,
-  outer: number,
-  height: number,
-): THREE.LatheGeometry {
-  const r = Math.min(0.04, height / 2);
-  const pts: THREE.Vector2[] = [];
-  const corner = (cx: number, cy: number, a0: number): void => {
-    for (let k = 0; k <= 4; k++) {
-      const a = a0 + (Math.PI / 2) * (k / 4);
-      pts.push(new THREE.Vector2(cx + Math.cos(a) * r, cy + Math.sin(a) * r));
-    }
-  };
-  corner(outer - r, r, -Math.PI / 2);
-  corner(outer - r, height - r, 0);
-  corner(inner + r, height - r, Math.PI / 2);
-  corner(inner + r, r, Math.PI);
-  pts.push(pts[0]!.clone());
-  return new THREE.LatheGeometry(pts, 64);
+// ── 2.54 "cosy office" look ───────────────────────────────────────────────
+
+const rboxCache = new Map<string, RoundedBoxGeometry>();
+/** A rounded box (soft edges catch the light the way real furniture does), cached by size. */
+export function rbox(w: number, h: number, d: number, r = 0.02): RoundedBoxGeometry {
+  const key = `${w}|${h}|${d}|${r}`;
+  let g = rboxCache.get(key);
+  if (!g) {
+    g = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2));
+    rboxCache.set(key, g);
+  }
+  return g;
 }
 
-export const GEO2 = {
-  ringDesk: ringDeskGeometry(0.5, 0.98, 0.07),
-  torus: new THREE.TorusGeometry(1, 0.03, 12, 96),
-  thinTorus: new THREE.TorusGeometry(1, 0.012, 8, 96),
-  octa: new THREE.OctahedronGeometry(1, 0),
-  /** A curved holo-screen: a slice of an open cylinder. */
-  screen: new THREE.CylinderGeometry(0.62, 0.62, 0.36, 24, 1, true, -0.42, 0.84),
-  dome: new THREE.SphereGeometry(1, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2),
-  hexagon: new THREE.CylinderGeometry(1, 1, 1, 6),
-  pill: new THREE.CapsuleGeometry(0.17, 0.22, 8, 20),
-  headSphere: new THREE.SphereGeometry(0.21, 32, 20),
-  // A slice of a slightly larger sphere, centred on +z (three's phi starts at -x): the glass visor.
-  facePlate: new THREE.SphereGeometry(0.214, 32, 16, Math.PI / 2 - 0.95, 1.9, 0.75, 1.1),
-  eye: new THREE.CapsuleGeometry(0.022, 0.035, 4, 8),
-  hand: new THREE.SphereGeometry(0.055, 16, 10),
-};
-
-/** A new additive "light" material: glows under bloom. The caller owns it (animate it, dispose it). */
-export function newGlowMat(color: string, opacity = 0.9): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide,
+/** A city at night through the windows: dark sky, towers, lit windows, a few soft lights. */
+export function cityTexture(): THREE.CanvasTexture | null {
+  let seed = 11;
+  const rand = (): number => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  return canvasTexture(512, 256, (g) => {
+    const sky = g.createLinearGradient(0, 0, 0, 256);
+    sky.addColorStop(0, '#0b1230');
+    sky.addColorStop(0.6, '#1d2457');
+    sky.addColorStop(1, '#3a2f63');
+    g.fillStyle = sky;
+    g.fillRect(0, 0, 512, 256);
+    for (let i = 0; i < 26; i++) {
+      const w = 18 + rand() * 40;
+      const h = 60 + rand() * 170;
+      const x = rand() * 512;
+      g.fillStyle = `rgba(${8 + rand() * 12},${10 + rand() * 14},${30 + rand() * 30},1)`;
+      g.fillRect(x, 256 - h, w, h);
+      for (let wy = 256 - h + 8; wy < 250; wy += 11)
+        for (let wx = x + 4; wx < x + w - 5; wx += 9)
+          if (rand() > 0.68) {
+            g.fillStyle = rand() > 0.3 ? 'rgba(255,214,150,0.9)' : 'rgba(150,190,255,0.85)';
+            g.fillRect(wx, wy, 4, 5);
+          }
+    }
+    for (let i = 0; i < 14; i++) {
+      const x = rand() * 512;
+      const y = 120 + rand() * 130;
+      const r = 4 + rand() * 12;
+      const grad = g.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, rand() > 0.5 ? 'rgba(255,170,90,0.6)' : 'rgba(120,160,255,0.6)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grad;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
   });
 }
 
-const glowCache = new Map<string, THREE.MeshBasicMaterial>();
-/** A shared, never-changed glow material per colour and strength (safe to use in render). */
-export function glowMat(color: string, opacity = 0.9): THREE.MeshBasicMaterial {
-  const key = `${color}|${opacity.toFixed(2)}`;
-  let m = glowCache.get(key);
-  if (!m) {
-    m = newGlowMat(color, opacity);
-    glowCache.set(key, m);
-  }
-  return m;
+/** A strip that fades from dark to clear: fake soft shadow where floor meets wall. */
+export function edgeShadeTexture(): THREE.CanvasTexture | null {
+  return canvasTexture(4, 64, (g) => {
+    const grad = g.createLinearGradient(0, 0, 0, 64);
+    grad.addColorStop(0, 'rgba(0,0,0,0.75)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 4, 64);
+  });
 }
+
+/** Warm and neutral palette for the cosy office. */
+export const COSY = {
+  floor: '#4a4743',
+  rug: '#34373e',
+  wall: '#34363d',
+  wallTop: '#5a5e67',
+  wood: '#cbbfae',
+  darkWood: '#7a5a3f',
+  metal: '#2a2e35',
+  chair: '#1d2026',
+  fabric: '#4c515a',
+  sofa: '#3f6b4c',
+  pot: '#e6e1d8',
+  leaf: '#2f6e3d',
+  leafLight: '#4a9157',
+  lamp: '#ffc184',
+  frame: '#15171b',
+} as const;

@@ -12,14 +12,13 @@ import { NPC_HEX, STATE_LABEL } from '../npc-kit';
 import { Avatar, STATE_GEM, type AvatarTarget } from './avatar';
 import { Burst, BURST_MS, HandoffArc, type BurstInfo } from './effects';
 import {
-  Atmosphere,
-  Deck,
-  HoloScreen,
-  Islands,
+  JarvisTerminal,
   Lounge,
+  MeetingRoom,
   Plants,
-  Reactor,
-  WarRoom,
+  PodLights,
+  Room,
+  Workstations,
 } from './furniture';
 import { Minimap, PartyBar, SquadPanel, Toasts, type Toast } from './hud';
 import { daylight, deskSpot, planFor, routeToSeat, seatAt, type P, type Plan } from './layout';
@@ -27,7 +26,7 @@ import { themeColor } from './materials';
 import { Bloom, Environment } from './post';
 
 /**
- * The 3D office (2.51; "Holo-Ops" look 2.52): Sir's NPC team on a floating command deck. Ideas from
+ * The 3D office (2.51; the cosy isometric office 2.54): Sir's NPC team in a cut-away office at night. Ideas from
  * six open-source agent offices (credited in BIBLE §12): Claw3D and Hermes Virtual Office (agents at
  * desks you can orbit around, going to meet), Agentshire (day and night, finish fireworks, a status
  * card), Pixel Agents (a pose per activity), The Delegation (a status overlay per agent) and AI Town
@@ -39,19 +38,23 @@ import { Bloom, Environment } from './post';
  */
 
 const BUBBLE_FRESH_MS = 6000;
-/** Past this distance a name plate shrinks to its badge (the name shows on hover and focus). */
-const FAR_TAG_M = 24;
-const SKY = '#03060c';
+/** Below this many pixels per metre a name plate shrinks to its badge (the name shows on hover and focus). */
+const FAR_TAG_PPM = 26;
+const SKY = '#14161c';
+/** Below this many frames a second (after the intro), the office switches itself to Performance. */
+const SLOW_FPS = 38;
 const TOAST_MS = 3800;
 const QUALITY_KEY = 'jarvis.npcs.quality';
 
 type Quality = 'high' | 'low';
 
-function savedQuality(): Quality {
+/** Sir's own pick, or null while the quality is automatic. */
+function savedQuality(): Quality | null {
   try {
-    return localStorage.getItem(QUALITY_KEY) === 'low' ? 'low' : 'high';
+    const q = localStorage.getItem(QUALITY_KEY);
+    return q === 'low' || q === 'high' ? q : null;
   } catch {
-    return 'high';
+    return null;
   }
 }
 
@@ -107,7 +110,11 @@ function useTargets(
   }, [npcs, attendees, meetingId, plan]);
 }
 
-/** Orbit, zoom and pan; a fly-in when the office opens, and a short flight to whoever Sir selects. */
+/**
+ * The isometric camera (2.54): an orthographic view from the front-right at about 35°, like a
+ * strategy game. Zoom and pan freely; turning is limited to a quarter so the cut-away walls stay at
+ * the back. A zoom-in when the office opens, and a short glide to whoever Sir selects.
+ */
 function CameraRig({
   plan,
   focusId,
@@ -121,30 +128,32 @@ function CameraRig({
   resetKey: number;
   reduced: boolean;
 }): null {
-  const { camera, gl } = useThree();
+  const { camera, gl, size } = useThree();
   const controls = useRef<OrbitControls | null>(null);
-  const flight = useRef<{ target: THREE.Vector3; pos: THREE.Vector3; speed: number } | null>(null);
+  const flight = useRef<{ target: THREE.Vector3; zoom: number; speed: number } | null>(null);
   const pending = useRef<string | null>(null);
   const opened = useRef(false);
   const span = Math.max(
     plan.bounds.max.x - plan.bounds.min.x,
     plan.bounds.max.z - plan.bounds.min.z,
   );
-  const home = useMemo(() => {
-    const c = plan.bounds.centre;
-    return {
-      target: new THREE.Vector3(c.x, 0.6, c.z),
-      pos: new THREE.Vector3(c.x - span * 0.2, span * 0.52, c.z + span * 0.7),
-    };
-  }, [plan, span]);
+  // The zoom that fits the whole office on screen.
+  const fit = Math.min(size.width / (span * 1.5), size.height / (span * 0.95));
+  const centre = useMemo(
+    () => new THREE.Vector3(plan.bounds.centre.x, 0.6, plan.bounds.centre.z),
+    [plan],
+  );
 
   useEffect(() => {
     const c = new OrbitControls(camera, gl.domElement);
     c.enableDamping = true;
-    c.dampingFactor = 0.08;
-    c.maxPolarAngle = 1.3;
-    c.minDistance = 3;
-    c.screenSpacePanning = false;
+    c.dampingFactor = 0.1;
+    c.screenSpacePanning = true;
+    c.minPolarAngle = 0.75;
+    c.maxPolarAngle = 1.05;
+    c.minAzimuthAngle = Math.PI / 4 - 0.6;
+    c.maxAzimuthAngle = Math.PI / 4 + 0.6;
+    c.zoomToCursor = true;
     c.addEventListener('start', () => {
       flight.current = null;
     });
@@ -154,20 +163,24 @@ function CameraRig({
 
   useEffect(() => {
     const c = controls.current;
+    const cam = camera as THREE.OrthographicCamera;
     if (!c) return;
-    c.maxDistance = span * 2.4;
-    c.target.copy(home.target);
-    // First open: swoop in from high above (the "level start"); later resets just go home.
+    c.minZoom = fit * 0.7;
+    c.maxZoom = fit * 5;
+    c.target.copy(centre);
+    // Front-right, about 35° above the floor.
+    cam.position.copy(centre).add(new THREE.Vector3(1, 0.98, 1).normalize().multiplyScalar(60));
     if (!opened.current && !reduced) {
-      camera.position.copy(home.pos).add(new THREE.Vector3(span * 0.6, span * 1.1, span * 0.4));
-      flight.current = { target: home.target.clone(), pos: home.pos.clone(), speed: 1.6 };
+      cam.zoom = fit * 0.7;
+      flight.current = { target: centre.clone(), zoom: fit * 1.25, speed: 2.2 };
     } else {
-      camera.position.copy(home.pos);
+      cam.zoom = fit * 1.25;
       flight.current = null;
     }
+    cam.updateProjectionMatrix();
     opened.current = true;
     c.update();
-  }, [home, span, camera, resetKey, reduced]);
+  }, [centre, fit, camera, resetKey, reduced]);
 
   useEffect(() => {
     pending.current = focusId;
@@ -175,27 +188,54 @@ function CameraRig({
 
   useFrame((_, dt) => {
     const c = controls.current;
+    const cam = camera as THREE.OrthographicCamera;
     if (!c) return;
     const at = pending.current ? heads.get(pending.current) : undefined;
     if (at) {
       pending.current = null;
-      const offset = camera.position.clone().sub(c.target).setLength(6.5);
-      offset.y = Math.max(offset.y, 3.2);
-      const target = at.clone().setY(0.9);
-      const pos = target.clone().add(offset);
+      const target = at.clone().setY(0.8);
+      const zoom = Math.max(cam.zoom, fit * 2.4);
       if (reduced) {
-        c.target.copy(target);
-        camera.position.copy(pos);
-      } else flight.current = { target, pos, speed: 4 };
+        const shift = target.clone().sub(c.target);
+        c.target.add(shift);
+        cam.position.add(shift);
+        cam.zoom = zoom;
+        cam.updateProjectionMatrix();
+      } else flight.current = { target, zoom, speed: 4 };
     }
     const f = flight.current;
     if (f) {
       const k = Math.min(1, dt * f.speed);
-      c.target.lerp(f.target, k);
-      camera.position.lerp(f.pos, k);
-      if (camera.position.distanceTo(f.pos) < 0.05) flight.current = null;
+      const shift = f.target.clone().sub(c.target).multiplyScalar(k);
+      c.target.add(shift);
+      cam.position.add(shift);
+      cam.zoom += (f.zoom - cam.zoom) * k;
+      cam.updateProjectionMatrix();
+      if (shift.length() < 0.002 && Math.abs(f.zoom - cam.zoom) < 0.05) flight.current = null;
     }
     c.update();
+  });
+  return null;
+}
+
+/**
+ * Measures the frame rate for a few seconds after the intro; tells the office when this PC is slow,
+ * so it can switch to Performance by itself (Sir's laptop has no graphics card).
+ */
+function FpsProbe({ onSlow }: { onSlow(fps: number): void }): null {
+  const t = useRef({ frames: 0, time: 0, done: false });
+  useFrame((_, dt) => {
+    const p = t.current;
+    if (p.done) return;
+    p.time += dt;
+    // Skip the first 2.5 s (intro, shader compile), then count 3 s.
+    if (p.time < 2.5) return;
+    p.frames++;
+    if (p.time >= 5.5) {
+      p.done = true;
+      const fps = p.frames / 3;
+      if (fps < SLOW_FPS) onSlow(Math.round(fps));
+    }
   });
   return null;
 }
@@ -216,7 +256,10 @@ function OverlaySync({
         el.style.visibility = 'hidden';
         continue;
       }
-      const far = camera.position.distanceTo(at) > FAR_TAG_M ? '1' : '0';
+      const ppm = (camera as THREE.OrthographicCamera).isOrthographicCamera
+        ? camera.zoom
+        : size.height / Math.max(1, camera.position.distanceTo(at));
+      const far = ppm < FAR_TAG_PPM ? '1' : '0';
       if (el.dataset['far'] !== far) el.dataset['far'] = far;
       v.copy(at)
         .setY(at.y + 0.25)
@@ -268,7 +311,7 @@ function JarvisPresence({
   ) : null;
 }
 
-/** Key light with soft shadows over the whole deck, a cool rim light from behind. */
+/** Night lighting: a cool fill, moonlight through the windows (with shadows), warm lamps elsewhere. */
 function Lights({
   plan,
   day,
@@ -289,39 +332,33 @@ function Lights({
     const l = key.current;
     if (!l) return;
     const cam = l.shadow.camera;
-    cam.left = -span * 0.65;
-    cam.right = span * 0.65;
-    cam.top = span * 0.65;
-    cam.bottom = -span * 0.65;
+    cam.left = -span * 0.7;
+    cam.right = span * 0.7;
+    cam.top = span * 0.7;
+    cam.bottom = -span * 0.7;
     cam.near = 1;
-    cam.far = span * 3;
+    cam.far = span * 4;
     cam.updateProjectionMatrix();
     l.shadow.mapSize.set(2048, 2048);
-    l.shadow.bias = -0.0006;
-    l.shadow.radius = 4;
+    l.shadow.bias = -0.0008;
+    l.shadow.normalBias = 0.02;
   }, [span]);
-  const warm = useMemo(
-    () => new THREE.Color('#9db8ff').lerp(new THREE.Color('#fff1dc'), day),
+  const moon = useMemo(
+    () => new THREE.Color('#8ea6ff').lerp(new THREE.Color('#fff3e0'), day),
     [day],
   );
   return (
     <>
       <primitive object={target} position={[c.x, 0, c.z]} />
-      <ambientLight intensity={0.12 + day * 0.1} />
-      <hemisphereLight args={['#7aa2ff', '#05070d', 0.35 + day * 0.25]} />
+      <ambientLight intensity={0.5 + day * 0.4} color="#ffe9d6" />
+      <hemisphereLight args={['#aebbe8', '#4d3c30', 0.9 + day * 0.4]} />
       <directionalLight
         ref={key}
-        color={warm}
-        intensity={1.1 + day * 1.1}
-        position={[c.x - span * 0.4, span * 0.9, c.z + span * 0.35]}
+        color={moon}
+        intensity={0.9 + day * 1.2}
+        position={[c.x + span * 0.35, span * 0.9, c.z - span * 0.55]}
         target={target}
         castShadow={shadows}
-      />
-      <directionalLight
-        color="#4f7cff"
-        intensity={0.9}
-        position={[c.x + span * 0.5, 4, c.z - span * 0.6]}
-        target={target}
       />
     </>
   );
@@ -342,6 +379,7 @@ function Scene({
   resetKey,
   tags,
   onFinished,
+  onSlow,
 }: {
   plan: Plan;
   npcs: Npc[];
@@ -357,6 +395,8 @@ function Scene({
   resetKey: number;
   tags: React.RefObject<Map<string, HTMLDivElement>>;
   onFinished(npc: Npc, error: boolean): void;
+  /** Set while the quality is automatic: called once if this PC can't keep up. */
+  onSlow?: ((fps: number) => void) | undefined;
 }): React.JSX.Element {
   const meetings = useNpcStore((s) => s.meetings);
   const handoffs = useNpcStore((s) => s.handoffs);
@@ -366,7 +406,19 @@ function Scene({
   const targets = useTargets(npcs, attendees, running?.id ?? null, plan);
   const stateOf = (n: Npc): NpcState => (n.enabled ? (states[n.id] ?? 'idle') : 'off');
   const deskCount = Math.max(...npcs.map((n) => n.desk + 1), npcs.length, 8);
-  const byDesk = new Map(npcs.map((n) => [n.desk, n]));
+  const owners = useMemo(
+    () =>
+      new Map(
+        npcs.map((n) => [
+          n.desk,
+          {
+            color: NPC_HEX[n.color],
+            state: n.enabled ? (states[n.id] ?? 'idle') : 'off',
+          },
+        ]),
+      ),
+    [npcs, states],
+  );
   const high = quality === 'high';
 
   // An NPC that stops working just finished a job: a burst here, a toast in the HUD.
@@ -403,25 +455,14 @@ function Scene({
     <>
       <Environment background={SKY} />
       <Lights plan={plan} day={day} shadows={high} />
-      <Atmosphere plan={plan} accent={accent} motes={high && !reduced} />
-      <Deck plan={plan} accent={accent} />
-      <Islands plan={plan} count={deskCount} accent={accent} />
-      {Array.from({ length: deskCount }, (_, d) => {
-        const owner = byDesk.get(d);
-        return (
-          <HoloScreen
-            key={d}
-            plan={plan}
-            desk={d}
-            color={owner ? NPC_HEX[owner.color] : null}
-            state={owner ? stateOf(owner) : null}
-          />
-        );
-      })}
-      <WarRoom plan={plan} active={Boolean(running)} accent={accent} />
-      <Reactor plan={plan} accent={accent} busy={speaking.has('jarvis') && !running} />
-      <Lounge plan={plan} accent={accent} />
+      <Room plan={plan} day={day} />
+      <Workstations plan={plan} count={deskCount} owners={owners} />
+      <PodLights plan={plan} count={deskCount} />
+      <MeetingRoom plan={plan} active={Boolean(running)} />
+      <JarvisTerminal plan={plan} accent={accent} busy={speaking.has('jarvis') && !running} />
+      <Lounge plan={plan} />
       <Plants plan={plan} />
+      {onSlow && <FpsProbe onSlow={onSlow} />}
       <JarvisPresence
         plan={plan}
         seat={attendees ? seatAt(attendees.length, attendees.length + 1, plan) : null}
@@ -460,7 +501,7 @@ function Scene({
         reduced={reduced}
       />
       <OverlaySync heads={heads} tags={tags} />
-      {high && <Bloom strength={0.6} />}
+      {high && <Bloom strength={0.35} />}
     </>
   );
 }
@@ -537,7 +578,10 @@ export function Office3D({
   const name = useSetting('assistant.name') || 'Jarvis';
   const reduced = useReducedMotion();
   const day = useDaylight();
-  const [quality, setQuality] = useState<Quality>(savedQuality);
+  const [picked, setPicked] = useState<Quality | null>(savedQuality);
+  // Automatic: start with the full look; FpsProbe drops to Performance if this PC can't keep up.
+  const [auto, setAuto] = useState<Quality>('high');
+  const quality: Quality = picked ?? auto;
   const [resetKey, setResetKey] = useState(0);
   const [accent] = useState(() => themeColor('--accent-500', '#22d3ee'));
   const heads = useMemo(() => new Map<string, THREE.Vector3>(), []);
@@ -548,7 +592,7 @@ export function Office3D({
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const pickQuality = (q: Quality): void => {
-    setQuality(q);
+    setPicked(q);
     try {
       localStorage.setItem(QUALITY_KEY, q);
     } catch {
@@ -610,7 +654,8 @@ export function Office3D({
           dpr={quality === 'high' ? [1, 1.75] : 1}
           shadows={quality === 'high' ? 'percentage' : false}
           gl={{ antialias: true, powerPreference: 'high-performance', toneMappingExposure: 0.95 }}
-          camera={{ fov: 38, near: 0.1, far: 400 }}
+          orthographic
+          camera={{ zoom: 40, position: [40, 40, 40], near: 0.1, far: 500 }}
           onPointerMissed={() => onSelect(null)}
           aria-hidden
         >
@@ -629,6 +674,23 @@ export function Office3D({
             resetKey={resetKey}
             tags={tags}
             onFinished={onFinished}
+            onSlow={
+              picked === null && auto === 'high'
+                ? (fps: number) => {
+                    setAuto('low');
+                    setToasts((all) => [
+                      ...all,
+                      {
+                        id: `perf:${Date.now()}`,
+                        title: 'Switched to Performance',
+                        text: `${fps} frames a second here, so glow and shadows are off. The button at the top right brings them back.`,
+                        color: accent,
+                        error: false,
+                      },
+                    ]);
+                  }
+                : undefined
+            }
           />
         </Canvas>
         <div className="office3d-vignette pointer-events-none absolute inset-0" aria-hidden />

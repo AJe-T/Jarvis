@@ -2,8 +2,8 @@
  * The 3D office's floor plan (2.51), as plain numbers so it can be tested without WebGL. Units are
  * metres; y is up, the floor is the x/z plane.
  *
- * Desks come in **pods of four**: round work islands (2.52) with four seats on a circle, each facing
- * the island's centre (an idea from Hermes Virtual Office's division rooms, drawn our own way). Pods fill rows, so any
+ * Desks come in **pods of four** (two facing pairs, like a real open-plan office: an idea from Hermes
+ * Virtual Office's division rooms and Pixel Agents' desks, drawn our own way). Pods fill rows, so any
  * number of NPCs fits; desk number `d` always lands in the same place for a given pod width. To the
  * right of the work floor sits the glass meeting room, with Jarvis's core in front of it. NPCs walk
  * along the aisles between pods (never through a desk) to the room's door and their seat.
@@ -18,12 +18,9 @@ export const POD_W = 4.6;
 export const POD_D = 4.4;
 /** Half the gap between a pod's edge and its centre: the aisle runs along it. */
 const POD_HALF_D = POD_D / 2;
-/** Seats sit on a circle round the island; each one's holo-screen floats between it and the centre. */
-export const ISLAND_SEAT_R = 1.32;
-export const ISLAND_SCREEN_R = 0.74;
-/** The ring desk's inner and outer radius. */
-export const ISLAND_DESK = { inner: 0.5, outer: 0.98 };
-const DIAG = Math.SQRT1_2;
+const DESK_DX = 0.9;
+const DESK_DZ = 0.45;
+const CHAIR_DZ = 1.15;
 const MARGIN = 1.2;
 const ROOM_SIZE = 6;
 const TABLE_R = 1.25;
@@ -31,11 +28,11 @@ const SEAT_R = 1.95;
 export const MAX_SEATS = 10;
 
 export interface DeskSpot {
-  /** Where the NPC's holo-screen floats (on the ring desk, towards the island's centre). */
+  /** The desk's centre (the monitor sits on it). */
   desk: P;
   /** Where the NPC sits. */
   chair: P;
-  /** Rotation about y so the NPC faces its screen and the island's centre (0 = facing +z). */
+  /** Rotation about y so the NPC faces its monitor (0 = facing +z). */
   facing: number;
   pod: number;
 }
@@ -85,16 +82,16 @@ export function planFor(npcCount: number, highestDesk = 0): Plan {
     // The door faces the work floor, halfway down the room's left wall.
     door: { x: x0, z: z0 + ROOM_SIZE / 2 },
   };
-  const core = { x: x0 + ROOM_SIZE / 2, z: z0 + ROOM_SIZE + 2.4 };
+  const core = { x: x0 + ROOM_SIZE / 2, z: z0 + ROOM_SIZE + 1.3 };
   const loungeD = 3.4;
   const lounge = {
-    centre: { x: floor.x / 2, z: Math.max(floor.z + 0.8, core.z - 1.2) + loungeD / 2 },
+    centre: { x: floor.x / 2, z: floor.z + 0.8 + loungeD / 2 },
     w: Math.min(floor.x - 0.8, 6),
     d: loungeD,
   };
   const max = {
     x: x0 + ROOM_SIZE + MARGIN,
-    z: Math.max(core.z + 1.6, lounge.centre.z + loungeD / 2) + MARGIN,
+    z: Math.max(core.z + 1.0, lounge.centre.z + loungeD / 2, z0 + ROOM_SIZE) + MARGIN,
   };
   const min = { x: -MARGIN, z: -MARGIN };
   return {
@@ -115,19 +112,20 @@ export function podCentre(pod: number, plan: Plan): P {
   };
 }
 
-/** Desk `d`: island d/4; seats 0–3 at its back-left, back-right, front-left and front-right. */
+/** Desk `d`: pod d/4; in the pod, left/right and back/front pairs that face each other. */
 export function deskSpot(d: number, plan: Plan): DeskSpot {
   const desk = Math.max(0, Math.floor(d));
   const pod = Math.floor(desk / 4);
   const i = desk % 4;
   const c = podCentre(pod, plan);
-  const dx = (i % 2 === 0 ? -1 : 1) * DIAG;
-  const dz = (i >= 2 ? 1 : -1) * DIAG;
+  const side = i % 2 === 0 ? -1 : 1;
+  const front = i >= 2;
   return {
     pod,
-    desk: { x: c.x + dx * ISLAND_SCREEN_R, z: c.z + dz * ISLAND_SCREEN_R },
-    chair: { x: c.x + dx * ISLAND_SEAT_R, z: c.z + dz * ISLAND_SEAT_R },
-    facing: Math.atan2(-dx, -dz),
+    desk: { x: c.x + side * DESK_DX, z: c.z + (front ? DESK_DZ : -DESK_DZ) },
+    chair: { x: c.x + side * DESK_DX, z: c.z + (front ? CHAIR_DZ : -CHAIR_DZ) },
+    // Back row looks towards +z (the divider), front row towards -z.
+    facing: front ? Math.PI : 0,
   };
 }
 
