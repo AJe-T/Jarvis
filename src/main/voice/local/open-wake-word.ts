@@ -150,6 +150,42 @@ export function nearMissTracker(threshold: number, report: (peak: number) => voi
   };
 }
 
+/** A repeat starts this long after the earlier near miss ended (shorter is the same phrase dipping). */
+const REPEAT_MIN_GAP_MS = 600;
+/** ...and no later than this ("Hey Jarvis… hey Jarvis!"). */
+const REPEAT_MAX_GAP_MS = 5000;
+
+/**
+ * Sir saying "Hey Jarvis" again because the first one scored just under the threshold: a second near
+ * miss soon after a first one wakes him. Two near misses this close together are rare in noise.
+ * Returns true on the chunk that should wake.
+ */
+export function repeatTracker(threshold: number, now: () => number) {
+  const floor = threshold * NEAR_MISS;
+  let inBurst = false;
+  let burstStart = -Infinity;
+  let lastEnd = -Infinity;
+  const tracker = (score: number): boolean => {
+    const t = now();
+    if (score < floor) {
+      if (inBurst) lastEnd = t;
+      inBurst = false;
+      return false;
+    }
+    if (!inBurst) burstStart = t;
+    inBurst = true;
+    const gap = burstStart - lastEnd;
+    return gap >= REPEAT_MIN_GAP_MS && gap <= REPEAT_MAX_GAP_MS;
+  };
+  return Object.assign(tracker, {
+    /** After a wake (or reset) the next phrase starts fresh. */
+    reset(): void {
+      inBurst = false;
+      lastEnd = -Infinity;
+    },
+  });
+}
+
 export function createOpenWakeWord(
   models: OwwModels,
   threshold: number,
@@ -159,6 +195,7 @@ export function createOpenWakeWord(
   const features = createFeatureStream(models);
   const classify = createClassifier(models);
   const nearMiss = onNearMiss ? nearMissTracker(threshold, onNearMiss) : undefined;
+  const repeat = repeatTracker(threshold, now);
   let lastFire = -Infinity;
   const scores: number[] = [];
 
@@ -167,10 +204,12 @@ export function createOpenWakeWord(
       const score = await classify(await features(chunk));
       scores.push(score);
       if (scores.length > 50) scores.shift();
-      const fired = score >= threshold && now() - lastFire >= DEBOUNCE_MS;
+      const repeated = repeat(score);
+      const fired = (score >= threshold || repeated) && now() - lastFire >= DEBOUNCE_MS;
       nearMiss?.(score, fired || score >= threshold);
       if (!fired) return false;
       lastFire = now();
+      repeat.reset();
       return true;
     },
     models.release,
@@ -178,6 +217,7 @@ export function createOpenWakeWord(
       // The "Hey Jarvis" that woke him is still in these buffers; left there it fires again.
       features.reset();
       classify.reset();
+      repeat.reset();
       scores.length = 0;
     },
   );

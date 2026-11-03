@@ -204,6 +204,8 @@ export const SETTINGS = {
   'models.deep': { schema: modelId, default: 'claude-opus-5-5' },
   'models.fast': { schema: modelId, default: 'claude-haiku-4-5-20251001' },
   'models.computer': { schema: modelId, default: 'claude-sonnet-5-5' },
+  /** Chats and voice pick their model by the request: fast for talk and quick commands, deep for real work. */
+  'models.auto': { schema: z.boolean(), default: true },
   'budget.dailyUsd': { schema: z.number().min(0).max(1000), default: 2 },
   'budget.monthlyUsd': { schema: z.number().min(0).max(10000), default: 30 },
   /** One automation run is stopped once it has cost this much (API-equivalent on the subscription); 0 = no cap. */

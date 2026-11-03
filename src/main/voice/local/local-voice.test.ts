@@ -7,7 +7,13 @@ import { createLocalEngines } from './local-engines';
 import { createWhisperStt } from './local-stt';
 import { createModelStore, MODEL_IDS, type ModelId, type Progress } from './model-store';
 import type { Vad } from './onnx';
-import { createOpenWakeWord, OWW_CHUNK, thresholdFor, type OwwModels } from './open-wake-word';
+import {
+  createOpenWakeWord,
+  OWW_CHUNK,
+  repeatTracker,
+  thresholdFor,
+  type OwwModels,
+} from './open-wake-word';
 import { cleanTranscript } from './whisper';
 import { MODEL_TAR_BZ2 } from '../../lib/bzip2-fixture';
 
@@ -399,5 +405,53 @@ describe('model store (pinned downloads)', () => {
     await expect(
       local.stt.start({ sampleRate: 16000, language: 'en', signal: new AbortController().signal }),
     ).rejects.toMatchObject({ userMessage: /Download the Whisper model/ });
+  });
+});
+
+describe('openWakeWord: Sir repeating "Hey Jarvis"', () => {
+  /** Scores per 80 ms chunk; returns the times (ms) the tracker said "wake". */
+  function run(scores: number[]): number[] {
+    let t = 0;
+    const repeat = repeatTracker(0.3, () => t);
+    const woke: number[] = [];
+    for (const s of scores) {
+      t += 80;
+      if (repeat(s)) woke.push(t);
+    }
+    return woke;
+  }
+  const quiet = (ms: number): number[] => Array<number>(Math.round(ms / 80)).fill(0.01);
+
+  it('a second near miss 1-5 s after the first wakes', () => {
+    expect(run([...quiet(400), 0.25, 0.26, ...quiet(1500), 0.22])).toHaveLength(1);
+  });
+
+  it('one near miss alone never wakes', () => {
+    expect(run([...quiet(400), 0.25, 0.27, 0.24, ...quiet(3000)])).toEqual([]);
+  });
+
+  it('a dip inside the same phrase is not a repeat', () => {
+    expect(run([0.25, 0.01, 0.01, 0.24])).toEqual([]);
+  });
+
+  it('a second near miss after more than 5 s does not wake', () => {
+    expect(run([0.25, ...quiet(6000), 0.25])).toEqual([]);
+  });
+
+  it('scores far below the threshold are not near misses', () => {
+    expect(run([0.1, ...quiet(1500), 0.1])).toEqual([]);
+  });
+
+  it('the engine wakes on the repeat', async () => {
+    let t = 0;
+    const scores = [...quiet(400), 0.25, ...quiet(1500), 0.24];
+    const { models } = fakeOww((call) => scores[call - 1] ?? 0.01);
+    const ww = createOpenWakeWord(models, 0.3, () => t);
+    let woke = false;
+    for (let i = 0; i < 20 + scores.length && !woke; i++) {
+      t += 80;
+      woke = await ww.process(new Int16Array(OWW_CHUNK));
+    }
+    expect(woke).toBe(true);
   });
 });

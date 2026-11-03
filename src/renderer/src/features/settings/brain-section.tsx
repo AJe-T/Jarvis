@@ -101,10 +101,20 @@ export function ClaudeModels(): React.JSX.Element {
         title="Claude's models"
         description="Which Claude model does each job. Model IDs can be changed without an app update."
       >
+        <SettingSwitch
+          k="models.auto"
+          label="Pick the model for each request (fast for talk and quick commands, deep for research, browsing, writing and code)"
+        />
         <div className="grid max-w-xl gap-4">
-          <SettingInput k="models.default" label="Default (conversation)" />
-          <SettingInput k="models.deep" label="Deep thinking (“think hard”, “plan”)" />
-          <SettingInput k="models.fast" label="Background (titles, summaries, memory)" />
+          <SettingInput k="models.default" label="Default (longer requests)" />
+          <SettingInput
+            k="models.deep"
+            label="Deep (reasoning, research, browsing, writing, code, “think hard”)"
+          />
+          <SettingInput
+            k="models.fast"
+            label="Fast (talk, quick commands, titles, summaries, memory)"
+          />
           <SettingInput
             k="models.computer"
             label="Computer control"

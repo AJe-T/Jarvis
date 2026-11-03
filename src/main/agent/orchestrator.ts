@@ -149,6 +149,15 @@ function userContent(text: string, attachments: Attachment[] = []): MessageParam
   return blocks;
 }
 
+/** The Claude model that wrote the last answer (free-pool answers are stored as "pool:…"). */
+export function lastClaudeModel(rows: readonly MessageRow[]): string | null {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (r?.role === 'assistant' && r.model && !r.model.startsWith('pool:')) return r.model;
+  }
+  return null;
+}
+
 export function createOrchestrator(deps: OrchestratorDeps) {
   const log = deps.logger.child({ module: 'agent.orchestrator' });
   const queue: Array<{ info: TurnInfo; controller: AbortController }> = [];
@@ -284,7 +293,11 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       },
       ctx,
       {
-        model: pickModel(deps.settings, { purpose: info.purpose, text: info.userText }),
+        model: pickModel(deps.settings, {
+          purpose: info.purpose,
+          text: info.userText,
+          previous: lastClaudeModel(deps.conversations.messages(info.conversationId)),
+        }),
         system,
         messages: deps.context.history(info.conversationId),
         withCache: deps.context.withCacheOnLastBlock,
