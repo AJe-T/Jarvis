@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "productName": "Jarvis",
-  "version": "2.55.1",
+  "version": "2.55.2",
   "private": true,
   "description": "JARVIS: voice-first AI assistant for Windows",
   "main": "./out/main/index.js",
@@ -95,7 +95,15 @@
     "three": "0.186.1",
     "unpdf": "1.8.1",
     "yaml": "2.9.1",
-    "zod": "4.6.5",
+    "zod": "4.6.7",
     "zustand": "5.0.15"
+  },
+  "overrides": {
+    "@jimp/plugin-scale": {
+      "@jimp/plugin-resize": "0.22.12"
+    },
+    "@jimp/plugin-shadow": {
+      "@jimp/plugin-blur": "0.22.12"
+    }
   }
 }
