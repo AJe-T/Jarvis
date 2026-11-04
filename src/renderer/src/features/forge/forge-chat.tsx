@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import clsx from 'clsx';
 import { Hammer, SendHorizontal, ShieldAlert } from 'lucide-react';
+import { useVoiceSend, VoiceSendButton } from '../../components/jarvis/voice-send';
 import { IconButton } from '../../components/ui/button';
 import { call } from '../../lib/api';
 import { useSetting } from '../../stores/settings-store';
@@ -173,12 +174,14 @@ export function ForgeChat(): React.JSX.Element {
     end.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
-  const submit = async (): Promise<void> => {
-    const t = text.trim();
+  const submitText = async (raw: string): Promise<void> => {
+    const t = raw.trim();
     if (!t || sending) return;
     setText('');
     if (!(await send(t))) setText(t);
   };
+  const submit = (): Promise<void> => submitText(text);
+  const voice = useVoiceSend({ text, setText, onSend: (t) => void submitText(t) });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -218,7 +221,11 @@ export function ForgeChat(): React.JSX.Element {
           value={text}
           rows={2}
           maxLength={8000}
-          placeholder="What should Forge build? (Enter sends, Shift+Enter for a new line)"
+          placeholder={
+            voice.live
+              ? 'Listening… speak, and it sends when you pause'
+              : 'What should Forge build? (Enter sends, Shift+Enter for a new line, or tap the mic)'
+          }
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -228,6 +235,7 @@ export function ForgeChat(): React.JSX.Element {
           }}
           className="min-h-[3rem] flex-1 resize-y rounded-sm border border-line bg-surface-1 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 outline-none focus:border-accent-edge"
         />
+        <VoiceSendButton live={voice.live} onClick={voice.toggle} disabled={sending} />
         <IconButton label="Send" type="submit" disabled={!text.trim() || sending}>
           <SendHorizontal size={16} aria-hidden />
         </IconButton>

@@ -69,6 +69,7 @@ export const HELP: Record<string, HelpEntry> = {
     what: 'Jarvis improving itself: a new tool (no reinstall) or a change to its own code, built and checked by your Claude Code in Forge’s own copy of the source. Chat with Forge here, follow each run live, and see what it cost and what shipped.',
     how: [
       'Chat: tell Forge what Jarvis should learn. It agrees the goal with you, then asks before it starts (budget per run in Settings, default $5 of Claude). Saying “Jarvis, learn to …” anywhere brings you here too.',
+      'Rather talk? Tap the mic beside the box and speak; your words appear as you go and the message sends when you pause (tap the mic again to send at once).',
       'While a run works, its steps show in the chat and on the card above it.',
       'First time? The Chat tab checks this PC is ready and starts a small, safe first build with one click.',
       'Charts: cost per week, runs by outcome, where runs fail and how much free AIs did.',
@@ -193,8 +194,8 @@ export const HELP: Record<string, HelpEntry> = {
     what: 'Your team of single-purpose agents (Marketing, Finance, Developers, Research…). Each has its own AI, tools and memory. Jarvis is their head: he gives them work, reads their memories and runs their meetings.',
     how: [
       'Hire an NPC from a template or from scratch; switch it off any time.',
-      'Office: your team as cube-headed robots in a 3D office at night. Scroll to zoom, drag to turn a little, right-drag to pan; click someone (or their portrait in the party bar) to go to them and open their file. The light on each robot\'s head shows what it is doing; they walk to the meeting room for meetings, a beam flies when one tags another, and a toast pops when someone finishes a job. On a slow PC it switches to Performance by itself; “Classic” is the flat office.',
-      'Team chat: #office is everyone. Tag someone (@Maya) to give them work; with no tag, Jarvis decides who does it. NPCs tag each other too.',
+      "Office: your team as cube-headed robots in a 3D office at night. Scroll to zoom, drag to turn a little, right-drag to pan; click someone (or their portrait in the party bar) to go to them and open their file. The light on each robot's head shows what it is doing; they walk to the meeting room for meetings, a beam flies when one tags another, and a toast pops when someone finishes a job. On a slow PC it switches to Performance by itself; “Classic” is the flat office.",
+      'Team chat: #office is everyone. Tag someone (@Maya) to give them work; with no tag, Jarvis decides who does it. NPCs tag each other too. Tap the mic beside the box to speak a message instead; it sends when you pause.',
       'Meeting room: pick NPCs and a topic. They talk in turns, then Jarvis posts decisions and action items; the minutes go to your vault (NPCs/Meetings).',
       'Each NPC keeps its own memory note (NPCs/<name>/Memory.md). Jarvis can read all of them.',
     ],
