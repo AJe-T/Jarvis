@@ -33,6 +33,8 @@ function setup(opts: {
   patch?: string;
   study?: ForgeDeps['study'];
   skills?: ForgeDeps['skills'];
+  /** The change's tests already pass against the original code (the proof check fails). */
+  redPasses?: boolean;
 }) {
   const runsDir = mkdtempSync(join(tmpdir(), 'forge-runs-'));
   const repo = mkdtempSync(join(tmpdir(), 'forge-repo-'));
@@ -70,12 +72,19 @@ function setup(opts: {
     },
     changes: () =>
       Promise.resolve({
-        files: opts.files ?? [{ status: 'M', path: 'src/main/a.ts' }],
+        files: opts.files ?? [
+          { status: 'M', path: 'src/main/a.ts' },
+          { status: 'A', path: 'src/main/a.test.ts' },
+        ],
         patch: opts.patch ?? '',
         truncated: false,
         stat: [{ path: 'src/main/a.ts', added: 12, removed: 3 }],
         head: 'aaa111',
       }),
+    atBase: (base, restore, remove, fn) => {
+      calls.push(`atBase:${base}:${restore.join(',')}:${remove.join(',')}`);
+      return fn();
+    },
     status: () => Promise.resolve(''),
     readText: (rel) =>
       existsSync(join(repo, rel)) ? readFileSync(join(repo, rel), 'utf8') : `contents of ${rel}`,
@@ -104,6 +113,13 @@ function setup(opts: {
       mkdirSync(join(repo, 'dist'), { recursive: true });
       writeFileSync(join(repo, 'dist', 'Jarvis-Setup-2.38.0.exe'), 'exe');
     }
+    // The proof check: the change's tests fail against the original code (unless redPasses).
+    if (label.startsWith('scripts/vitest-electron.mjs run '))
+      return Promise.resolve(
+        opts.redPasses
+          ? { code: 0, out: '1 passed' }
+          : { code: 1, out: 'FAIL a.test.ts · 1 failed' },
+      );
     return Promise.resolve({
       code: opts.failGate && label.includes(opts.failGate) ? 1 : 0,
       out: 'out',
@@ -166,12 +182,77 @@ describe('Forge runs', () => {
       'commit:feat(forge): Add a weather tool that reads the public API',
       'clean',
     ]);
-    expect(calls.filter((c) => c.startsWith('gate:'))).toHaveLength(7);
+    expect(calls.filter((c) => c.startsWith('gate:'))).toHaveLength(8);
     expect(bossInputs[0]?.rules).toContain('contents of CLAUDE.md');
     expect(bossInputs[0]?.rules).toContain('contents of conversations/RULES.md');
     expect(bossInputs[0]?.budgetUsd).toBe(5);
     expect(announce).toHaveBeenCalledWith('Forge', expect.stringContaining('every check passed'));
     expect(readdirSync(runsDir)).toHaveLength(1);
+  });
+
+  it('a fix gets the fix playbook and proves its test fails against the original code', async () => {
+    const { forge, calls, bossInputs } = setup({});
+    forge.start({ kind: 'change', goal: 'Fix the timer crash on resume', approved: [] });
+    await settle(forge);
+    expect(forge.status()?.state).toBe('passed');
+    expect(forge.status()?.playbook).toBe('fix');
+    expect(bossInputs[0]?.rules).toContain('# Playbook: fix');
+    // The changed code goes back to the base commit; the new test stays and runs.
+    expect(calls).toContain('atBase:abc123:src/main/a.ts:');
+    expect(calls).toContain('gate:scripts/vitest-electron.mjs run src/main/a.test.ts');
+    const proof = forge.status()?.report?.results.find((g) => g.id === 'evidence');
+    expect(proof).toMatchObject({ ok: true });
+  });
+
+  it('tests that already pass against the original code fail the proof check, before the build', async () => {
+    const { forge, calls } = setup({ redPasses: true });
+    forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
+    await settle(forge);
+    expect(forge.status()).toMatchObject({ state: 'failed', error: 'the evidence check failed' });
+    expect(calls.some((c) => c === 'gate:run build')).toBe(false);
+  });
+
+  it('a feature that changes code without a unit test fails the proof check', async () => {
+    const { forge, calls } = setup({ files: [{ status: 'M', path: 'src/main/a.ts' }] });
+    forge.start({
+      kind: 'change',
+      goal: 'Add a weather tool that reads the public API',
+      approved: [],
+    });
+    await settle(forge);
+    expect(forge.status()).toMatchObject({ state: 'failed', error: 'the evidence check failed' });
+    expect(calls.some((c) => c.startsWith('atBase'))).toBe(false);
+  });
+
+  it('a refactor needs no new test: the full suite is its proof', async () => {
+    const { forge, calls, bossInputs } = setup({ files: [{ status: 'M', path: 'src/main/a.ts' }] });
+    forge.start({ kind: 'change', goal: 'Refactor the weather module', approved: [] });
+    await settle(forge);
+    expect(forge.status()?.state).toBe('passed');
+    expect(bossInputs[0]?.rules).toContain('# Playbook: refactor');
+    expect(calls.some((c) => c.startsWith('atBase'))).toBe(false);
+  });
+
+  it('an interface change that breaks the design system fails before any command runs', async () => {
+    const { forge, calls } = setup({
+      files: [{ status: 'M', path: 'src/renderer/src/features/x/x.tsx' }],
+      patch: [
+        'diff --git a/src/renderer/src/features/x/x.tsx b/src/renderer/src/features/x/x.tsx',
+        '--- a/src/renderer/src/features/x/x.tsx',
+        '+++ b/src/renderer/src/features/x/x.tsx',
+        '@@ -1,1 +1,2 @@',
+        ' export const X = () => (',
+        '+  <p className="text-[13px]" style={{ color: "#ff00ff" }}>hi</p>',
+      ].join('\n'),
+    });
+    forge.start({ kind: 'change', goal: 'Add a greeting line to the X view', approved: [] });
+    await settle(forge);
+    expect(forge.status()).toMatchObject({ state: 'failed', error: 'the design check failed' });
+    expect(calls.some((c) => c.startsWith('gate:'))).toBe(false);
   });
 
   it('a protected change fails the run without running the checks', async () => {
@@ -375,7 +456,7 @@ describe('Forge runs', () => {
     const h = forge.history();
     expect(h.map((r) => r.id)).toEqual([forge.status()?.id, 'forge_aaa']);
     expect(h[0]).toMatchObject({ kind: 'change', state: 'passed', costUsd: 1.5 });
-    expect(h[0]?.checks.length).toBe(8);
+    expect(h[0]?.checks.length).toBe(10);
     expect(h[1]).toMatchObject({
       tool: 'calc',
       freeEdits: 2,

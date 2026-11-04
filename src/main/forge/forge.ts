@@ -17,8 +17,17 @@ import {
   type GateResult,
   type GateRunner,
 } from './gates';
+import { designFindings } from './design-check';
+import {
+  evidencePlan,
+  playbookFor,
+  playbookRules,
+  redCommand,
+  redResult,
+  type Playbook,
+} from './evidence';
 import { addedRuns, copyFindings, indexStudyRepo } from './nocopy';
-import type { Finding } from './protected';
+import type { ChangedFile, Finding } from './protected';
 import { describeShip, shipChange, type ShipInfo } from './ship';
 import {
   describeStudy,
@@ -80,6 +89,8 @@ export interface ForgeRun {
     /** The studied repo was too big to index in full. */
     partial?: boolean;
   };
+  /** A change run: how the boss works (fix, feature, refactor) and what the proof check needs. */
+  playbook?: Playbook;
   /** A tool run: its name, build folder, the tools it lists, and whether it was installed. */
   tool?: { name: string; buildDir?: string; tools: ToolInfo[]; installed?: 'added' | 'updated' };
   /** What the boss is doing right now, newest last (capped). */
@@ -283,6 +294,44 @@ export function runView(r: ForgeRun, installersDir?: string): ForgeRunView | nul
 
 const MAX_LOG = 40;
 const RULES_CHARS = 20_000;
+/** How much of a changed interface file the design check reads (focus and reduced-motion rules). */
+const DESIGN_READ_CHARS = 200_000;
+const PROOF_TIMEOUT_MS = 10 * 60_000;
+
+/**
+ * The proof check of a change run (evidence.ts): the run's unit tests against the original code.
+ * Runs that need none (a refactor, interface only) pass with the reason; a fix or feature without
+ * a unit test fails.
+ */
+function proofGate(p: {
+  playbook: Playbook;
+  files: readonly ChangedFile[];
+  base: string;
+  ws: Workspace;
+  run: GateRunner;
+  now: () => number;
+}): (signal: AbortSignal) => Promise<GateResult> {
+  const plan = evidencePlan(p.playbook, p.files);
+  return async (signal) => {
+    if ('skip' in plan)
+      return { id: 'evidence', ok: true, ms: 0, tail: `Not needed: ${plan.skip}.` };
+    if ('missing' in plan) return { id: 'evidence', ok: false, ms: 0, tail: plan.missing };
+    const start = p.now();
+    try {
+      const r = await p.ws.atBase(p.base, plan.restore, plan.remove, () =>
+        p.run(redCommand(plan.tests), { timeoutMs: PROOF_TIMEOUT_MS, signal }),
+      );
+      return redResult(r, p.now() - start);
+    } catch (err) {
+      return {
+        id: 'evidence',
+        ok: false,
+        ms: p.now() - start,
+        tail: `The proof check could not run: ${errorMessage(err)}`,
+      };
+    }
+  };
+}
 const FINISHED: readonly ForgeState[] = ['passed', 'failed', 'cancelled'];
 
 /** forge/<date>-<time>-<first words of the goal>: readable in `git branch`, safe as a ref name. */
@@ -456,10 +505,15 @@ export function createForge(deps: ForgeDeps): Forge {
     const delegate = delegateFor(r, ws.dir, signal);
     const notes = `docs/forge-study/${runSlug(r.goal, r.startedAt)}.md`;
     const extras = await extrasFor(r, notes, join(ws.dir, notes));
+    const playbook = playbookFor(r.goal);
+    r.playbook = playbook;
     const boss = await deps.boss({
       repoDir: ws.dir,
       brief: r.goal,
-      rules: bossRules(r.approved, repoRules, Boolean(delegate)) + extras.rules,
+      rules:
+        bossRules(r.approved, repoRules, Boolean(delegate)) +
+        playbookRules(playbook) +
+        extras.rules,
       approved: r.approved,
       budgetUsd: deps.budgetUsd(),
       signal,
@@ -486,7 +540,10 @@ export function createForge(deps: ForgeDeps): Forge {
     Object.assign(r, { base, stat, head });
     if (truncated)
       return finish(r, 'failed', { error: 'the change is too large to review in full' });
-    const copied = noCopy(r, addedRuns(patch));
+    const added = addedRuns(patch);
+    const copied = noCopy(r, added);
+    const design = designFindings(added, (rel) => ws.readText(rel, DESIGN_READ_CHARS));
+    const evidence = proofGate({ playbook, files, base, ws, run, now });
     const report = await runGates(
       { run, now },
       {
@@ -496,6 +553,8 @@ export function createForge(deps: ForgeDeps): Forge {
         signal,
         onGate: (id) => progress(r, `Gate: ${id}`),
         ...(copied ? { noCopy: copied } : {}),
+        design,
+        evidence,
       },
     );
     if (signal.aborted) return finish(r, 'cancelled', { report });

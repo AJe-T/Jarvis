@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
-import { copyFileSync, existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { copyFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { FORGE_REPO_RE } from '@shared/forge';
 import { runProcess } from '../lib/process';
 import { forgeEnv } from './env';
@@ -129,6 +129,11 @@ export interface Workspace {
   }>;
   /** Puts .git/config back to how it was cloned (the checks ran changed code that could edit it); throws without the saved copy. */
   restoreConfig(): void;
+  /**
+   * The proof check: puts `restore` back to their version at `base` and removes `remove`, runs `fn`,
+   * then returns the clone to the run's commit (reset + clean), even when `fn` throws.
+   */
+  atBase<T>(base: string, restore: string[], remove: string[], fn: () => Promise<T>): Promise<T>;
   /** `git status --short`: what the boss changed so far. */
   status(): Promise<string>;
   /** A text file from the repo, or '' when it doesn't exist (CLAUDE.md, RULES.md). */
@@ -199,6 +204,24 @@ export function createWorkspace(deps: { dir: string; git: GitFn; run: GateRunner
         stat,
         head,
       };
+    },
+    async atBase(base, restore, remove, fn) {
+      try {
+        // "--" so a path can never be read as an option; base is the commit Forge recorded.
+        if (restore.length) await git(['checkout', base, '--', ...restore]);
+        for (const rel of remove) {
+          const abs = resolve(dir, rel);
+          const inside = relative(dir, abs);
+          if (!inside || inside.startsWith('..') || isAbsolute(inside))
+            throw new Error(`Not a file in Forge's copy: ${rel}`);
+          rmSync(abs, { force: true });
+        }
+        return await fn();
+      } finally {
+        // Everything the run changed is committed, so this restores it exactly.
+        await git(['reset', '--hard', 'HEAD']);
+        await git(['clean', '-fdx', '-e', 'node_modules']);
+      }
     },
     status: () => git(['status', '--short']),
     readText(rel, max) {

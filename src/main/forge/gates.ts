@@ -9,10 +9,12 @@ import { reviewDiff, type ChangedFile, type Finding } from './protected';
 export const GATE_IDS = [
   'review',
   'no-copy',
+  'design',
   'typecheck',
   'lint',
   'related',
   'unit',
+  'evidence',
   'build',
   'e2e',
   'secrets',
@@ -33,8 +35,15 @@ export interface GateReport {
   findings: Finding[];
 }
 
-/** Gates that run a command (review and no-copy read the diff). */
-export type CommandGateId = Exclude<GateId, 'review' | 'no-copy'>;
+/** Gates that read the diff, or that Forge runs itself (evidence), instead of one fixed command. */
+type SpecialGateId = 'review' | 'no-copy' | 'design' | 'evidence';
+const SPECIAL: ReadonlySet<GateId> = new Set<SpecialGateId>([
+  'review',
+  'no-copy',
+  'design',
+  'evidence',
+]);
+export type CommandGateId = Exclude<GateId, SpecialGateId>;
 
 /** Node arguments for one check: an npm script (through npm-cli.js), or a script file in the repo. */
 export type GateCommand = { npm: string[] } | { node: string[] };
@@ -107,42 +116,51 @@ export async function runGates(
     onGate?: (id: GateId) => void;
     /** F6: what the no-copy check found against the studied repository (none: no study). */
     noCopy?: readonly Finding[];
+    /** What the design check found in the interface lines the change adds (none: not checked). */
+    design?: readonly Finding[];
+    /** The proof check (evidence.ts): the change's tests against the original code (none: skipped). */
+    evidence?: (signal: AbortSignal) => Promise<GateResult>;
   },
 ): Promise<GateReport> {
-  const findings = reviewDiff(input.files, input.patch, input.approved);
-  const blocked = findings.filter((f) => f.severity === 'block');
-  const results: GateResult[] = [
-    {
-      id: 'review',
-      ok: blocked.length === 0,
-      ms: 0,
-      tail: findings.map((f) => `${f.severity.toUpperCase()} ${f.path}: ${f.problem}`).join('\n'),
-    },
+  const findings: Finding[] = [];
+  const results: GateResult[] = [];
+  const diffGates: Array<[GateId, readonly Finding[] | undefined, string]> = [
+    ['review', reviewDiff(input.files, input.patch, input.approved), ''],
+    ['no-copy', input.noCopy, 'No code copied from the studied repository.'],
+    ['design', input.design, 'The interface follows the design system.'],
   ];
-  if (blocked.length > 0) return { ok: false, results, findings };
-  if (input.noCopy) {
-    const copied = input.noCopy.filter((f) => f.severity === 'block');
-    findings.push(...input.noCopy);
-    results.push({
-      id: 'no-copy',
-      ok: copied.length === 0,
-      ms: 0,
-      tail:
-        input.noCopy.map((f) => `${f.severity.toUpperCase()} ${f.path}: ${f.problem}`).join('\n') ||
-        'No code copied from the studied repository.',
-    });
-    if (copied.length > 0) return { ok: false, results, findings };
+  for (const [id, list, clean] of diffGates) {
+    if (!list) continue;
+    const r = findingsGate(id, list, clean);
+    findings.push(...list);
+    results.push(r);
+    if (!r.ok) return { ok: false, results, findings };
   }
   const changed = input.files.filter((f) => f.status !== 'D').map((f) => f.path);
   for (const id of GATE_IDS) {
-    if (id === 'review' || id === 'no-copy') continue;
+    if (id === 'evidence' && !input.evidence) continue;
+    if (SPECIAL.has(id) && id !== 'evidence') continue;
     if (input.signal.aborted) return { ok: false, results, findings };
     input.onGate?.(id);
-    const r = await runGate(deps.run, id, changed, input.signal, deps.now);
+    const r =
+      id === 'evidence' && input.evidence
+        ? await input.evidence(input.signal)
+        : await runGate(deps.run, id as CommandGateId, changed, input.signal, deps.now);
     results.push(r);
     if (!r.ok) return { ok: false, results, findings };
   }
   return { ok: true, results, findings };
+}
+
+/** A gate that reads findings: it fails on any "block"; warnings only show in the report. */
+function findingsGate(id: GateId, list: readonly Finding[], clean: string): GateResult {
+  return {
+    id,
+    ok: !list.some((f) => f.severity === 'block'),
+    ms: 0,
+    tail:
+      list.map((f) => `${f.severity.toUpperCase()} ${f.path}: ${f.problem}`).join('\n') || clean,
+  };
 }
 
 export function describeReport(report: GateReport): string {

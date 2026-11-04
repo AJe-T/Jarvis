@@ -48,7 +48,8 @@ Sir: "add X" / repo link / "like the feature in <app>"
   5. BUILD      workers (free pool first) do one task each: write the test, then the code
   6. CHECK      per task: diff only touches allowed files? its tests pass? else retry → escalate
   7. REVIEW     boss reads the full diff, runs impact tests, fixes or re-plans
-  8. GATES      typecheck → lint → impact tests → full unit + security suite → e2e → secret-scan
+  8. GATES      review → (no-copy) → design → typecheck → lint → impact tests → full unit + security suite
+                → proof (the run's tests fail on the original code) → build → e2e → secret-scan
   9. APPROVE    Sir sees Before/After/Why, the diff summary, protected-path flags, tokens used
  10. SHIP       L2: register the tool. L3: bump version, npm run dist, commit, tag, push
  11. INSTALL    Sir runs the installer. Jarvis never installs itself.

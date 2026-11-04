@@ -83,7 +83,7 @@ describe('context builder', () => {
     const c = conversations.create('text');
     conversations.setSummary(c.id, 'They discussed the GST toggle.', 0);
     const [, dyn] = await builder.system({ conversationId: c.id, mode: 'text', userText: 'x' });
-    expect(dyn?.text).toContain('Earlier in this conversation: They discussed the GST toggle.');
+    expect(dyn?.text).toContain('use recall_earlier): They discussed the GST toggle.');
   });
 
   it('trims history to the window, starting at a user message', () => {
