@@ -58,6 +58,8 @@ export const INVOKE_CHANNELS = [
   'llm:localModels',
   'llm:localTest',
   'llm:hardware',
+  'offline:status',
+  'offline:set',
   'llm:cloudModels',
   'llm:cloudTest',
   'runs:estimate',

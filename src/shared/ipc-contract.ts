@@ -110,6 +110,7 @@ export const VoiceStatus = z.object({
 });
 export type VoiceStatus = z.infer<typeof VoiceStatus>;
 const Empty = z.object({}).strict();
+const OfflineProblemSchema = z.object({ part: z.string(), fix: z.string() });
 /** AI Router: a custom provider as Sir types it (main checks it again before use). */
 const CustomProviderInput = z.object({
   name: z.string().min(1).max(40),
@@ -525,6 +526,15 @@ export const INVOKE = {
   ),
   'llm:localTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
   /** This PC's RAM and free disk, for "which colibri model fits" (shared/colibri.ts). */
+  /** Offline mode (src/main/offline.ts): what stops it, and turning it on (only when nothing does). */
+  'offline:status': contract(
+    Empty,
+    z.object({ enabled: z.boolean(), problems: z.array(OfflineProblemSchema) }),
+  ),
+  'offline:set': contract(
+    z.object({ enabled: z.boolean() }).strict(),
+    z.object({ ok: z.boolean(), problems: z.array(OfflineProblemSchema) }),
+  ),
   'llm:hardware': contract(
     Empty,
     z.object({ ramGb: z.number(), freeDiskGb: z.number(), cpuCores: z.number() }),

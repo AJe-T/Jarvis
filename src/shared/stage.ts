@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** Longest page or drawing shown beside the orb (figures from explain_visually reach ~1.6 MB). */
+export const MAX_ARTIFACT_CHARS = 2_000_000;
+
 /**
  * Core stage panels (Design-system.md §5.2a): Jarvis moves aside and shows one panel beside the
  * orb. Built-in kinds read live app data; the generic kinds carry Jarvis's own content, so a new
@@ -86,7 +89,7 @@ export const StagePanelSchema = z.discriminatedUnion('kind', [
     kind: z.literal('artifact'),
     title: Title,
     format: z.enum(['html', 'svg', 'mermaid']),
-    code: z.string().min(1).max(200_000),
+    code: z.string().min(1).max(MAX_ARTIFACT_CHARS),
   }),
   /** A picture (a file Jarvis made or Sir asked to see), as a data URL; at most ~8 MB. */
   z.object({

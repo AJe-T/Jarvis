@@ -19,6 +19,9 @@ import { registerSafetyHandlers } from './ipc/handlers/safety';
 import { registerAiConnectionHandlers } from './ipc/handlers/ai-connections';
 import { registerRunHandlers } from './ipc/handlers/runs';
 import { registerPoolHandlers } from './ipc/handlers/pool';
+import { registerOfflineHandlers } from './ipc/handlers/offline';
+import { guardOfflineChange, type OfflineView } from './offline';
+import { findEspeak } from './voice/tts/kokoro';
 import { registerPasswordHandlers } from './ipc/handlers/passwords';
 import { registerSpacesHandlers } from './ipc/handlers/spaces';
 import { registerPlannerHandlers } from './ipc/handlers/planner';
@@ -332,6 +335,15 @@ async function boot(): Promise<void> {
       });
     });
   };
+  // Offline mode reads the saved settings, the downloaded models and whether eSpeak NG is installed.
+  const offlineView: OfflineView = {
+    get: (key) => services.settings.get(key),
+    installed: (id) => voice.local.models.installed(id),
+    espeak: () => findEspeak() !== null,
+  };
+  registerOfflineHandlers(services, offlineView);
+  // Every settings write, whoever makes it, passes the offline check (onboarding, voice mode, IPC…).
+  services.settings.setGuard((key, value) => guardOfflineChange(offlineView, key, value));
   registerCoreHandlers(services, {
     audit: (event, details) => services.audit.append('user', event, details),
     onOnboarded: async (_vaultPath, facts) => {

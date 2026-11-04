@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { isDefaultName } from '@shared/assistant-name';
 import { JarvisError } from '../errors';
 import { logger } from '../logging/logger';
+import { isOffline } from '../offline';
 import type { Services } from '../services';
 import { createFakeRecorder, createFakeStt, createFakeTts, createFakeWake } from './fakes';
 import {
@@ -201,10 +202,14 @@ function fallbackWhy(chosen: SttEngineId, engine: SttEngineId): string {
 /** Voice v2 (src/main/voice/v2): fixed, measured engines instead of the classic settings matrix. */
 const isV2 = (s: Services): boolean => s.settings.get('voice.engine') === 'v2';
 
+/** Deepgram's key, unless offline mode is on (then Deepgram is never used). */
+const deepgramKey = (s: Services): string | undefined =>
+  isOffline(s.settings) ? undefined : s.secrets.get('deepgram') || undefined;
+
 /** The engine that will really hear Sir: a cloud engine without its key falls back to on-device speech. */
 function effectiveStt(s: Services, local: Pick<LocalEngines, 'ready'>): SttEngineId {
   // v2: Deepgram streams when its key is set (fast, accurate); otherwise the best on-device model.
-  if (isV2(s)) return s.secrets.get('deepgram') ? 'deepgram' : 'whisper';
+  if (isV2(s)) return deepgramKey(s) ? 'deepgram' : 'whisper';
   const chosen = s.settings.get('voice.stt.provider');
   return chosen !== 'whisper' && !hasKey(s, chosen) && local.ready() ? 'whisper' : chosen;
 }
@@ -262,7 +267,7 @@ export function realFactories(
    * (it sends his recorded voice to Groq / OpenAI) and only engines whose key is set.
    */
   const cloudHearing = (): Array<{ name: string; t: Transcriber }> =>
-    s.settings.get('pool.abilities.voiceHearing')
+    s.settings.get('pool.abilities.voiceHearing') && !isOffline(s.settings)
       ? (['groq', 'openai'] as const)
           .filter((id) => hasKey(s, id))
           .map((id) => ({ name: sttName(id), t: phrase[id] }))
@@ -844,8 +849,13 @@ export function createVoiceSystem(
           // voice:setMode shows its own error
           s.emit('notify', { level: 'warn', message: r.error, action: 'settings:voice' });
       });
-    if (key === 'voice.stt.provider' || key === 'voice.stt.whisperModel' || key === 'voice.engine')
-      local.preload(isV2(s) && !s.secrets.get('deepgram'));
+    if (
+      key === 'voice.stt.provider' ||
+      key === 'voice.stt.whisperModel' ||
+      key === 'voice.engine' ||
+      key === 'offline.enabled'
+    )
+      local.preload(isV2(s) && !deepgramKey(s));
     if (key.startsWith('voice.tts.')) {
       clearSpeechCache();
       voice.warmLines();
@@ -865,7 +875,7 @@ export function createVoiceSystem(
       const fetchFn = s.fetch ? { fetch: s.fetch } : {};
       // v2: Deepgram when its key is set, else on this PC.
       if (isV2(s)) {
-        const dg = s.secrets.get('deepgram');
+        const dg = deepgramKey(s);
         if (dg) return deepgramFile({ key: dg, data, mime, language: lang, ...fetchFn });
         if (!local.ready()) return null;
         return local.transcribe((await decodeAudio(data, mime)).slice(0, 16000 * 120), lang);
@@ -943,7 +953,9 @@ export function createVoiceSystem(
       const chosen = (factories as unknown as Record<string, TtsProvider | undefined>)[
         s.settings.get('voice.tts.provider')
       ];
-      const voices = [...new Set([chosen, factories.edge, factories.sapi])].filter(
+      // Offline mode: never the Edge voices (they are online).
+      const backups = isOffline(s.settings) ? [factories.sapi] : [factories.edge, factories.sapi];
+      const voices = [...new Set([chosen, ...backups])].filter(
         (v): v is TtsProvider => v !== undefined,
       );
       return speakToFile(text, voices, {
@@ -976,7 +988,7 @@ export function createVoiceSystem(
         local.ambient(handlers, { keepAll: true }),
       /** A model was downloaded: warm Whisper and Laya, and (re)start the wake word if it was waiting for it. */
       changed: () => {
-        local.preload(isV2(s) && !s.secrets.get('deepgram'));
+        local.preload(isV2(s) && !deepgramKey(s));
         s.laya.warm();
         void voice.applyMode();
       },
@@ -991,7 +1003,7 @@ export function createVoiceSystem(
       activeConversation = id;
     },
     start: () => {
-      if (!s.isTest) local.preload(isV2(s) && !s.secrets.get('deepgram'));
+      if (!s.isTest) local.preload(isV2(s) && !deepgramKey(s));
       // Debug recordings are Sir's voice: kept only while he has them switched on.
       if (!s.settings.get('voice.debugAudio'))
         void diag.clear().catch((err: unknown) => {

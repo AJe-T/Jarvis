@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import { StagePanelSchema, type StagePanel } from '@shared/stage';
+import { MAX_ARTIFACT_CHARS, StagePanelSchema, type StagePanel } from '@shared/stage';
 import type { Tier } from '@shared/types';
 import { ToolError } from '../errors';
 import type { PathGuard } from '../security/path-guard';
@@ -22,6 +22,13 @@ const IMAGE_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
 };
+const ARTIFACT_TYPES: Record<string, 'html' | 'svg' | 'mermaid'> = {
+  '.html': 'html',
+  '.htm': 'html',
+  '.svg': 'svg',
+  '.mmd': 'mermaid',
+  '.mermaid': 'mermaid',
+};
 const TEXT_TYPES = new Set(['.md', '.markdown', '.txt', '.log', '.csv', '.json', '.yaml', '.yml']);
 
 /**
@@ -35,12 +42,12 @@ export function panelForFile(file: string, data: Buffer): StagePanel | null {
   if (mime) return { kind: 'image', title, src: `data:${mime};base64,${data.toString('base64')}` };
   if (data.includes(0)) return null;
   const text = data.toString('utf8');
-  if (ext === '.html' || ext === '.htm')
-    return { kind: 'artifact', title, format: 'html', code: text.slice(0, 200_000) };
-  if (ext === '.svg')
-    return { kind: 'artifact', title, format: 'svg', code: text.slice(0, 200_000) };
-  if (ext === '.mmd' || ext === '.mermaid')
-    return { kind: 'artifact', title, format: 'mermaid', code: text.slice(0, 200_000) };
+  const format = ARTIFACT_TYPES[ext];
+  // A cut page or drawing breaks, so a longer one is not shown (show_file says so).
+  if (format)
+    return text.length > MAX_ARTIFACT_CHARS
+      ? null
+      : { kind: 'artifact', title, format, code: text };
   if (!TEXT_TYPES.has(ext)) return null;
   const cut = text.length > MAX_NOTE;
   const body = ext === '.md' || ext === '.markdown' ? text : `\`\`\`\n${text}\n\`\`\``;
@@ -111,7 +118,12 @@ export function createStageTools(
         try {
           const s = await handle.stat();
           if (s.isDirectory()) return fail(`${file} is a folder, not a file.`);
-          const limit = IMAGE_TYPES[path.extname(file).toLowerCase()] ? MAX_IMAGE : MAX_TEXT;
+          const ext = path.extname(file).toLowerCase();
+          const limit = IMAGE_TYPES[ext]
+            ? MAX_IMAGE
+            : ARTIFACT_TYPES[ext]
+              ? MAX_ARTIFACT_CHARS
+              : MAX_TEXT;
           if (s.size > limit)
             return fail(
               `${path.basename(file)} is ${(s.size / 1024 / 1024).toFixed(1)} MB; the limit is ${limit / 1024 / 1024} MB.`,

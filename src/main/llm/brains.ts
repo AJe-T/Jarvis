@@ -17,6 +17,7 @@ import type { Connections } from './connections';
 import { cloudBaseUrl, createLocalClient } from './local-client';
 import type { FreePool } from './pool/pool';
 import type { Fusion } from './pool/fusion';
+import { isOffline } from '../offline';
 import type { LlmClient } from './types';
 
 /**
@@ -88,6 +89,8 @@ export function createBrains(
 
   function ready(id: BrainRef): boolean {
     if (id === 'jarvis') return true;
+    // Offline mode: only brains on this PC (Jarvis himself is the local model then).
+    if (isOffline(deps.settings) && id !== 'local') return false;
     if (id === 'local') return deps.settings.get('llm.local.model') !== '';
     if (id === 'free') return deps.pool.ready();
     if (id === 'fusion') return deps.fusion.ready();

@@ -8,6 +8,8 @@ interface Ask {
   body: string;
   actionLabel: string;
   destructive: boolean;
+  /** Only the action button: a notice Sir acknowledges, nothing to cancel. */
+  alertOnly?: boolean;
   resolve(ok: boolean): void;
 }
 
@@ -54,9 +56,11 @@ export function ConfirmModalHost(): React.JSX.Element | null {
             {ask.body}
           </Dialog.Description>
           <div className="mt-5 flex justify-end gap-2">
-            <Button id="confirm-modal-cancel" onClick={() => close(false)}>
-              Cancel
-            </Button>
+            {!ask.alertOnly && (
+              <Button id="confirm-modal-cancel" onClick={() => close(false)}>
+                Cancel
+              </Button>
+            )}
             <Button variant={ask.destructive ? 'danger' : 'primary'} onClick={() => close(true)}>
               {ask.actionLabel}
             </Button>

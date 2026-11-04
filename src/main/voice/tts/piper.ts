@@ -5,6 +5,7 @@ import { JarvisError } from '../../errors';
 import { inference } from '../../inference/client';
 import type { TtsChunk, TtsProvider } from '../types';
 import { encodeWav } from '../wav';
+import { trimSilence } from './trim';
 import { espeakIpa, findEspeak, realEspeak, speedFromRate, type RunEspeak } from './kokoro';
 
 /**
@@ -146,7 +147,10 @@ export function createPiperTts(deps: {
       if (signal.aborted) return;
       yield {
         mime: 'audio/wav',
-        data: encodeWav(normalise(wave), config.audio.sample_rate),
+        data: encodeWav(
+          trimSilence(normalise(wave), config.audio.sample_rate),
+          config.audio.sample_rate,
+        ),
       } satisfies TtsChunk;
     },
   };

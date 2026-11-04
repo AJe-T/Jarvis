@@ -206,13 +206,26 @@ describe('Whisper speech-to-text session', () => {
 
   it('sends nothing while it never hears speech, and reports transcription errors', async () => {
     expect((await runSession([], { frames: 20 })).events).toEqual([]);
-    const failing = await runSession([0.9, ...rep(40, 0)], { fail: true, frames: 20 });
+    const failing = await runSession([...rep(8, 0.9), ...rep(40, 0)], { fail: true, frames: 20 });
     expect(failing.events).toEqual(['start', 'error:model crashed']);
   });
 
   it('ends with no final when Whisper only heard noise', async () => {
-    const { events } = await runSession([0.9, ...rep(40, 0)], { text: '', frames: 20 });
+    const { events } = await runSession([...rep(8, 0.9), ...rep(40, 0)], { text: '', frames: 20 });
     expect(events).toEqual(['start', 'end']);
+  });
+
+  it('drops a cough or click shorter than 200 ms of voice and keeps listening for Sir', async () => {
+    // 3 voiced windows (~96 ms: a click), quiet long enough to end a phrase, then a real "yes" (~320 ms).
+    const probs = [...rep(3, 0.9), ...rep(30, 0.05), ...rep(10, 0.9), ...rep(30, 0.05)];
+    const { events, heard } = await runSession(probs, { text: 'yes', frames: 60 });
+    expect(events).toEqual(['start', 'final:yes', 'end']);
+    expect(heard).toHaveLength(1); // the click never reached Whisper
+  });
+
+  it('a short "yes" (~200 ms of voice) still counts', async () => {
+    const { events } = await runSession([...rep(7, 0.9), ...rep(30, 0.05)], { text: 'yes' });
+    expect(events).toEqual(['start', 'final:yes', 'end']);
   });
 
   it('keeps listening in continuous mode and shows words while Sir is still talking', async () => {

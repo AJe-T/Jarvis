@@ -31,6 +31,12 @@ describe('voice backup chain', () => {
     ).toEqual(['sapi']);
   });
 
+  it('offline mode: only voices on this PC, never Edge or ElevenLabs, whatever the switch', () => {
+    expect(speakingFallbacks('kokoro', f, true, true).map((p) => p.id)).toEqual(['sapi']);
+    expect(speakingFallbacks('piper', f, false, true).map((p) => p.id)).toEqual(['kokoro', 'sapi']);
+    expect(speakingFallbacks('sapi', f, true, true).map((p) => p.id)).toEqual(['kokoro']);
+  });
+
   it('speaking backup off: the old Edge → Windows fallback', () => {
     expect(speakingFallbacks('kokoro', f, false).map((p) => p.id)).toEqual(['edge', 'sapi']);
     expect(speakingFallbacks('sapi', f, false)).toEqual([]);

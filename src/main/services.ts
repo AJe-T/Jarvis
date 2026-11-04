@@ -95,6 +95,9 @@ import { createScreenTools } from './tools/everyday/screen';
 import { createWebPageTools } from './tools/everyday/web-page';
 import { createYouTubeTools } from './tools/everyday/youtube';
 import { createVideoTools } from './tools/everyday/video';
+import { createFigureJobs, createFigureTools } from './figures/figures';
+import { findAnatomySkill } from './figures/agent';
+import { isOffline } from './offline';
 import { createWeatherTools } from './tools/everyday/weather';
 import { createSkillStore } from './skills/skills';
 import { createToolRegistry, type ToolScope } from './tools/registry';
@@ -220,7 +223,8 @@ export function createServices(opts: ServiceOptions) {
   // The UI follows the settings Jarvis changes himself (set_personality, quiet_mode); allowlist, so a
   // future sensitive key is never broadcast by default.
   settings.onChange((key, value) => {
-    if (key === 'persona' || key === 'quiet.until') opts.emit('settings:changed', { key, value });
+    if (key === 'persona' || key === 'quiet.until' || key === 'offline.enabled')
+      opts.emit('settings:changed', { key, value });
   });
   const secrets = createSecretStore(
     join(opts.userData, 'secrets.bin'),
@@ -509,6 +513,15 @@ export function createServices(opts: ServiceOptions) {
     onError: (err) => logger.debug({ err: String(err) }, 'claude session poll failed'),
   });
   if (!opts.isTest) sessionWatcher.start();
+  const figures = createFigureJobs({
+    rt: claudeCode,
+    dir: () => join(opts.paths.documents, 'Jarvis', 'Figures'),
+    skill: () => findAnatomySkill(),
+    offline: () => isOffline(settings),
+    announce,
+    show: (panel) => opts.emit('stage:panel', { panel }),
+  });
+  killSwitch.onKill(() => void figures.cancel());
   const appIndex = createAppIndex(opts.os, opts.startMenuDirs ?? defaultStartMenuDirs());
   const registry = createToolRegistry({
     // Claude's paid search only when free search can't take the turn (AI Router Phase 3).
@@ -656,6 +669,8 @@ export function createServices(opts: ServiceOptions) {
     createImageTool({ images, gate: searchGate }),
     // Videos from HTML with HyperFrames (heygen-com/hyperframes), rendered on this PC.
     ...createVideoTools({ videosDir: () => join(opts.paths.videos, 'Jarvis') }),
+    // Interactive figures that explain an idea as a machine (wheresryan22/anatomy, Sir's own skill).
+    ...createFigureTools(figures),
     // HuggingGPT (microsoft/JARVIS): Claude plans, picks Hub models, runs them, explains.
     ...createHuggingFaceTools({
       token: () => secrets.get('huggingface'),

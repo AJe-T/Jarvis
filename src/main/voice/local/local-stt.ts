@@ -8,6 +8,12 @@ export const END_PROB = 0.35;
 export const END_SILENCE_MS = 700;
 export const PRE_ROLL_WINDOWS = 10; // ~320 ms before speech was detected, so first syllables aren't cut
 const MAX_SPEECH_MS = 30_000;
+/**
+ * Voiced audio a phrase needs before it counts (idea from huwprosser/jarvis-mlx, which drops clips
+ * under 0.75 s). Shorter is a cough, click or knock: it is dropped and listening goes on, instead of
+ * ending Sir's turn on nothing. A spoken "yes" or "no" is ~300–450 ms, so it still gets through.
+ */
+export const MIN_VOICED_MS = 200;
 
 /** int16 mic samples → [-1, 1] floats, carrying a partial window over to the next call. */
 export function toWindows(
@@ -41,7 +47,7 @@ function joinWindows(windows: Float32Array[]): Float32Array {
 
 /**
  * Whisper isn't streaming, so the session listens with Silero VAD and transcribes once Sir stops
- * talking: speechStarted → (≥700 ms quiet) → final + utteranceEnd. By default one utterance per
+ * talking: speechStarted (after MIN_VOICED_MS of voice) → (≥700 ms quiet) → final + utteranceEnd. By default one utterance per
  * session, as the voice controller closes the session after the final transcript. `continuous` keeps
  * going for dictation; `livePartials` re-reads the phrase so far while Sir speaks, so words appear as
  * he says them (like a phone keyboard). Whisper runs one job at a time: a live re-read is skipped while
@@ -74,6 +80,9 @@ export function createWhisperStt(deps: {
       let speech: Float32Array[] = [];
       let inSpeech = false;
       let quietMs = 0;
+      /** Voiced time in this phrase (pre-roll not counted), and whether speechStarted fired for it. */
+      let voicedMs = 0;
+      let announced = false;
       let done = false;
       let chain = Promise.resolve();
       /** Bumped per utterance so a late live re-read never overwrites a newer phrase. */
@@ -113,6 +122,14 @@ export function createWhisperStt(deps: {
         if (continuous) vad.reset();
       }
 
+      /** A cough, click or knock (less than MIN_VOICED_MS of voice): forget it and keep listening. */
+      function dropBlip(): void {
+        speech = [];
+        inSpeech = false;
+        quietMs = 0;
+        vad.reset();
+      }
+
       async function step(window: Float32Array): Promise<void> {
         if (done || signal.aborted) return;
         const p = await vad.prob(window);
@@ -123,13 +140,21 @@ export function createWhisperStt(deps: {
           inSpeech = true;
           speech.push(...preRoll);
           preRoll.length = 0;
-          fire('speechStarted');
+          voicedMs = WINDOW_MS;
+          announced = false;
           return;
         }
         speech.push(window);
+        if (p >= END_PROB) voicedMs += WINDOW_MS;
+        if (!announced && voicedMs >= MIN_VOICED_MS) {
+          announced = true;
+          fire('speechStarted');
+        }
         quietMs = p < END_PROB ? quietMs + WINDOW_MS : 0;
-        if (quietMs >= endSilenceMs || speech.length * WINDOW_MS >= MAX_SPEECH_MS) await finish();
-        else livePartial();
+        if (quietMs < endSilenceMs && speech.length * WINDOW_MS < MAX_SPEECH_MS)
+          return livePartial();
+        if (announced) return finish();
+        dropBlip();
       }
 
       const session: SttSession = {

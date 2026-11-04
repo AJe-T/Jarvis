@@ -5,6 +5,7 @@ import type { SettingsService } from '../../settings/settings-service';
 import type { LlmClient, LlmMessage, LlmRequest } from '../types';
 import type { FreePool, PoolJob, Trail } from './pool';
 import { modelMeta, rankRoutes, type RouteState } from './router';
+import { isOffline } from '../../offline';
 import { providerName } from './snapshot';
 
 /**
@@ -136,6 +137,7 @@ export function createFusion(deps: {
     /** Two or more tier-2 providers can draft right now. */
     ready: (): boolean =>
       deps.settings.get('pool.enabled') &&
+      !isOffline(deps.settings) &&
       deps.settings.get('pool.abilities.fusion') &&
       lineup().drafters.length >= 2,
     /**

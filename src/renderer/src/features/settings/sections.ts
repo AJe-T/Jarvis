@@ -132,7 +132,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     label: 'Privacy',
     group: 'Safety',
     icon: ShieldCheck,
-    keywords: 'quiet redact screen telemetry',
+    keywords: 'quiet redact screen telemetry offline local airplane internet',
     Component: PrivacySection,
   },
   {

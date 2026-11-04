@@ -615,6 +615,12 @@ export const SETTINGS = {
     schema: z.record(z.string().max(80), z.string().max(16)),
     default: {} as Record<string, string>,
   },
+  /**
+   * Offline mode (2.60, idea from huwprosser/jarvis-mlx): brain, hearing and voice all on this PC,
+   * nothing sent out. Main-only: offline:set turns it on only when src/main/offline.ts finds every
+   * part on this PC and ready, and while it is on no setting may move a part back to the cloud.
+   */
+  'offline.enabled': { schema: z.boolean(), default: false },
   /** Password manager: lock after this many idle minutes (0 = only when Sir locks it or Windows locks). */
   'passwords.autoLockMinutes': { schema: z.number().int().min(0).max(240), default: 5 },
   /** Copied passwords are wiped from the clipboard after this many seconds. */
@@ -633,6 +639,7 @@ export const MAIN_ONLY_SETTINGS: readonly SettingKey[] = [
   'mini.dock',
   'copilot.contacts',
   'forge.repoUrl',
+  'offline.enabled', // only through offline:set, which checks everything is on this PC
 ];
 
 /** Applied live, but a restart gives these a clean start (the Save bar offers one). */

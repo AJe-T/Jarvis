@@ -11,6 +11,7 @@ import type { SettingsService } from '../settings/settings-service';
 import { runAgentLoop, type LoopResult, type ToolRuntime, type TurnContext } from './agent-loop';
 import { gated, markThirdParty, poolBlock, restrictTools, trailLine } from './brain-runner';
 import type { TurnInfo } from './orchestrator';
+import { isOffline } from '../offline';
 import { displayText } from './ui-history';
 
 /**
@@ -157,7 +158,9 @@ export function createPoolTurns(deps: PoolTurnDeps) {
   const { settings } = deps;
 
   const tier2Ready = (): boolean =>
-    settings.get('pool.enabled') && deps.pool.routes().some((r) => r.enabled && r.tier === 2);
+    settings.get('pool.enabled') &&
+    !isOffline(settings) &&
+    deps.pool.routes().some((r) => r.enabled && r.tier === 2);
 
   /** The pool's view of this chat, or null when the gate refuses it. */
   function context(info: TurnInfo, ctx: TurnContext): ReturnType<typeof poolContext> | null {

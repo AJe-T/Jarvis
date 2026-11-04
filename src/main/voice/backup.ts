@@ -47,12 +47,18 @@ export function createEngineReporter(deps: {
   };
 }
 
-/** Voices tried after the chosen one. Backup on: Kokoro, Edge, ElevenLabs, Windows (as set up). */
+/**
+ * Voices tried after the chosen one. Backup on: Kokoro, Edge, ElevenLabs, Windows (as set up).
+ * Offline mode: only voices on this PC (Kokoro, then Windows), whatever the backup switch says.
+ */
 export function speakingFallbacks(
   primary: string,
   f: { edge: TtsProvider; sapi: TtsProvider; kokoro?: TtsProvider; elevenlabs?: TtsProvider },
   backup: boolean,
+  offline = false,
 ): TtsProvider[] {
+  if (offline)
+    return [f.kokoro, f.sapi].filter((p): p is TtsProvider => p !== undefined && p.id !== primary);
   if (!backup) return primary === 'sapi' ? [] : primary === 'edge' ? [f.sapi] : [f.edge, f.sapi];
   return [f.kokoro, f.edge, f.elevenlabs, f.sapi].filter(
     (p): p is TtsProvider => p !== undefined && p.id !== primary,

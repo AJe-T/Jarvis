@@ -7,6 +7,7 @@ import { JarvisError } from '../../errors';
 import { inference } from '../../inference/client';
 import type { TtsChunk, TtsProvider } from '../types';
 import { encodeWav } from '../wav';
+import { trimSilence } from './trim';
 
 export { encodeWav };
 
@@ -219,7 +220,10 @@ export function createKokoroTts(deps: {
         speed: speedFromRate(rate),
       });
       if (signal.aborted) return;
-      yield { mime: 'audio/wav', data: encodeWav(wave, SAMPLE_RATE) } satisfies TtsChunk;
+      yield {
+        mime: 'audio/wav',
+        data: encodeWav(trimSilence(wave, SAMPLE_RATE), SAMPLE_RATE),
+      } satisfies TtsChunk;
     },
   };
 }

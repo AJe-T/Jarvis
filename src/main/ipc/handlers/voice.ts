@@ -8,6 +8,7 @@ import type { VoiceStatus } from '@shared/ipc-contract';
 import type { VoiceCheckResult } from '../../voice/v2/check';
 import { V2_SETUP_MODELS } from '../../voice/v2/policy';
 import { handle, onSend } from '../handle';
+import { isOffline } from '../../offline';
 import { ENROL_PHRASES, type Enrolment } from '../../voice/enrolment';
 
 interface VoiceMatch {
@@ -38,6 +39,12 @@ export function registerVoiceHandlers(
     return { ok: true };
   });
   handle('voice:setMode', async (req) => {
+    if (req.mode === 'realtime' && isOffline(s.settings))
+      return {
+        ok: false,
+        error:
+          'Offline mode is on, and a realtime conversation streams your voice to the cloud. Turn Offline mode off first (Settings → Privacy).',
+      };
     const previous = s.settings.get('voice.mode');
     s.settings.set('voice.mode', req.mode); // the settings listener also re-applies the mode
     const r = await voice.applyMode();

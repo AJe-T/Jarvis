@@ -6,6 +6,7 @@ import { useSetting, useSettingsStore } from '../../stores/settings-store';
 import { useUiStore } from '../../stores/ui-store';
 import { AccentPicker } from './accent-picker';
 import { TextSizePicker, ThemePicker } from './appearance-pickers';
+import { OfflineModeCard } from './offline-card';
 import { OrbStylePicker } from './orb-style-picker';
 import { SecretField } from './secret-field';
 import { SettingInput, SettingSelect, SettingSwitch } from './settings-controls';
@@ -32,6 +33,7 @@ export function PrivacySection(): React.JSX.Element {
       title="Privacy"
       description="Start a message with /private to keep that conversation out of Obsidian and memory."
     >
+      <OfflineModeCard />
       <SettingSwitch k="privacy.logConversationsToVault" label="Save conversations to Obsidian" />
       <SettingInput
         k="retention.messagesDays"

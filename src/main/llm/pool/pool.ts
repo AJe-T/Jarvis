@@ -41,6 +41,7 @@ import { buildSnapshot, providerName } from './snapshot';
 import { estimateTokens, shrinkRequest } from './shrink';
 import { buildAnalytics } from './analytics';
 import { buildAllowance } from './allowance';
+import { isOffline } from '../../offline';
 import { readOpenRouterKey } from './openrouter-key';
 
 /**
@@ -740,6 +741,7 @@ export function createFreePool(deps: PoolDeps) {
     /** Ready = switched on and a tier-2 route set up, or a tier-3 one Jarvis may ask about. */
     ready: (): boolean =>
       settings.get('pool.enabled') &&
+      !isOffline(settings) &&
       routes().some((r) => r.enabled && (r.tier === 2 || settings.get('pool.tier3') === 'ask')),
     snapshot: (): PoolSnapshot =>
       buildSnapshot({

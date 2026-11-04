@@ -23,6 +23,7 @@ import type { QuickMatch } from './quick-commands';
 import type { ContinuousTranscriber, HeardSegment } from './local/continuous';
 import { Utterance, warmSpeech } from './tts-pipeline';
 import { speakingFallbacks, ttsName, whyOf, type EngineReport } from './backup';
+import { isOffline } from '../offline';
 import { createLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
 import type { AudioTap, VoiceDiagnostics } from './diagnostics';
 import { createEchoCheck, type EchoState } from './echo-check';
@@ -368,6 +369,7 @@ export function createVoiceController(d: VoiceDeps) {
             d.settings.get('voice.tts.provider'),
             d.factories,
             d.settings.get('pool.abilities.voiceSpeaking'),
+            isOffline(d.settings),
           ),
         onEngine: (id, failed) =>
           d.report?.(

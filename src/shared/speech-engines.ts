@@ -553,6 +553,15 @@ export const LOCAL_MODEL_IDS = [
 ] as const;
 
 const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/i;
+/** An http(s) address on this PC itself (not the home network): what offline mode accepts. */
+export function isLoopbackUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return /^https?:$/.test(u.protocol) && LOOPBACK.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
 /** Link-local (incl. the 169.254.169.254 cloud metadata address) and metadata host names. */
 const LINK_LOCAL =
   /^(169\.254(\.\d{1,3}){2}|\[fe[89ab][0-9a-f]:[^\]]*\]|metadata\.google\.internal)$/i;

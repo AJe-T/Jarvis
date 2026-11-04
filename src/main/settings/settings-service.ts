@@ -12,7 +12,12 @@ export interface SettingsService {
 }
 
 /** Settings are validated per key (shared/settings.ts) on every write and on load. */
-export function createSettingsService(repo: SettingsRepo): SettingsService {
+/** Checks a write before it is saved (offline mode); throws a JarvisError to refuse it. */
+export type SettingGuard = (key: SettingKey, value: unknown) => void;
+
+export function createSettingsService(
+  repo: SettingsRepo,
+): SettingsService & { setGuard(guard: SettingGuard): void } {
   const values = new Map<SettingKey, unknown>();
   for (const [key, raw] of repo.all()) {
     if (!(key in SETTINGS)) continue;
@@ -20,8 +25,13 @@ export function createSettingsService(repo: SettingsRepo): SettingsService {
     if (parsed.success) values.set(key as SettingKey, parsed.data);
   }
   const listeners = new Set<Listener>();
+  let guard: SettingGuard = () => undefined;
 
-  const service: SettingsService = {
+  const service: SettingsService & { setGuard(g: SettingGuard): void } = {
+    /** One guard for every write, whoever makes it (IPC, onboarding, tools, main flows). */
+    setGuard(g) {
+      guard = g;
+    },
     get<K extends SettingKey>(key: K): SettingValue<K> {
       return (
         values.has(key) ? values.get(key) : structuredClone(SETTINGS[key].default)
@@ -38,6 +48,7 @@ export function createSettingsService(repo: SettingsRepo): SettingsService {
           `Invalid value for ${key}`,
           `That value isn't valid for ${key}.`,
         );
+      guard(key, parsed.data);
       values.set(key, parsed.data);
       repo.set(key, parsed.data);
       for (const l of listeners) l(key, parsed.data);
