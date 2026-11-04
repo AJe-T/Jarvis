@@ -6,7 +6,7 @@ import { confirmAction } from '../../components/ui/confirm-modal';
 import { Section, TextInput } from '../../components/ui/field';
 import { call } from '../../lib/api';
 import { useSetting } from '../../stores/settings-store';
-import { saveSetting } from './settings-controls';
+import { SettingSwitch, saveSetting } from './settings-controls';
 
 /** Security.md §5.1 allowed roots and §5 step 4 per-tool overrides (changes need their own confirmation). */
 export function FilesSection(): React.JSX.Element {
@@ -98,6 +98,12 @@ export function FilesSection(): React.JSX.Element {
             <FolderPlus size={14} aria-hidden /> Add folder
           </Button>
         </div>
+      </Section>
+      <Section
+        title="App control and notifications"
+        description="Optional: install agent-desktop (vercel-labs/agent-desktop) with npm install -g agent-desktop, then restart Jarvis. Looking at and clicking controls in apps gets much quicker, and Jarvis can read, dismiss and act on your Windows notifications. Jarvis's own safety checks still come first; if agent-desktop can't do something, the built-in way runs."
+      >
+        <SettingSwitch k="pc.agentDesktop" label="Use agent-desktop when it is installed" />
       </Section>
       <Section
         title="Stricter rules"

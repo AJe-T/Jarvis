@@ -479,11 +479,17 @@ export const SETTINGS = {
     ),
     default: {},
   },
+  /** Use vercel-labs/agent-desktop for app control and notifications when it is installed. */
+  'pc.agentDesktop': { schema: z.boolean(), default: true },
+  /** Meeting recorder: action items from the summary go to Tasks (tagged #meeting). */
+  'meetings.addTasks': { schema: z.boolean(), default: true },
   'dictation.enabled': { schema: z.boolean(), default: false },
   'dictation.removeFillers': { schema: z.boolean(), default: true },
   /** "heard → written" fixes, one per line, e.g. "jarvis => JARVIS". */
   'dictation.dictionary': { schema: z.string().max(5000), default: '' },
   'dictation.keepHistory': { schema: z.boolean(), default: true },
+  /** Hold to talk (idea from Hex): hold the hotkey while speaking; letting go types it. */
+  'dictation.holdToTalk': { schema: z.boolean(), default: false },
   'vault.path': { schema: z.string().max(400), default: '' },
   'files.allowedRoots': {
     schema: z.array(z.string().min(3).max(400)).max(50),
@@ -502,6 +508,8 @@ export const SETTINGS = {
   'memory.semanticSearch': { schema: z.boolean(), default: true },
   /** Re-order found memories with an on-device cross-encoder when downloaded (hindsight idea). */
   'memory.rerank': { schema: z.boolean(), default: true },
+  /** Three-step recall (claude-mem idea): each turn sees only the start of matching notes. */
+  'memory.compactRecall': { schema: z.boolean(), default: true },
   /** Weekly: the fast model looks across memory notes and writes patterns to Facts/Observations.md (hindsight "reflect"). */
   'memory.reflect': { schema: z.boolean(), default: true },
   /** ADR-027: on-device Laya decisions. 'shadow' runs beside Claude and only logs; 'on' acts on them. */

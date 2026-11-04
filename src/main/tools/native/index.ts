@@ -10,6 +10,8 @@ import type { OsAdapter } from './os';
 import { createShellTool } from './shell';
 import { createSystemTools } from './system';
 import { createUiAutomationTools } from './ui-automation';
+import type { AgentDesktop } from './agent-desktop';
+import { createNotificationTools } from './notifications';
 
 export interface NativeToolDeps {
   os: OsAdapter;
@@ -20,6 +22,8 @@ export interface NativeToolDeps {
   protectedPaths(): string[];
   /** Jarvis Terminal mirrors run_powershell (ADR-032). */
   onShellRun?: Parameters<typeof createShellTool>[1];
+  /** vercel-labs/agent-desktop when installed: quicker UI tools, and notifications. */
+  agentDesktop?: AgentDesktop;
 }
 
 /** API-Guide.md §2.3 v1 native tool catalogue (memory/routines/delegation tools are added by their phases). */
@@ -27,7 +31,9 @@ export function createNativeTools(d: NativeToolDeps): Tool[] {
   return [
     ...createSystemTools(d.os),
     ...createAppTools(d.os, d.appIndex),
-    ...createUiAutomationTools(d.os),
+    ...createUiAutomationTools(d.os, d.agentDesktop),
+    // Only when agent-desktop is installed (it reads the Action Center); found at start-up.
+    ...(d.agentDesktop?.available() ? createNotificationTools(d.agentDesktop) : []),
     ...createFileTools({
       os: d.os,
       guard: d.guard,

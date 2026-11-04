@@ -23,13 +23,26 @@ export function DictationSection(): React.JSX.Element {
       >
         <SettingSwitch k="dictation.enabled" label="Turn on the dictation hotkey" />
         <SettingInput k="hotkeys.dictation" label="Dictation hotkey" />
+        <SettingSwitch
+          k="dictation.holdToTalk"
+          label="Hold to talk: hold the hotkey while you speak, let go to type it (pauses don't end it)"
+        />
         <SettingSwitch k="dictation.removeFillers" label="Remove filler words (um, uh, er)" />
         <SettingTextArea
           k="dictation.dictionary"
           label="Custom dictionary"
-          hint='One fix per line: "heard => written", e.g. "jarvis => JARVIS" or "avan tech => AvaanTech".'
+          hint='One fix per line: "heard => written", e.g. "jarvis => JARVIS" or "avan tech => AvaanTech". A line with just a name ("Priyanka") adds it to the vocabulary. With Deepgram (English), every written word is sent as a word to expect, so names are heard right the first time.'
         />
         <SettingSwitch k="dictation.keepHistory" label="Keep a history of dictations on this PC" />
+      </Section>
+      <Section
+        title="Meetings"
+        description='Say "record this meeting" (asks first: everyone should agree). Your microphone (You) and the PC’s sound (Them) are transcribed on this PC with the on-device speech model; only the words are kept. "Stop the meeting" saves the transcript, a summary and action items to the vault’s Meetings folder. Use headphones for the cleanest "You" track.'
+      >
+        <SettingSwitch
+          k="meetings.addTasks"
+          label="Add the meeting's action items to Tasks (#meeting)"
+        />
       </Section>
       <Section title="Dictation history">
         <div className="flex gap-2">

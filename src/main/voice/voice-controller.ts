@@ -96,6 +96,8 @@ export interface VoiceDeps {
     maxListenMs?: number;
     echoSettleMs?: number;
     dictationQuietMs?: number;
+    /** Hold to talk: wait after the hotkey is let go for the last words' transcript. */
+    holdTailMs?: number;
     composeIdleMs?: number;
   };
 }
@@ -119,6 +121,7 @@ const MAX_EARLY_FRAMES = 250; // 8 s at 512 samples per frame, 20 s at 1280
 const WAKE_REOPEN_MS = 30_000;
 /** Dictation lets Sir pause to think mid-sentence. */
 const DICTATION_PAUSE_MS = 1500;
+const HOLD_TAIL_MS = 700;
 const DICTATION_MAX_MS = 120_000;
 /** Composing a message stops by itself after this long without new words (or Sir taps the mic). */
 const COMPOSE_IDLE_MS = 20_000;
@@ -185,6 +188,8 @@ export function createVoiceController(d: VoiceDeps) {
       partial?: string;
       target: 'app' | 'composer';
       quiet?: ReturnType<typeof setTimeout>;
+      /** Hold to talk (idea from Hex): ends when the hotkey is let go, never on a pause. */
+      hold?: boolean;
     };
   } | null = null;
   /** ADR-012 conversational state. */
@@ -714,6 +719,7 @@ export function createVoiceController(d: VoiceDeps) {
     followUp = false,
     dictation: 'app' | 'composer' | null = null,
     greetingLine?: string,
+    hold = false,
   ): Promise<void> {
     if (listening) return;
     stopSpeaking();
@@ -730,7 +736,9 @@ export function createVoiceController(d: VoiceDeps) {
       tap: d.diag?.tap('stt') ?? null,
       followUp,
       ...(greetingLine ? { greeting: greetingLine } : {}),
-      ...(dictation ? { dictation: { parts: [], target: dictation } } : {}),
+      ...(dictation
+        ? { dictation: { parts: [], target: dictation, ...(hold ? { hold } : {}) } }
+        : {}),
     };
     const detail = followUp
       ? 'follow-up'
@@ -845,6 +853,7 @@ export function createVoiceController(d: VoiceDeps) {
   function dictationPause(l: NonNullable<typeof listening>): void {
     if (!l.dictation) return;
     clearTimeout(l.dictation.quiet);
+    if (l.dictation.hold) return; // held: only letting go of the hotkey ends it
     const ms =
       l.dictation.target === 'composer'
         ? (d.timeouts?.composeIdleMs ?? COMPOSE_IDLE_MS)
@@ -1155,11 +1164,25 @@ export function createVoiceController(d: VoiceDeps) {
       else if (wasReply && voiceTurns.size === 0 && !speaking) openFollowUp();
     },
 
-    /** Dictation hotkey: start, or finish early if already dictating. Works in every voice mode. */
-    dictate(): void {
-      if (listening?.dictation) return finishDictation(listening);
+    /**
+     * Dictation hotkey: start, or finish early if already dictating. Works in every voice mode.
+     * `released` (hold to talk): dictation ends when it settles, i.e. when Sir lets go of the hotkey.
+     */
+    dictate(released?: Promise<unknown>): void {
+      if (listening?.dictation) {
+        // Holding a hotkey repeats it: the hold already running keeps going.
+        if (listening.dictation.hold && released) return;
+        return finishDictation(listening);
+      }
       if (listening) cancelListening();
-      void startListening(false, false, 'app');
+      void startListening(false, false, 'app', undefined, Boolean(released));
+      const mine = listening;
+      if (!released || !mine) return;
+      // The last words' transcript lands a moment after the key comes up.
+      const finish = (): void => {
+        setTimeout(() => finishDictation(mine), d.timeouts?.holdTailMs ?? HOLD_TAIL_MS);
+      };
+      released.then(finish, finish);
     },
 
     /**

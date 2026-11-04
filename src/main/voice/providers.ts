@@ -17,7 +17,11 @@ import type { Recorder, SttProvider, SttSession, TtsChunk, TtsProvider, WakeWord
 
 type Handler = (...args: never[]) => void;
 
-export function createDeepgramStt(getKey: () => string | undefined): SttProvider {
+export function createDeepgramStt(
+  getKey: () => string | undefined,
+  /** Vocabulary (dictation dictionary): words Nova-3 should expect (keyterm prompting). */
+  keyterms: () => string[] = () => [],
+): SttProvider {
   return {
     id: 'deepgram',
     async start({ language, signal, endSilenceMs = 1000 }) {
@@ -29,7 +33,11 @@ export function createDeepgramStt(getKey: () => string | undefined): SttProvider
           'Add a Deepgram key in Settings → Voice.',
         );
       const client = new DeepgramClient({ apiKey });
+      // Keyterm prompting is English-only on Nova-3 ⚠️ (developers.deepgram.com/docs/keyterm).
+      // queryParams arrays are sent as repeated keyterm=… (the SDK's typed field would send JSON).
+      const terms = language.startsWith('en') ? keyterms() : [];
       const socket = await client.listen.v1.connect({
+        ...(terms.length ? { queryParams: { keyterm: terms } } : {}),
         model: 'nova-3',
         language: language === 'auto' ? 'multi' : language,
         encoding: 'linear16',

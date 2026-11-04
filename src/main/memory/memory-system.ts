@@ -13,6 +13,7 @@ import { createConversationLogger } from './conversation-logger';
 import { createCurator } from './curator';
 import { createIndexer } from './indexer';
 import { createMemoryTool } from './memory-tool';
+import { createRecallTools } from './recall-tools';
 import { createRetriever } from './retriever';
 import { OBSERVATIONS_PATH, REFLECT_EVERY_MS, reflect, reflectDue } from './reflect';
 import { createReranker } from './rerank';
@@ -204,6 +205,7 @@ export function createMemorySystem(s: Services) {
     conversations: s.conversations,
     semantic,
     reranker,
+    compact: () => s.settings.get('memory.compactRecall'),
   });
   const convLogger = createConversationLogger(vault);
   const curator = createCurator({
@@ -228,6 +230,13 @@ export function createMemorySystem(s: Services) {
   s.registry.register(createMemoryTool(vault, emitChanged));
   for (const t of [
     ...searchTools({ retriever, conversations: s.conversations }),
+    ...createRecallTools({
+      vault,
+      notesChanged: (from, to, limit) => repos.memories.changedBetween(from, to, limit),
+      messagesBetween: (from, to, limit) => s.conversations.messagesBetween(from, to, limit),
+      actionsBetween: (from, to, limit) => s.toolCalls.between(from, to, limit),
+      dayRange: localDayRange,
+    }),
     ...createRoutineTools(repos, () => s.tools),
     createBrowserRoutineTool(vault, s.browserTrail),
   ])

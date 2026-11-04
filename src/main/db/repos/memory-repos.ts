@@ -96,6 +96,14 @@ export function createMemoryRepos(db: Db) {
           )
           .all(ftsQuery, k) as unknown as Array<MemoryRow & { snippet: string }>;
       },
+      /** Notes written or edited in [fromIso, toIso), oldest first (recall_timeline). */
+      changedBetween(fromIso: string, toIso: string, limit: number): MemoryRow[] {
+        return db
+          .prepare(
+            'SELECT * FROM memories WHERE updated_at >= ? AND updated_at < ? ORDER BY updated_at LIMIT ?',
+          )
+          .all(fromIso, toIso, limit) as unknown as MemoryRow[];
+      },
       /** Notes under a vault folder, e.g. "Memory/" (memory tidy-up). */
       under(prefix: string): MemoryRow[] {
         return db

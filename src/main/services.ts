@@ -66,6 +66,7 @@ import { createUtilityTools } from './tools/everyday/utilities';
 import { createToolExecutor } from './tools/executor';
 import { createAppIndex } from './tools/native/app-index';
 import { createNativeTools } from './tools/native/index';
+import { createAgentDesktop, findAgentDesktop } from './tools/native/agent-desktop';
 import type { OsAdapter } from './tools/native/os';
 import { createMealTools, createMealsRepo } from './tools/everyday/meals';
 import { createKnowledgeTools } from './tools/everyday/knowledge';
@@ -612,7 +613,7 @@ export function createServices(opts: ServiceOptions) {
     refuseStart: (ctx) =>
       conversations.get(ctx.conversationId)?.kind === 'forge'
         ? null
-        : 'Only the Forge desk starts builds. Call forge_chat to hand sir\'s request to it.',
+        : "Only the Forge desk starts builds. Call forge_chat to hand sir's request to it.",
   }))
     registry.register(tool);
   // Jarvis Terminal (ADR-032): Sir's own commands, plus every script Jarvis runs.
@@ -620,7 +621,15 @@ export function createServices(opts: ServiceOptions) {
     ps: (script, o) => opts.os.ps(script, o),
     audit: (command) => audit.append('user', 'terminal.run', { command: command.slice(0, 200) }),
   });
+  // vercel-labs/agent-desktop, run as its own program when Sir installed it (looked for once).
+  const agentDesktopPath = opts.isTest ? null : findAgentDesktop();
+  const agentDesktop = createAgentDesktop({
+    path: () => agentDesktopPath,
+    enabled: () => settings.get('pc.agentDesktop'),
+  });
+  if (agentDesktopPath) logger.info({ path: agentDesktopPath }, 'agent-desktop found');
   for (const tool of createNativeTools({
+    agentDesktop,
     onShellRun: (script, r, ms) => terminal.record(script, r, ms),
     os: opts.os,
     appIndex,

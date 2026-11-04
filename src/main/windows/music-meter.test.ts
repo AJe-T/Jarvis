@@ -6,6 +6,7 @@ vi.mock('electron', () => ({ app: { isPackaged: true }, session: {}, shell: {}, 
 const { isMeterUrl } = await import('./music-meter');
 const { isArtifactUrl } = await import('./hardening');
 const { isCaptureUrl } = await import('./capture-window');
+const { isMeetingUrl } = await import('./meeting-window');
 
 /** The app's own bundled page, as hardening.ts resolves it (this test sits beside it). */
 const own = (name: string): string => pathToFileURL(join(__dirname, '../renderer', name)).href;
@@ -16,6 +17,13 @@ describe('privileged app pages (Security.md §7)', () => {
     expect(isMeterUrl(own('index.html'))).toBe(false);
     expect(isMeterUrl('https://evil.example/meter.html')).toBe(false);
     expect(isMeterUrl('')).toBe(false);
+  });
+
+  it('lets only our own meeting page open the microphone and loopback audio', () => {
+    expect(isMeetingUrl(own('meeting.html'))).toBe(true);
+    expect(isMeetingUrl(own('meter.html'))).toBe(false);
+    expect(isMeetingUrl('file:///C:/Users/sir/Downloads/meeting.html')).toBe(false);
+    expect(isMeetingUrl('https://evil.example/meeting.html')).toBe(false);
   });
 
   it('a different file with the same name never gets the page’s privileges', () => {

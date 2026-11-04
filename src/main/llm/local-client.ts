@@ -185,7 +185,7 @@ type OpenAiTool = ReturnType<typeof toOpenAiTools>[number];
 /** Small local models drift when shown ~70 tools; isair/jarvis routes each request to a few. */
 export const LOCAL_TOOL_LIMIT = 12;
 /** Always offered: memory and the clock are relevant to almost anything. */
-const CORE_TOOLS = ['get_datetime', 'search_memory', 'memory'];
+const CORE_TOOLS = ['get_datetime', 'search_memory', 'memory', 'memory_get'];
 const STOP = new Set(
   'a an the and or of to in on for with my me i you it is are be do does can could would please what whats how when where who this that from at by about jarvis sir'.split(
     ' ',

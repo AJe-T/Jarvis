@@ -26,6 +26,8 @@ export interface ContinuousTranscriber {
   write(frame: Int16Array): void;
   /** Forget audio in progress (e.g. when another listener takes the microphone). */
   reset(): void;
+  /** Meetings: transcribe the phrase in progress and everything waiting, then resolve. */
+  flush(): Promise<void>;
   close(): void;
 }
 
@@ -44,7 +46,10 @@ export function createContinuousTranscriber(deps: {
   onBacklog?(dropped: number): void;
   onError(err: Error): void;
   now?(): number;
+  /** Meetings keep every phrase (Infinity) instead of dropping the oldest when Whisper lags. */
+  maxBacklog?: number;
 }): ContinuousTranscriber {
+  const maxBacklog = deps.maxBacklog ?? MAX_BACKLOG;
   const now = deps.now ?? Date.now;
   let pending: Float32Array = new Float32Array(0);
   let preRoll: Float32Array[] = [];
@@ -57,9 +62,15 @@ export function createContinuousTranscriber(deps: {
   const backlog: Array<{ audio: Float32Array; start: number; end: number }> = [];
   let transcribing = false;
   let dropped = 0;
+  let drained: Promise<void> = Promise.resolve();
 
-  async function drain(): Promise<void> {
-    if (transcribing) return;
+  function drain(): Promise<void> {
+    if (transcribing) return drained;
+    drained = drainNow();
+    return drained;
+  }
+
+  async function drainNow(): Promise<void> {
     transcribing = true;
     try {
       while (backlog.length && !closed) {
@@ -84,7 +95,7 @@ export function createContinuousTranscriber(deps: {
       at += w.length;
     }
     backlog.push({ audio, start: startedAt, end: now() });
-    if (backlog.length > MAX_BACKLOG) {
+    if (backlog.length > maxBacklog) {
       backlog.shift();
       dropped++;
       deps.onBacklog?.(dropped);
@@ -137,6 +148,12 @@ export function createContinuousTranscriber(deps: {
       quietMs = 0;
       pending = new Float32Array(0);
       deps.vad.reset();
+    },
+    async flush() {
+      // Every window already written goes through the voice detector first.
+      await vadChain;
+      if (inSpeech && speech.length) cut();
+      await drain();
     },
     close() {
       closed = true;

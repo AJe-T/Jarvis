@@ -120,6 +120,16 @@ export function createToolCallsRepo(db: Db) {
         )
         .all(...ids) as unknown as ToolCallRow[];
     },
+    /** Actions in [fromIso, toIso), oldest first, never from /private chats (recall_timeline). */
+    between(fromIso: string, toIso: string, limit: number): ToolCallRow[] {
+      return db
+        .prepare(
+          `SELECT t.* FROM tool_calls t JOIN conversations c ON c.id = t.conversation_id
+           WHERE c.is_private = 0 AND t.created_at >= ? AND t.created_at < ?
+           ORDER BY t.created_at LIMIT ?`,
+        )
+        .all(fromIso, toIso, limit) as unknown as ToolCallRow[];
+    },
     list(limit: number, conversationId?: string): ToolCallRow[] {
       return (conversationId
         ? db

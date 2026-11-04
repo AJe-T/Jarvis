@@ -8,6 +8,7 @@ import { useUiStore } from '../../stores/ui-store';
 import { SecretField } from './secret-field';
 import { AccountIdField, refreshList, useConnections } from './connections-card';
 import { SettingInput } from './settings-controls';
+import { ColibriFitPanel, LocalServerPresets } from './colibri-fit';
 import {
   ACCOUNT_SLOT,
   CLOUD_PROVIDERS,
@@ -31,7 +32,7 @@ const OPTIONS: Array<{ id: Provider; title: string; body: string }> = [
   },
   {
     id: 'local',
-    title: 'Local model (Ollama / LM Studio)',
+    title: 'Local model (Ollama / LM Studio / colibri)',
     body: 'Any OpenAI-compatible server on this PC or your network. With Ollama or LM Studio it runs offline: free and private, but slower and less capable than Claude; no web search or computer control.',
   },
   {
@@ -136,8 +137,9 @@ export function LocalModelCard(): React.JSX.Element {
       <SettingInput
         k="llm.local.baseUrl"
         label="Server address (OpenAI-compatible)"
-        hint="Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1 · FreeLLMAPI: http://localhost:3001/v1. Only this PC or your home network."
+        hint="Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1 · colibri: http://127.0.0.1:8000/v1 · FreeLLMAPI: http://localhost:3001/v1. Only this PC or your home network."
       />
+      <LocalServerPresets onPicked={() => void refresh()} />
       <SecretField
         name="local_llm"
         label="Server key (only if the server asks for one)"
@@ -176,6 +178,7 @@ export function LocalModelCard(): React.JSX.Element {
         No Ollama yet? Install it from ollama.com, then run e.g. <code>ollama pull qwen3:8b</code>.
         Models that support tool calling (Qwen 3, Llama 3.1+, Mistral) can use Jarvis's tools.
       </p>
+      <ColibriFitPanel />
       <p className="text-xs text-lamp-400">
         FreeLLMAPI (github.com/tashfeenahmed/freellmapi) runs on this PC but forwards every message
         to free cloud AI providers, which may keep or train on it. It is not offline or private;

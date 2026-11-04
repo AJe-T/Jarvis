@@ -58,7 +58,12 @@ function setup(
       sapi: createFakeTts('sapi'),
       ambient: async (h) => {
         ambientHandlers = h;
-        return { write: () => undefined, reset: () => undefined, close: () => undefined };
+        return {
+          write: () => undefined,
+          reset: () => undefined,
+          flush: async () => undefined,
+          close: () => undefined,
+        };
       },
     },
     timeouts: { silenceMs: 300, maxListenMs: 3000, echoSettleMs: 10 },
@@ -322,6 +327,33 @@ describe('dictation (ideas from isair/jarvis)', () => {
       target_app: 'notepad',
     });
     expect(s.conversations.list(5)).toHaveLength(0); // dictation never becomes a chat turn
+    v.voice.shutdown();
+  });
+
+  it('hold to talk: a pause does not end it, letting go of the hotkey types it', async () => {
+    const t = setupServices();
+    const s = t.services;
+    s.settings.set('voice.mode', 'off');
+    const v = createVoiceSystem(s, {
+      factories: {
+        recorder: (_d, n) => createFakeRecorder(n),
+        wake: () => createFakeWake(),
+        stt: createFakeStt(['book a table for two']),
+        edge: createFakeTts('edge'),
+        sapi: createFakeTts('sapi'),
+      },
+      timeouts: { silenceMs: 2000, dictationQuietMs: 20, holdTailMs: 10 },
+    });
+    let letGo = (): void => undefined;
+    const released = new Promise<void>((r) => (letGo = r));
+    v.voice.dictate(released);
+    v.voice.dictate(released); // the held hotkey repeating doesn't end it
+    const os = s.os as unknown as { calls: Array<{ op: string; args: unknown[] }> };
+    await new Promise((r) => setTimeout(r, 150));
+    expect(os.calls.some((c) => c.op === 'pasteText')).toBe(false); // the pause didn't end it
+    letGo();
+    await until(() => os.calls.some((c) => c.op === 'pasteText'));
+    expect(os.calls.find((c) => c.op === 'pasteText')?.args).toEqual(['Book a table for two']);
     v.voice.shutdown();
   });
 

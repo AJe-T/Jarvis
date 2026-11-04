@@ -304,11 +304,15 @@ export function createLocalEngines(
       return phraseFeatures(await featureModels, audio);
     },
     /** ADR-012 always-listening: its own VAD instance, the shared (warm) Whisper. */
-    async ambient(handlers: {
-      onSpeechStart(): void;
-      onSegment(seg: HeardSegment): void;
-      onError(err: Error): void;
-    }): Promise<ContinuousTranscriber> {
+    async ambient(
+      handlers: {
+        onSpeechStart(): void;
+        onSegment(seg: HeardSegment): void;
+        onError(err: Error): void;
+      },
+      /** Meetings: never drop a phrase when Whisper falls behind. */
+      opts: { keepAll?: boolean } = {},
+    ): Promise<ContinuousTranscriber> {
       if (!store.installed('silero-vad')) throw notReady('Whisper model');
       const [ownVad] = await Promise.all([
         openVad(),
@@ -324,6 +328,7 @@ export function createLocalEngines(
         },
         language: () => settings.get('voice.stt.language'),
         endSilenceMs: () => settings.get('voice.endSilenceMs'),
+        ...(opts.keepAll ? { maxBacklog: Infinity } : {}),
         ...handlers,
       });
       // Its own detector in the worker goes when always-listening stops.

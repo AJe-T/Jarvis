@@ -57,6 +57,7 @@ export const INVOKE_CHANNELS = [
   'llm:claudeCodeStatus',
   'llm:localModels',
   'llm:localTest',
+  'llm:hardware',
   'llm:cloudModels',
   'llm:cloudTest',
   'runs:estimate',

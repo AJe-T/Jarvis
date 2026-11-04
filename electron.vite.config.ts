@@ -35,6 +35,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
           meter: resolve(__dirname, 'src/preload/meter.ts'),
+          meeting: resolve(__dirname, 'src/preload/meeting.ts'),
           'browser-bar': resolve(__dirname, 'src/preload/browser-bar.ts'),
           terminal: resolve(__dirname, 'src/preload/terminal.ts'),
           capture: resolve(__dirname, 'src/preload/capture.ts'),
@@ -52,6 +53,8 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
           meter: resolve(__dirname, 'src/renderer/meter.html'),
+          // meeting.html: the hidden meeting recorder (windows/meeting-window.ts).
+          meeting: resolve(__dirname, 'src/renderer/meeting.html'),
           'browser-bar': resolve(__dirname, 'src/renderer/browser-bar.html'),
           terminal: resolve(__dirname, 'src/renderer/terminal.html'),
           // camera.html: Jarvis Camera beside the orb (apps/camera-view.ts), the only page that may open the camera on its own.

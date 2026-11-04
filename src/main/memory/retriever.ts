@@ -19,6 +19,15 @@ export interface MemoryHit {
   snippet: string;
 }
 
+/** Per-turn index snippets: the first ~200 characters, cut at a word, when compact recall is on. */
+export const INDEX_SNIPPET_CHARS = 200;
+export function indexSnippet(snippet: string, compact: boolean): string {
+  if (!compact || snippet.length <= INDEX_SNIPPET_CHARS) return snippet;
+  const cut = snippet.slice(0, INDEX_SNIPPET_CHARS);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > INDEX_SNIPPET_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /** API-Guide.md §6.2. */
 export function createRetriever(deps: {
   vault: VaultService;
@@ -28,6 +37,8 @@ export function createRetriever(deps: {
   semantic?: SemanticIndex;
   /** Re-orders fused candidates with a cross-encoder when downloaded (idea from hindsight). */
   reranker?: Reranker;
+  /** Three-step recall (claude-mem idea): only the start of each note; memory_get reads the rest. */
+  compact?: () => boolean;
 }) {
   async function note(rel: string): Promise<string> {
     if (!deps.vault.exists(rel)) return '';
@@ -119,8 +130,13 @@ export function createRetriever(deps: {
     /** The "Possibly relevant memories" part of the dynamic system block. */
     async buildContextBlock(userText: string): Promise<string> {
       const parts: string[] = [];
+      const short = deps.compact?.() ?? false;
       for (const h of await this.findMemories(userText))
-        parts.push(`- ${h.vaultPath} (${h.title}):\n${h.snippet.replace(/^/gm, '  ')}`);
+        parts.push(
+          `- ${h.vaultPath} (${h.title}):\n${indexSnippet(h.snippet, short).replace(/^/gm, '  ')}`,
+        );
+      if (short && parts.length)
+        parts.push('(Only the start of each note: memory_get with the paths reads them in full.)');
       if (PAST_REFERENCE.test(userText)) {
         const convs = await this.findConversations(userText, 5);
         if (convs.length) {

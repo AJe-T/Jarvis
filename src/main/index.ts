@@ -53,6 +53,12 @@ import { createNpcRepo } from './npcs/npc-repo';
 import { createNpcRuntime } from './npcs/npc-runtime';
 import { createNpcTools } from './npcs/npc-tools';
 import { registerVoiceHandlers } from './ipc/handlers/voice';
+import { waitForRelease } from './voice/key-release';
+import { pickModel } from './agent/model-router';
+import { createMeetings } from './meetings/meetings';
+import { createMeetingTools } from './meetings/meeting-tools';
+import { SUMMARY_PROMPT } from './meetings/transcript';
+import { createMeetingWindowOpener } from './windows/meeting-window';
 import { createVoiceSystem } from './voice/voice-system';
 import { startupFacts, startupLine } from './voice/greetings';
 import { registerMcpHandlers } from './ipc/handlers/mcp';
@@ -264,13 +270,55 @@ async function boot(): Promise<void> {
   const voice = createVoiceSystem(services, isTest ? {} : { capture });
   for (const tool of createCameraTools({ snapshot: () => capture.snapshot() }))
     services.registry.register(tool);
+  // Meeting recorder (idea from anomalyco/hex): mic + PC sound, transcribed on this PC, saved to the vault.
+  const meetings = createMeetings({
+    openWindow: createMeetingWindowOpener(),
+    listen: (h) => voice.local.listen(h),
+    ready: () => voice.local.ready(),
+    summarize: async (transcript) => {
+      const msg = await services.llm.stream(
+        {
+          model: pickModel(services.settings, { purpose: 'summary' }),
+          max_tokens: 1500,
+          system: SUMMARY_PROMPT,
+          messages: [{ role: 'user', content: transcript }],
+        },
+        { signal: services.killSwitch.signal() },
+      );
+      services.ledger.record(msg, 'summary', null);
+      return msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+    },
+    writeNote: async (rel, markdown) => {
+      await memory.vault.write(rel, markdown);
+      emit('memory:changed', { vaultPaths: [rel] });
+    },
+    addTask: (title, notes) => void services.planner.saveTodo({ title, notes, tags: ['meeting'] }),
+    addTasks: () => services.settings.get('meetings.addTasks'),
+    onAutoStop: (path) =>
+      emit('notify', {
+        level: 'info',
+        message: `The meeting ran for 3 hours, so Jarvis stopped recording and saved it to ${path}.`,
+        action: 'memory',
+      }),
+    log: logger.child({ module: 'meetings' }),
+  });
+  for (const tool of createMeetingTools(meetings)) services.registry.register(tool);
   const mcp = createMcpSystem(services, { appVersion: app.getVersion() });
   app.on('will-quit', () => void mcp.manager.shutdown());
   pttHandlers.add(() => voice.voice.ptt());
   extraHotkeys.push({
     key: 'hotkeys.dictation',
     enabled: () => services.settings.get('dictation.enabled'),
-    fn: () => voice.voice.dictate(),
+    // Hold to talk (idea from Hex): dictation ends when the hotkey comes up, not on a pause.
+    fn: () =>
+      services.settings.get('dictation.holdToTalk')
+        ? voice.voice.dictate(
+            waitForRelease(services.os, services.settings.get('hotkeys.dictation')).catch(
+              (err: unknown) =>
+                logger.warn({ err: errorMessage(err) }, 'hold to talk: no key poll'),
+            ),
+          )
+        : voice.voice.dictate(),
   });
   app.on('will-quit', () => voice.voice.shutdown());
   const startMemory = (): void => {

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { statfs, writeFile } from 'node:fs/promises';
+import { cpus, homedir, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { app, dialog, shell, BrowserWindow } from 'electron';
 import { MAIN_ONLY_SETTINGS, SENSITIVE_SETTINGS } from '@shared/settings';
@@ -187,6 +188,14 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
     } catch (err) {
       return { models: [], error: userError(err) };
     }
+  });
+  handle('llm:hardware', async () => {
+    const gb = (bytes: number): number => Math.round((bytes / 1024 ** 3) * 10) / 10;
+    // colibri keeps its models in ~/colibri-models by default: the home drive's free space.
+    const freeDiskGb = await statfs(homedir())
+      .then((st) => gb(st.bavail * st.bsize))
+      .catch(() => 0);
+    return { ramGb: gb(totalmem()), freeDiskGb, cpuCores: cpus().length };
   });
   handle('llm:localTest', async () => {
     try {

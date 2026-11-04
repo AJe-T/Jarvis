@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { defineTool, fail, ok, type Tool } from '../types';
+import { defineTool, fail, ok, type Tool, type ToolOutput } from '../types';
+import { flattenRefs, matchesOf, type AdNode, type AgentDesktop } from './agent-desktop';
 import { matchWindow, windows } from './apps';
 import type { OsAdapter } from './os';
 
@@ -283,13 +284,89 @@ function notFound(r: ActResult, name: string): string {
   return `No control matching "${name}" is visible. Use list_ui_elements to see what is there.`;
 }
 
-export function createUiAutomationTools(osa: OsAdapter): Tool[] {
+/**
+ * agent-desktop fast path (vercel-labs/agent-desktop, run as its own program when installed): the
+ * same accessibility tree, read natively instead of by a PowerShell query. It only ever answers for
+ * a window Jarvis already picked (never Jarvis itself), with Jarvis's checks; anything it can't do
+ * cleanly returns null and the PowerShell path runs as before.
+ */
+function adFast(ad: AgentDesktop | undefined) {
+  const line = (n: AdNode, k: number): string =>
+    `${k + 1}. ${n.role ?? 'element'} "${n.name ?? ''}"${n.states?.includes('disabled') ? ' (disabled)' : ''}${n.value ? ` value="${n.value.slice(0, 80)}"` : ''}`;
+  return {
+    async list(
+      proc: string,
+      title: string,
+      i: { filter?: string | undefined; max: number },
+      signal: AbortSignal,
+    ): Promise<string | null> {
+      if (!ad?.available()) return null;
+      const r = await ad.run<{ tree?: AdNode }>(['snapshot', `--app=${proc}`, '-i', '--compact'], {
+        signal,
+        timeoutMs: 15_000,
+      });
+      if (!r.ok) return null;
+      const want = (i.filter ?? '').toLowerCase();
+      const nodes = flattenRefs(r.data?.tree, 2000)
+        .filter((n) => !want || (n.name ?? '').toLowerCase().includes(want))
+        .slice(0, i.max);
+      return nodes.length ? `${title}\n${nodes.map(line).join('\n')}` : null;
+    },
+    async click(
+      proc: string,
+      i: { name: string; automationId?: string | undefined },
+      signal: AbortSignal,
+    ): Promise<ToolOutput | null> {
+      if (!ad?.available() || !i.name || i.automationId) return null;
+      const find = async (exact: boolean): Promise<AdNode[]> => {
+        const r = await ad.run(
+          [
+            'find',
+            `--app=${proc}`,
+            `--name=${i.name}`,
+            ...(exact ? ['--exact'] : []),
+            '--limit',
+            '2',
+          ],
+          { signal, timeoutMs: 15_000 },
+        );
+        return r.ok ? matchesOf(r.data) : [];
+      };
+      let hits = await find(true);
+      if (!hits.length) hits = await find(false);
+      const hit = hits.length === 1 ? hits[0] : undefined;
+      if (!hit?.ref_id) return null; // none or several: the PowerShell search decides
+      const label = `${hit.name ?? i.name} (${hit.role ?? 'element'})`;
+      // Fuzzy matching could land on "Send mail" for "Mail": a risky control needs a risky name.
+      if (!RISKY.test(riskText(i)) && RISKY.test(hit.name ?? ''))
+        return fail(
+          `The matching control is "${label}". Ask again with that exact name so sir can approve it.`,
+        );
+      if (hit.states?.includes('disabled')) return fail(`${label} is disabled right now.`);
+      const c = await ad.run(['click', hit.ref_id], { signal, timeoutMs: 15_000 });
+      if (c.ok) return ok(`Done: clicked ${label}.`);
+      // Only a click that provably never happened may be tried again the PowerShell way.
+      if (c.error?.disposition?.delivery === 'not_delivered') return null;
+      return fail(
+        `Clicking ${label} may or may not have worked (${c.error?.code ?? 'error'}). Look at the app before trying again.`,
+      );
+    },
+  };
+}
+
+export function createUiAutomationTools(osa: OsAdapter, ad?: AgentDesktop): Tool[] {
   // Never Jarvis itself: its windows show revealed passwords and its own Approve buttons.
-  const pidFor = async (window: string, signal: AbortSignal): Promise<number | null> =>
+  const windowFor = async (
+    window: string,
+    signal: AbortSignal,
+  ): Promise<{ Id: number; ProcessName: string } | null> =>
     matchWindow(
       (await windows(osa, signal)).filter((w) => !SELF.test(w.ProcessName) && w.Id !== process.pid),
       window,
-    )?.Id ?? null;
+    ) ?? null;
+  const pidFor = async (window: string, signal: AbortSignal): Promise<number | null> =>
+    (await windowFor(window, signal))?.Id ?? null;
+  const fast = adFast(ad);
   /** Keys and pasted text go to the window in front: refuse when that is Jarvis or a password box. */
   const frontIsSafe = async (signal: AbortSignal): Promise<string | null> => {
     const r = await osa.psJson<{ process: string; password: boolean }>(PS_FOCUS_INFO, {
@@ -318,9 +395,14 @@ export function createUiAutomationTools(osa: OsAdapter): Tool[] {
       timeoutMs: 30_000,
       summarize: (i) => `Look at the controls in ${i.window}`,
       async run(i, ctx) {
-        const pid = await pidFor(i.window, ctx.signal);
-        if (!pid)
+        const win = await windowFor(i.window, ctx.signal);
+        const pid = win?.Id;
+        if (!win || !pid)
           return fail(`No open window matches "${i.window}". Use list_open_windows or open_app.`);
+        if (!i.includeText) {
+          const quick = await fast.list(win.ProcessName, i.window, i, ctx.signal);
+          if (quick) return ok(quick);
+        }
         const r = await osa.psJson<{
           title: string;
           items: Array<{ n: string; t: string; id: string; on: boolean; v: string }>;
@@ -355,8 +437,11 @@ export function createUiAutomationTools(osa: OsAdapter): Tool[] {
       timeoutMs: 30_000,
       summarize: (i) => `Click "${i.name || i.automationId}" in ${i.window}`,
       async run(i, ctx) {
-        const pid = await pidFor(i.window, ctx.signal);
-        if (!pid) return fail(`No open window matches "${i.window}".`);
+        const win = await windowFor(i.window, ctx.signal);
+        const pid = win?.Id;
+        if (!win || !pid) return fail(`No open window matches "${i.window}".`);
+        const quick = await fast.click(win.ProcessName, i, ctx.signal);
+        if (quick) return quick;
         const r = await osa.psJson<ActResult>(PS_UIA_ACT, {
           params: {
             pid,

@@ -47,7 +47,7 @@ function onStopped(rec: Recorder, onStop: () => void): Recorder {
 }
 import { pickModel } from '../agent/model-router';
 import { INTENT_JUDGE_PROMPT, parseIntent, type Intent, type JudgeContext } from './conversation';
-import { createDictationRepo, finishDictation } from './dictation';
+import { createDictationRepo, finishDictation, vocabularyTerms } from './dictation';
 import { createLocalEngines, type LocalEngines } from './local/local-engines';
 import { createModelStore, type ModelStore } from './local/model-store';
 import { matchQuickCommand, type RoutineTriggers } from './quick-commands';
@@ -251,7 +251,10 @@ export function realFactories(
   };
   const captureOn = (): boolean =>
     !!capture && s.settings.get('voice.echoCancel') && !capture.broken();
-  const deepgram = createDeepgramStt(() => s.secrets.get('deepgram'));
+  const deepgram = createDeepgramStt(
+    () => s.secrets.get('deepgram'),
+    () => vocabularyTerms(s.settings.get('dictation.dictionary')),
+  );
   const phrase = phraseTranscribers(s);
   const report = createEngineReporter({ engines: s.voiceEngines, emit: s.emit });
   /**
@@ -543,6 +546,7 @@ export function createVoiceSystem(
       echoSettleMs?: number;
       dictationQuietMs?: number;
       composeIdleMs?: number;
+      holdTailMs?: number;
     };
     /** Tests: a scripted intent judge. */
     judge?: (transcript: string, ctx: JudgeContext) => Promise<Intent>;
@@ -965,6 +969,11 @@ export function createVoiceSystem(
     },
     local: {
       models,
+      /** Meetings (idea from Hex): on-device speech is downloaded and ready. */
+      ready: () => local.ready(),
+      /** Meetings: one on-device listener per track that keeps every phrase. */
+      listen: (handlers: Parameters<LocalEngines['ambient']>[0]) =>
+        local.ambient(handlers, { keepAll: true }),
       /** A model was downloaded: warm Whisper and Laya, and (re)start the wake word if it was waiting for it. */
       changed: () => {
         local.preload(isV2(s) && !s.secrets.get('deepgram'));

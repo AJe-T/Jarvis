@@ -524,6 +524,11 @@ export const INVOKE = {
     z.object({ models: z.array(z.string()), error: z.string().optional() }),
   ),
   'llm:localTest': contract(Empty, z.object({ ok: z.boolean(), error: z.string().optional() })),
+  /** This PC's RAM and free disk, for "which colibri model fits" (shared/colibri.ts). */
+  'llm:hardware': contract(
+    Empty,
+    z.object({ ramGb: z.number(), freeDiskGb: z.number(), cpuCores: z.number() }),
+  ),
   /** The cloud provider chosen in Settings → Brain: its model list, and a test call. */
   'llm:cloudModels': contract(
     Empty,

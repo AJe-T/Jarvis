@@ -33,6 +33,28 @@ export function parseDictionary(src: string): Array<[RegExp, string]> {
   return out;
 }
 
+/** Keyterm limits: Deepgram caps keyterm prompting at about 500 tokens a request. */
+const MAX_TERMS = 50;
+const MAX_TERM_CHARS = 50;
+
+/**
+ * Vocabulary (idea from Hex): the written side of every dictionary line, plus lines that hold a
+ * single term with no arrow ("AvaanTech"). Sent to the speech engine as words to expect, so they
+ * are heard right in the first place; the dictionary still fixes them afterwards.
+ */
+export function vocabularyTerms(src: string): string[] {
+  const terms = new Set<string>();
+  for (const line of src.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const m = /(?:=>|->)\s*(.*)$/.exec(t);
+    const term = (m ? (m[1] ?? '') : t).trim();
+    if (term && term.length <= MAX_TERM_CHARS) terms.add(term);
+    if (terms.size >= MAX_TERMS) break;
+  }
+  return [...terms];
+}
+
 export function applyDictionary(text: string, rules: Array<[RegExp, string]>): string {
   return rules.reduce((t, [re, to]) => t.replace(re, to), text);
 }

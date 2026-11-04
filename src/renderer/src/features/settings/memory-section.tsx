@@ -109,6 +109,10 @@ export function MemorySection(): React.JSX.Element {
           label="Re-rank found memories when the model is downloaded"
         />
         <SettingSwitch k="memory.reflect" label="Reflect on my memory once a week" />
+        <SettingSwitch
+          k="memory.compactRecall"
+          label="Short memory index each turn (Jarvis reads full notes only when needed; fewer tokens)"
+        />
       </Section>
     </>
   );
