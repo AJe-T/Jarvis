@@ -35,7 +35,7 @@ test('NPCs: hire from a template, see them in the office, tag them in the team c
   await page.screenshot({ path: 'test-results/npcs-office.png' });
 
   await page.getByRole('tab', { name: 'Team chat' }).click();
-  const box = page.getByLabel('Message');
+  const box = page.getByLabel('Message', { exact: true });
   await box.fill('@Maya give me a tagline');
   await box.press('Enter');
   await expect(page.getByText('Less noise.')).toBeVisible({ timeout: 15_000 });
