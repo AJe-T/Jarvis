@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS, type SettingKey } from '@shared/settings';
 import { pickModel, turnWeight } from './model-router';
-import { lastClaudeModel } from './orchestrator';
+import { isPromptTooLong, lastClaudeModel } from './orchestrator';
 import type { MessageRow } from '../db/repos/conversations-repo';
 
 const settings = { get: <K extends SettingKey>(k: K) => SETTINGS[k].default } as never;
@@ -9,7 +9,7 @@ const manual = {
   get: <K extends SettingKey>(k: K) => (k === 'models.auto' ? false : SETTINGS[k].default),
 } as never;
 
-const FAST = 'claude-haiku-4-5-20251001';
+const FAST = 'claude-haiku-5-5';
 const DEFAULT = 'claude-sonnet-5-5';
 const DEEP = 'claude-opus-5-5';
 
@@ -96,5 +96,14 @@ describe('lastClaudeModel', () => {
       lastClaudeModel([row('assistant', DEEP), row('assistant', 'pool:llama'), row('user', null)]),
     ).toBe(DEEP);
     expect(lastClaudeModel([row('user', null)])).toBeNull();
+  });
+});
+
+describe('isPromptTooLong', () => {
+  it("spots Claude's context-window rejection and nothing else", () => {
+    expect(isPromptTooLong(new Error('Prompt is too long · the request is ~225859 tokens'))).toBe(
+      true,
+    );
+    expect(isPromptTooLong(new Error('rate limited'))).toBe(false);
   });
 });

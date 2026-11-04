@@ -202,7 +202,8 @@ export const SETTINGS = {
   'pool.abilities.voiceHearing': { schema: z.boolean(), default: false },
   'models.default': { schema: modelId, default: 'claude-sonnet-5-5' },
   'models.deep': { schema: modelId, default: 'claude-opus-5-5' },
-  'models.fast': { schema: modelId, default: 'claude-haiku-4-5-20251001' },
+  /** Haiku 5.5: 1M window. Haiku 4.5 (200k) can't hold Jarvis's tools and prompt for a chat turn. */
+  'models.fast': { schema: modelId, default: 'claude-haiku-5-5' },
   'models.computer': { schema: modelId, default: 'claude-sonnet-5-5' },
   /** Chats and voice pick their model by the request: fast for talk and quick commands, deep for real work. */
   'models.auto': { schema: z.boolean(), default: true },
@@ -228,6 +229,13 @@ export const SETTINGS = {
         outPerMTok: 20,
         cacheReadPerMTok: 0.2,
         cacheWritePerMTok: 5,
+      },
+      // Jarvis's chat prompts are over 100k tokens, so the higher of Haiku 5.5's two price tiers.
+      'claude-haiku-5-5': {
+        inPerMTok: 0.5,
+        outPerMTok: 2.5,
+        cacheReadPerMTok: 0.05,
+        cacheWritePerMTok: 0.625,
       },
       'claude-haiku-4-5-20251001': {
         inPerMTok: 1,

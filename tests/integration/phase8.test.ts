@@ -59,6 +59,34 @@ describe('Claude subscription mode end to end (ADR-010)', () => {
     expect(s.budget.isExceeded()).toBe(true);
   });
 
+  it('a quick request too big for the fast model is answered by the default model', async () => {
+    const query = fakeClaudeCode(
+      async function* () {
+        yield result('error_during_execution', {
+          errors: ['Prompt is too long · the request is ~225859 tokens (limit 200000)'],
+        });
+      },
+      async function* () {
+        yield text('m1', 'Here is one, sir.');
+        yield result();
+      },
+    );
+    const t = setupServices(undefined, {
+      claudeCodeQuery: query,
+      claudeCodePath: () => 'C:/fake/claude.exe',
+    });
+    const s = t.services;
+    s.settings.set('llm.provider', 'subscription');
+    s.settings.set('models.fast', 'claude-haiku-4-5-20251001');
+    const { conversationId } = s.orchestrator.send({ text: 'tell me a joke', source: 'text' });
+    await idle(s, 10_000);
+
+    expect(query.calls[0]?.model).toBe('claude-haiku-4-5-20251001');
+    expect(query.calls[1]?.model).toBe(s.settings.get('models.default'));
+    const stored = s.conversations.messages(conversationId).map((m) => m.text_plain);
+    expect(stored).toContain('Here is one, sir.');
+  });
+
   it('switching back to the API key uses the Messages API again', async () => {
     const query = fakeClaudeCode(async function* () {
       yield result();

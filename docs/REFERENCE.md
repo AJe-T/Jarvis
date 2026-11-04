@@ -156,7 +156,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `pool.abilities.voiceHearing` | boolean | `false` | audited with value |
 | `models.default` | string | `claude-sonnet-5-5` |  |
 | `models.deep` | string | `claude-opus-5-5` |  |
-| `models.fast` | string | `claude-haiku-4-5-20251001` |  |
+| `models.fast` | string | `claude-haiku-5-5` |  |
 | `models.computer` | string | `claude-sonnet-5-5` |  |
 | `models.auto` | boolean | `true` |  |
 | `budget.dailyUsd` | number | `2` |  |

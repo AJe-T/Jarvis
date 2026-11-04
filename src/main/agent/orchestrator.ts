@@ -150,6 +150,11 @@ function userContent(text: string, attachments: Attachment[] = []): MessageParam
 }
 
 /** The Claude model that wrote the last answer (free-pool answers are stored as "pool:…"). */
+/** Claude Code's / the API's "prompt is too long" rejection: the model's context window is too small. */
+export function isPromptTooLong(err: unknown): boolean {
+  return /prompt is too long/i.test(errorMessage(err));
+}
+
 export function lastClaudeModel(rows: readonly MessageRow[]): string | null {
   for (let i = rows.length - 1; i >= 0; i--) {
     const r = rows[i];
@@ -283,37 +288,57 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       mode: info.mode,
       userText: info.userText,
     });
-    return (deps.loop?.() ?? runAgentLoop)(
-      {
-        llm: deps.llm(),
-        tools: deps.tools(),
-        budget: deps.budget,
-        ledger: deps.ledger,
-        maxIterations: deps.settings.get('agent.maxIterations'),
-      },
-      ctx,
-      {
-        model: pickModel(deps.settings, {
-          purpose: info.purpose,
-          text: info.userText,
-          previous: lastClaudeModel(deps.conversations.messages(info.conversationId)),
-        }),
-        system,
-        messages: deps.context.history(info.conversationId),
-        withCache: deps.context.withCacheOnLastBlock,
-      },
-      {
-        onText,
-        persist: (msgs) => {
-          onPersist?.();
-          persist(info.conversationId, msgs);
+    let started = false;
+    const run = (model: string): ReturnType<typeof runAgentLoop> =>
+      (deps.loop?.() ?? runAgentLoop)(
+        {
+          llm: deps.llm(),
+          tools: deps.tools(),
+          budget: deps.budget,
+          ledger: deps.ledger,
+          maxIterations: deps.settings.get('agent.maxIterations'),
         },
-        onStep: (msg) => {
-          for (const b of msg.content) if (b.type === 'tool_use') toolUseIds.push(b.id);
-          onStepEnd();
+        ctx,
+        {
+          model,
+          system,
+          messages: deps.context.history(info.conversationId),
+          withCache: deps.context.withCacheOnLastBlock,
         },
-      },
-    );
+        {
+          onText: (delta) => {
+            if (delta) started = true;
+            onText(delta);
+          },
+          persist: (msgs) => {
+            started = true;
+            onPersist?.();
+            persist(info.conversationId, msgs);
+          },
+          onStep: (msg) => {
+            started = true;
+            for (const b of msg.content) if (b.type === 'tool_use') toolUseIds.push(b.id);
+            onStepEnd();
+          },
+        },
+      );
+    const picked = pickModel(deps.settings, {
+      purpose: info.purpose,
+      text: info.userText,
+      previous: lastClaudeModel(deps.conversations.messages(info.conversationId)),
+    });
+    try {
+      return await run(picked);
+    } catch (err) {
+      // A smaller-window model (Haiku 4.5: 200k) can't hold Jarvis's tools and prompt: the default answers.
+      const fallback = deps.settings.get('models.default');
+      if (started || picked === fallback || !isPromptTooLong(err) || ctx.signal.aborted) throw err;
+      log.warn(
+        { model: picked, fallback },
+        'prompt too long for the picked model; using the default',
+      );
+      return run(fallback);
+    }
   }
 
   /**
