@@ -29,12 +29,20 @@ const SERVER = 'jarvis';
 const PREFIX = `mcp__${SERVER}__`;
 /** Claude Code's own web search; Security.md §6.3 treats its results as untrusted. */
 const WEB_SEARCH = 'WebSearch';
+/**
+ * Claude Code's tool search: connected MCP servers' tools (hundreds, ~250k tokens of definitions)
+ * are sent by name only and loaded when Claude needs one. Left out of `tools`, every definition is
+ * sent on every call.
+ */
+const TOOL_SEARCH = 'ToolSearch';
+/** Jarvis's own tools stay loaded, so quick commands need no search step. */
+const ALWAYS_LOAD = { 'anthropic/alwaysLoad': true } as const;
 /** Computer control needs the API-only computer-use toolset (ADR-010). */
 const API_ONLY_TOOLS = new Set(['delegate_desktop_task']);
 /** Longer than a confirmation (120 s) plus the slowest tool timeout. */
 const TOOL_CALL_TIMEOUT_MS = 10 * 60_000;
 
-const SUBSCRIPTION_NOTE = `\n\n## Connection\nYou are running through Sir's Claude subscription. Your tools are named with the prefix "${PREFIX}" (for example ${PREFIX}open_app); tool descriptions refer to them without it. Computer control (moving the mouse, typing into apps) is not available in this mode: if Sir asks for it, say it needs an Anthropic API key (Settings → Models & AI).`;
+const SUBSCRIPTION_NOTE = `\n\n## Connection\nYou are running through Sir's Claude subscription. Your tools are named with the prefix "${PREFIX}" (for example ${PREFIX}open_app); tool descriptions refer to them without it. Tools from Sir's connected apps (browser automation, files, documentation lookup and others) are listed by name only: load one with ${TOOL_SEARCH} before calling it. Computer control (moving the mouse, typing into apps) is not available in this mode: if Sir asks for it, say it needs an Anthropic API key (Settings → Models & AI).`;
 
 type ResultBlock = { type: string; text?: string; source?: { data?: string; media_type?: string } };
 
@@ -65,6 +73,7 @@ export function createJarvisMcpServer(tools: ToolRuntime, ctx: TurnContext): Mcp
       name: t.name,
       description: t.description,
       inputSchema: { ...t.inputSchema, type: 'object' as const },
+      ...(t.deferred ? {} : { _meta: ALWAYS_LOAD }),
     })),
   }));
   mcp.server.setRequestHandler(CallToolRequestSchema, async (req) => {
@@ -149,10 +158,11 @@ export function createSdkLoop(rt: ClaudeCodeRuntime, opts: { webSearchEnabled():
         prompt: promptFor(req.messages),
         options: {
           ...baseOptions(rt, path),
-          tools: web ? [WEB_SEARCH] : [],
-          // The only gate: Jarvis tools (which then pass Jarvis's own policy) and WebSearch; nothing else.
+          tools: web ? [TOOL_SEARCH, WEB_SEARCH] : [TOOL_SEARCH],
+          // The only gate: Jarvis tools (which then pass Jarvis's own policy), tool search (it only
+          // loads definitions) and WebSearch; nothing else.
           canUseTool: async (name, input) =>
-            name.startsWith(PREFIX) || (web && name === WEB_SEARCH)
+            name.startsWith(PREFIX) || name === TOOL_SEARCH || (web && name === WEB_SEARCH)
               ? { behavior: 'allow', updatedInput: input }
               : { behavior: 'deny', message: `${name} is not available to Jarvis.` },
           mcpServers: { [SERVER]: server },

@@ -12,7 +12,9 @@ import {
   type FakeScript,
 } from '../../../tests/integration/fake-claude-code';
 import type { LoopDeps, ToolRuntime, TurnContext } from './agent-loop';
-import { createSdkLoop } from './sdk-loop';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createJarvisMcpServer, createSdkLoop } from './sdk-loop';
 
 function setup(script: FakeScript, opts: { web?: boolean; signal?: AbortSignal } = {}) {
   const query = fakeClaudeCode(script);
@@ -108,7 +110,7 @@ describe('Claude subscription loop (ADR-010)', () => {
       settingSources: [],
       strictMcpConfig: true,
       persistSession: false,
-      tools: [],
+      tools: ['ToolSearch'],
       model: 'claude-sonnet-5-5',
       maxTurns: 5,
       cwd: 'C:/fake/cwd',
@@ -121,6 +123,9 @@ describe('Claude subscription loop (ADR-010)', () => {
     });
     await expect(o?.canUseTool?.('WebSearch', {}, {} as never)).resolves.toMatchObject({
       behavior: 'deny',
+    });
+    await expect(o?.canUseTool?.('ToolSearch', {}, {} as never)).resolves.toMatchObject({
+      behavior: 'allow',
     });
     await expect(o?.canUseTool?.('mcp__jarvis__get_time', {}, {} as never)).resolves.toMatchObject({
       behavior: 'allow',
@@ -152,7 +157,7 @@ describe('Claude subscription loop (ADR-010)', () => {
       { web: true },
     );
     await t.run();
-    expect(t.query.calls[0]).toMatchObject({ tools: ['WebSearch'] });
+    expect(t.query.calls[0]).toMatchObject({ tools: ['ToolSearch', 'WebSearch'] });
     await expect(
       t.query.calls[0]?.canUseTool?.('WebSearch', {}, {} as never),
     ).resolves.toMatchObject({ behavior: 'allow' });
@@ -203,5 +208,27 @@ describe('Claude subscription loop (ADR-010)', () => {
         stopReason: 'interrupted',
       }),
     ]);
+  });
+});
+
+describe('tool search (2.57)', () => {
+  it("keeps Jarvis's own tools loaded and leaves connected MCP servers' tools to ToolSearch", async () => {
+    const tools = {
+      catalog: () => [
+        { name: 'open_app', description: 'Open an app', inputSchema: {} },
+        { name: 'browser_navigate', description: 'Playwright', inputSchema: {}, deferred: true },
+      ],
+    } as unknown as ToolRuntime;
+    const server = createJarvisMcpServer(tools, {} as TurnContext);
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await server.connect(a);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(b);
+    const listed = (await client.listTools()).tools;
+    await client.close();
+    expect(listed.find((t) => t.name === 'open_app')?._meta).toEqual({
+      'anthropic/alwaysLoad': true,
+    });
+    expect(listed.find((t) => t.name === 'browser_navigate')?._meta).toBeUndefined();
   });
 });

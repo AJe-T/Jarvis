@@ -52,6 +52,8 @@ export interface ToolCatalogEntry {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** From a connected MCP server: Claude Code loads its full definition only when needed. */
+  deferred?: boolean;
 }
 
 export const NO_TOOLS: ToolRuntime = {

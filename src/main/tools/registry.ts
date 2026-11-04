@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import type { TurnContext } from '../agent/agent-loop';
+import type { ToolCatalogEntry, TurnContext } from '../agent/agent-loop';
 import type { Tool } from './types';
 
 export const WEB_SEARCH_TOOL = {
@@ -61,11 +61,15 @@ export function createToolRegistry(opts: {
     },
     all,
     catalog() {
-      return all().map((t) => ({
+      const own = (t: Tool): ToolCatalogEntry => ({
         name: t.name,
         description: t.description,
         inputSchema: inputSchema(t),
-      }));
+      });
+      return [
+        ...[...tools.values()].map(own),
+        ...providers.flatMap((p) => p()).map((t) => ({ ...own(t), deferred: true })),
+      ];
     },
     definitions(scope?: ToolScope): Anthropic.ToolUnion[] {
       const hideFree = opts.freeSearchShown ? !opts.freeSearchShown(scope) : false;

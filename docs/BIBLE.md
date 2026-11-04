@@ -407,6 +407,8 @@ Sidebar → **Connections** → **Add connection**. Three tabs:
 
 Keys go in the form before **Connect** (stored encrypted like every secret, passed only to that server). Tools appear as `mcp__server__tool`, go through the same policy, and their output is untrusted.
 
+**Tool search on the Claude subscription (2.57).** Connected servers' tools are sent to Claude by name only, and Claude Code's `ToolSearch` loads a tool's full definition when a request needs it. Jarvis's own tools (open apps, volume, files, memory…) stay loaded, so quick commands need no extra step. Before 2.57 every definition was sent on every call: with REA, Playwright and Chrome DevTools connected that was about 270k tokens per call, which made replies slow and used up plan limits fast. A test with 150 large tools went from 337k to 4.6k tokens per call. API-key, local and free-pool brains are unchanged.
+
 ### 3.20 NPCs: your team of agents (2.21)
 Sidebar → **NPCs**. Single-purpose agents (a Marketing Head, a Finance Manager, a Frontend Developer…), each with its own brief, AI (any brain: Jarvis's own connection, the local model, a cloud provider, or your ChatGPT / Gemini plan), tools and memory. **Jarvis is their head**: he gives them work, reads every NPC's memory and runs their meetings.
 - **Roster:** hire from 10 templates (Marketing Head, Finance Manager, Frontend Developer, Backend Developer, Researcher, Content Writer, Sales Lead, Project Manager, Designer, Fitness & Diet Coach) or from scratch; rename and change anything; switch each one **on/off**; remove. Each gets a desk.
@@ -859,6 +861,7 @@ If `laya:install` reports a mismatch, this export differs from the pinned one (f
 | 1.0 | Polish and packaging: mini orb, backups, usage dashboard, installer with fuses |
 | 1.1 | Claude subscription connection |
 | 1.2 | On-device voice (Whisper, openWakeWord); 1.2.1 fixed the wake word never hearing anything |
+| 2.57 | **Tool search: ~98% fewer tokens per subscription call.** Connected MCP servers' tools now load only when Claude needs one (Claude Code's ToolSearch was left out of the allowed tools, so every definition, ~270k tokens with REA connected, went out on every call). Jarvis's own tools stay loaded for instant commands. |
 | 2.56.1 | **Fix: "Prompt is too long" on quick commands.** The fast model is now Claude Haiku 5.5 (1M-token window) instead of Haiku 4.5 (200k), which could not hold Jarvis's tools and prompt; and any "prompt is too long" rejection from a picked model falls back to the default model. |
 | 2.56 | **Automatic model per request, and steadier voice.** Talk and quick commands use the fast model and real work (research, browsing, writing, code) the deep one, chosen per request in code; "yes, do it" stays on the last answer's model (Settings → Models & AI → Claude's models, on by default). Voice: a second "Hey Jarvis" just after a near miss now wakes him; background noise no longer keeps Deepgram listening for 30 s and ending in "Speech recognition failed": with no words in 7 s he asks again. |
 | 2.55.3 | **Fixed: the Forge end-to-end test.** The first-run card (F12) added a second heading with "Forge" in it, so the test's loose look-ups matched two things and stopped. Its look-ups are now exact or scoped to the chat log, and it checks the first-run card shows on a fresh install |
