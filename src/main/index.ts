@@ -292,6 +292,7 @@ async function boot(): Promise<void> {
       await memory.vault.write(rel, markdown);
       emit('memory:changed', { vaultPaths: [rel] });
     },
+    exists: (rel) => memory.vault.exists(rel),
     addTask: (title, notes) => void services.planner.saveTodo({ title, notes, tags: ['meeting'] }),
     addTasks: () => services.settings.get('meetings.addTasks'),
     onAutoStop: (path) =>

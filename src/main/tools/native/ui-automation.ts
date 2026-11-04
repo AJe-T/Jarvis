@@ -290,9 +290,24 @@ function notFound(r: ActResult, name: string): string {
  * a window Jarvis already picked (never Jarvis itself), with Jarvis's checks; anything it can't do
  * cleanly returns null and the PowerShell path runs as before.
  */
+/** A control that may hold a password: its value is never shown (agent-desktop redacts too). */
+const SECRET_NODE = /pass(word)?|secure|secret|pin\b/i;
+const secretNode = (n: AdNode): boolean =>
+  SECRET_NODE.test(`${n.role ?? ''} ${n.name ?? ''} ${(n.states ?? []).join(' ')}`);
+
+/**
+ * Whether agent-desktop's `--app=<process name>` can only mean the window Jarvis picked: a name
+ * shared with another open window (a second instance, or Jarvis's own "electron" in dev) could make
+ * it read or click somewhere else, so those go the PowerShell way, which targets the exact process.
+ */
+export function uniqueApp(all: Array<{ ProcessName: string }>, proc: string): boolean {
+  if (SELF.test(proc)) return false;
+  return all.filter((w) => w.ProcessName.toLowerCase() === proc.toLowerCase()).length === 1;
+}
+
 function adFast(ad: AgentDesktop | undefined) {
   const line = (n: AdNode, k: number): string =>
-    `${k + 1}. ${n.role ?? 'element'} "${n.name ?? ''}"${n.states?.includes('disabled') ? ' (disabled)' : ''}${n.value ? ` value="${n.value.slice(0, 80)}"` : ''}`;
+    `${k + 1}. ${n.role ?? 'element'} "${n.name ?? ''}"${n.states?.includes('disabled') ? ' (disabled)' : ''}${n.value && !secretNode(n) ? ` value="${n.value.slice(0, 80)}"` : ''}`;
   return {
     async list(
       proc: string,
@@ -359,11 +374,16 @@ export function createUiAutomationTools(osa: OsAdapter, ad?: AgentDesktop): Tool
   const windowFor = async (
     window: string,
     signal: AbortSignal,
-  ): Promise<{ Id: number; ProcessName: string } | null> =>
-    matchWindow(
-      (await windows(osa, signal)).filter((w) => !SELF.test(w.ProcessName) && w.Id !== process.pid),
+  ): Promise<{ Id: number; ProcessName: string; unique: boolean } | null> => {
+    const all = await windows(osa, signal);
+    const w = matchWindow(
+      all.filter((x) => !SELF.test(x.ProcessName) && x.Id !== process.pid),
       window,
-    ) ?? null;
+    );
+    return w
+      ? { Id: w.Id, ProcessName: w.ProcessName, unique: uniqueApp(all, w.ProcessName) }
+      : null;
+  };
   const pidFor = async (window: string, signal: AbortSignal): Promise<number | null> =>
     (await windowFor(window, signal))?.Id ?? null;
   const fast = adFast(ad);
@@ -400,7 +420,9 @@ export function createUiAutomationTools(osa: OsAdapter, ad?: AgentDesktop): Tool
         if (!win || !pid)
           return fail(`No open window matches "${i.window}". Use list_open_windows or open_app.`);
         if (!i.includeText) {
-          const quick = await fast.list(win.ProcessName, i.window, i, ctx.signal);
+          const quick = win.unique
+            ? await fast.list(win.ProcessName, i.window, i, ctx.signal)
+            : null;
           if (quick) return ok(quick);
         }
         const r = await osa.psJson<{
@@ -440,7 +462,7 @@ export function createUiAutomationTools(osa: OsAdapter, ad?: AgentDesktop): Tool
         const win = await windowFor(i.window, ctx.signal);
         const pid = win?.Id;
         if (!win || !pid) return fail(`No open window matches "${i.window}".`);
-        const quick = await fast.click(win.ProcessName, i, ctx.signal);
+        const quick = win.unique ? await fast.click(win.ProcessName, i, ctx.signal) : null;
         if (quick) return quick;
         const r = await osa.psJson<ActResult>(PS_UIA_ACT, {
           params: {

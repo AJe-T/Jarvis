@@ -106,7 +106,15 @@ export function createNotificationTools(ad: AgentDesktop): Tool[] {
       name: 'notification_action',
       description:
         'Press a button on a Windows notification (e.g. "Mark as read", "Snooze", "Reply"), given its number and title from list_notifications. Always asks sir first.',
-      input: z.object({ ...target, action: z.string().min(1).max(60) }),
+      input: z.object({
+        ...target,
+        // A name starting with "-" would be read as a flag by agent-desktop.
+        action: z
+          .string()
+          .min(1)
+          .max(60)
+          .refine((a) => !a.trim().startsWith('-'), 'Not a button name.'),
+      }),
       tier: 'CONFIRM',
       destructive: (i) => /\b(delete|remove)\b/i.test(i.action),
       externalFacing: true,

@@ -60,7 +60,9 @@ describe('three-step recall', () => {
     });
     expect(out).toContain('Priya is getting married in December.');
     expect(out).toContain('## Memory/Gone.md\n(no such note)');
-    expect(out).toContain('(not a note: only .md files)');
+    expect(out).toContain('(not a note: only memory notes, .md)');
+    const internal = await text(tools().memory_get, { paths: ['_jarvis/state.md'] });
+    expect(internal).toContain('not a note');
   });
 
   it('labels each action with how it ended, denied ones included', () => {

@@ -77,8 +77,9 @@ export function createRecallTools(d: RecallDeps): Tool[] {
         const parts: string[] = [];
         let total = 0;
         for (const p of paths) {
-          if (!p.toLowerCase().endsWith('.md')) {
-            parts.push(`## ${p}\n(not a note: only .md files)`);
+          // Jarvis's own housekeeping (_jarvis/: templates, state) is not memory.
+          if (!p.toLowerCase().endsWith('.md') || /^_jarvis[\\/]/i.test(p)) {
+            parts.push(`## ${p}\n(not a note: only memory notes, .md)`);
             continue;
           }
           try {

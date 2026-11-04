@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { join } from 'node:path';
 
 /**
  * agent-desktop (vercel-labs/agent-desktop, Apache-2.0) is a native program that reads and drives
@@ -44,7 +44,10 @@ export interface AgentDesktop {
 const DEFAULT_TIMEOUT = 20_000;
 const MAX_OUT = 8 * 1024 * 1024;
 
-/** Where `npm install -g agent-desktop` puts the Windows program, then agent-desktop.exe on PATH. */
+/**
+ * Where `npm install -g agent-desktop` puts the Windows program. PATH is not searched: any folder on
+ * it could hold a program of that name, and this one gets to read notifications.
+ */
 export function findAgentDesktop(
   env: NodeJS.ProcessEnv = process.env,
   exists: (p: string) => boolean = existsSync,
@@ -63,8 +66,6 @@ export function findAgentDesktop(
         `agent-desktop-win32-${arch}.exe`,
       ),
     );
-  for (const dir of (env['PATH'] ?? env['Path'] ?? '').split(delimiter))
-    if (dir && isAbsolute(dir)) candidates.push(join(dir, 'agent-desktop.exe'));
   return candidates.find((p) => exists(p)) ?? null;
 }
 

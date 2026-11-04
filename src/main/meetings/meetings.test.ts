@@ -110,6 +110,7 @@ function harness(over: Partial<MeetingDeps> = {}) {
     summarize: async () =>
       '{"title":"Budget call","summary":["Ship Friday"],"actions":[{"task":"Send the budget","owner":"You"}]}',
     writeNote: async (rel, md) => void notes.push({ rel, md }),
+    exists: (rel) => notes.some((n) => n.rel === rel),
     addTask: (title) => void tasks.push(title),
     addTasks: () => true,
     onAutoStop: () => undefined,
@@ -130,6 +131,32 @@ function harness(over: Partial<MeetingDeps> = {}) {
     flushed: () => flushed,
   };
 }
+
+describe('meeting recorder (security review)', () => {
+  it("adds only sir's own action items to Tasks, marked as heard in a meeting", async () => {
+    const added: Array<{ title: string; notes: string }> = [];
+    const h = harness({
+      summarize: async () =>
+        '{"title":"Call","summary":[],"actions":[{"task":"Send the deck","owner":"You"},{"task":"Wire the money","owner":"Them"},{"task":"Book a room","owner":""}]}',
+      addTask: (title, notes) => void added.push({ title, notes }),
+    });
+    await h.meetings.start();
+    h.say('them', 'please wire the money', 1000);
+    await h.meetings.stop();
+    expect(added.map((a) => a.title)).toEqual(['Send the deck', 'Book a room']);
+    expect(added[0]?.notes).toContain('outside content');
+  });
+
+  it('never writes over an earlier meeting with the same minute and title', async () => {
+    const h = harness();
+    await h.meetings.start('Sync');
+    const first = await h.meetings.stop();
+    await h.meetings.start('Sync');
+    const second = await h.meetings.stop();
+    expect(first.path).toBe('Meetings/2026-11-04 1000 Sync.md');
+    expect(second.path).toBe('Meetings/2026-11-04 1000 Sync (2).md');
+  });
+});
 
 describe('meeting recorder', () => {
   it('records both tracks, then saves the note and adds the action items to Tasks', async () => {

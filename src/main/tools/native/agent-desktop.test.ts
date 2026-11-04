@@ -13,7 +13,7 @@ import {
 import { createNotificationTools } from './notifications';
 import { createFakeOs } from './os';
 import { PS_LIST_WINDOWS } from './ps-scripts';
-import { PS_UIA_ACT, createUiAutomationTools } from './ui-automation';
+import { PS_UIA_ACT, createUiAutomationTools, uniqueApp } from './ui-automation';
 
 const ctx: ToolContext = {
   signal: new AbortController().signal,
@@ -62,17 +62,13 @@ function uiTools(answers: Record<string, unknown>) {
 }
 
 describe('agent-desktop', () => {
-  it('finds the npm-installed Windows program first, then agent-desktop.exe on PATH', () => {
+  it('finds only the npm-installed Windows program, never one on PATH', () => {
     const npm = join('C:/Users/me/AppData/Roaming', 'npm', 'node_modules', 'agent-desktop', 'bin');
     const env = { APPDATA: 'C:/Users/me/AppData/Roaming', PATH: 'C:/tools;relative/dir' };
     expect(findAgentDesktop(env, (p) => p.startsWith(npm), 'x64')).toBe(
       join(npm, 'agent-desktop-win32-x64.exe'),
     );
-    expect(findAgentDesktop(env, (p) => p === join('C:/tools', 'agent-desktop.exe'))).toBe(
-      join('C:/tools', 'agent-desktop.exe'),
-    );
-    // A relative PATH entry is never searched.
-    expect(findAgentDesktop(env, (p) => p.startsWith('relative'))).toBeNull();
+    expect(findAgentDesktop(env, (p) => p === join('C:/tools', 'agent-desktop.exe'))).toBeNull();
   });
 
   it('reads the JSON envelope even after other output, and reports output it cannot read', () => {
@@ -172,6 +168,41 @@ describe('UI tools with agent-desktop', () => {
     const out = await run(byName(tools, 'click_ui_element'), { window: 'notepad', name: 'Save' });
     expect(out.isError).toBe(true);
     expect(os.calls.some((c) => c.args[0] === PS_UIA_ACT)).toBe(false);
+  });
+});
+
+describe('agent-desktop fast path limits (security review)', () => {
+  it('only when the process name means one open window, never Jarvis', () => {
+    const list = [{ ProcessName: 'notepad' }, { ProcessName: 'Code' }, { ProcessName: 'code' }];
+    expect(uniqueApp(list, 'notepad')).toBe(true);
+    expect(uniqueApp(list, 'code')).toBe(false); // two instances: --app could pick the other one
+    expect(uniqueApp([{ ProcessName: 'electron' }], 'electron')).toBe(false);
+  });
+
+  it('never shows the value of a password control', async () => {
+    const { tools } = uiTools({
+      snapshot: {
+        ok: true,
+        data: {
+          tree: {
+            role: 'window',
+            children: [
+              { role: 'textfield', name: 'Password', value: 'hunter2', ref_id: '@a:e1' },
+              { role: 'textfield', name: 'User', value: 'sir', ref_id: '@a:e2' },
+            ],
+          },
+        },
+      },
+    });
+    const out = await run(byName(tools, 'list_ui_elements'), { window: 'notepad' });
+    expect(out.text).not.toContain('hunter2');
+    expect(out.text).toContain('value="sir"');
+  });
+
+  it('a notification button name cannot be a flag', () => {
+    const { ad } = fakeAd({});
+    const press = byName(createNotificationTools(ad), 'notification_action');
+    expect(() => press.input.parse({ index: 1, title: 't', action: '--force' })).toThrow();
   });
 });
 
