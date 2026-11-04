@@ -582,7 +582,7 @@ describe('Forge shipping (F5)', () => {
       'git:status --porcelain',
       'git:add --',
       'git:commit -m',
-      'gate:ci',
+      'gate:ci --prefer-offline',
       'gate:run dist',
       'backup',
       'git:fetch --prune',

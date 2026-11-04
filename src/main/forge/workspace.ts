@@ -19,6 +19,14 @@ import { parseNameStatus, type ChangedFile } from './protected';
  */
 
 /**
+ * `npm ci` still deletes node_modules and reinstalls every package from the lockfile (nothing is
+ * trusted between runs), but takes packages from npm's own cache first, checked against the
+ * lockfile's integrity hashes, and skips the audit and funding requests (idea from
+ * max-sixty/worktrunk's cheap per-worktree setup). Most runs then reinstall without a download.
+ */
+export const NPM_CI = ['ci', '--prefer-offline', '--no-audit', '--no-fund'];
+
+/**
  * The branch every run starts from and every approved change is merged into. `main` since 2.50
  * (Sir, 2026-11-03: main is the only trunk); it was `dev`, which drifted behind main.
  */
@@ -174,7 +182,7 @@ export function createWorkspace(deps: { dir: string; git: GitFn; run: GateRunner
       return { branch, base: (await git(['rev-parse', 'HEAD'])).trim() };
     },
     async install(signal) {
-      const r = await deps.run({ npm: ['ci'] }, { timeoutMs: 30 * MIN, signal });
+      const r = await deps.run({ npm: NPM_CI }, { timeoutMs: 30 * MIN, signal });
       return { ok: r.code === 0, out: r.out };
     },
     async commit(message) {
