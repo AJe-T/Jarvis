@@ -32,3 +32,17 @@ test('Sidebar → Forge: the chat, the run history with its totals, and Forge’
   await expect(page.getByRole('list', { name: 'Forge/Chats' }).getByRole('button')).toHaveCount(1);
   await app.close();
 });
+
+test('Forge: tap the mic, speak, and the message sends by itself after a pause', async () => {
+  const { app } = await launchApp({ JARVIS_FAKE_TRANSCRIPTS: 'learn to convert currencies' });
+  const page = await app.firstWindow();
+  await onboard(page);
+  await page.getByRole('button', { name: 'Forge', exact: true }).click();
+  await page.getByRole('button', { name: 'Speak a message' }).click();
+  // The words stream into the box, then a short pause sends them (no Send click).
+  const log = page.getByRole('log', { name: 'Forge chat' });
+  await expect(log.getByText('learn to convert currencies')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('textbox', { name: 'Message to Forge' })).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Speak a message' })).toBeVisible();
+  await app.close();
+});

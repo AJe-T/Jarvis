@@ -11,7 +11,7 @@ import {
 import { basename, join } from 'node:path';
 import { errorMessage } from '../errors';
 import type { GateRunner } from './gates';
-import { BASE_BRANCH, type GitFn, type Workspace } from './workspace';
+import { BASE_BRANCH, NPM_CI, type GitFn, type Workspace } from './workspace';
 
 /**
  * Forge phase F5 (docs/Forge.md §3 step 10): a passed change becomes a real version only after Sir
@@ -220,7 +220,7 @@ async function build(d: ShipDeps, s: ShipInfo): Promise<void> {
     step(d, s, 'bumped');
   }
   // The checks ran the changed code, which could have edited node_modules: build from the lockfile.
-  await npm(d, ['ci'], 'Reinstalling dependencies (npm ci)', 30 * MIN);
+  await npm(d, NPM_CI, 'Reinstalling dependencies (npm ci)', 30 * MIN);
   await npm(d, ['run', 'dist'], 'Building the installer (npm run dist)', 45 * MIN);
   const built = join(d.ws.dir, 'dist', `Jarvis-Setup-${s.version ?? ''}.exe`);
   if (!existsSync(built)) throw new Error(`npm run dist finished but ${built} is missing.`);

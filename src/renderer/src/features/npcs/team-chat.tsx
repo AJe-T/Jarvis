@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Hash, SendHorizontal, ShieldAlert, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { OFFICE, dmChannel, type Npc, type NpcMessage } from '@shared/npcs';
+import { useVoiceSend, VoiceSendButton } from '../../components/jarvis/voice-send';
 import { IconButton } from '../../components/ui/button';
 import { confirmAction } from '../../components/ui/confirm-modal';
 import { call } from '../../lib/api';
@@ -140,12 +141,14 @@ export function Composer({
     setPick(0);
     box.current?.focus();
   };
-  const submit = (): void => {
-    const t = text.trim();
+  const submitText = (raw: string): void => {
+    const t = raw.trim();
     if (!t || disabled) return;
     setText('');
     void send(channel, t);
   };
+  const submit = (): void => submitText(text);
+  const voice = useVoiceSend({ text, setText, onSend: submitText });
 
   return (
     // Right padding: the floating orb sits in the bottom-right corner.
@@ -182,7 +185,7 @@ export function Composer({
           rows={1}
           value={text}
           disabled={disabled}
-          placeholder={placeholder}
+          placeholder={voice.live ? 'Listening… speak, and it sends when you pause' : placeholder}
           aria-label="Message"
           onChange={(e) => {
             setText(e.target.value);
@@ -204,6 +207,7 @@ export function Composer({
           }}
           className="max-h-40 min-h-8 flex-1 resize-none bg-transparent px-2 py-1 text-sm text-ink-100 outline-none placeholder:text-ink-500"
         />
+        <VoiceSendButton live={voice.live} onClick={voice.toggle} disabled={disabled} />
         <IconButton label="Send" onClick={submit} disabled={!text.trim() || disabled}>
           <SendHorizontal size={16} aria-hidden />
         </IconButton>
