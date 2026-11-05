@@ -445,6 +445,11 @@ export const INVOKE = {
     z.object({ conversation: ConversationSummarySchema, messages: z.array(UiMessageSchema) }),
   ),
   'conversations:delete': contract(z.object({ id: Id, alsoVault: z.boolean() }), Ok),
+  'conversations:rename': contract(
+    z.object({ id: Id, title: z.string().trim().min(1).max(120) }),
+    Ok,
+  ),
+  'conversations:pin': contract(z.object({ id: Id, pinned: z.boolean() }), Ok),
   /** Context meter (idea from LibreChat): how full the next request's context is, and of what. */
   'conversations:context': contract(
     z.object({ id: Id }),
@@ -905,6 +910,14 @@ export const INVOKE = {
   'voice:captureDevice': contract(z.object({ deviceId: z.string().max(300) }), Ok),
   /** Phone-keyboard dictation into the message box: words stream in as voice:compose events. */
   'voice:compose': contract(z.object({ action: z.enum(['start', 'stop']) }), Ok),
+  /** 4.4 "Read aloud" on a reply: speak this text now, or stop. */
+  'voice:speak': contract(
+    z.discriminatedUnion('action', [
+      z.object({ action: z.literal('start'), text: z.string().min(1).max(20_000) }),
+      z.object({ action: z.literal('stop') }),
+    ]),
+    Ok,
+  ),
   /** One click: download Whisper base.en + the voice detector and switch speech to on-device. */
   'voice:setupLocal': contract(Empty, Ok),
   'voice:devices': contract(Empty, z.array(z.object({ index: z.number(), name: z.string() }))),

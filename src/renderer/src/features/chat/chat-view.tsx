@@ -327,6 +327,11 @@ function CommsLog({ onClose }: { onClose(): void }): React.JSX.Element {
                       )
                   : undefined
               }
+              onFollowUp={
+                i === messages.length - 1 && m.role === 'assistant' && !live
+                  ? (text) => void useChatStore.getState().send(text, 'text')
+                  : undefined
+              }
             />
           ))}
           {live && (

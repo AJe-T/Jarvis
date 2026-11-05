@@ -69,19 +69,30 @@ export class SentenceChunker {
 }
 
 /**
- * Agents.md §B1 voice format: only the <spoken>…</spoken> block is read aloud. If the model forgets
- * the block, the first two sentences of the (stripped) reply are spoken instead.
+ * Agents.md §B1 voice format: only <spoken>…</spoken> blocks are read aloud. If the model forgets
+ * the block, the first two sentences of the (stripped) reply are spoken instead. Since 2.63 a later
+ * block is read too: Claude's lead-in before a tool ("Let me check your calendar, sir.") is its own
+ * block, and the answer after the tool starts a new one.
  */
 export class SpokenExtractor {
   private raw = '';
-  private mode: 'pending' | 'inside' | 'done' | 'fallback' = 'pending';
+  private mode: 'pending' | 'inside' | 'between' | 'done' | 'fallback' = 'pending';
   private emitted = 0;
   private fallbackSentences = 0;
+  /** A later block is starting: its first words get a space in front. */
+  private gap = false;
 
   /** Returns newly speakable text (already Markdown-stripped). */
   push(delta: string): string {
     this.raw += delta;
     if (this.mode === 'done') return '';
+    if (this.mode === 'between') {
+      const next = this.raw.indexOf('<spoken>', this.emitted);
+      if (next === -1) return '';
+      this.mode = 'inside';
+      this.emitted = next + '<spoken>'.length;
+      this.gap = true; // a space between the blocks, whichever deltas they arrive in
+    }
     if (this.mode === 'pending') {
       const trimmed = this.raw.trimStart();
       if (trimmed.startsWith('<spoken>')) {
@@ -96,10 +107,19 @@ export class SpokenExtractor {
       // Hold back a possible partial closing tag at the end of the buffer.
       const safeEnd =
         close !== -1 ? close : Math.max(this.emitted, this.raw.length - '</spoken>'.length);
-      const text = this.raw.slice(this.emitted, safeEnd);
-      this.emitted = safeEnd;
-      if (close !== -1) this.mode = 'done';
-      return text;
+      let text = this.raw.slice(this.emitted, safeEnd);
+      if (this.gap && text) {
+        text = ` ${text}`;
+        this.gap = false;
+      }
+      if (close === -1) {
+        this.emitted = safeEnd;
+        return text;
+      }
+      // The block closed: wait for another one (it may already be in this delta).
+      this.mode = 'between';
+      this.emitted = close + '</spoken>'.length;
+      return text + this.push('');
     }
     // Fallback: speak up to two complete sentences of the visible reply (Markdown stripped first,
     // so periods inside links/code don't count as sentence ends).
@@ -112,6 +132,10 @@ export class SpokenExtractor {
 
   /** Remaining speakable text at the end of the reply. */
   end(): string {
+    if (this.mode === 'between') {
+      this.mode = 'done';
+      return '';
+    }
     if (this.mode === 'inside') {
       const rest = this.raw.slice(this.emitted).replace(/<\/?s(p(o(k(e(n)?)?)?)?)?>?$/, '');
       this.mode = 'done';

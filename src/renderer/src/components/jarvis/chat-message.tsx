@@ -7,6 +7,7 @@ import { call } from '../../lib/api';
 import { IconButton } from '../ui/button';
 import { ToolCallCard } from './tool-call-card';
 import { ArtifactCard, artifactKind } from './artifact';
+import { ReplyFooter } from './reply-footer';
 
 function safeHref(href: string | undefined): string | undefined {
   if (!href) return undefined;
@@ -118,8 +119,11 @@ export const Markdown = memo(function Markdown({ text }: { text: string }): Reac
 export function ChatMessage({
   message,
   onRewind,
+  onFollowUp,
 }: {
   message: UiMessage;
+  /** The latest reply only: follow-up chips send their words as Sir's next message. */
+  onFollowUp?: ((text: string) => void) | undefined;
   /** Shown on Sir's messages when Jarvis is idle (idea from isair/jarvis). */
   onRewind?: ((resend: boolean) => void) | undefined;
 }): React.JSX.Element {
@@ -167,13 +171,6 @@ export function ChatMessage({
       {message.toolCalls && message.toolCalls.length > 0 && <ToolCards calls={message.toolCalls} />}
       {message.text && <Markdown text={message.text} />}
       {message.interrupted && <span className="text-sm text-ink-500"> (interrupted)</span>}
-      {message.text.trim() && (
-        <CopyButton
-          text={message.text}
-          label="Copy reply"
-          className="mt-1 block rounded-sm p-1 text-ink-500 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-ink-100 focus-visible:opacity-100"
-        />
-      )}
       {message.citations && message.citations.length > 0 && (
         <ol className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-ink-300">
           {message.citations.map((c, i) => (
@@ -192,6 +189,7 @@ export function ChatMessage({
           ))}
         </ol>
       )}
+      <ReplyFooter message={message} onFollowUp={onFollowUp} />
     </article>
   );
 }

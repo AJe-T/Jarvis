@@ -5,6 +5,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import type { UiMessage } from '@shared/types';
 import { ChatMessage } from './chat-message';
 import { pastedName } from './composer';
+import { followUps, timingLabel } from './reply-footer';
 
 const msg = (m: Partial<UiMessage>): UiMessage => ({
   id: 'm1',
@@ -53,5 +54,40 @@ describe('pasted files', () => {
       'pasted-2026-11-06-09-30-15.jpeg',
     );
     expect(pastedName({ name: 'report.pdf', type: 'application/pdf' }, at)).toBe('report.pdf');
+  });
+});
+
+describe('reply footer (v2.63)', () => {
+  it('reads a reply aloud through Jarvis, and stops when asked', async () => {
+    const speak = vi.fn(async () => ({ ok: true }));
+    (window as unknown as { jarvis: unknown }).jarvis = { call: { 'voice:speak': speak } };
+    show(msg({ text: 'It is **sunny**, sir.' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read aloud' })));
+    expect(speak).toHaveBeenCalledWith({ action: 'start', text: 'It is **sunny**, sir.' });
+  });
+
+  it('shows how long the reply took', () => {
+    show(msg({ text: 'Done.', timing: { firstWordMs: 1240, totalMs: 6400 } }));
+    expect(screen.getByText('1.2 s to first word · 6.4 s')).toBeTruthy();
+    expect(timingLabel({ firstWordMs: 900, totalMs: 1000 })).toBe('1.0 s');
+    expect(timingLabel({ firstWordMs: 4000, totalMs: 26_400 })).toBe('4.0 s to first word · 26 s');
+  });
+
+  it('offers follow-ups under the latest reply only, "Do it" when it asked a question', async () => {
+    const next = vi.fn();
+    render(
+      <Tooltip.Provider>
+        <ChatMessage message={msg({ text: 'Shall I book it for Friday?' })} onFollowUp={next} />
+      </Tooltip.Provider>,
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Do it' })));
+    expect(next).toHaveBeenCalledWith('Yes, do it.');
+    expect(followUps('Here is the summary.').map((c) => c.label)).toEqual([
+      'More detail',
+      'Save to memory',
+    ]);
+    cleanup();
+    show(msg({ text: 'Shall I book it?' })); // not the latest: no chips
+    expect(screen.queryByRole('button', { name: 'Do it' })).toBeNull();
   });
 });

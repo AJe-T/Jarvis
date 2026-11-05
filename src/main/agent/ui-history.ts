@@ -75,6 +75,8 @@ export function buildUiMessages(
       }
     }
     if (row.stop_reason === 'interrupted') current.interrupted = true;
+    if (row.first_word_ms != null && row.total_ms != null)
+      current.timing = { firstWordMs: row.first_word_ms, totalMs: row.total_ms };
   }
   return out.map((m) => (m.role === 'assistant' ? { ...m, text: displayText(m.text) } : m));
 }

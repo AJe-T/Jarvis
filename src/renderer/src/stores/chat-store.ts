@@ -44,6 +44,15 @@ interface ChatStore {
   applyMessage(turnId: string, conversationId: string, message: UiMessage): void;
   applyToolUpdate(turnId: string, conversationId: string, toolCall: UiToolCall): void;
   upsertConversation(c: ConversationSummary): void;
+  rename(id: string, title: string): Promise<void>;
+  pin(id: string, pinned: boolean): Promise<void>;
+}
+
+/** Pinned chats first, then the most recent. */
+export function sortConversations(list: ConversationSummary[]): ConversationSummary[] {
+  return [...list].sort((a, b) =>
+    !!a.pinned !== !!b.pinned ? (a.pinned ? -1 : 1) : a.lastActiveAt < b.lastActiveAt ? 1 : -1,
+  );
 }
 
 function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
@@ -214,6 +223,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   upsertConversation(c) {
     const rest = get().conversations.filter((x) => x.id !== c.id);
-    set({ conversations: [c, ...rest].sort((a, b) => (a.lastActiveAt < b.lastActiveAt ? 1 : -1)) });
+    set({ conversations: sortConversations([c, ...rest]) });
+  },
+
+  async rename(id, title) {
+    const t = title.trim().slice(0, 120);
+    const c = get().conversations.find((x) => x.id === id);
+    if (!t || !c || t === c.title) return;
+    await call('conversations:rename', { id, title: t });
+    get().upsertConversation({ ...c, title: t });
+  },
+
+  async pin(id, pinned) {
+    const c = get().conversations.find((x) => x.id === id);
+    if (!c) return;
+    await call('conversations:pin', { id, pinned });
+    const { pinned: _was, ...rest } = c;
+    get().upsertConversation(pinned ? { ...rest, pinned: true } : rest);
   },
 }));

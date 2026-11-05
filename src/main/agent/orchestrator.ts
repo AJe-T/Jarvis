@@ -222,7 +222,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       deps.killSwitch.signal(),
     );
     const clean = title.replace(/^["'\s]+|["'\s.]+$/g, '').slice(0, 80);
-    if (!clean) return;
+    // Sir may have renamed it while the title was being written: his name wins.
+    if (!clean || deps.conversations.get(conv.id)?.title) return;
     deps.conversations.setTitle(conv.id, clean);
     const updated = deps.conversations.get(conv.id);
     if (updated) deps.emit('conversation:updated', toSummary(updated));
@@ -433,10 +434,14 @@ ${detail.trim()}`;
     const toolUseIds: string[] = [];
     let outcome: TurnEnd['outcome'] = 'error';
     let replyText = '';
+    // 4.8: from Sir's message to the first word on screen, and to the end of the reply.
+    const turnStarted = Date.now();
+    let firstWordAt: number | undefined;
     for (const l of startListeners) l(info);
     deps.state.set('THINKING');
     const forward = (delta: string): void => {
       if (!delta) return;
+      firstWordAt ??= Date.now();
       deps.emit('chat:delta', {
         turnId: info.turnId,
         conversationId: info.conversationId,
@@ -463,11 +468,19 @@ ${detail.trim()}`;
       outcome = result.outcome;
       replyText = stripMood(result.text);
       const toolCalls = deps.toolCalls.byToolUseIds(toolUseIds).map(toUiToolCall);
+      const ended = Date.now();
+      const timing = {
+        firstWordMs: (firstWordAt ?? ended) - turnStarted,
+        totalMs: ended - turnStarted,
+      };
+      if (result.outcome !== 'aborted')
+        deps.conversations.setReplyTiming(info.conversationId, timing.firstWordMs, timing.totalMs);
       const message: UiMessage = {
         id: info.turnId,
         role: 'assistant',
         text: displayText(result.text),
         createdAt: nowIso(),
+        ...(result.outcome !== 'aborted' ? { timing } : {}),
         ...(result.outcome === 'aborted' ? { interrupted: true } : {}),
         ...(result.citations.length ? { citations: result.citations } : {}),
         ...(toolCalls.length ? { toolCalls } : {}),

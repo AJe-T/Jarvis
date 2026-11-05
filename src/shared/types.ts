@@ -109,6 +109,8 @@ export const UiMessageSchema = z.object({
   interrupted: z.boolean().optional(),
   citations: z.array(CitationSchema).optional(),
   toolCalls: z.array(UiToolCallSchema).optional(),
+  /** Replies only: ms from Sir's message to the first word, and to the end of the reply. */
+  timing: z.object({ firstWordMs: z.number(), totalMs: z.number() }).optional(),
   createdAt: z.string(),
 });
 export type UiMessage = z.infer<typeof UiMessageSchema>;
@@ -120,6 +122,8 @@ export const ConversationSummarySchema = z.object({
   source: z.enum(['text', 'voice', 'mixed']),
   /** The day note in the vault this chat is logged to (privacy.logConversationsToVault). */
   vaultLogPath: z.string().optional(),
+  /** Kept at the top of Conversations. */
+  pinned: z.boolean().optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 

@@ -10,6 +10,10 @@ import { V2_SETUP_MODELS } from '../../voice/v2/policy';
 import { handle, onSend } from '../handle';
 import { isOffline } from '../../offline';
 import { ENROL_PHRASES, type Enrolment } from '../../voice/enrolment';
+import { stripMarkdown } from '../../voice/speech/speech';
+
+/** A long reply read aloud stops here (about four minutes of speech). */
+const READ_ALOUD_MAX_CHARS = 4_000;
 
 interface VoiceMatch {
   enrolment: Enrolment;
@@ -96,6 +100,14 @@ export function registerVoiceHandlers(
   });
   handle('voice:compose', (req) => {
     voice.compose(req.action);
+    return { ok: true };
+  });
+  handle('voice:speak', (req) => {
+    if (req.action === 'stop') voice.stopSpeaking();
+    else {
+      const text = stripMarkdown(req.text).slice(0, READ_ALOUD_MAX_CHARS).trim();
+      if (text) voice.say(text);
+    }
     return { ok: true };
   });
   handle('voice:setupLocal', () => {

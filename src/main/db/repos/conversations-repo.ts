@@ -16,6 +16,8 @@ export interface ConversationRow {
   source: ConversationSource;
   is_private: number;
   vault_log_path: string | null;
+  /** 1 = pinned to the top of Conversations (migration 020). */
+  pinned?: number;
   /** 'chat' (Sir's chats), 'npc' (NPC work, migration 013) or 'forge' (the Forge desk, F9). */
   kind?: ConversationKind;
 }
@@ -30,6 +32,9 @@ export interface MessageRow {
   content_json: string;
   text_plain: string;
   source: MessageSource | null;
+  /** Migration 021: set on a turn's last assistant row. */
+  first_word_ms?: number | null;
+  total_ms?: number | null;
   model: string | null;
   stop_reason: string | null;
   created_at: string;
@@ -56,6 +61,7 @@ export function toSummary(r: ConversationRow): ConversationSummary {
     lastActiveAt: r.last_active_at,
     source: r.source,
     ...(r.vault_log_path ? { vaultLogPath: r.vault_log_path } : {}),
+    ...(r.pinned ? { pinned: true } : {}),
   };
 }
 
@@ -81,10 +87,12 @@ export function createConversationsRepo(db: Db) {
       return row;
     },
 
-    list(limit: number, beforeLastActive?: string): ConversationRow[] {
+    /** `pinned`: only pinned chats (true), only the others (false), or all (undefined). */
+    list(limit: number, beforeLastActive?: string, pinned?: boolean): ConversationRow[] {
       const params: SqlValue[] = [];
       // NPC work (migration 013) and Forge desk conversations hold tool calls and costs, not chats with Sir.
       let where = "WHERE kind = 'chat'";
+      if (pinned !== undefined) where += pinned ? ' AND pinned = 1' : ' AND pinned = 0';
       if (beforeLastActive) {
         where += ' AND last_active_at < ?';
         params.push(beforeLastActive);
@@ -110,6 +118,25 @@ export function createConversationsRepo(db: Db) {
       db.prepare('UPDATE conversations SET title = ? WHERE id = ?').run(title, id);
     },
 
+    /**
+     * One page of Conversations: pinned chats first (first page only), then the rest by recency.
+     * The cursor is the last unpinned chat's last_active_at.
+     */
+    page(limit: number, cursor?: string): { rows: ConversationRow[]; nextCursor?: string } {
+      const pinned = cursor ? [] : this.list(200, undefined, true);
+      const rest = this.list(limit + 1, cursor, false);
+      const shown = rest.slice(0, limit);
+      const last = shown.at(-1);
+      return {
+        rows: [...pinned, ...shown],
+        ...(rest.length > limit && last ? { nextCursor: last.last_active_at } : {}),
+      };
+    },
+
+    setPinned(id: string, pinned: boolean): void {
+      db.prepare('UPDATE conversations SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, id);
+    },
+
     /** Never moves the summary point back (a slow background summary after a manual compact). */
     setSummary(id: string, summary: string, uptoSeq: number): void {
       db.prepare(
@@ -130,6 +157,15 @@ export function createConversationsRepo(db: Db) {
 
     delete(id: string): void {
       db.prepare('DELETE FROM conversations WHERE id = ?').run(id);
+    },
+
+    /** How long the reply took, on the conversation's latest assistant row (one per turn). */
+    setReplyTiming(conversationId: string, firstWordMs: number, totalMs: number): void {
+      db.prepare(
+        `UPDATE messages SET first_word_ms = ?, total_ms = ? WHERE id = (
+           SELECT id FROM messages WHERE conversation_id = ? AND role = 'assistant'
+           ORDER BY seq DESC LIMIT 1)`,
+      ).run(Math.round(firstWordMs), Math.round(totalMs), conversationId);
     },
 
     appendMessages(conversationId: string, messages: NewMessage[]): MessageRow[] {

@@ -46,6 +46,27 @@ describe('spoken extractor', () => {
     expect(said).toBe('VS Code is open, sir.');
   });
 
+  it('reads a lead-in, then the answer after the tool (two blocks, any delta boundaries; v2.63)', () => {
+    const text =
+      '<spoken>Let me check your calendar, sir.</spoken>' +
+      '<spoken>You have two meetings on Friday, sir.</spoken>\n\n| Time | Meeting |';
+    for (const size of [1, 7, text.length]) {
+      const x = new SpokenExtractor();
+      let said = '';
+      for (let i = 0; i < text.length; i += size) said += x.push(text.slice(i, i + size));
+      said += x.end();
+      expect(said.replace(/\s+/g, ' ').trim()).toBe(
+        'Let me check your calendar, sir. You have two meetings on Friday, sir.',
+      );
+    }
+  });
+
+  it('screen details between blocks are not read', () => {
+    const x = new SpokenExtractor();
+    const said = x.push('<spoken>One.</spoken> | a | b | <spoken>Two.</spoken> tail') + x.end();
+    expect(said.replace(/\s+/g, ' ').trim()).toBe('One. Two.');
+  });
+
   it('allows leading whitespace before the block', () => {
     const x = new SpokenExtractor();
     expect(x.push('  <spoken>Hello, sir.</spoken> more') + x.end()).toBe('Hello, sir.');

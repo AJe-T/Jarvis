@@ -83,10 +83,8 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
   });
 
   handle('conversations:list', (req) => {
-    const rows = s.conversations.list(req.limit + 1, req.cursor);
-    const items = rows.slice(0, req.limit).map(toSummary);
-    const last = items.at(-1);
-    return { items, ...(rows.length > req.limit && last ? { nextCursor: last.lastActiveAt } : {}) };
+    const { rows, nextCursor } = s.conversations.page(req.limit, req.cursor);
+    return { items: rows.map(toSummary), ...(nextCursor ? { nextCursor } : {}) };
   });
   handle('conversations:get', (req) => {
     const conv = s.conversations.get(req.id);
@@ -113,6 +111,27 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
     const r = await s.orchestrator.compact(req.id);
     audit('conversation.compact', { id: req.id, messages: r.summarizedMessages });
     return r;
+  });
+  handle('conversations:rename', (req) => {
+    if (!s.conversations.get(req.id))
+      throw new JarvisError(
+        'NOT_FOUND',
+        'conversation not found',
+        'That conversation no longer exists.',
+      );
+    s.conversations.setTitle(req.id, req.title);
+    audit('conversation.rename', { id: req.id });
+    return { ok: true };
+  });
+  handle('conversations:pin', (req) => {
+    if (!s.conversations.get(req.id))
+      throw new JarvisError(
+        'NOT_FOUND',
+        'conversation not found',
+        'That conversation no longer exists.',
+      );
+    s.conversations.setPinned(req.id, req.pinned);
+    return { ok: true };
   });
   handle('conversations:delete', (req) => {
     s.conversations.delete(req.id);
