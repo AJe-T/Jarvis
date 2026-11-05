@@ -25,3 +25,4 @@ The daily logs are gitignored. Never paste them into context in full.
 - 2026-10-14: Don't copy code from other repos. Reverse-engineer them instead (read the source or study the app) and write our own code with the same logic. No pasting or line-by-line translation; AGPL/GPL projects: behaviour and ideas only.
 - 2026-11-03: Forge work lives on its own branch (`forge-v2`). Only when Sir says "push" does Claude push and merge it into `main`; `main` is the only trunk (Forge builds from and ships to `main`).
 - 2026-11-03: Forge memory is separate from Jarvis memory. Jarvis may read Forge memory; Forge (boss and workers) may never read Jarvis memory, Spaces or chats.
+- 2026-11-06: `TASKS.md` (repo root) holds every pending task, plan point and parked idea. Add new ones in the same turn they come up; delete them when shipped. When Sir asks for pending tasks ("what's pending", "pending tasks"), read `TASKS.md` and list it.

@@ -27,6 +27,7 @@ You are helping Sir build **JARVIS**, a voice-first AI assistant desktop app for
 | `docs/Integrations.md` | AI provider / gateway / agent CLI status matrix, remaining plan, how to add one |
 | `docs/Forge.md` | Planned self-improvement feature: levels, pipeline, safety rules, phases F0–F7 |
 | `docs/Implementation.md` | Phase-by-phase tasks and prompts |
+| `TASKS.md` | Pending tasks, deferred plan points and parked ideas ("what's pending") |
 
 ## Commands
 `npm run dev` · `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:e2e` · `npm run dist` · `npm run evals` (costs tokens, ask first)
