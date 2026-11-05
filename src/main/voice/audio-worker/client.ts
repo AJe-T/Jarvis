@@ -27,6 +27,8 @@ export interface WakeHooks {
   onTiming?(ms: number): void;
   /** A frame dropped because the worker is behind. */
   onBacklog?(): void;
+  /** A wake phrase scored just under the threshold. */
+  onNearMiss?(info: Record<string, unknown>): void;
 }
 
 type Waiter = { resolve(v: never): void; reject(e: Error): void };
@@ -36,6 +38,7 @@ interface Engine {
   broken: Error | null;
   closed: boolean;
   onTiming?: ((ms: number) => void) | undefined;
+  onNearMiss?: ((info: Record<string, unknown>) => void) | undefined;
 }
 
 /**
@@ -84,6 +87,8 @@ export function createAudioWorker(opts: { logger: Logger; connect(): Promise<Aud
       for (const w of e.fifo.splice(0)) w.reject(e.broken);
       return;
     }
+    // Not an answer to a frame: the fifo of waiting frames is left as it is.
+    if (m.t === 'near-miss') return void e.onNearMiss?.(m.info);
     e.onTiming?.(m.ms);
     const w = e.fifo.shift();
     if (m.t === 'wake') (w?.resolve as ((v: boolean) => void) | undefined)?.(m.heard);
@@ -110,7 +115,11 @@ export function createAudioWorker(opts: { logger: Logger; connect(): Promise<Aud
     return link;
   }
 
-  async function open(msg: ToWorker & { id: number }, onTiming?: (ms: number) => void) {
+  async function open(
+    msg: ToWorker & { id: number },
+    onTiming?: (ms: number) => void,
+    onNearMiss?: (info: Record<string, unknown>) => void,
+  ) {
     const l = await connected();
     const frameLength = await new Promise<number>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -129,7 +138,7 @@ export function createAudioWorker(opts: { logger: Logger; connect(): Promise<Aud
       });
       l.post(msg);
     });
-    const engine: Engine = { fifo: [], broken: null, closed: false, onTiming };
+    const engine: Engine = { fifo: [], broken: null, closed: false, onTiming, onNearMiss };
     engines.set(msg.id, engine);
     return { l, engine, frameLength };
   }
@@ -153,7 +162,11 @@ export function createAudioWorker(opts: { logger: Logger; connect(): Promise<Aud
   return {
     async wake(spec: WakeSpec, hooks: WakeHooks = {}): Promise<WakeWord> {
       const id = nextId++;
-      const { l, engine, frameLength } = await open({ t: 'wake-open', id, spec }, hooks.onTiming);
+      const { l, engine, frameLength } = await open(
+        { t: 'wake-open', id, spec },
+        hooks.onTiming,
+        hooks.onNearMiss,
+      );
       return {
         frameLength,
         process(frame) {

@@ -219,7 +219,7 @@ function effectiveStt(s: Services, local: Pick<LocalEngines, 'ready'>): SttEngin
  * worker, at a measured sensitivity; no recording of Sir's voice needed. Either alone if only one is
  * downloaded.
  */
-async function v2Wake(local: LocalEngines): Promise<WakeWord> {
+async function v2Wake(s: Services, local: LocalEngines): Promise<WakeWord> {
   const spotter = local.spotterReady();
   const oww = local.wakeReady();
   if (!spotter && !oww)
@@ -229,7 +229,17 @@ async function v2Wake(local: LocalEngines): Promise<WakeWord> {
       'The wake word needs the free on-device models: Settings → Voice → "Set up free on-device speech" (once).',
     );
   const [a, b] = await Promise.all([
-    spotter ? local.spotterWake(V2_WAKE_SENSITIVITY, 'Jarvis', []) : null,
+    // How on-device speech spelled "Jarvis" in Sir's voice (Settings → Voice → Your voice) counts
+    // too; spellings of a custom name don't, since v2 wakes on "Jarvis".
+    spotter
+      ? local.spotterWake(
+          V2_WAKE_SENSITIVITY,
+          'Jarvis',
+          isDefaultName(s.settings.get('assistant.name'))
+            ? s.settings.get('voice.wake.learned')
+            : [],
+        )
+      : null,
     oww ? local.wake(V2_WAKE_SENSITIVITY) : null,
   ]);
   return a && b ? eitherWake(a, b) : ((a ?? b) as WakeWord);
@@ -354,7 +364,7 @@ export function realFactories(
       ),
     echoCancelled: captureOn,
     wake: (sensitivity) => {
-      if (isV2(s)) return v2Wake(local);
+      if (isV2(s)) return v2Wake(s, local);
       const engine = s.settings.get('voice.wake.provider');
       if (engine === 'spotter')
         return local.spotterWake(
@@ -388,6 +398,10 @@ export function realFactories(
     },
     stt,
     verifySpeaker: createSpeakerCheck(s, models),
+    transcribeClip: (audio) =>
+      local.ready()
+        ? local.transcribe(audio, s.settings.get('voice.stt.language'))
+        : Promise.resolve(''),
     edge: createEdgeTts(),
     sapi: createSapiTts(),
     kokoro: createKokoroTts({
@@ -584,6 +598,8 @@ export function createVoiceSystem(
     root: join(s.userData, 'models'),
     onProgress: (p) => s.emit('models:progress', p),
   });
+  /** Set once the controller exists: near misses reported while it is created have nowhere to go. */
+  const nearMissTo: { controller?: { nearMiss(): void } } = {};
   // Voice fix 1B: wake words and the voice detector run in their own utility process (the app only;
   // tests and plain Node keep them in this process).
   const audioHost = join(__dirname, 'audio-host.js');
@@ -606,7 +622,11 @@ export function createVoiceSystem(
       });
     },
     // A "Hey Jarvis" that almost woke him: the log shows how close it came (tune the sensitivity).
-    onNearMiss: (info) => logger.info(info, 'wake word near miss'),
+    // ...and the controller gives it a second listen (on-device speech-to-text on the last 2 s).
+    onNearMiss: (info) => {
+      logger.info(info, 'wake word near miss');
+      nearMissTo.controller?.nearMiss();
+    },
     onSpotted: (info) => logger.info(info, 'wake word heard'),
     onSpotterDecode: diag.timer('spotter.decode'),
   });
@@ -743,6 +763,7 @@ export function createVoiceSystem(
       }),
     ...(opts.timeouts ? { timeouts: opts.timeouts } : {}),
   });
+  nearMissTo.controller = voice;
   const enrolment = createEnrolment({
     record: () => voice.recordSample(),
     speakerReady: () => models.installed('wavlm-speaker'),

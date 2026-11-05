@@ -28,6 +28,8 @@ export function installVoiceBridge(): void {
   registerBridge((on) => [
     on('tts:audio', (p) => audioPlayer.enqueue(p)),
     on('tts:stop', () => audioPlayer.stop()),
+    // Listening was cut short: the words heard wait in the message box (Core) as a draft.
+    on('voice:draft', (p) => useChatStore.getState().keepSpoken(p.text)),
     // Main asks for compressed audio (voice notes) as 16 kHz mono samples for on-device Whisper.
     on('audio:decode', (p) => {
       void decodeTo16k(p.data)

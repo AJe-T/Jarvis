@@ -118,9 +118,16 @@ export function deepgramEvents(fire: Fire, timers: Timers = {}) {
       fire('error', err instanceof Error ? err : new Error(String(err)));
     },
 
-    close(code?: number): void {
+    /**
+     * Worded "close 1011", not "code 1011": the log redactor takes "code" plus digits for a one-time
+     * code and hid every close reason. Deepgram's reason ("NET-0001 …") says why it hung up.
+     */
+    close(code?: number, reason?: string): void {
       if (over || ending) return;
-      endEarly(`Deepgram closed the connection${code ? ` (code ${code})` : ''}`);
+      const why = [code ? `close ${code}` : '', reason?.trim().slice(0, 160) ?? '']
+        .filter(Boolean)
+        .join(': ');
+      endEarly(`Deepgram closed the connection${why ? ` (${why})` : ''}`);
     },
 
     /** Called before Jarvis closes the session, so its own close isn't taken for a drop. */

@@ -214,6 +214,7 @@ export const EVENT_CHANNELS = [
   'music:level',
   'voice:transcript',
   'voice:compose',
+  'voice:draft',
   'tts:audio',
   'tts:stop',
   'usage:update',

@@ -93,7 +93,8 @@ export function VoiceSection(): React.JSX.Element {
       <div id="voice-output" className="scroll-mt-4">
         <VoiceOutput name={name} />
       </div>
-      {!v2 && <VoiceProfile />}
+      {/* v2 too: the five phrases tune its wake word to Sir's voice (it was hidden here before 2.63). */}
+      <VoiceProfile v2={v2} />
       <details className="group rounded-md border border-line bg-surface-1 open:pb-2">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-ink-100 select-none hover:bg-hover">
           <span className="mr-2 inline-block transition-transform group-open:rotate-90">›</span>

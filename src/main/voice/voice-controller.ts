@@ -59,6 +59,11 @@ export interface VoiceFactories {
    * not set up, so it only ever narrows who can wake Jarvis.
    */
   verifySpeaker?(audio: Float32Array): Promise<boolean>;
+  /**
+   * One short clip through on-device speech-to-text (the wake word's second opinion on a near
+   * miss). Resolves "" when on-device speech isn't set up.
+   */
+  transcribeClip?(audio: Float32Array): Promise<string>;
   /** On-device Whisper on every phrase: "always listening", and the wake word for a custom name. Throws JarvisError if not available. */
   ambient?(handlers: {
     onSpeechStart(): void;
@@ -107,6 +112,8 @@ export interface VoiceDeps {
 
 const SILENCE_TIMEOUT_MS = 8_000;
 const MAX_LISTEN_MS = 30_000;
+/** While words keep coming the 30 s limit moves on, up to this. */
+const MAX_LISTEN_CAP_MS = 120_000;
 const LEVEL_INTERVAL_MS = 50; // ≤ 20 Hz (Code-style.md §5)
 const METER_MS = 5_000;
 /** Voice Match enrolment: one phrase, ended by a pause or this limit. */
@@ -142,6 +149,10 @@ const GREETING_MAX_MS = 3_000;
 const ACK_DELAY_MS = 1_200;
 /** The listening chime plays on its own before "Yes, sir?", so the two don't blur together. */
 const WAKE_CHIME_MS = 300;
+/** The wake word's last audio kept for a second opinion: "Hey Jarvis" plus a little either side. */
+const NEAR_MISS_CLIP_MS = 2_000;
+/** Near misses come in pairs (two peaks of one phrase): one check per phrase. */
+const NEAR_MISS_GAP_MS = 1_500;
 /** A repeated wake word is ignored while the greeting plays, but no longer than this. */
 const GREETING_STALE_MS = 8_000;
 /** Stock lines are rendered ahead only for free voices: a paid cloud voice would bill each one. */
@@ -179,6 +190,11 @@ export function createVoiceController(d: VoiceDeps) {
     max?: ReturnType<typeof setTimeout>;
     heard: boolean;
     retried: boolean;
+    startedAt: number;
+    /** The words heard so far (latest partial): kept as a draft if listening is cut short. */
+    said?: string;
+    /** Speech-to-text dropped once before any words and was reopened. */
+    sttReopened?: boolean;
     /** Audio captured while the speech-to-text session is still starting ("Hey Jarvis, what time…"). */
     early: Int16Array[];
     /** voice.debugAudio: the frames this session's speech-to-text was given. */
@@ -588,7 +604,64 @@ export function createVoiceController(d: VoiceDeps) {
    * straight back to reading. Engines in the audio worker answer later, in order; an answer of
    * "heard" wakes Jarvis if that engine and microphone are still current and he isn't listening yet.
    */
+  /** The last NEAR_MISS_CLIP_MS of audio the wake word heard (16 kHz). */
+  const wakeClip: Int16Array[] = [];
+  let wakeClipSamples = 0;
+  function clearWakeAudio(): void {
+    wakeClip.length = 0;
+    wakeClipSamples = 0;
+  }
+  function keepWakeAudio(frame: Int16Array): void {
+    wakeClip.push(frame);
+    wakeClipSamples += frame.length;
+    const max = (16_000 * NEAR_MISS_CLIP_MS) / 1000;
+    while (wakeClipSamples - (wakeClip[0]?.length ?? 0) >= max)
+      wakeClipSamples -= wakeClip.shift()?.length ?? 0;
+  }
+
+  /**
+   * A wake phrase scored just under the threshold. Most of Sir's missed "Jarvis"es land here
+   * (scores 0.18–0.30 against 0.30 in the logs), so on-device speech-to-text gets the last two
+   * seconds, and if it heard the name he is woken after all. Never while Jarvis is speaking: his
+   * own voice saying "Jarvis" must not wake him.
+   */
+  let secondOpinion = false;
+  let lastSecondOpinion = 0;
+  async function nearMiss(): Promise<void> {
+    const w = wake;
+    const rec = recorder;
+    const transcribe = d.factories.transcribeClip;
+    const now = Date.now();
+    if (!transcribe || !w || !rec || secondOpinion || listening || sample || sleeping) return;
+    if (!wakeMode() || audible() || now - spokenEndedAt < ECHO_SETTLE_MS * 3) return;
+    if (now - lastSecondOpinion < NEAR_MISS_GAP_MS || wakeClipSamples === 0) return;
+    secondOpinion = true;
+    lastSecondOpinion = now;
+    const audio = new Float32Array(wakeClipSamples);
+    let at = 0;
+    for (const f of wakeClip) {
+      for (let i = 0; i < f.length; i++) audio[at + i] = (f[i] ?? 0) / 32768;
+      at += f.length;
+    }
+    if (d.settings.get('voice.debugAudio')) {
+      const tap = d.diag?.tap('near-miss');
+      for (const f of wakeClip) tap?.write(f);
+      tap?.close();
+    }
+    try {
+      const text = await transcribe(audio);
+      const named = mentionsName(text, names()) && !isEcho(text, recentSpoken);
+      log.info({ named }, 'wake word second opinion');
+      if (named) woke(w, rec);
+    } catch (err) {
+      log.warn({ err: errorMessage(err) }, 'wake word second opinion failed');
+    } finally {
+      secondOpinion = false;
+    }
+  }
+
   function feedWake(w: WakeWord, frame: Int16Array, rec: Recorder): void {
+    keepWakeAudio(frame);
     const started = performance.now();
     let result: boolean | Promise<boolean>;
     try {
@@ -611,6 +684,7 @@ export function createVoiceController(d: VoiceDeps) {
 
   function woke(w: WakeWord, rec: Recorder): void {
     if (wake !== w || recorder !== rec || listening || sample) return;
+    clearWakeAudio(); // that phrase is used up
     // One recording per wake: it ends with the phrase that fired.
     wakeTap?.close();
     wakeTap = null;
@@ -772,6 +846,7 @@ export function createVoiceController(d: VoiceDeps) {
       abort,
       heard: false,
       retried: isRetry,
+      startedAt: Date.now(),
       early: [],
       tap: d.diag?.tap('stt') ?? null,
       followUp,
@@ -815,11 +890,28 @@ export function createVoiceController(d: VoiceDeps) {
           ? DICTATION_MAX_MS
           : (d.timeouts?.maxListenMs ?? MAX_LISTEN_MS),
     );
+    await openStt(current);
+  }
+
+  /**
+   * Opens speech-to-text for a listening session. A connection that drops before any word was heard
+   * (Deepgram sometimes closes one about a second after it opened) is reopened once, quietly, with the
+   * audio kept meanwhile; only a second failure is reported, and never for a follow-up window, which
+   * gives up quietly anyway.
+   */
+  async function openStt(current: NonNullable<typeof listening>): Promise<void> {
+    const dictation = current.dictation?.target ?? null;
+    const failed = (message: string): void => {
+      if (listening !== current) return;
+      if (!current.followUp)
+        d.emit('notify', { level: 'error', message, action: 'settings:voice' });
+      cancelListening();
+    };
     try {
       const session = await d.factories.stt.start({
         sampleRate: 16000,
         language: d.settings.get('voice.stt.language'),
-        signal: abort.signal,
+        signal: current.abort.signal,
         endSilenceMs: dictation ? DICTATION_PAUSE_MS : d.settings.get('voice.endSilenceMs'),
         ...(dictation ? { continuous: true, livePartials: true } : {}),
       });
@@ -830,7 +922,11 @@ export function createVoiceController(d: VoiceDeps) {
       current.session = session;
       session.on('speechStarted', () => (current.heard = true));
       session.on('partial', (text) => {
-        if (text) current.heard = true;
+        if (text) {
+          current.heard = true;
+          current.said = text;
+          extendListening(current);
+        }
         timings.eosAt = Date.now();
         if (current.dictation) {
           emitDictation(current, text);
@@ -850,12 +946,15 @@ export function createVoiceController(d: VoiceDeps) {
       });
       session.on('error', (err) => {
         log.warn({ err: errorMessage(err) }, 'speech-to-text error');
-        d.emit('notify', {
-          level: 'error',
-          message: 'Speech recognition failed. You can type instead.',
-          action: 'settings:voice',
-        });
-        cancelListening();
+        if (listening !== current) return;
+        if (!current.heard && !current.sttReopened) {
+          current.sttReopened = true;
+          current.session = null; // frames wait in `early` until the new session is up
+          void session.close().catch(() => undefined);
+          log.info('speech-to-text dropped before any words; reconnecting');
+          return void openStt(current);
+        }
+        failed('Speech recognition failed. You can type instead.');
       });
       for (const f of current.early) {
         session.write(f);
@@ -864,17 +963,26 @@ export function createVoiceController(d: VoiceDeps) {
       current.early = [];
     } catch (err) {
       log.warn({ err: errorMessage(err) }, 'speech-to-text connect failed');
-      d.emit('notify', {
-        level: 'error',
-        // Setup problems (no Deepgram key, Whisper model not downloaded) carry their own message.
-        message:
-          err instanceof JarvisError && err.userMessage
-            ? err.userMessage
-            : "Couldn't start speech recognition. You can type instead.",
-        action: 'settings:voice',
-      });
-      cancelListening();
+      // Setup problems (no Deepgram key, Whisper model not downloaded) carry their own message.
+      failed(
+        err instanceof JarvisError && err.userMessage
+          ? err.userMessage
+          : "Couldn't start speech recognition. You can type instead.",
+      );
     }
+  }
+
+  /**
+   * Words are still arriving: the listening limit moves on, so a long request isn't cut off
+   * mid-sentence (it used to end at 30 s, words and all). Never past MAX_LISTEN_CAP_MS.
+   */
+  function extendListening(current: NonNullable<typeof listening>): void {
+    if (current.dictation || listening !== current) return;
+    const limit = d.timeouts?.maxListenMs ?? MAX_LISTEN_MS;
+    const left = current.startedAt + MAX_LISTEN_CAP_MS - Date.now();
+    if (left <= 0) return;
+    clearTimeout(current.max);
+    current.max = setTimeout(() => cancelListening(), Math.min(limit, left));
   }
 
   /** Everything dictated so far plus the phrase still being spoken. */
@@ -924,6 +1032,7 @@ export function createVoiceController(d: VoiceDeps) {
     clearTimeout(l.max);
     l.tap?.close();
     wake?.reset();
+    clearWakeAudio();
     l.abort.abort();
     void l.session?.close().catch(() => undefined);
     if (!needRecorder()) releaseRecorder();
@@ -933,8 +1042,11 @@ export function createVoiceController(d: VoiceDeps) {
     if (!listening) return;
     // Stopping a message being composed keeps the words already in the box.
     if (listening.dictation?.target === 'composer') return finishDictation(listening);
+    // Words already heard are not thrown away: they wait in the message box as a draft.
+    const said = listening.dictation ? '' : (listening.said ?? '').trim();
     endListening();
     d.emit('voice:transcript', { text: '', isFinal: true });
+    if (said) d.emit('voice:draft', { text: said });
     settleAfterListening();
   }
 
@@ -1177,6 +1289,8 @@ export function createVoiceController(d: VoiceDeps) {
 
   const controller = {
     onConfirmShown,
+    /** The wake engine reported a near miss (voice-system wires the local engines' hook here). */
+    nearMiss: (): void => void nearMiss(),
     say,
     notice,
     stopSpeaking,

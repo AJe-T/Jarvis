@@ -18,7 +18,7 @@ const MAX_FILE_BYTES = 10 * 60 * SAMPLE_RATE * 2;
  */
 export type DropReason = 'queue' | 'length' | 'early' | 'overrun' | 'backlog';
 /** What the frames in a debug recording were fed to. */
-export type TapKind = 'stt' | 'wake' | 'ambient';
+export type TapKind = 'stt' | 'wake' | 'ambient' | 'near-miss';
 
 export interface AudioTap {
   write(frame: Int16Array): void;

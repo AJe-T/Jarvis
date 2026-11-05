@@ -39,9 +39,11 @@ function Progress({ done, total }: { done: number; total: number }): React.JSX.E
  * ADR-039 Voice Match, like "Hey Google" setup: say "Hey <name>" five times. Jarvis keeps a voice
  * fingerprint (never the recordings) and how on-device speech spells the name in Sir's voice.
  */
-export function VoiceProfile(): React.JSX.Element {
+export function VoiceProfile({ v2 = false }: { v2?: boolean }): React.JSX.Element {
   const name = useDraftSetting('assistant.name') ?? DEFAULT_NAME;
-  const wakeEngine = useSetting('voice.wake.provider') ?? 'spotter';
+  // Voice v2 always uses the instant spotter (with the "hey jarvis" model): the recordings tune it.
+  const chosenWake = useSetting('voice.wake.provider') ?? 'spotter';
+  const wakeEngine = v2 ? 'spotter' : chosenWake;
   const learned = useSetting('voice.wake.learned') ?? [];
   const toast = useUiStore((s) => s.toast);
   const models = useModels();
@@ -163,9 +165,14 @@ export function VoiceProfile(): React.JSX.Element {
         <>
           <p className="flex items-center gap-2 text-sm text-ok-400">
             <Check size={16} aria-hidden /> Your voice is set up
-            {profile?.wakeTrained ? `, and your “Hey ${name}” is a wake word` : ''}.
+            {v2
+              ? ', and the wake word is tuned to how you say the name'
+              : profile?.wakeTrained
+                ? `, and your “Hey ${name}” is a wake word`
+                : ''}
+            .
           </p>
-          {!profile?.wakeTrained && (
+          {!v2 && !profile?.wakeTrained && (
             <p className="text-sm text-lamp-400">
               Set up again once the “Hey Jarvis” wake-word model is downloaded (Wake word above) to
               make your own “Hey {name}” the wake word.

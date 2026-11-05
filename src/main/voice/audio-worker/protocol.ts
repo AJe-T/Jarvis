@@ -37,4 +37,6 @@ export type FromWorker =
   | { t: 'prob'; id: number; p: number; ms: number }
   /** A frame or window failed; the engine is unusable after this. */
   | { t: 'error'; id: number; error: string }
+  /** A wake phrase that scored just under the threshold (main may double-check it). */
+  | { t: 'near-miss'; id: number; info: Record<string, unknown> }
   | { t: 'log'; level: 'info' | 'warn'; obj: Record<string, unknown>; msg: string };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deepgramEvents } from './deepgram-events';
+import { redact } from '../../security/redact';
 
 function setup() {
   const out: Array<[string, unknown?]> = [];
@@ -39,9 +40,17 @@ describe('Deepgram live events (voice fix 1A)', () => {
 
   it('a drop before any words is an error, so listening ends at once', () => {
     const { ev, out } = setup();
-    ev.close(1011);
+    ev.close(1011, 'NET-0001: no audio received');
     expect(out[0]?.[0]).toBe('error');
-    expect(String(out[0]?.[1])).toMatch(/closed the connection \(code 1011\)/);
+    expect(String(out[0]?.[1])).toMatch(
+      /closed the connection \(close 1011: NET-0001: no audio received\)/,
+    );
+  });
+
+  it('the close reason survives log redaction (it was hidden as a one-time code)', () => {
+    const { ev, out } = setup();
+    ev.close(1011);
+    expect(redact(String(out[0]?.[1]))).toContain('close 1011');
   });
 
   it("Jarvis's own close is not a drop", () => {

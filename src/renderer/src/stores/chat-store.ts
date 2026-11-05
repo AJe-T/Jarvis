@@ -27,10 +27,14 @@ interface ChatStore {
   awaitingId: boolean;
   /** Text to put back into the composer (rewind → edit). */
   draft: string | null;
+  /** Words heard before listening was cut short; the composer adds them to what is in the box. */
+  spoken: string | null;
   loadConversations(): Promise<void>;
   /** isair/jarvis rewind: back to before Sir's Nth message; resend regenerates from there. */
   rewind(userIndex: number, resend: boolean): Promise<void>;
   takeDraft(): string | null;
+  keepSpoken(text: string): void;
+  takeSpoken(): string | null;
   open(id: string): Promise<void>;
   newConversation(): void;
   send(text: string, source?: 'text' | 'voice', attachments?: Attachment[]): Promise<void>;
@@ -72,6 +76,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   activity: [],
   awaitingId: false,
   draft: null,
+  spoken: null,
 
   async loadConversations() {
     const { items } = await call('conversations:list', { limit: 100 });
@@ -150,6 +155,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const d = get().draft;
     if (d !== null) set({ draft: null });
     return d;
+  },
+
+  keepSpoken(text) {
+    const s = text.trim();
+    if (!s) return;
+    const before = get().spoken;
+    set({ spoken: before ? `${before} ${s}` : s });
+  },
+
+  takeSpoken() {
+    const s = get().spoken;
+    if (s !== null) set({ spoken: null });
+    return s;
   },
 
   async cancel() {

@@ -50,7 +50,12 @@ export function createAudioHost(
       case 'wake-open':
         return open(
           m.id,
-          async () => ({ kind: 'wake', wake: await engines.openWake(m.spec) }),
+          async () => ({
+            kind: 'wake',
+            wake: await engines.openWake(m.spec, (info) =>
+              post({ t: 'near-miss', id: m.id, info }),
+            ),
+          }),
           (e) => (e.kind === 'wake' ? e.wake.frameLength : 0),
         );
       case 'vad-open':

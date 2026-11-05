@@ -40,9 +40,18 @@ function inProcess(opts: { wake?: WakeWord; stall?: boolean } = {}) {
     connects++;
     let toMain: ((m: FromWorker) => void) | null = null;
     const host = createAudioHost((m) => queueMicrotask(() => toMain?.(m)), {
-      openWake: async (spec) => {
+      openWake: async (spec, onNearMiss) => {
         if (spec.engine === 'spotter' && spec.phrases.length === 0) throw new Error('no phrases');
-        return wake;
+        // A frame starting with 2 is a phrase that scored just under the threshold.
+        return {
+          ...wake,
+          process: (f: Int16Array) => {
+            if (f[0] === 2) onNearMiss?.({ engine: 'hey-jarvis', score: 0.25 });
+            return wake.process(f);
+          },
+          reset: () => wake.reset(),
+          release: () => wake.release(),
+        };
       },
       openVad: async () => ({ prob: async (w) => w[0] ?? 0, reset: () => undefined }),
     });
@@ -91,6 +100,15 @@ describe('audio worker (voice fix 1B)', () => {
     expect(times).toHaveLength(1);
     expect((t.wake as ReturnType<typeof fakeWake>).resets).toBe(1);
     expect((t.wake as ReturnType<typeof fakeWake>).released).toBe(true);
+  });
+
+  it('passes near misses to main without disturbing the answers to frames (v2.63)', async () => {
+    const t = inProcess();
+    const near: Array<Record<string, unknown>> = [];
+    const w = await t.worker.wake(spec, { onNearMiss: (info) => near.push(info) });
+    const answers = await Promise.all([w.process(frame(2)), w.process(frame(1))]);
+    expect(answers).toEqual([false, true]);
+    expect(near).toEqual([{ engine: 'hey-jarvis', score: 0.25 }]);
   });
 
   it('drops (and counts) wake frames once the worker is 2 s behind instead of queueing forever', async () => {

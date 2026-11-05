@@ -1307,6 +1307,8 @@ export const EVENTS = {
   'music:level': z.object({ rms: z.number() }),
   'voice:transcript': z.object({ text: z.string(), isFinal: z.boolean() }),
   'voice:compose': z.object({ text: z.string(), final: z.boolean() }),
+  /** Listening was cut short (error, time limit, Esc): the words heard so far, for the message box. */
+  'voice:draft': z.object({ text: z.string().max(10_000) }),
   'tts:audio': z.object({
     utteranceId: z.string(),
     seq: z.number(),

@@ -52,6 +52,20 @@ export function Composer(): React.JSX.Element {
       box?.setSelectionRange(d.length, d.length);
     });
   }, [draft, takeDraft]);
+  // Listening was cut short (error, time limit, Esc): what Sir said is added to the box, not lost.
+  const spoken = useChatStore((s) => s.spoken);
+  useEffect(() => {
+    if (spoken === null) return;
+    const said = useChatStore.getState().takeSpoken();
+    if (!said) return;
+    setText((t) => (t.trim() ? `${t}${/s$/.test(t) ? '' : ' '}${said}` : said));
+    useUiStore.getState().toast({
+      level: 'info',
+      message:
+        'Listening stopped early. What you said is in the message box: edit it or press Send.',
+    });
+    requestAnimationFrame(() => boxRef.current?.focus());
+  }, [spoken]);
   const state = useAssistantStore((s) => s.state);
   const detail = useAssistantStore((s) => s.detail);
   const transcript = useAssistantStore((s) => s.transcript);

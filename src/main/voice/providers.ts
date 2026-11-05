@@ -61,7 +61,7 @@ export function createDeepgramStt(
       const events = deepgramEvents(fire);
       socket.on('message', (msg) => events.message(msg));
       socket.on('error', (err) => events.error(err));
-      socket.on('close', (e) => events.close(e.code));
+      socket.on('close', (e) => events.close(e.code, e.reason));
       socket.connect();
       await socket.waitForOpen();
       const session: SttSession = {

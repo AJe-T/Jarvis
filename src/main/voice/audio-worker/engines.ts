@@ -32,7 +32,13 @@ export function createAudioEngines(log: Log) {
   }
 
   return {
-    async openWake(spec: WakeSpec): Promise<WakeWord> {
+    /** `onNearMiss`: told of each near miss instead of only logging it (main double-checks those). */
+    async openWake(
+      spec: WakeSpec,
+      onNearMiss?: (info: Record<string, unknown>) => void,
+    ): Promise<WakeWord> {
+      const near = (info: Record<string, unknown>): void =>
+        onNearMiss ? onNearMiss(info) : log('info', info, 'wake word near miss');
       if (spec.engine === 'spotter') {
         const model = await spotterModel(spec.dir);
         const engine = await model.open(keywordsText(spec.phrases, model.pieces, spec.threshold));
@@ -44,11 +50,7 @@ export function createAudioEngines(log: Log) {
       const models = await loadOwwModels(spec.dir);
       if (spec.engine === 'openwakeword')
         return createOpenWakeWord(models, spec.threshold, Date.now, (score) =>
-          log(
-            'info',
-            { engine: 'hey-jarvis', score: round2(score), threshold: spec.threshold },
-            'wake word near miss',
-          ),
+          near({ engine: 'hey-jarvis', score: round2(score), threshold: spec.threshold }),
         );
       return createPersonalWake(models, spec.templates, {
         sensitivity: spec.sensitivity,
@@ -56,11 +58,7 @@ export function createAudioEngines(log: Log) {
           ? { classifierThreshold: spec.classifierThreshold }
           : {}),
         onNearMiss: (distance, threshold) =>
-          log(
-            'info',
-            { engine: 'personal', distance: round2(distance), threshold: round2(threshold) },
-            'wake word near miss',
-          ),
+          near({ engine: 'personal', distance: round2(distance), threshold: round2(threshold) }),
       });
     },
 

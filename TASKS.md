@@ -22,6 +22,23 @@ Last updated: 2026-11-06 (after v2.62.0).
 
 Not planned: chat branching and message reactions (complexity for little gain with one user).
 
+## 1b. Voice: first wake missed, spoken words lost (proposed 2026-11-06, waiting for Sir's pick)
+
+Evidence (log of 2026-11-05/06): voice v2 runs two wake engines together, the keyword spotter
+("JARVIS", threshold 0.15) and openWakeWord's "hey jarvis" model (threshold 0.30). About 25 tries
+scored 0.18–0.30 and never woke; the spotter fired only 11 times. The spotter was never calibrated
+(`voice.wake.spotterLevel` = 0). Spoken words are thrown away by `cancelListening()` (it sends an
+empty transcript) on a speech-to-text error, on the 30 s listening limit, and on Esc.
+
+| # | Task | Size | Notes |
+|---|---|---|---|
+| W1 | Sir records "Hey Jarvis" ×5 in Settings → Voice → Your voice | none | Calibrates the spotter to his voice and room. No code. Do first. |
+| W2 | Second opinion on a near miss: when a wake score lands just under the line, run on-device speech-to-text on the last ~1.5 s and wake if it says "Jarvis" | M | Only on near misses, so cheap. Fixes "Jarvis" said without "hey", which the "hey jarvis" model scores low by design. |
+| W3 | Wake debug: keep the audio of each near miss (with `voice.debugAudio`) so thresholds can be tuned on real recordings | S | |
+| W4 | Log Deepgram close codes: the log redactor masks them as `[REDACTED:otp]`, so why Deepgram closed 1 s after waking (23:52, 00:14) can't be seen | S | |
+| D1 | Spoken words kept as a draft: whenever listening ends without sending (speech-to-text error, time limit, Esc, any cut), the words heard so far go into the message box as a draft instead of vanishing | M | Reuses the composer draft (as used by "Edit from here"). Appends to text already typed. A short note says the words were kept. |
+| D2 | Long requests not cut: the 30 s listening limit extends while words are still arriving (cap 2 min) | S | |
+
 ## 2. Modules still to review, one by one
 
 Core is done (v2.62.0). For each module: Sir lists the bugs, Claude finds the causes and proposes a

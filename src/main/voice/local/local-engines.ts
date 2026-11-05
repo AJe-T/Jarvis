@@ -106,6 +106,7 @@ export function createLocalEngines(
   const wakeHooks = {
     ...(hooks.onWakeTiming ? { onTiming: hooks.onWakeTiming } : {}),
     ...(hooks.onWakeBacklog ? { onBacklog: hooks.onWakeBacklog } : {}),
+    ...(hooks.onNearMiss ? { onNearMiss: hooks.onNearMiss } : {}),
   };
   let vad: Promise<Vad> | null = null;
   let whisper: { id: ModelId; model: Promise<Transcriber> } | null = null;

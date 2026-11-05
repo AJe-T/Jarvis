@@ -53,11 +53,22 @@ export function createFakeWake(): WakeWord & { trigger(): void; resets: number }
   };
 }
 
+/**
+ * A scripted session: `drop` closes the connection before any words (an error, like Deepgram
+ * hanging up); `partials` are interim words, one every `everyMs`, with no final (Sir still talking,
+ * or cut off).
+ */
+export interface FakeUtterance {
+  drop?: boolean;
+  partials?: string[];
+  everyMs?: number;
+}
+
 /** Each started session "hears" the next scripted transcript after a short delay. */
 export function createFakeStt(
-  transcripts: string[] = [],
+  transcripts: Array<string | FakeUtterance> = [],
   opts: { startDelayMs?: number } = {},
-): SttProvider & { queue: string[]; sessions: number; written: number } {
+): SttProvider & { queue: Array<string | FakeUtterance>; sessions: number; written: number } {
   const provider = {
     id: 'fake',
     queue: [...transcripts],
@@ -70,14 +81,27 @@ export function createFakeStt(
       const fire = (e: string, ...a: unknown[]): void => {
         for (const h of handlers[e] ?? []) (h as (...x: unknown[]) => void)(...a);
       };
-      const text = provider.queue.shift();
-      if (text !== undefined) {
+      const next = provider.queue.shift();
+      if (typeof next === 'string') {
         setTimeout(() => {
           if (signal.aborted) return;
           fire('speechStarted');
-          fire('partial', text.split(' ').slice(0, 2).join(' '));
-          fire('final', text);
+          fire('partial', next.split(' ').slice(0, 2).join(' '));
+          fire('final', next);
         }, 60);
+      } else if (next?.drop) {
+        setTimeout(() => !signal.aborted && fire('error', new Error('closed (close 1011)')), 30);
+      } else if (next?.partials) {
+        next.partials.forEach((words, i) =>
+          setTimeout(
+            () => {
+              if (signal.aborted) return;
+              if (i === 0) fire('speechStarted');
+              fire('partial', words);
+            },
+            30 + i * (next.everyMs ?? 50),
+          ),
+        );
       }
       return {
         write: () => {
