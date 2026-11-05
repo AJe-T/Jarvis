@@ -138,13 +138,25 @@ export function VoiceSection(): React.JSX.Element {
           />
           <SettingSwitch
             k="voice.greet"
-            label={`Instant replies: “Yes, sir?” when woken and “On it, sir.” while ${name} works (no AI call). Off: say your request in the same breath as the name`}
+            label={`Instant replies: “Yes, sir?” when woken, and a fitting “On it, sir.” when ${name}’s answer is slow to start (no AI call). Off: say your request in the same breath as the name`}
           />
           <SettingSwitch
             k="voice.startupGreeting"
             label={`Greet me when ${name} starts: the time and today's plan, then listen for my answer`}
           />
-          <SettingSwitch k="voice.sounds" label="Chime when listening starts and stops" />
+          <SettingSwitch
+            k="voice.sounds"
+            label="Chime when listening starts (rising) and stops (falling)"
+          />
+          <SettingSelect
+            k="voice.soundLevel"
+            label="Chime volume"
+            options={[
+              { value: 'soft', label: 'Soft' },
+              { value: 'normal', label: 'Normal' },
+              { value: 'loud', label: 'Loud' },
+            ]}
+          />
         </Section>
         <Section title="Language and speed">
           <SettingSelect

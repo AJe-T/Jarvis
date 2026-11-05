@@ -13,6 +13,9 @@ import type { DirectAction } from './orchestrator';
 
 export type FastMode = 'off' | 'rules' | 'laya';
 
+/** Shown, not heard (the speakers are off by then), so it says how to undo it. */
+export const MUTED_ACK = "Muted, sir. Say 'unmute' to bring the sound back.";
+
 const APP_STOP_WORDS =
   /\b(?:and|then|with|folder|file|files|document|website|site|url|link|tab|page|chat|conversation|email|mail|settings|my|the last|it|that|this)\b/;
 
@@ -31,7 +34,7 @@ export function ruleMatch(raw: string): DirectAction | null {
     return { tool: 'set_volume', input: { level: Number(level) }, ack: `Volume ${level}.` };
 
   if (/^(?:mute|mute\s+(?:the\s+)?(?:sound|volume|audio|pc|computer))$/.test(t))
-    return { tool: 'mute', input: { muted: true }, ack: 'Muted.' };
+    return { tool: 'mute', input: { muted: true }, ack: MUTED_ACK };
   if (/^(?:unmute|unmute\s+(?:the\s+)?(?:sound|volume|audio|pc|computer))$/.test(t))
     return { tool: 'mute', input: { muted: false }, ack: 'Sound is back on.' };
 
@@ -95,14 +98,9 @@ export const LAYA_ACTIONS: Record<string, { criteria: string; action: DirectActi
     criteria: 'go back to the previous song or track',
     action: media('previous', 'Going back.'),
   },
-  mute: {
-    criteria: 'silence the computer sound completely',
-    action: { tool: 'mute', input: { muted: true }, ack: 'Muted.' },
-  },
-  unmute: {
-    criteria: 'turn the computer sound back on',
-    action: { tool: 'mute', input: { muted: false }, ack: 'Sound is back on.' },
-  },
+  // No mute/unmute here: short questions about sound ("can you hear me?") read as "silence the
+  // computer" to a zero-shot classifier, and a muted PC also silences Jarvis, so it looked like he
+  // had stopped listening. Muting needs the exact words (ruleMatch) or Claude.
   other: {
     criteria: 'anything else: a question, a chat, a task, or a request needing more detail',
     action: null,

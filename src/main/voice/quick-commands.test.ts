@@ -41,6 +41,21 @@ describe('instant voice commands (idea from Priler/jarvis)', () => {
     });
   });
 
+  it('understands everyday ways of asking the time and date', () => {
+    for (const said of [
+      'What is the time right now?',
+      'Do you know what time it is?',
+      "What's the current time, Jarvis?",
+      'Can you tell me the time please',
+      'Time please',
+    ])
+      expect(matchQuickCommand(said, [], at)?.kind, said).toBe('say');
+    expect(matchQuickCommand('what day is it today', [], at)).toMatchObject({ kind: 'say' });
+    expect(matchQuickCommand("what's the date right now", [], at)).toMatchObject({ kind: 'say' });
+    expect(matchQuickCommand("what's the time in London", [], at)).toBeNull();
+    expect(matchQuickCommand('what time does the shop close', [], at)).toBeNull();
+  });
+
   it('similarity is 1 for equal strings and drops with edits', () => {
     expect(similarity('abc', 'abc')).toBe(1);
     expect(similarity('kitten', 'sitting')).toBeCloseTo(1 - 3 / 7);

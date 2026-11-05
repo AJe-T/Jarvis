@@ -24,7 +24,7 @@ import type { ContinuousTranscriber, HeardSegment } from './local/continuous';
 import { Utterance, warmSpeech } from './tts-pipeline';
 import { speakingFallbacks, ttsName, whyOf, type EngineReport } from './backup';
 import { isOffline } from '../offline';
-import { createLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
+import { createLinePicker, createWorkingLinePicker, WAKE_LINES, WORKING_LINES } from './greetings';
 import type { AudioTap, VoiceDiagnostics } from './diagnostics';
 import { createEchoCheck, type EchoState } from './echo-check';
 import type { RealtimeSession } from './realtime/session';
@@ -100,6 +100,8 @@ export interface VoiceDeps {
     /** Hold to talk: wait after the hotkey is let go for the last words' transcript. */
     holdTailMs?: number;
     composeIdleMs?: number;
+    ackDelayMs?: number;
+    wakeChimeMs?: number;
   };
 }
 
@@ -133,6 +135,13 @@ const CONVERSATION_GAP_MS = 15 * 60_000;
 const ECHO_SETTLE_MS = 400;
 /** Listening starts after the wake greeting, or after this long if its playback is never reported. */
 const GREETING_MAX_MS = 3_000;
+/**
+ * "On it, sir." only when the answer hasn't started by then: a fast reply needs no filler, and the
+ * thinking chime covers the first second.
+ */
+const ACK_DELAY_MS = 1_200;
+/** The listening chime plays on its own before "Yes, sir?", so the two don't blur together. */
+const WAKE_CHIME_MS = 300;
 /** A repeated wake word is ignored while the greeting plays, but no longer than this. */
 const GREETING_STALE_MS = 8_000;
 /** Stock lines are rendered ahead only for free voices: a paid cloud voice would bill each one. */
@@ -291,7 +300,7 @@ export function createVoiceController(d: VoiceDeps) {
     }
   }
   const wakeLine = createLinePicker(WAKE_LINES);
-  const workingLine = createLinePicker(WORKING_LINES);
+  const workingLine = createWorkingLinePicker();
   /** The "Yes, sir?" playing before listening starts (no echo cancellation). */
   let greeting: Utterance | null = null;
   let greetingAt = 0;
@@ -421,6 +430,31 @@ export function createVoiceController(d: VoiceDeps) {
   }
 
   /**
+   * A request is with the model. If no word of the answer has arrived after ACK_DELAY_MS, say a
+   * working line that fits it. It is queued in front of the reply (never stops it), and is skipped
+   * once the reply is writing, the turn is over, or Sir is speaking again.
+   */
+  let ackTimer: ReturnType<typeof setTimeout> | undefined;
+  function scheduleAck(said: string): void {
+    clearTimeout(ackTimer);
+    const line = workingLine(said);
+    if (!line) return;
+    ackTimer = setTimeout(() => {
+      ackTimer = undefined;
+      if (!d.orchestrator.isBusy() || listening || speaking || playing.size > 0) return;
+      rememberSpoken(line);
+      const u = newUtterance(false, undefined, true);
+      speaking = ack = u;
+      u.push(line);
+      u.end();
+    }, d.timeouts?.ackDelayMs ?? ACK_DELAY_MS);
+  }
+  function cancelAck(): void {
+    clearTimeout(ackTimer);
+    ackTimer = undefined;
+  }
+
+  /**
    * Woken: answer at once ("Yes, sir?"), with no model call, and listen for the request. With
    * echo cancellation the mic opens at the same moment (it doesn't hear the greeting), so words
    * Sir says straight after the name aren't lost; without it, listening starts once it has played.
@@ -438,7 +472,11 @@ export function createVoiceController(d: VoiceDeps) {
     // Listening during the greeting relies on echo cancellation; not where it was seen to leak.
     if (d.factories.echoCancelled?.() && echo.state() !== 'leaks') {
       void startListening(false, false, null, line); // synchronously LISTENING; say() leaves it so
-      say(line, true);
+      // The listening chime first, on its own, then the words. Skipped if listening already ended.
+      const session = listening;
+      setTimeout(() => {
+        if (session && listening === session) say(line, true);
+      }, d.timeouts?.wakeChimeMs ?? WAKE_CHIME_MS);
       return;
     }
     const u = say(line, true);
@@ -980,9 +1018,8 @@ export function createVoiceController(d: VoiceDeps) {
     // A new request replaces a reply that is still being worked on.
     const replacing = d.orchestrator.isBusy();
     if (replacing) d.orchestrator.cancel();
-    // Instant "On it, sir." while the model works (seconds); the reply plays right after it.
-    // Not when replacing a reply: stopping that one would cut this line off too.
-    if (d.settings.get('voice.greet') && !quick && !replacing) ack = say(workingLine(), true);
+    // "On it, sir." only if the answer is slow to start, worded for the request.
+    if (d.settings.get('voice.greet') && !quick) scheduleAck(text);
     const recent =
       lastVoice && Date.now() - lastVoice.at < CONVERSATION_GAP_MS
         ? lastVoice.conversationId
@@ -1107,6 +1144,7 @@ export function createVoiceController(d: VoiceDeps) {
   d.orchestrator.onDelta((turn, delta) => {
     const u = voiceTurns.get(turn.turnId);
     if (!u) return;
+    cancelAck(); // the answer is coming: no filler in front of it
     if (pendingLatency?.turnId === turn.turnId) pendingLatency.firstTokenAt ??= Date.now();
     rememberSpoken(delta);
     u.push(delta);
@@ -1114,6 +1152,7 @@ export function createVoiceController(d: VoiceDeps) {
   d.orchestrator.onTurnEnd((turn) => {
     const u = voiceTurns.get(turn.turnId);
     if (!u) return;
+    cancelAck();
     if (turn.outcome === 'aborted') {
       u.stop();
       voiceTurns.delete(turn.turnId);
@@ -1352,6 +1391,7 @@ export function createVoiceController(d: VoiceDeps) {
       stopSpeaking();
       notices.length = 0;
       clearTimeout(noticeTimer);
+      cancelAck();
       ambient?.close();
       ambient = null;
       wake?.release();

@@ -22,6 +22,8 @@ function setupVoice(
     sttStartMs?: number;
     greet?: boolean;
     echoCancelled?: boolean;
+    ackDelayMs?: number;
+    wakeChimeMs?: number;
   } = {},
 ) {
   const t = setupServices(script);
@@ -43,7 +45,12 @@ function setupVoice(
       sapi,
       ...(opts.echoCancelled ? { echoCancelled: () => true } : {}),
     },
-    timeouts: { silenceMs: 300, maxListenMs: 3000 },
+    timeouts: {
+      silenceMs: 300,
+      maxListenMs: 3000,
+      ...(opts.ackDelayMs !== undefined ? { ackDelayMs: opts.ackDelayMs } : {}),
+      ...(opts.wakeChimeMs !== undefined ? { wakeChimeMs: opts.wakeChimeMs } : {}),
+    },
   });
   const states = (): string[] =>
     t.events
@@ -271,7 +278,8 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     await t.v.start();
     t.wake.trigger();
     await until(() => t.stt.sessions === 1); // at once, before the greeting is played
-    expect(t.audio().length).toBeGreaterThan(0);
+    expect(t.audio()).toHaveLength(0); // the listening chime plays on its own first (v2.62)
+    await until(() => t.audio().length > 0);
     await until(() => t.stt.sessions === 2); // the empty phrase reopened listening
     await until(() => t.services.conversations.list(5).length === 1);
     await idle(t.services);
@@ -284,11 +292,18 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     t.v.voice.shutdown();
   });
 
-  it('says a stock "working on it" line, and the reply plays after it instead of cutting it off', async () => {
+  it('a slow answer gets a fitting "working on it" line, and the reply plays after it instead of cutting it off', async () => {
     const t = setupVoice(
-      { rules: [{ match: 'weather', steps: [{ text: '<spoken>Sunny, sir.</spoken>' }] }] },
+      {
+        rules: [
+          {
+            match: 'weather',
+            steps: [{ text: '<spoken>Sunny, sir.</spoken>', startDelayMs: 150 }],
+          },
+        ],
+      },
       ['what is the weather'],
-      { greet: true },
+      { greet: true, ackDelayMs: 20 },
     );
     await t.v.start();
     t.v.voice.ptt();
@@ -298,6 +313,20 @@ describe('phase 4 voice (Testing.md §8, fixture-based)', () => {
     const working = t.audio()[0]?.utteranceId;
     expect(t.audio().some((a) => a.utteranceId !== working)).toBe(true); // the reply is its own utterance
     expect(t.events.some((e) => e.event === 'tts:stop')).toBe(false);
+  });
+
+  it('a quick answer gets no "working on it" line (v2.62)', async () => {
+    const t = setupVoice(
+      { rules: [{ match: 'weather', steps: [{ text: '<spoken>Sunny, sir.</spoken>' }] }] },
+      ['what is the weather'],
+      { greet: true, ackDelayMs: 400 },
+    );
+    await t.v.start();
+    t.v.voice.ptt();
+    await until(() => t.services.conversations.list(5).length === 1);
+    await idle(t.services);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(new Set(t.audio().map((a) => a.utteranceId)).size).toBe(1); // only the reply
   });
 
   it('greets on start with the plan for today, then opens the mic for the answer', async () => {

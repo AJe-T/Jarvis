@@ -54,10 +54,16 @@ export function similarity(a: string, b: string): number {
   return 1 - (prev[b.length] ?? longer) / longer;
 }
 
-const TIME =
-  /^(?:what(?:s| is) the time|what time is it|whats the time now|tell me the time|time)$/;
-const DATE =
-  /^(?:what(?:s| is) (?:the date|todays date|the date today)|what day is (?:it|today)|todays date|date)$/;
+// Anchored on both ends so "what's the time in London" still goes to Claude. A trailing "now" is
+// already gone (FILLER_END), which leaves "right" from "right now".
+const ASK = String.raw`(?:(?:do you know|tell me|can you tell me)\s+)?`;
+const LATELY = String.raw`(?:\s+(?:right|at the moment))?`;
+const TIME = new RegExp(
+  String.raw`^${ASK}(?:what(?:s| is) the (?:current )?time|what time is it|what time it is|(?:the )?(?:current )?time)${LATELY}$`,
+);
+const DATE = new RegExp(
+  String.raw`^${ASK}(?:what(?:s| is) (?:the date|todays date|the date today|the day today)|what day is (?:it(?: today)?|today)|what (?:day|date) it is|(?:todays )?date)${LATELY}$`,
+);
 
 export function matchQuickCommand(
   text: string,

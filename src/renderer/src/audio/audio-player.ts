@@ -3,6 +3,27 @@ import { useAssistantStore } from '../stores/assistant-store';
 
 type AudioEvent = EventPayload<'tts:audio'>;
 
+export type ChimeKind = 'listen' | 'cancel' | 'confirm' | 'thinking';
+export type ChimeLevel = 'soft' | 'normal' | 'loud';
+
+/** Peak gain per Settings → Voice → Chime volume (0.08 before v2.62, easy to miss). */
+export const CHIME_PEAK: Record<ChimeLevel, number> = { soft: 0.12, normal: 0.3, loud: 0.55 };
+
+/**
+ * On and off must be told apart without looking: listening rises over three notes ("da-da-DING"),
+ * stopping falls over two ("dum-dum"). `scale` keeps the thinking tick quieter than the cues.
+ */
+export const CHIMES: Record<
+  ChimeKind,
+  { notes: number[]; gap: number; length: number; scale: number }
+> = {
+  listen: { notes: [660, 880, 1320], gap: 0.1, length: 0.18, scale: 1 },
+  cancel: { notes: [660, 392], gap: 0.16, length: 0.24, scale: 1 },
+  confirm: { notes: [700, 560], gap: 0.12, length: 0.16, scale: 0.8 },
+  // "Got it, working on it": one low note, so a slow reply doesn't feel like silence.
+  thinking: { notes: [440], gap: 0, length: 0.14, scale: 0.4 },
+};
+
 /** Head start before streamed PCM starts playing (and after any underrun). */
 const PCM_LEAD_S = 0.12;
 
@@ -132,27 +153,23 @@ class AudioPlayer {
   }
 
   /** Short UI chimes (Design-system.md §7), synthesised so no sound files ship. */
-  chime(kind: 'listen' | 'cancel' | 'confirm' | 'thinking'): void {
+  chime(kind: ChimeKind, level: ChimeLevel = 'loud'): void {
     const ctx = this.context();
-    const notes = {
-      listen: [660, 880],
-      cancel: [520, 390],
-      confirm: [700, 560],
-      // "Got it, working on it": one soft low note, so a slow reply doesn't feel like silence.
-      thinking: [440],
-    }[kind];
+    const { notes, gap, length, scale } = CHIMES[kind];
+    const peak = CHIME_PEAK[level] * scale;
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.frequency.value = freq;
-      osc.type = 'sine';
-      const t = ctx.currentTime + i * 0.11;
+      // Triangle: brighter than a sine, so it cuts through music and room noise.
+      osc.type = 'triangle';
+      const t = ctx.currentTime + i * gap;
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.08, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
       osc.connect(gain).connect(ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.13);
+      osc.stop(t + length + 0.01);
     });
   }
 }

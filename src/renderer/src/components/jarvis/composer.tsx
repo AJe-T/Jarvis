@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { AudioLines, Mic, Paperclip, Send, Square, X } from 'lucide-react';
 import clsx from 'clsx';
 import { compactActive } from '../../features/chat/context-meter';
@@ -22,10 +22,18 @@ function readAsBase64(file: File): Promise<string> {
   });
 }
 
+/** A pasted screenshot arrives as "image.png"; give it a name that says what it is. */
+export function pastedName(file: Pick<File, 'name' | 'type'>, now = new Date()): string {
+  if (file.name && file.name !== 'image.png') return file.name;
+  const ext = file.type.split('/')[1] ?? 'png';
+  return `pasted-${now.toISOString().slice(0, 19).replace(/[:T]/g, '-')}.${ext}`;
+}
+
 /** Design-system.md §5.2. */
 export function Composer(): React.JSX.Element {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const live = useChatStore((s) => s.live);
   const send = useChatStore((s) => s.send);
@@ -118,7 +126,15 @@ export function Composer(): React.JSX.Element {
     }
   }
 
-  async function onFiles(list: FileList | null): Promise<void> {
+  /** Ctrl+V with an image or PDF on the clipboard attaches it; plain text pastes as usual. */
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>): void {
+    const files = Array.from(e.clipboardData.files);
+    if (files.length === 0) return;
+    e.preventDefault();
+    void onFiles(files);
+  }
+
+  async function onFiles(list: FileList | File[] | null): Promise<void> {
     for (const f of Array.from(list ?? [])) {
       const mime = MIMES.find((m) => m === f.type);
       if (!mime) {
@@ -130,7 +146,7 @@ export function Composer(): React.JSX.Element {
         continue;
       }
       const dataBase64 = await readAsBase64(f);
-      setAttachments((a) => [...a, { name: f.name, mime, dataBase64 }].slice(0, 5));
+      setAttachments((a) => [...a, { name: pastedName(f), mime, dataBase64 }].slice(0, 5));
     }
   }
 
@@ -156,10 +172,18 @@ export function Composer(): React.JSX.Element {
         </ul>
       )}
       <div
-        className="composer flex min-h-[52px] items-end gap-1 p-1.5"
-        onDragOver={(e) => e.preventDefault()}
+        className={clsx(
+          'composer flex min-h-[52px] items-end gap-1 p-1.5',
+          dragging && 'outline-2 outline-accent-500',
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer.types.includes('Files')) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           e.preventDefault();
+          setDragging(false);
           void onFiles(e.dataTransfer.files);
         }}
       >
@@ -177,6 +201,7 @@ export function Composer(): React.JSX.Element {
           rows={1}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           className="max-h-48 min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2.5 py-1.5 text-base text-ink-100 focus:outline-none focus-visible:outline-none short:max-h-24"
           style={{ fieldSizing: 'content' }}
         />

@@ -50,7 +50,13 @@ export interface NewMessage {
 }
 
 export function toSummary(r: ConversationRow): ConversationSummary {
-  return { id: r.id, title: r.title, lastActiveAt: r.last_active_at, source: r.source };
+  return {
+    id: r.id,
+    title: r.title,
+    lastActiveAt: r.last_active_at,
+    source: r.source,
+    ...(r.vault_log_path ? { vaultLogPath: r.vault_log_path } : {}),
+  };
 }
 
 export function createConversationsRepo(db: Db) {

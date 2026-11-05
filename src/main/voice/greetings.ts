@@ -16,15 +16,62 @@ export const WAKE_LINES = [
   'Sir?',
 ] as const;
 
-/** A request is on its way to the model; the real answer follows. */
-export const WORKING_LINES = [
-  'On it, sir.',
-  'Right away, sir.',
-  'Working on it, sir.',
-  'Looking into it, sir.',
-  'One moment, sir.',
-  'Give me a second, sir.',
-] as const;
+/**
+ * Said only when the real answer is slow to start (see voice-controller ACK_DELAY_MS), and worded
+ * for what was asked: "can you hear me" gets nothing, "what did we decide earlier" gets "let me
+ * think back", not a stock "working on it".
+ */
+export const WORKING_LINE_SETS = {
+  recall: ['Let me think back, sir.', 'Give me a moment to recall, sir.'],
+  lookup: ['Checking now, sir.', 'Let me look that up, sir.'],
+  action: ['On it, sir.', 'Right away, sir.'],
+  long: ['Give me a moment to work through that, sir.', 'Working through that now, sir.'],
+  general: ['One moment, sir.', 'Let me see, sir.'],
+} as const;
+export type WorkingKind = keyof typeof WORKING_LINE_SETS;
+
+/** Every working line, for rendering them ahead of time. */
+export const WORKING_LINES: readonly string[] = Object.values(WORKING_LINE_SETS).flat();
+
+/** Chit-chat and "are you there?" checks: answered quickly, and a filler would only get in the way. */
+const SMALL_TALK =
+  /^(?:(?:hey|hi|hello|ok|okay|good (?:morning|afternoon|evening|night))\b.{0,12}$|(?:(?:can|do) you )?hear me|are you (?:there|listening|awake|on)\b|(?:thanks?|thank you|how are you|testing|yes|no|nothing)\b.{0,12}$)/;
+const RECALL =
+  /\b(?:earlier|before|last time|yesterday|we (?:talked|discussed|spoke|said|decided)|you (?:said|told|mentioned|suggested)|i (?:said|told you|asked)|remember|recall|what did (?:i|we|you))\b/;
+const LOOKUP =
+  /\b(?:search|look (?:up|for)|google|find out|research|news|weather|forecast|latest|price|score|who (?:is|was)|check (?:my|the|if|whether))\b/;
+const ACTION =
+  /^(?:open|close|send|create|make|set|start|stop|play|write|add|schedule|remind|book|turn|delete|move|save|email|message|call|launch|show|draft|run)\b/;
+const LONG_WORDS = 18;
+
+/** Which kind of working line fits the request; null when none should be said. */
+export function workingKind(said: string): WorkingKind | null {
+  const t = said
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/^(?:(?:hey|ok|okay)\s+)?jarvis[\s,.!:-]*/, '')
+    .replace(/^(?:(?:can|could|would) you|please)\s+/, '')
+    .trim();
+  if (!t || SMALL_TALK.test(t)) return null;
+  if (RECALL.test(t)) return 'recall';
+  if (LOOKUP.test(t)) return 'lookup';
+  if (t.split(/\s+/).length > LONG_WORDS) return 'long';
+  if (ACTION.test(t)) return 'action';
+  return 'general';
+}
+
+/** A working line that fits `said`, never the same one twice in a row; null = say nothing. */
+export function createWorkingLinePicker(
+  random: () => number = Math.random,
+): (said: string) => string | null {
+  const pickers = Object.fromEntries(
+    Object.entries(WORKING_LINE_SETS).map(([k, lines]) => [k, createLinePicker(lines, random)]),
+  ) as Record<WorkingKind, () => string>;
+  return (said) => {
+    const kind = workingKind(said);
+    return kind ? pickers[kind]() : null;
+  };
+}
 
 /** What the startup hello mentions (from the planner; nothing is fetched). */
 export interface StartupFacts {

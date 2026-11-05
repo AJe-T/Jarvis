@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { createLinePicker, startupFacts, startupLine, WAKE_LINES } from './greetings';
+import {
+  createLinePicker,
+  createWorkingLinePicker,
+  startupFacts,
+  startupLine,
+  WAKE_LINES,
+  WORKING_LINE_SETS,
+  WORKING_LINES,
+  workingKind,
+} from './greetings';
 
 describe('createLinePicker', () => {
   it('never repeats the previous line', () => {
@@ -87,5 +96,41 @@ describe('startup hello', () => {
     expect(facts.events.map((e) => e.title)).toEqual(['Later']);
     expect(facts.tasksDue).toBe(1);
     expect(facts.overdue).toBe(1);
+  });
+});
+
+describe('working lines fit the request (v2.62)', () => {
+  it('says nothing for chit-chat and "can you hear me"', () => {
+    for (const said of [
+      'Can you hear me?',
+      'Jarvis, are you there?',
+      'Hello',
+      'Thank you',
+      'How are you',
+    ])
+      expect(workingKind(said), said).toBeNull();
+  });
+
+  it('picks a line by what was asked', () => {
+    expect(workingKind('What did we decide earlier about the launch?')).toBe('recall');
+    expect(workingKind('You mentioned a book yesterday, what was it')).toBe('recall');
+    expect(workingKind("What's the weather in Hyderabad")).toBe('lookup');
+    expect(workingKind('Could you search for flights to Delhi')).toBe('lookup');
+    expect(workingKind('Open my notes and add milk to the list')).toBe('action');
+    expect(workingKind('Explain how a transformer model works')).toBe('general');
+    expect(workingKind('Note this down for the meeting')).toBe('general'); // not "no"
+    expect(workingKind('Good morning, what is on the news today')).toBe('lookup');
+    expect(
+      workingKind(
+        'I want you to go through the whole plan for next month, compare it with what we did in the last quarter and tell me where the gaps are',
+      ),
+    ).toBe('long');
+  });
+
+  it('only uses lines from the matching set', () => {
+    const pick = createWorkingLinePicker(() => 0);
+    expect(WORKING_LINE_SETS.recall).toContain(pick('what did you say before'));
+    expect(pick('can you hear me')).toBeNull();
+    expect(WORKING_LINES).toContain(pick('open spotify'));
   });
 });

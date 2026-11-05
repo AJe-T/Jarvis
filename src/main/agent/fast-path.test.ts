@@ -54,7 +54,7 @@ describe('fast path with Laya', () => {
   });
 
   it('never asks Laya when rules already know, or when off / rules-only', async () => {
-    const classify = vi.fn(async () => probs('mute', 0.99));
+    const classify = vi.fn(async () => probs('play_pause', 0.99));
     expect(
       await createFastPath({ mode: () => 'laya', classify, logger })('volume 20'),
     ).toMatchObject({
@@ -63,6 +63,16 @@ describe('fast path with Laya', () => {
     expect(await createFastPath({ mode: () => 'rules', classify, logger })('shh')).toBeNull();
     expect(await createFastPath({ mode: () => 'off', classify, logger })('mute')).toBeNull();
     expect(classify).not.toHaveBeenCalled();
+  });
+
+  it('never mutes on a guess: sound questions go to Claude, exact words still mute', async () => {
+    expect(Object.values(LAYA_ACTIONS).some((a) => a.action?.tool === 'mute')).toBe(false);
+    // Even a classifier that is sure about "mute" has nothing to pick.
+    const classify = vi.fn(async () => ({ mute: 0.99, other: 0.01 }));
+    const fast = createFastPath({ mode: () => 'laya', classify, logger });
+    for (const said of ['can you hear me', "I can't hear you", 'is the sound working', 'shh'])
+      expect(await fast(said)).toBeNull();
+    expect(await fast('mute the sound')).toMatchObject({ tool: 'mute', input: { muted: true } });
   });
 
   it('understands a custom assistant name in front', async () => {

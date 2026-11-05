@@ -426,9 +426,14 @@ export const SETTINGS = {
   /** Priler/jarvis-style instant commands: routine trigger phrases, time and date answered offline. */
   'voice.quickCommands': { schema: z.boolean(), default: true },
   'voice.sounds': { schema: z.boolean(), default: true },
+  /** How loud the listening on/off chimes are. Loud by default so the cue is heard over music. */
+  'voice.soundLevel': {
+    schema: z.enum(['soft', 'normal', 'loud']),
+    default: 'loud' as 'soft' | 'normal' | 'loud',
+  },
   /**
-   * Instant spoken replies with no model call: "Yes, sir?" when woken, "On it, sir." while a
-   * request is being worked on. Off = the wake word starts listening at once (say it all in one breath).
+   * Instant spoken replies with no model call: "Yes, sir?" when woken, and a working line that fits
+   * the request when the answer is slow to start (voice-controller ACK_DELAY_MS). Off = the wake word starts listening at once (say it all in one breath).
    */
   'voice.greet': { schema: z.boolean(), default: true },
   /** When Jarvis starts: a spoken hello with the time and today's plan (no model call), then the mic opens. */

@@ -18,6 +18,8 @@ const StepSchema = z.object({
     )
     .optional(),
   chunkDelayMs: z.number().optional(),
+  /** Wait before the first word, like a model that is slow to start. */
+  startDelayMs: z.number().optional(),
 });
 const RuleSchema = z.object({
   match: z.string().optional(),
@@ -87,6 +89,7 @@ export function createFakeClaude(
       const step = pick(req);
       const content: Array<Record<string, unknown>> = [];
       const text = step.text ?? '';
+      if (step.startDelayMs) await sleep(step.startDelayMs, opts.signal).catch(() => undefined);
       if (text) {
         for (let i = 0; i < text.length; i += 8) {
           if (opts.signal.aborted)

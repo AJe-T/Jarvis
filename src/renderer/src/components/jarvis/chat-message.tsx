@@ -1,7 +1,7 @@
 import { isValidElement, memo, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Copy, Pencil, RotateCcw } from 'lucide-react';
+import { Check, Copy, Mic, Pencil, RotateCcw } from 'lucide-react';
 import type { UiMessage, UiToolCall } from '@shared/types';
 import { call } from '../../lib/api';
 import { IconButton } from '../ui/button';
@@ -26,24 +26,44 @@ function nodeText(node: React.ReactNode): string {
   return '';
 }
 
-function CodeBlock({ children }: { children: React.ReactNode }): React.JSX.Element {
+const COPIED_MS = 1500;
+
+function CopyButton({
+  text,
+  label,
+  className,
+}: {
+  text: string;
+  label: string;
+  className: string;
+}): React.JSX.Element {
   const [copied, setCopied] = useState(false);
-  const text = nodeText(children);
+  return (
+    <button
+      type="button"
+      aria-label={copied ? 'Copied' : label}
+      title={label}
+      className={className}
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), COPIED_MS);
+        });
+      }}
+    >
+      {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
+    </button>
+  );
+}
+
+function CodeBlock({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div className="relative">
-      <button
-        type="button"
-        aria-label="Copy code"
+      <CopyButton
+        text={nodeText(children)}
+        label="Copy code"
         className="absolute top-2 right-2 rounded-sm p-1 text-ink-500 hover:text-ink-100"
-        onClick={() => {
-          void navigator.clipboard.writeText(text).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          });
-        }}
-      >
-        {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
-      </button>
+      />
       <pre>{children}</pre>
     </div>
   );
@@ -127,15 +147,33 @@ export function ChatMessage({
           </div>
         )}
         <div className="max-w-[85%] min-w-0 rounded-md border border-line border-r-2 border-r-neon-magenta bg-surface-2 px-4 py-2.5 wrap-anywhere whitespace-pre-wrap text-ink-100 md:max-w-[80%]">
+          {message.source === 'voice' && (
+            <Mic
+              size={12}
+              strokeWidth={2}
+              className="mr-1.5 inline-block align-[-1px] text-ink-500"
+              aria-label="Spoken"
+            />
+          )}
           {message.text}
         </div>
       </div>
     );
   return (
-    <article className="min-w-0 border-l-2 border-accent-500 pl-3 text-ink-100" aria-label="Jarvis">
+    <article
+      className="group min-w-0 border-l-2 border-accent-500 pl-3 text-ink-100"
+      aria-label="Jarvis"
+    >
       {message.toolCalls && message.toolCalls.length > 0 && <ToolCards calls={message.toolCalls} />}
       {message.text && <Markdown text={message.text} />}
       {message.interrupted && <span className="text-sm text-ink-500"> (interrupted)</span>}
+      {message.text.trim() && (
+        <CopyButton
+          text={message.text}
+          label="Copy reply"
+          className="mt-1 block rounded-sm p-1 text-ink-500 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-ink-100 focus-visible:opacity-100"
+        />
+      )}
       {message.citations && message.citations.length > 0 && (
         <ol className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-ink-300">
           {message.citations.map((c, i) => (

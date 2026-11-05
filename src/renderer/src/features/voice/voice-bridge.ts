@@ -1,5 +1,5 @@
 import type { AssistantState } from '@shared/types';
-import { audioPlayer } from '../../audio/audio-player';
+import { audioPlayer, type ChimeLevel } from '../../audio/audio-player';
 import { call } from '../../lib/api';
 import { registerBridge } from '../../lib/ipc-bridge';
 import { useAssistantStore } from '../../stores/assistant-store';
@@ -42,15 +42,18 @@ export function installVoiceBridge(): void {
   let previousDetail: string | undefined;
   useAssistantStore.subscribe((s) => {
     if (s.state === previous) return;
-    const sounds = useSettingsStore.getState().values['voice.sounds'] !== false;
+    const values = useSettingsStore.getState().values;
+    const sounds = values['voice.sounds'] !== false;
+    const level = (values['voice.soundLevel'] ?? 'loud') as ChimeLevel;
     // ADR-012: the follow-up window after a reply opens and closes silently, like a person waiting.
     const followUp = s.detail === 'follow-up' || previousDetail === 'follow-up';
     if (sounds && !followUp) {
-      if (s.state === 'LISTENING') audioPlayer.chime('listen');
-      else if (previous === 'LISTENING' && s.state === 'IDLE') audioPlayer.chime('cancel');
-      else if (s.state === 'AWAITING_CONFIRMATION') audioPlayer.chime('confirm');
+      if (s.state === 'LISTENING') audioPlayer.chime('listen', level);
+      else if (previous === 'LISTENING' && s.state === 'IDLE') audioPlayer.chime('cancel', level);
+      else if (s.state === 'AWAITING_CONFIRMATION') audioPlayer.chime('confirm', level);
     }
-    if (sounds && previous === 'LISTENING' && s.state === 'THINKING') audioPlayer.chime('thinking');
+    if (sounds && previous === 'LISTENING' && s.state === 'THINKING')
+      audioPlayer.chime('thinking', level);
     previous = s.state;
     previousDetail = s.detail;
   });

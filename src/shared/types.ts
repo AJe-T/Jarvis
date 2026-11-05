@@ -118,6 +118,8 @@ export const ConversationSummarySchema = z.object({
   title: z.string().nullable(),
   lastActiveAt: z.string(),
   source: z.enum(['text', 'voice', 'mixed']),
+  /** The day note in the vault this chat is logged to (privacy.logConversationsToVault). */
+  vaultLogPath: z.string().optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 
