@@ -39,6 +39,10 @@ export function PrivacySection(): React.JSX.Element {
         k="clipboard.history"
         label="Keep a clipboard history: the last 50 things you copy (text only), found with Ctrl+K. In memory only, gone when Jarvis closes; passwords and copies marked private are never kept"
       />
+      <SettingSwitch
+        k="timeline.enabled"
+        label="Keep a day timeline: which app and window was in front, once a minute while you are at the PC, for 30 days (Settings → Activity → My day). Never what is on the screen; private-browsing windows and password managers are recorded without a title"
+      />
       <SettingInput
         k="retention.messagesDays"
         label="Delete chat history older than (days, 0 = keep forever)"

@@ -75,6 +75,7 @@ Trust boundaries: Renderer ↔ Main (IPC), Main ↔ child processes (MCP/PowerSh
 | `search_files`, `read_text_file` (in allowed roots, ≤ 1 MB) | SAFE | Output marked untrusted |
 | `search_in_files` (text of files in allowed roots; text ≤ 1 MB, documents ≤ 5 MB) | SAFE; **CONFIRM** when the words searched for are a hunt for secrets (password, token, API key, private key, credential, PIN, OTP, CVV) | Output marked untrusted; denied folders are not entered and every file is checked against the path guard before it is opened (links and denied paths); credential files are never opened (`.env`, keys, `.npmrc`, `.netrc`, `.git-credentials`, `credentials*`, `secrets*`, key stores); bounded by time (15 s) and counts (3,000 files, 15 documents); listed in `PRIVATE_TOOLS` (files), so its output never reaches a third-party free model (§16.15) |
 | `write_clipboard` | SAFE | |
+| `day_timeline` | SAFE | App names and window titles Jarvis recorded himself; output untrusted; §16.18 |
 | `clipboard_history` | CONFIRM | Past copies may be private; output untrusted; §16.17 |
 | `read_clipboard` | CONFIRM | Clipboard may hold passwords |
 | `show_notification`, `set_timer`, `set_reminder` | SAFE | |
@@ -543,6 +544,13 @@ Free tiers of other companies answer sub-tasks Claude hands to brain `free`. Tie
 - **Tool `clipboard_history`:** CONFIRM like `read_clipboard`, output untrusted, listed in `PRIVATE_TOOLS` (clipboard) so it never reaches a third-party free model.
 - **Renderer:** `clipboard:history` returns previews of at most 300 characters for the command palette; `clipboard:restore` copies the full text back inside the main process, so the full text never crosses to the window.
 - **Residual risk (accepted):** a secret that carries no mark and matches no pattern (a password typed into Notepad and copied) is kept in memory until it leaves the list of 50, the history is cleared or Jarvis closes.
+
+### 16.18 Day timeline (v2.66)
+- **Off by default** (`timeline.enabled`, audited with its value). While on, the main process asks Windows for the foreground window once a minute (`src/main/tools/everyday/timeline.ts`) and adds 60 s to that app and title in the `app_usage` table.
+- **What is stored:** local day, process name, window title (secrets redacted, cut to 120 characters), seconds. Never screen content, key presses, URLs beyond what a title shows, or audio. Rows older than 30 days are deleted at startup; **Clear** deletes all.
+- **Not recorded:** while Sir is away (no input for 2 minutes), the lock screen, and the title of private-browsing windows (InPrivate, Incognito, Private Browsing) and password managers (the app is counted, the title is empty).
+- **Tool `day_timeline`:** SAFE, output untrusted (a window title is text a web page chose), listed in `PRIVATE_TOOLS` (screen) so it never reaches a third-party free model.
+- **Residual risk (accepted):** window titles of ordinary windows can name private things (a document, a page title). They stay in the local database for 30 days and in backups made in that time.
 
 ### 16.16 Offline mode and figures (v2.60)
 - **Offline mode** (`src/main/offline.ts`, `offline.enabled` is main-only): `offline:set` turns it on only when the brain, speech to text, voice and wake word are all on this PC (loopback addresses only, not the home network) and the local model answers a ping. While on, the settings service itself refuses any write that would add a cloud part (`setGuard`, same check before/after, so IPC, onboarding and main flows all pass it), `voice:setMode` refuses realtime, voice v2 ignores the Deepgram key, cloud hearing and Edge/ElevenLabs fallbacks are skipped, and `brains.ready`, the free pool and fusion report only local brains. Web-reading tools are not blocked.

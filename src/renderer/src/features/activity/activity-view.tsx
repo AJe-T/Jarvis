@@ -7,10 +7,16 @@ import { Button } from '../../components/ui/button';
 import { PageBody, PageHeader } from '../../components/ui/page';
 import { call, cleanError } from '../../lib/api';
 import { useUiStore } from '../../stores/ui-store';
+import { DayPanel } from './day-panel';
 import { UsagePanel } from './usage-panel';
 
-type Tab = 'actions' | 'audit' | 'usage';
-const TAB_LABEL: Record<Tab, string> = { actions: 'Actions', audit: 'Audit log', usage: 'Usage' };
+type Tab = 'actions' | 'audit' | 'usage' | 'day';
+const TAB_LABEL: Record<Tab, string> = {
+  actions: 'Actions',
+  audit: 'Audit log',
+  usage: 'Usage',
+  day: 'My day',
+};
 
 /** Full Activity log (Rail → Activity): every tool call, plus the tamper-evident audit log. */
 export function ActivityView(): React.JSX.Element {
@@ -62,7 +68,7 @@ export function ActivityView(): React.JSX.Element {
 
       <PageBody className="flex flex-col gap-4">
         <div role="tablist" className="-mt-2 flex gap-5 border-b border-line">
-          {(['actions', 'audit', 'usage'] as const).map((t) => (
+          {(['actions', 'audit', 'usage', 'day'] as const).map((t) => (
             <button
               key={t}
               role="tab"
@@ -96,7 +102,9 @@ export function ActivityView(): React.JSX.Element {
           </p>
         )}
 
-        {tab === 'usage' ? (
+        {tab === 'day' ? (
+          <DayPanel />
+        ) : tab === 'usage' ? (
           <UsagePanel />
         ) : tab === 'actions' ? (
           <ol className="flex flex-col gap-1.5">

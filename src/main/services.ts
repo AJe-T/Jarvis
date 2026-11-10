@@ -72,6 +72,7 @@ import {
   reportingOwnCopies,
 } from './tools/native/clipboard-history';
 import { createNativeTools } from './tools/native/index';
+import { createTimeline, createTimelineTool } from './tools/everyday/timeline';
 import { createAgentDesktop, findAgentDesktop } from './tools/native/agent-desktop';
 import type { OsAdapter } from './tools/native/os';
 import { createMealTools, createMealsRepo } from './tools/everyday/meals';
@@ -151,6 +152,8 @@ export interface ServiceOptions {
     music: string;
   };
   startMenuDirs?: string[];
+  /** Seconds since the last key press or mouse move (Electron powerMonitor); 0 in tests. */
+  idleSeconds?: () => number;
   home?: string;
   /** Tests: stand-ins for the ChatGPT / Antigravity apps. */
   cliBrains?: Record<CliBrainId, CliBrain>;
@@ -669,6 +672,15 @@ export function createServices(opts: ServiceOptions) {
   registry.register(createClipboardHistoryTool(clipboardHistory));
   // Everyday tools (ideas from isair/jarvis): weather, home town, meal log, look at the screen.
   const meals = createMealsRepo(db);
+  // Day timeline (2.66): the app in front, once a minute, only while the setting is on.
+  const timeline = createTimeline({
+    db,
+    foreground: () => os.foregroundWindow(),
+    idleSeconds: opts.idleSeconds ?? (() => 0),
+    enabled: () => settings.get('timeline.enabled'),
+  });
+  if (!opts.isTest) timeline.start();
+  registry.register(createTimelineTool(timeline, () => settings.get('timeline.enabled')));
   for (const tool of [
     ...createWeatherTools({ settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) }),
     ...createMealTools({ repo: meals, settings }),
@@ -880,6 +892,7 @@ export function createServices(opts: ServiceOptions) {
     emit: opts.emit,
     os,
     clipboardHistory,
+    timeline,
     settings,
     secrets,
     conversations,

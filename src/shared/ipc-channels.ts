@@ -157,6 +157,8 @@ export const INVOKE_CHANNELS = [
   'clipboard:history',
   'clipboard:restore',
   'clipboard:clear',
+  'timeline:day',
+  'timeline:clear',
   'spaces:list',
   'spaces:create',
   'spaces:update',

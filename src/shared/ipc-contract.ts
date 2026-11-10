@@ -1254,6 +1254,27 @@ export const INVOKE = {
   ),
   'clipboard:restore': contract(z.object({ id: z.number().int().min(1) }), Ok),
   'clipboard:clear': contract(Empty, Ok),
+  /** Day timeline (2.66): time per app for one local day (default today). */
+  'timeline:day': contract(
+    z.object({
+      day: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional(),
+    }),
+    z.object({
+      day: z.string(),
+      totalSeconds: z.number(),
+      apps: z.array(
+        z.object({
+          process: z.string(),
+          seconds: z.number(),
+          windows: z.array(z.object({ title: z.string(), seconds: z.number() })),
+        }),
+      ),
+    }),
+  ),
+  'timeline:clear': contract(Empty, Ok),
   /** NPCs (2.21): Sir's team of single-purpose agents, Jarvis at their head. */
   'npcs:list': contract(
     Empty,
