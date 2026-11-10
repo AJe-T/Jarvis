@@ -59,6 +59,8 @@ const SYSTEMS: Item[] = [
   { view: 'copilot', label: 'Reply copilot', Icon: MessagesSquare },
 ];
 const SETTINGS: Item = { view: 'settings', label: 'Settings', Icon: Settings };
+/** Every screen in the sidebar, in its order (the command palette lists the same ones). */
+export const NAV_ITEMS: Item[] = [...WORKSPACE, ...SYSTEMS, SETTINGS];
 
 const rowClass = (on: boolean): string =>
   clsx(

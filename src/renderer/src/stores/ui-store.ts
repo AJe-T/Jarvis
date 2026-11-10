@@ -38,6 +38,8 @@ interface UiState {
   routerTab: string | null;
   /** Spaces view target: "Space" or "Space/Page"; null = the Spaces dashboard. */
   spaceTarget: string | null;
+  /** Memory view target: the vault path of the note to open (set by the command palette). */
+  memoryTarget: string | null;
   activityOpen: boolean;
   /** Sidebar hidden by Sir (Ctrl+B) or, while a Core panel is up, by Jarvis (railAuto). */
   railHidden: boolean;
@@ -80,6 +82,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   settingsSection: 'general',
   routerTab: null,
   spaceTarget: null,
+  memoryTarget: null,
   // §5.1: the conversation log owns the right edge of Core now, so activity starts closed.
   activityOpen: false,
   railHidden: readRailHidden(),
@@ -95,7 +98,9 @@ export const useUiStore = create<UiState>((set, get) => ({
         ? { view, spaceTarget: section ?? null }
         : view === 'router'
           ? { view, routerTab: section ?? null }
-          : { view, ...(section ? { settingsSection: section } : {}) },
+          : view === 'memory'
+            ? { view, memoryTarget: section ?? null }
+            : { view, ...(section ? { settingsSection: section } : {}) },
     );
   },
   toggleActivity: () => set({ activityOpen: !get().activityOpen }),

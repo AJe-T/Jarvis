@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { ConfirmDialog } from './components/jarvis/confirm-dialog';
 import { AppsView } from './features/apps/apps-view';
 import { NpcsView } from './features/npcs/npcs-view';
+import { Palette } from './features/palette/palette';
 import { CompareView } from './features/compare/compare-view';
 import { RouterView } from './features/router/router-view';
 import { ForgeView } from './features/forge/forge-view';
@@ -43,7 +44,7 @@ export const EXTRA_VIEWS: Partial<Record<View, ComponentType>> = {
   router: RouterView,
   forge: ForgeView,
 };
-export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog, Tier3Host];
+export const APP_OVERLAYS: ComponentType[] = [ConfirmDialog, Tier3Host, Palette];
 
 registerBridge((on) => [
   on('confirm:request', (p) => useConfirmStore.getState().show(p)),

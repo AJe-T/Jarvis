@@ -107,6 +107,12 @@ export function MemoryView(): React.JSX.Element {
   const bump = useMemoryStore((s) => s.bump);
   const toast = useUiStore((s) => s.toast);
   const go = useUiStore((s) => s.go);
+  const target = useUiStore((s) => s.memoryTarget);
+
+  // The command palette opens a note by its path.
+  useEffect(() => {
+    if (target) setSelected(target);
+  }, [target]);
 
   const load = useCallback(async (p: string) => {
     try {
