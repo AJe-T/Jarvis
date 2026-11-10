@@ -8,7 +8,7 @@ How to keep it:
 - When an item ships, delete it here (the changes log and `docs/BIBLE.md` keep the history).
 - Size: **S** < 1 h · **M** 1–3 h · **L** half a day or more (tests and BIBLE update included).
 
-Last updated: 2026-11-10 (after v2.64.0).
+Last updated: 2026-11-11 (after v2.65.0).
 
 ## 1. Core module
 
@@ -35,6 +35,7 @@ plan with sizes, Sir picks what to do now and what goes back into this file.
 
 | What | How to check |
 |---|---|
+| v2.65 clipboard history | Settings → Privacy → turn on "Keep a clipboard history". Copy three things, press Ctrl+K, type "clipboard": all three listed; Enter on one, then paste. Copy a password from Jarvis's Passwords (and from your own password manager if you use one): it must NOT appear. If nothing is ever listed: `Select-String -Path "$env:APPDATA\Jarvis\logs\jarvis.1.log" -Pattern "clipboard privacy check failed"`. Claude could not reach the real clipboard from its sandbox, so the private-mark check has only been tested with fakes. |
 | v2.64 search, chips and file search | Press Ctrl+K and type a task, a chat word, "microphone"; open a memory note from it. Under a reply use **Add to tasks** and **Save to Space**. Ask "find the file that mentions <a word>" and check the time it takes on your real Documents folder. |
 | W1: tune the wake word to your voice | Settings → Voice → **Your voice (Voice Match)**, shown with engine v2 since 2.63: download the voice model once, then record "Hey Jarvis" 5 times. |
 | v2.62–2.63 voice with the real mic and speakers | Say "Hey Jarvis" (beep first, then "Yes, sir?"); just "Jarvis" (should wake, maybe through the second opinion); "can you hear me" (no mute, no filler); a slow question (Jarvis's own lead-in, or a fitting working line); talk past 30 s (not cut off); press Esc mid-sentence (the words stay in the box). |
@@ -67,7 +68,6 @@ Proposed 2026-11-10 from a survey of the modules and of other assistants. Sir ha
 | Tests for untested modules | `copilot`, `inference`, `npcs`, `scheduler`, `settings`, `skills`, `spaces`, `ipc` | M per batch | No visible change. |
 | Split oversized files | `voice-controller.ts`, `ipc-contract.ts`, `voice-system.ts`, `services.ts` are over 800 lines | L | No visible change. |
 | Voice edit of selected text in any app | Select text, hold a hotkey, say "make this formal": the selection is replaced | M | Idea from Wispr Flow's command mode. Reuses dictation paste and the copilot rewrite. |
-| Clipboard history | Search and re-paste past copies; "paste what I copied an hour ago" | M | Idea from Raycast. Must skip copies made by Passwords. |
 | Day timeline | Log the foreground app and window title; "where did my day go" and data for briefings | M | Titles only, no screen content. Local only. |
 | Index for search inside files | `search_in_files` (2.64) reads files one by one and stops after 15 s | L | Build an index only if Sir searches big folders often. |
 | Palette: open a calendar event on its day | Ctrl+K opens the Calendar, not the event's date | S | |

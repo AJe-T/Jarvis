@@ -23,6 +23,7 @@ import { registerOfflineHandlers } from './ipc/handlers/offline';
 import { guardOfflineChange, type OfflineView } from './offline';
 import { findEspeak } from './voice/tts/kokoro';
 import { registerPasswordHandlers } from './ipc/handlers/passwords';
+import { registerClipboardHandlers } from './ipc/handlers/clipboard';
 import { registerSpacesHandlers } from './ipc/handlers/spaces';
 import { registerPlannerHandlers } from './ipc/handlers/planner';
 import { createSpaces, createSpacesTool } from './spaces/spaces';
@@ -358,6 +359,7 @@ async function boot(): Promise<void> {
   registerRunHandlers(services);
   registerPoolHandlers(services);
   registerPasswordHandlers(services);
+  registerClipboardHandlers(services);
   registerMemoryHandlers(services, memory);
   // Spaces (Notion-style notebooks) live in the vault so memory search and the Brain graph see them.
   const spaces = createSpaces({

@@ -43,6 +43,7 @@ export function registerPasswordHandlers(s: Services): void {
   let clearTimer: ReturnType<typeof setTimeout> | undefined;
   async function copyThenClear(text: string): Promise<number> {
     const seconds = s.settings.get('passwords.clipboardSeconds');
+    s.clipboardHistory.ignore(text); // a copied password never enters the clipboard history
     const r = s.isTest
       ? null
       : await runPowerShell(PS_PRIVATE_COPY, { params: { text }, timeoutMs: 15_000 }).catch(

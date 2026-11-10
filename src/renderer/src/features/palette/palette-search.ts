@@ -4,6 +4,7 @@ import type { View } from '../../stores/ui-store';
 export const PALETTE_GROUPS = [
   'Actions',
   'Go to',
+  'Clipboard',
   'Settings',
   'Tasks',
   'Calendar',
@@ -19,7 +20,9 @@ export type PaletteRun =
   | { kind: 'chat'; id: string }
   | { kind: 'todo'; id: string }
   | { kind: 'newChat' }
-  | { kind: 'toggleSidebar' };
+  | { kind: 'toggleSidebar' }
+  | { kind: 'clip'; id: number }
+  | { kind: 'clearClips' };
 
 export interface PaletteItem {
   id: string;
@@ -38,6 +41,8 @@ export interface PaletteSources {
   events: Array<{ id: string; title: string; start: string }>;
   spaces: Array<{ name: string; pages: string[] }>;
   chats: Array<{ id: string; title: string | null }>;
+  /** Clipboard history previews, newest first (empty while the setting is off). */
+  clips?: Array<{ id: number; preview: string }>;
 }
 
 const PER_GROUP = 6;
@@ -59,6 +64,24 @@ export function localItems(s: PaletteSources): PaletteItem[] {
       keywords: 'rail menu',
       run: { kind: 'toggleSidebar' },
     },
+    ...((s.clips?.length ?? 0) > 0
+      ? [
+          {
+            id: 'action:clear-clips',
+            group: 'Actions',
+            label: 'Clear the clipboard history',
+            run: { kind: 'clearClips' },
+          } satisfies PaletteItem,
+        ]
+      : []),
+    ...(s.clips ?? []).map((c): PaletteItem => ({
+      id: `clip:${c.id}`,
+      group: 'Clipboard',
+      label: c.preview.trim().split(/\r?\n/)[0]?.slice(0, 90) ?? '',
+      hint: 'copy again',
+      keywords: `clipboard copied ${c.preview}`,
+      run: { kind: 'clip', id: c.id },
+    })),
     ...s.views.map((v): PaletteItem => ({
       id: `view:${v.view}`,
       group: 'Go to',
@@ -118,7 +141,10 @@ export function localItems(s: PaletteSources): PaletteItem[] {
  */
 export function matchItems(items: PaletteItem[], query: string): PaletteItem[] {
   const q = query.trim().toLowerCase();
-  if (!q) return items.filter((i) => i.group === 'Actions' || i.group === 'Go to');
+  if (!q)
+    return items.filter(
+      (i) => (i.group === 'Actions' && i.run.kind !== 'clearClips') || i.group === 'Go to',
+    );
   const words = q.split(/\s+/);
   const hits = items.filter((i) => {
     const hay = `${i.label} ${i.hint ?? ''} ${i.keywords ?? ''}`.toLowerCase();

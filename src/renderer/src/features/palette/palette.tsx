@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Search } from 'lucide-react';
 import { NAV_ITEMS } from '../../components/jarvis/rail';
-import { call } from '../../lib/api';
+import type { Res } from '@shared/ipc-contract';
+import { call, cleanError } from '../../lib/api';
 import { useChatStore } from '../../stores/chat-store';
 import { usePlannerStore } from '../../stores/planner-store';
 import { useSetting } from '../../stores/settings-store';
@@ -36,6 +37,15 @@ function run(r: PaletteRun): void {
       return ui.go('chat');
     case 'toggleSidebar':
       return ui.toggleRail();
+    case 'clip':
+      return void call('clipboard:restore', { id: r.id }).then(
+        () => ui.toast({ level: 'info', message: 'Copied again. Paste it with Ctrl+V.' }),
+        (err: unknown) => ui.toast({ level: 'error', message: cleanError(err) }),
+      );
+    case 'clearClips':
+      return void call('clipboard:clear', {}).then(() =>
+        ui.toast({ level: 'info', message: 'Clipboard history cleared.' }),
+      );
   }
 }
 
@@ -123,6 +133,8 @@ export function Palette(): React.JSX.Element | null {
   const chats = useChatStore((s) => s.conversations);
   const spaces = useSpacesStore((s) => s.spaces);
   const pages = useSpacePages(open);
+  const clipsOn = useSetting('clipboard.history') === true;
+  const [clips, setClips] = useState<Res<'clipboard:history'>>([]);
   const remote = useRemoteHits(open ? query : '');
 
   useEffect(() => {
@@ -141,7 +153,9 @@ export function Palette(): React.JSX.Element | null {
     setQuery('');
     setActive(0);
     if (!usePlannerStore.getState().loaded) void usePlannerStore.getState().refresh();
-  }, [open]);
+    if (clipsOn) void call('clipboard:history', {}).then(setClips, () => setClips([]));
+    else setClips([]);
+  }, [open, clipsOn]);
 
   const local = useMemo(
     () =>
@@ -152,8 +166,9 @@ export function Palette(): React.JSX.Element | null {
         events,
         spaces: spaces.map((s) => ({ name: s.name, pages: pages[s.name] ?? [] })),
         chats,
+        clips,
       }),
-    [todos, events, spaces, pages, chats],
+    [todos, events, spaces, pages, chats, clips],
   );
   const results = useMemo(
     () => groupItems([...matchItems(local, query), ...remote], query),

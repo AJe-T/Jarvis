@@ -35,6 +35,10 @@ export function PrivacySection(): React.JSX.Element {
     >
       <OfflineModeCard />
       <SettingSwitch k="privacy.logConversationsToVault" label="Save conversations to Obsidian" />
+      <SettingSwitch
+        k="clipboard.history"
+        label="Keep a clipboard history: the last 50 things you copy (text only), found with Ctrl+K. In memory only, gone when Jarvis closes; passwords and copies marked private are never kept"
+      />
       <SettingInput
         k="retention.messagesDays"
         label="Delete chat history older than (days, 0 = keep forever)"

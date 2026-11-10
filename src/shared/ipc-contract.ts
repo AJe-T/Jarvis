@@ -1247,6 +1247,13 @@ export const INVOKE = {
     z.object({ current: MasterPassword, next: MasterPassword }),
     Ok,
   ),
+  /** Clipboard history (2.65): previews for the command palette; restore copies one back. */
+  'clipboard:history': contract(
+    Empty,
+    z.array(z.object({ id: z.number().int(), preview: z.string(), at: z.number() })),
+  ),
+  'clipboard:restore': contract(z.object({ id: z.number().int().min(1) }), Ok),
+  'clipboard:clear': contract(Empty, Ok),
   /** NPCs (2.21): Sir's team of single-purpose agents, Jarvis at their head. */
   'npcs:list': contract(
     Empty,

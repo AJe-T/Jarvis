@@ -505,6 +505,8 @@ export const SETTINGS = {
     default: {} as Record<string, (typeof TIERS)[number]>,
   },
   'privacy.logConversationsToVault': { schema: z.boolean(), default: true },
+  /** Clipboard history (2.65): the last text copies, in memory only. Off until Sir turns it on. */
+  'clipboard.history': { schema: z.boolean(), default: false },
   'retention.messagesDays': { schema: z.number().int().min(0).max(36500), default: 0 },
   'app.closeToTray': { schema: z.boolean(), default: true },
   'app.startWithWindows': { schema: z.boolean(), default: false },
@@ -667,6 +669,7 @@ export const RESTART_SETTINGS: readonly SettingKey[] = [
 export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   'policy.overrides',
   'files.allowedRoots',
+  'clipboard.history', // whether what Sir copies is remembered
   'llm.provider',
   'llm.cloud.provider', // where the whole conversation is sent
   'llm.cloud.connection', // and with whose key

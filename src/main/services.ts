@@ -65,6 +65,12 @@ import { createHuggingFaceTools } from './tools/everyday/hugging-face';
 import { createUtilityTools } from './tools/everyday/utilities';
 import { createToolExecutor } from './tools/executor';
 import { createAppIndex } from './tools/native/app-index';
+import {
+  clipboardIsPrivate,
+  createClipboardHistory,
+  createClipboardHistoryTool,
+  reportingOwnCopies,
+} from './tools/native/clipboard-history';
 import { createNativeTools } from './tools/native/index';
 import { createAgentDesktop, findAgentDesktop } from './tools/native/agent-desktop';
 import type { OsAdapter } from './tools/native/os';
@@ -226,6 +232,14 @@ export function createServices(opts: ServiceOptions) {
     if (key === 'persona' || key === 'quiet.until' || key === 'offline.enabled')
       opts.emit('settings:changed', { key, value });
   });
+  // Clipboard history (2.65): memory only, and never the copies Jarvis makes himself.
+  const clipboardHistory = createClipboardHistory({
+    read: () => opts.os.clipboardRead(),
+    isPrivate: opts.isTest ? () => Promise.resolve(false) : clipboardIsPrivate,
+    enabled: () => settings.get('clipboard.history'),
+  });
+  const os = reportingOwnCopies(opts.os, (text) => clipboardHistory.ignore(text));
+  if (!opts.isTest) clipboardHistory.start();
   const secrets = createSecretStore(
     join(opts.userData, 'secrets.bin'),
     opts.encryptor,
@@ -243,7 +257,7 @@ export function createServices(opts: ServiceOptions) {
   const budgetAlerts = createBudgetAlerts({
     onAlert: (a) => {
       const text = budgetAlertText(a);
-      if (settings.get('quiet.until') <= Date.now()) opts.os.notify('Budget', text);
+      if (settings.get('quiet.until') <= Date.now()) os.notify('Budget', text);
       opts.emit('notify', { level: a.step >= 0.9 ? 'warn' : 'info', message: text });
     },
   });
@@ -485,7 +499,7 @@ export function createServices(opts: ServiceOptions) {
   });
   /** One path for every reminder: Windows notification, in-app toast, and Jarvis says it (quiet mode: toast only). */
   function deliverReminder(title: string, text: string, missed = false): void {
-    if (settings.get('quiet.until') <= Date.now()) opts.os.notify(title, text);
+    if (settings.get('quiet.until') <= Date.now()) os.notify(title, text);
     opts.emit('notify', { level: 'info', message: `${title}: ${text}` });
     for (const l of reminderListeners) l(text, missed);
   }
@@ -493,7 +507,7 @@ export function createServices(opts: ServiceOptions) {
   const announceListeners = new Set<(text: string) => void>();
   function announce(title: string, text: string): void {
     const quiet = settings.get('quiet.until') > Date.now();
-    if (!quiet) opts.os.notify(title, text);
+    if (!quiet) os.notify(title, text);
     opts.emit('notify', { level: 'info', message: text });
     if (!quiet) for (const l of announceListeners) l(text);
   }
@@ -522,7 +536,7 @@ export function createServices(opts: ServiceOptions) {
     show: (panel) => opts.emit('stage:panel', { panel }),
   });
   killSwitch.onKill(() => void figures.cancel());
-  const appIndex = createAppIndex(opts.os, opts.startMenuDirs ?? defaultStartMenuDirs());
+  const appIndex = createAppIndex(os, opts.startMenuDirs ?? defaultStartMenuDirs());
   const registry = createToolRegistry({
     // Claude's paid search only when free search can't take the turn (AI Router Phase 3).
     webSearchEnabled: (scope) =>
@@ -631,7 +645,7 @@ export function createServices(opts: ServiceOptions) {
     registry.register(tool);
   // Jarvis Terminal (ADR-032): Sir's own commands, plus every script Jarvis runs.
   const terminal = createTerminal({
-    ps: (script, o) => opts.os.ps(script, o),
+    ps: (script, o) => os.ps(script, o),
     audit: (command) => audit.append('user', 'terminal.run', { command: command.slice(0, 200) }),
   });
   // vercel-labs/agent-desktop, run as its own program when Sir installed it (looked for once).
@@ -644,7 +658,7 @@ export function createServices(opts: ServiceOptions) {
   for (const tool of createNativeTools({
     agentDesktop,
     onShellRun: (script, r, ms) => terminal.record(script, r, ms),
-    os: opts.os,
+    os: os,
     appIndex,
     guard: pathGuard,
     scheduler,
@@ -652,12 +666,13 @@ export function createServices(opts: ServiceOptions) {
     protectedPaths: () => [settings.get('vault.path')],
   }))
     registry.register(tool);
+  registry.register(createClipboardHistoryTool(clipboardHistory));
   // Everyday tools (ideas from isair/jarvis): weather, home town, meal log, look at the screen.
   const meals = createMealsRepo(db);
   for (const tool of [
     ...createWeatherTools({ settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) }),
     ...createMealTools({ repo: meals, settings }),
-    ...createScreenTools(opts.os, opts.paths.pictures),
+    ...createScreenTools(os, opts.paths.pictures),
     // Ideas from smaller Jarvis projects on GitHub: Wikipedia, dictionary, distance; personality, quiet mode.
     ...createKnowledgeTools(opts.fetch ? { fetch: opts.fetch } : {}),
     ...createModeTools({ settings }),
@@ -678,7 +693,7 @@ export function createServices(opts: ServiceOptions) {
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
     }),
     // Music from Sir's own library (kishanrajput23/Jarvis-Desktop-Voice-Assistant).
-    ...createMusicTools({ os: opts.os, guard: pathGuard, musicDir: () => opts.paths.music }),
+    ...createMusicTools({ os: os, guard: pathGuard, musicDir: () => opts.paths.music }),
     // Claude Code sessions, plan usage and new sessions by voice (ethanplusai/jarvis).
     ...createClaudeSessionTools({
       reader: claudeSessions,
@@ -689,7 +704,7 @@ export function createServices(opts: ServiceOptions) {
     }),
     // Everyday plugins (sukeesh/Jarvis): currency, markets, network, passwords, folder tidy.
     ...createUtilityTools({
-      os: opts.os,
+      os: os,
       guard: pathGuard,
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
     }),
@@ -863,7 +878,8 @@ export function createServices(opts: ServiceOptions) {
     userData: opts.userData,
     isTest: opts.isTest,
     emit: opts.emit,
-    os: opts.os,
+    os,
+    clipboardHistory,
     settings,
     secrets,
     conversations,

@@ -47,6 +47,22 @@ describe('command palette search', () => {
     });
   });
 
+  it('lists clipboard copies by their text or by "clipboard", and offers to clear them', () => {
+    const items = localItems({
+      ...sources,
+      clips: [{ id: 7, preview: 'https://avaan.example/invoice/4471\nsecond line' }],
+    });
+    expect(matchItems(items, '4471')[0]).toMatchObject({
+      group: 'Clipboard',
+      label: 'https://avaan.example/invoice/4471',
+      run: { kind: 'clip', id: 7 },
+    });
+    expect(matchItems(items, 'clipboard').map((i) => i.run.kind)).toEqual(['clearClips', 'clip']);
+    // Nothing from the clipboard in the opening menu, and no clear action without copies.
+    expect(matchItems(items, '').some((i) => i.run.kind === 'clearClips')).toBe(false);
+    expect(localItems(sources).some((i) => i.run.kind === 'clearClips')).toBe(false);
+  });
+
   it('caps each group at six, drops repeats and puts labels that start with the query first', () => {
     const many = Array.from({ length: 9 }, (_, i) => ({
       id: `chat:${i}`,

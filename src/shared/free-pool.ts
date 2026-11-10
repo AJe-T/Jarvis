@@ -386,6 +386,7 @@ export const PRIVATE_TOOLS: Record<string, PrivateSourceId> = {
   read_document: 'files',
   search_files: 'files',
   search_in_files: 'files',
+  clipboard_history: 'clipboard',
   show_file: 'files',
   look_at_screen: 'screen',
   read_screen_text: 'screen',
