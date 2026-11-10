@@ -1,14 +1,27 @@
 import { existsSync, statSync } from 'node:fs';
-import { cp, mkdir, open, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, open, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type { Tier } from '@shared/types';
 import { ToolError } from '../../errors';
 import type { PathGuard } from '../../security/path-guard';
 import { defineTool, fail, ok, type Tool } from '../types';
+import { DOCUMENT_EXT, documentText } from './documents';
 import type { OsAdapter } from './os';
 
 const MAX_READ = 1024 * 1024;
+// ponytail: search_in_files reads files one by one, with no index. These caps keep it bounded
+// (PDFs are parsed on the main thread); build an index if Sir searches big folders often.
+const MAX_SEARCH_DOC = 5 * 1024 * 1024;
+const MAX_SEARCH_DOCS = 15;
+const MAX_SEARCH_FILES = 3000;
+const SEARCH_BUDGET_MS = 15_000;
+/** Credential stores search_in_files never opens, beyond SENSITIVE_FILE: it reads many files unasked. */
+const SEARCH_SKIP =
+  /(^|[\\/])(\.npmrc|\.netrc|\.pgpass|\.git-credentials|id_(ecdsa|dsa)|credentials[^\\/]*|secrets?[^\\/]*|.*\.(ppk|jks|keystore|ovpn|kdb))$/i;
+/** A search for these is a hunt for secrets: Sir confirms it first (it could be a planted instruction). */
+const SECRET_HUNT =
+  /pass(word|phrase|wd)|secret|token|api[\s_-]?key|private[\s_-]?key|credential|\bpin\b|\botp\b|cvv/i;
 const SKIP_DIRS = new Set([
   'node_modules',
   '.git',
@@ -49,6 +62,35 @@ function isProtected(deps: FileToolDeps, resolved: string): boolean {
   );
 }
 
+/**
+ * Every file under root, nearest folders first: 8 levels deep, 50,000 entries, no build or hidden
+ * folders, and no folder `enter` turns away.
+ */
+async function* walkFiles(
+  root: string,
+  signal: AbortSignal,
+  enter: (dir: string) => boolean = () => true,
+): AsyncGenerator<string> {
+  const queue: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }];
+  let scanned = 0;
+  while (queue.length && scanned < 50_000 && !signal.aborted) {
+    const { dir, depth } = queue.shift() as { dir: string; depth: number };
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const e of entries) {
+      scanned++;
+      const full = path.join(dir, e.name);
+      if (!e.isDirectory()) yield full;
+      else if (
+        depth < 8 &&
+        !SKIP_DIRS.has(e.name.toLowerCase()) &&
+        !e.name.startsWith('.') &&
+        enter(full)
+      )
+        queue.push({ dir: full, depth: depth + 1 });
+    }
+  }
+}
+
 async function search(
   root: string,
   words: string[],
@@ -57,28 +99,87 @@ async function search(
   signal: AbortSignal,
 ) {
   const hits: Array<{ path: string; size: number; modified: string }> = [];
-  const queue: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }];
-  let scanned = 0;
-  while (queue.length && hits.length < max && scanned < 50_000 && !signal.aborted) {
-    const { dir, depth } = queue.shift() as { dir: string; depth: number };
-    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-    for (const e of entries) {
-      scanned++;
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) {
-        if (depth < 8 && !SKIP_DIRS.has(e.name.toLowerCase()) && !e.name.startsWith('.'))
-          queue.push({ dir: full, depth: depth + 1 });
-        continue;
-      }
-      const name = e.name.toLowerCase();
-      if (ext && !name.endsWith(`.${ext}`)) continue;
-      if (!words.every((w) => name.includes(w))) continue;
-      const s = await stat(full).catch(() => null);
-      if (s) hits.push({ path: full, size: s.size, modified: s.mtime.toISOString().slice(0, 10) });
-      if (hits.length >= max) break;
-    }
+  if (max <= 0) return hits;
+  for await (const full of walkFiles(root, signal)) {
+    const name = path.basename(full).toLowerCase();
+    if (ext && !name.endsWith(`.${ext}`)) continue;
+    if (!words.every((w) => name.includes(w))) continue;
+    const s = await stat(full).catch(() => null);
+    if (s) hits.push({ path: full, size: s.size, modified: s.mtime.toISOString().slice(0, 10) });
+    if (hits.length >= max) break;
   }
   return hits;
+}
+
+/** Text of one file for search_in_files, or null when it is skipped (too big, binary, unreadable). */
+async function searchableText(file: string): Promise<string | null> {
+  const s = await stat(file).catch(() => null);
+  if (!s?.isFile()) return null;
+  if (DOCUMENT_EXT.test(file)) {
+    if (s.size > MAX_SEARCH_DOC) return null;
+    return documentText(file).then(
+      (d) => d.text,
+      () => null, // damaged or password-protected
+    );
+  }
+  if (s.size > MAX_READ) return null;
+  const buf = await readFile(file).catch(() => null);
+  return buf && !buf.includes(0) ? buf.toString('utf8') : null;
+}
+
+/** About 160 characters around the first matched word, on one line. */
+function snippetAround(text: string, word: string): string {
+  const at = Math.max(text.toLowerCase().indexOf(word), 0);
+  const from = Math.max(at - 60, 0);
+  const cut = text
+    .slice(from, at + 100)
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `${from > 0 ? '…' : ''}${cut}${at + 100 < text.length ? '…' : ''}`;
+}
+
+interface ContentHit {
+  path: string;
+  snippet: string;
+}
+
+/**
+ * Reads files under the roots until enough match, the time is up or the read caps are reached.
+ * Every file is checked against the path guard first (a link may point outside the allowed
+ * folders), and credential files are never opened here (read_text_file asks before reading one).
+ */
+async function searchContents(
+  guard: PathGuard,
+  roots: string[],
+  words: string[],
+  ext: string | undefined,
+  max: number,
+  signal: AbortSignal,
+): Promise<{ hits: ContentHit[]; read: number; stoppedEarly: boolean }> {
+  const hits: ContentHit[] = [];
+  const deadline = Date.now() + SEARCH_BUDGET_MS;
+  let read = 0;
+  let docs = 0;
+  for (const root of roots) {
+    // Denied folders are not entered at all: nothing in them may be read, and walking them is waste.
+    for await (const file of walkFiles(root, signal, (dir) => guard.check(dir).ok)) {
+      if (Date.now() > deadline || read >= MAX_SEARCH_FILES)
+        return { hits, read, stoppedEarly: true };
+      if (SENSITIVE_FILE.test(file) || SEARCH_SKIP.test(file) || !guard.check(file).ok) continue;
+      if (ext && !file.toLowerCase().endsWith(`.${ext}`)) continue;
+      const isDoc = DOCUMENT_EXT.test(file);
+      if (isDoc && docs >= MAX_SEARCH_DOCS) continue;
+      const text = await searchableText(file);
+      if (text === null) continue;
+      read++;
+      if (isDoc) docs++;
+      const lower = text.toLowerCase();
+      if (!words.every((w) => lower.includes(w))) continue;
+      hits.push({ path: file, snippet: snippetAround(text, words[0] ?? '') });
+      if (hits.length >= max) return { hits, read, stoppedEarly: false };
+    }
+  }
+  return { hits, read, stoppedEarly: signal.aborted };
 }
 
 export function createFileTools(deps: FileToolDeps): Tool[] {
@@ -118,6 +219,47 @@ export function createFileTools(deps: FileToolDeps): Tool[] {
           return ok(`No files named like "${query}" in ${folder ?? 'the allowed folders'}.`);
         return ok(
           hits.map((h) => `${h.path}  (${Math.ceil(h.size / 1024)} KB, ${h.modified})`).join('\n'),
+        );
+      },
+    }),
+    defineTool({
+      name: 'search_in_files',
+      description:
+        "Find files by what they SAY, inside sir's allowed folders: every word must appear in the file's text. Reads text files (≤ 1 MB) and PDF, Word, Excel and PowerPoint (≤ 5 MB). Use search_files when sir knows the name. Optional extension and folder; a folder is much faster. Returns paths with the matching line; stops after about 15 seconds and says so. Credential files are never opened; searching for passwords, keys or tokens needs sir's confirmation.",
+      input: z.object({
+        text: z.string().trim().min(2).max(100),
+        ext: z
+          .string()
+          .regex(/^[a-z0-9]{1,8}$/i)
+          .optional(),
+        folder: pathArg.optional(),
+        maxResults: z.number().int().min(1).max(20).default(10),
+      }),
+      tier: ({ text }): Tier => (SECRET_HUNT.test(text) ? 'CONFIRM' : 'SAFE'),
+      untrustedOutput: true,
+      timeoutMs: 30_000,
+      summarize: ({ text, ext }) => `Search inside files for "${text}"${ext ? ` (.${ext})` : ''}`,
+      guards: ({ folder }) => ({ paths: folder ? [folder] : [] }),
+      async run({ text, ext, folder, maxResults }, ctx) {
+        const roots = folder
+          ? [guard.resolve(folder)]
+          : deps.roots().filter((r) => guard.check(r).ok);
+        const words = text.toLowerCase().split(/\s+/).filter(Boolean);
+        const { hits, read, stoppedEarly } = await searchContents(
+          guard,
+          roots,
+          words,
+          ext?.toLowerCase(),
+          maxResults,
+          ctx.signal,
+        );
+        const where = folder ?? 'the allowed folders';
+        const note = stoppedEarly
+          ? ` The search stopped early after reading ${read} files; name a folder or an extension to search the rest.`
+          : '';
+        if (hits.length === 0) return ok(`No file in ${where} says "${text}".${note}`);
+        return ok(
+          `${hits.map((h) => `${h.path}\n    ${h.snippet}`).join('\n')}${note && `\n${note.trim()}`}`,
         );
       },
     }),

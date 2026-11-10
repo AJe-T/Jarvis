@@ -73,6 +73,7 @@ Trust boundaries: Renderer ↔ Main (IPC), Main ↔ child processes (MCP/PowerSh
 | `focus_window`, `minimize_window`, `maximize_window`, `arrange_windows` | SAFE | arrange only moves and resizes windows on the main screen; params via `$P` |
 | `set_volume`, `mute`, `media_control`, `set_brightness` | SAFE | |
 | `search_files`, `read_text_file` (in allowed roots, ≤ 1 MB) | SAFE | Output marked untrusted |
+| `search_in_files` (text of files in allowed roots; text ≤ 1 MB, documents ≤ 5 MB) | SAFE; **CONFIRM** when the words searched for are a hunt for secrets (password, token, API key, private key, credential, PIN, OTP, CVV) | Output marked untrusted; denied folders are not entered and every file is checked against the path guard before it is opened (links and denied paths); credential files are never opened (`.env`, keys, `.npmrc`, `.netrc`, `.git-credentials`, `credentials*`, `secrets*`, key stores); bounded by time (15 s) and counts (3,000 files, 15 documents); listed in `PRIVATE_TOOLS` (files), so its output never reaches a third-party free model (§16.15) |
 | `write_clipboard` | SAFE | |
 | `read_clipboard` | CONFIRM | Clipboard may hold passwords |
 | `show_notification`, `set_timer`, `set_reminder` | SAFE | |

@@ -2,7 +2,7 @@
 
 > Generated from the code by `npm run docs:reference` (tests/unit/reference.test.ts fails when this file is stale). Do not edit by hand. The narrative guide is [BIBLE.md](BIBLE.md).
 
-## Tools (111)
+## Tools (112)
 
 Every tool goes through the executor: Zod input check → policy tier (SAFE runs, CONFIRM asks Sir, BLOCKED never runs) → guards → audit and activity log. MCP tools from connected servers are added at runtime and are not listed here.
 
@@ -100,6 +100,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `schedule_task` | CONFIRM | Create a task Jarvis runs by itself, e.g. "every weekday at 8:00 give me a briefing", "every Friday 17:00 summarise my week", "on the 1st of each month check my bills", "tomorrow at 9 remind me why I opened this project" (once), or "each time you start, tell me what is overdue" (startup). kind: briefing (spoken/saved digest), task (do and report), checkin (proactive: report only if something is worth saying). Times are local, 24 h; once.at is local "YYYY-MM-DDTHH:mm". |
 | `search_conversations` | SAFE | Search past conversations with sir. Give a query for "what did we decide about X"; give from/to dates (YYYY-MM-DD, Sir's local days, inclusive) for "what did we talk about yesterday / last Monday", with or without a query. Returns dated snippets. |
 | `search_files` | SAFE (untrusted output) | Find files by name inside sir's allowed folders (Desktop, Documents, Downloads, …). Words must all appear in the file name. Optional extension filter (e.g. "pdf") and folder. Returns paths, sizes and dates. |
+| `search_in_files` | depends on input (untrusted output) | Find files by what they SAY, inside sir's allowed folders: every word must appear in the file's text. Reads text files (≤ 1 MB) and PDF, Word, Excel and PowerPoint (≤ 5 MB). Use search_files when sir knows the name. Optional extension and folder; a folder is much faster. Returns paths with the matching line; stops after about 15 seconds and says so. Credential files are never opened; searching for passwords, keys or tokens needs sir's confirmation. |
 | `search_memory` | SAFE | Full-text search of sir's memory notes (people, projects, facts, preferences). Use when the injected memories don't cover the question. |
 | `search_tool_output` | SAFE (untrusted output) | Search or read a long tool result that was cut short (its note gives an id like "o3"). query: words to look for; returns the best-matching parts. part: read one part by number instead (to read on). Use this rather than running the original tool again. |
 | `set_brightness` | SAFE | Set the built-in display brightness (0–100). Works on laptops; external monitors usually do not support it. |

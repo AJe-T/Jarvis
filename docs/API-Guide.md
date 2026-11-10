@@ -185,7 +185,7 @@ Implementation additions to the `Tool` interface (`src/main/tools/types.ts`): `e
 | system | `get_datetime`, `get_system_info`, `get_battery`, `set_volume`, `mute`, `media_control`, `set_brightness`, `lock_screen`, `sleep_pc`, `restart_pc`, `shutdown_pc` |
 | apps & windows | `list_installed_apps`, `open_app`, `close_app`, `kill_process`, `list_open_windows`, `focus_window`, `minimize_window`, `maximize_window` |
 | web | `open_url` (+ Claude server-side web search) |
-| files | `search_files`, `read_text_file`, `write_text_file`, `create_folder`, `move_path`, `rename_path`, `copy_path`, `delete_to_recycle_bin`, `open_path` |
+| files | `search_files`, `search_in_files`, `read_text_file`, `write_text_file`, `create_folder`, `move_path`, `rename_path`, `copy_path`, `delete_to_recycle_bin`, `open_path` |
 | clipboard & notify | `read_clipboard`, `write_clipboard`, `show_notification` |
 | time | `set_timer`, `set_reminder`, `list_reminders`, `cancel_reminder` |
 | memory | Claude `memory` tool, `search_memory`, `search_conversations` |
@@ -790,7 +790,7 @@ Implementation additions to the `Tool` interface (`src/main/tools/types.ts`): `e
 | system | `get_datetime`, `get_system_info`, `get_battery`, `set_volume`, `mute`, `media_control`, `set_brightness`, `lock_screen`, `sleep_pc`, `restart_pc`, `shutdown_pc` |
 | apps & windows | `list_installed_apps`, `open_app`, `close_app`, `kill_process`, `list_open_windows`, `focus_window`, `minimize_window`, `maximize_window` |
 | web | `open_url` (+ Claude server-side web search) |
-| files | `search_files`, `read_text_file`, `write_text_file`, `create_folder`, `move_path`, `rename_path`, `copy_path`, `delete_to_recycle_bin`, `open_path` |
+| files | `search_files`, `search_in_files`, `read_text_file`, `write_text_file`, `create_folder`, `move_path`, `rename_path`, `copy_path`, `delete_to_recycle_bin`, `open_path` |
 | clipboard & notify | `read_clipboard`, `write_clipboard`, `show_notification` |
 | time | `set_timer`, `set_reminder`, `list_reminders`, `cancel_reminder` |
 | memory | Claude `memory` tool, `search_memory`, `search_conversations` |
