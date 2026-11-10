@@ -287,7 +287,7 @@ export function createVoiceController(d: VoiceDeps) {
     if (realtime || realtimeStarting || !d.realtime) return;
     realtimeStarting = true;
     stopSpeaking();
-    cancelListening();
+    cancelListening('realtime conversation starting');
     d.state.set('LISTENING', 'realtime');
     ensureRecorder();
     try {
@@ -758,7 +758,7 @@ export function createVoiceController(d: VoiceDeps) {
         message: 'The microphone stopped working. Check it is plugged in.',
         action: 'settings:voice',
       });
-      cancelListening();
+      cancelListening('microphone read failed');
     } finally {
       if (recorder === rec) {
         releaseRecorder();
@@ -874,7 +874,7 @@ export function createVoiceController(d: VoiceDeps) {
     const composing = dictation === 'composer';
     current.silence = setTimeout(
       () => {
-        if (!current.heard) cancelListening();
+        if (!current.heard) cancelListening('silence: nothing heard');
       },
       composing
         ? (d.timeouts?.composeIdleMs ?? COMPOSE_IDLE_MS)
@@ -883,7 +883,7 @@ export function createVoiceController(d: VoiceDeps) {
           : (d.timeouts?.silenceMs ?? SILENCE_TIMEOUT_MS),
     );
     current.max = setTimeout(
-      () => (current.dictation ? finishDictation(current) : cancelListening()),
+      () => (current.dictation ? finishDictation(current) : cancelListening('max listen time')),
       composing
         ? COMPOSE_MAX_MS
         : dictation
@@ -905,7 +905,7 @@ export function createVoiceController(d: VoiceDeps) {
       if (listening !== current) return;
       if (!current.followUp)
         d.emit('notify', { level: 'error', message, action: 'settings:voice' });
-      cancelListening();
+      cancelListening('speech-to-text failed');
     };
     try {
       const session = await d.factories.stt.start({
@@ -982,7 +982,7 @@ export function createVoiceController(d: VoiceDeps) {
     const left = current.startedAt + MAX_LISTEN_CAP_MS - Date.now();
     if (left <= 0) return;
     clearTimeout(current.max);
-    current.max = setTimeout(() => cancelListening(), Math.min(limit, left));
+    current.max = setTimeout(() => cancelListening('max listen time'), Math.min(limit, left));
   }
 
   /** Everything dictated so far plus the phrase still being spoken. */
@@ -1038,8 +1038,13 @@ export function createVoiceController(d: VoiceDeps) {
     if (!needRecorder()) releaseRecorder();
   }
 
-  function cancelListening(): void {
+  function cancelListening(reason: string): void {
     if (!listening) return;
+    // Who ended it and how soon: a listen that closes after ~1 s with nothing heard was untraceable (W-short).
+    log.info(
+      { reason, ms: Date.now() - listening.startedAt, heard: Boolean(listening.heard) },
+      'listening cancelled',
+    );
     // Stopping a message being composed keeps the words already in the box.
     if (listening.dictation?.target === 'composer') return finishDictation(listening);
     // Words already heard are not thrown away: they wait in the message box as a draft.
@@ -1329,7 +1334,7 @@ export function createVoiceController(d: VoiceDeps) {
         if (listening.dictation.hold && released) return;
         return finishDictation(listening);
       }
-      if (listening) cancelListening();
+      if (listening) cancelListening('dictation hotkey');
       void startListening(false, false, 'app', undefined, Boolean(released));
       const mine = listening;
       if (!released || !mine) return;
@@ -1350,7 +1355,7 @@ export function createVoiceController(d: VoiceDeps) {
         return;
       }
       if (listening?.dictation?.target === 'composer') return;
-      if (listening) cancelListening();
+      if (listening) cancelListening('composer mic');
       void startListening(false, false, 'composer');
     },
 
@@ -1370,7 +1375,7 @@ export function createVoiceController(d: VoiceDeps) {
         else void startRealtime();
         return;
       }
-      if (listening) cancelListening();
+      if (listening) cancelListening('talk hotkey');
       else void startListening(false);
     },
 
@@ -1407,7 +1412,7 @@ export function createVoiceController(d: VoiceDeps) {
         return;
       }
       if (action === 'start') void startListening(false);
-      else cancelListening();
+      else cancelListening('renderer stop (mic button or Esc)');
     },
 
     /** Applies voice.mode: 'wake' keeps the wake word running on-device; audio leaves the PC only while LISTENING (and never with local Whisper). */
@@ -1415,7 +1420,7 @@ export function createVoiceController(d: VoiceDeps) {
       const gen = ++modeGeneration;
       const m = mode();
       realtime?.end('voice settings changed', true);
-      cancelListening();
+      cancelListening('voice settings applied');
       closeTaps();
       wake?.release();
       wake = null;
@@ -1491,7 +1496,7 @@ export function createVoiceController(d: VoiceDeps) {
 
     onKill(): void {
       realtime?.end('stopped', true);
-      cancelListening();
+      cancelListening('kill switch');
       stopSpeaking();
       afterSpeechWaiters.clear();
       notices.length = 0;
@@ -1501,7 +1506,7 @@ export function createVoiceController(d: VoiceDeps) {
     shutdown(): void {
       realtime?.end('Jarvis closed', true);
       warming?.abort();
-      cancelListening();
+      cancelListening('shutdown');
       stopSpeaking();
       notices.length = 0;
       clearTimeout(noticeTimer);
