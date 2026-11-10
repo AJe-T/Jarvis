@@ -36,6 +36,15 @@ export function createDeepgramStt(
       // Keyterm prompting is English-only on Nova-3 ⚠️ (developers.deepgram.com/docs/keyterm).
       // queryParams arrays are sent as repeated keyterm=… (the SDK's typed field would send JSON).
       const terms = language.startsWith('en') ? keyterms() : [];
+      const handlers = new Map<string, Handler[]>();
+      const fire = (event: string, ...args: unknown[]): void => {
+        for (const h of handlers.get(event) ?? []) (h as (...a: unknown[]) => void)(...args);
+      };
+      const events = deepgramEvents(fire);
+      // Jarvis ending listening aborts the signal before session.close(); the SDK then closes the
+      // socket with 1000 "aborted", which was logged as Deepgram dropping the line. Registered
+      // before the SDK's own abort listener so the close is known to be ours first.
+      signal.addEventListener('abort', () => events.ending(), { once: true });
       const socket = await client.listen.v1.connect({
         ...(terms.length ? { queryParams: { keyterm: terms } } : {}),
         model: 'nova-3',
@@ -54,11 +63,6 @@ export function createDeepgramStt(
         reconnectAttempts: 0,
         connectionTimeoutInSeconds: 5,
       });
-      const handlers = new Map<string, Handler[]>();
-      const fire = (event: string, ...args: unknown[]): void => {
-        for (const h of handlers.get(event) ?? []) (h as (...a: unknown[]) => void)(...args);
-      };
-      const events = deepgramEvents(fire);
       socket.on('message', (msg) => events.message(msg));
       socket.on('error', (err) => events.error(err));
       socket.on('close', (e) => events.close(e.code, e.reason));
