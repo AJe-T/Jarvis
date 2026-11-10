@@ -85,7 +85,13 @@ describe('reply footer (v2.63)', () => {
     expect(followUps('Here is the summary.').map((c) => c.label)).toEqual([
       'More detail',
       'Save to memory',
+      'Add to tasks',
+      'Save to Space',
     ]);
+    // The calendar chip shows only when the reply names a time.
+    expect(followUps('The dentist is free on Friday at 4 pm.').map((c) => c.label)).toContain(
+      'Add to calendar',
+    );
     cleanup();
     show(msg({ text: 'Shall I book it?' })); // not the latest: no chips
     expect(screen.queryByRole('button', { name: 'Do it' })).toBeNull();

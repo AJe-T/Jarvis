@@ -16,14 +16,27 @@ export function timingLabel(t: NonNullable<UiMessage['timing']>): string {
     : `${s(t.firstWordMs)} to first word · ${s(t.totalMs)}`;
 }
 
+// ponytail: a word list, not a date parser; it only decides whether the calendar chip is worth showing.
+const MENTIONS_A_TIME =
+  /\b(today|tonight|tomorrow|(mon|tues|wednes|thurs|fri|satur|sun)day|next week|\d{1,2}(:\d{2})?\s?(am|pm)|\d{1,2}:\d{2}|\d{1,2}(st|nd|rd|th)?\s(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))/i;
+
 /**
  * Follow-up chips (4.5) under the latest reply: fixed, so they cost nothing. "Do it" only when the
- * reply ends with a question (an offer or a plan waiting for a yes).
+ * reply ends with a question (an offer or a plan waiting for a yes). The "send to" chips hand the
+ * reply to Tasks, Calendar (only when it names a time) and Spaces through Jarvis's own tools.
  */
 export function followUps(text: string): Array<{ label: string; send: string }> {
   const chips = [
     { label: 'More detail', send: 'Tell me more about that, in more detail.' },
     { label: 'Save to memory', send: 'Save the key points of that to memory.' },
+    { label: 'Add to tasks', send: 'Add the action items from that to my tasks.' },
+    ...(MENTIONS_A_TIME.test(text)
+      ? [{ label: 'Add to calendar', send: 'Put that on my calendar.' }]
+      : []),
+    {
+      label: 'Save to Space',
+      send: 'Save that as a page in the Space that fits best, and tell me which one.',
+    },
   ];
   return /\?\s*$/.test(text.trim()) ? [{ label: 'Do it', send: 'Yes, do it.' }, ...chips] : chips;
 }
