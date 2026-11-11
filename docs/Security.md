@@ -75,6 +75,9 @@ Trust boundaries: Renderer ↔ Main (IPC), Main ↔ child processes (MCP/PowerSh
 | `search_files`, `read_text_file` (in allowed roots, ≤ 1 MB) | SAFE | Output marked untrusted |
 | `search_in_files` (text of files in allowed roots; text ≤ 1 MB, documents ≤ 5 MB) | SAFE; **CONFIRM** when the words searched for are a hunt for secrets (password, token, API key, private key, credential, PIN, OTP, CVV) | Output marked untrusted; denied folders are not entered and every file is checked against the path guard before it is opened (links and denied paths); credential files are never opened (`.env`, keys, `.npmrc`, `.netrc`, `.git-credentials`, `credentials*`, `secrets*`, key stores); bounded by time (15 s) and counts (3,000 files, 15 documents); listed in `PRIVATE_TOOLS` (files), so its output never reaches a third-party free model (§16.15) |
 | `write_clipboard` | SAFE | |
+| `watch_me` | CONFIRM | Window and focused-control names only, 5 minutes at most; §16.23 |
+| `stop_watching` | SAFE | Returns the trail once; output untrusted and private |
+| `save_routine` | CONFIRM | Shows every step; forbidden tools refused; steps re-checked by the policy when run |
 | `screen_memory` | CONFIRM | Past screen text may be private; output untrusted; §16.22 |
 | `undo_last_action` | CONFIRM | Shows what it will take back; re-checks the path guard; never overwrites or deletes permanently; §16.21 |
 | `day_timeline` | SAFE | App names and window titles Jarvis recorded himself; output untrusted; §16.18 |
@@ -582,6 +585,12 @@ Free tiers of other companies answer sub-tasks Claude hands to brain `free`. Tie
 - **Retention:** `screenMemory.keepDays` (default 7, at most 30), pruned at startup and hourly; "Clear the screen memory" deletes all rows (audited).
 - **Reading it back:** tool `screen_memory` is CONFIRM (like `read_screen_text`), output untrusted (screen text is whatever a web page or document showed), listed in `PRIVATE_TOOLS` (screen). The renderer gets snippets through `screen:search`; `screen:copy` moves a full capture to the clipboard inside the main process.
 - **Residual risk (accepted):** the table is plain text in the local database and its backups for the retention period; secrets that match no pattern (a password shown in clear in an ordinary window) are stored; with several monitors the text may come from a window other than the one named.
+
+### 16.23 Teach by showing (v2.73)
+- **`watch_me` is CONFIRM**; nothing is watched without Sir's approval, for at most 5 minutes, and the kill switch stops it. One PowerShell process (`-EncodedCommand`, no shell, no outside arguments) reads the foreground window and the UI Automation **focused element's name and control type** every 0.7 s (`src/main/automation/watch-me.ts`).
+- **Never recorded:** key presses, typed text, field values, the screen, the mouse (the script uses no key-state, value-pattern, text-pattern or screen API; a test asserts this). A password field (`IsPassword`) is noted as "password field" with no name. Private-browsing windows and password managers are noted without title or control. Jarvis's own windows are dropped. Titles and names pass `redact()`.
+- **The trail is data:** `stop_watching` returns it once as untrusted output (window titles and control names are text other programs chose), listed in `PRIVATE_TOOLS` (screen); it is not stored anywhere.
+- **`save_routine` is CONFIRM** and shows every step. Steps must be existing tools with valid input and may not be `run_powershell`, `delegate_desktop_task`, `memory` or `run_routine`; the same check runs again whenever routines are loaded. When a routine runs, each step is judged by the policy engine as if Jarvis had called it himself, so confirmations still appear.
 
 ### 16.16 Offline mode and figures (v2.60)
 - **Offline mode** (`src/main/offline.ts`, `offline.enabled` is main-only): `offline:set` turns it on only when the brain, speech to text, voice and wake word are all on this PC (loopback addresses only, not the home network) and the local model answers a ping. While on, the settings service itself refuses any write that would add a cloud part (`setGuard`, same check before/after, so IPC, onboarding and main flows all pass it), `voice:setMode` refuses realtime, voice v2 ignores the Deepgram key, cloud hearing and Edge/ElevenLabs fallbacks are skipped, and `brains.ready`, the free pool and fusion report only local brains. Web-reading tools are not blocked.

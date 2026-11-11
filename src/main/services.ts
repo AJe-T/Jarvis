@@ -74,6 +74,12 @@ import {
 import { createNativeTools } from './tools/native/index';
 import { createUndoJournal, createUndoTool, undoablePlanner } from './tools/undo-journal';
 import { createTimeline, createTimelineTool } from './tools/everyday/timeline';
+import {
+  createWatchMe,
+  createWatchTools,
+  startPowerShellWatcher,
+  type StartWatcher,
+} from './automation/watch-me';
 import { createScreenMemory, createScreenMemoryTool } from './tools/everyday/screen-memory';
 import { createAgentDesktop, findAgentDesktop } from './tools/native/agent-desktop';
 import type { OsAdapter } from './tools/native/os';
@@ -154,6 +160,8 @@ export interface ServiceOptions {
     music: string;
   };
   startMenuDirs?: string[];
+  /** Tests: stand-in for the process that watches windows and focus during "watch me". */
+  startWatcher?: StartWatcher;
   /** Seconds since the last key press or mouse move (Electron powerMonitor); 0 in tests. */
   idleSeconds?: () => number;
   home?: string;
@@ -688,6 +696,14 @@ export function createServices(opts: ServiceOptions) {
   });
   if (!opts.isTest) timeline.start();
   registry.register(createTimelineTool(timeline, () => settings.get('timeline.enabled')));
+  // Teach by showing (2.73): after "watch me", the windows and controls Sir goes through.
+  const watchMe = createWatchMe({
+    start: opts.startWatcher ?? startPowerShellWatcher,
+    ownPid: process.pid,
+    notify: (message) => opts.emit('notify', { level: 'info', message }),
+  });
+  killSwitch.onKill(() => void watchMe.end());
+  for (const tool of createWatchTools(watchMe)) registry.register(tool);
   // Screen memory (2.72): the text on the main screen, read on this PC, only while the setting is on.
   const screenMemory = createScreenMemory({
     db,

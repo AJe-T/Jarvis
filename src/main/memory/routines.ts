@@ -57,19 +57,7 @@ export async function loadRoutines(
       });
       continue;
     }
-    let error: string | null = null;
-    parsed.data.steps.forEach((s, i) => {
-      const tool = registry.get(s.tool);
-      if (error) return;
-      if (!tool) error = `Step ${i + 1}: unknown tool "${s.tool}"`;
-      else if (FORBIDDEN_IN_ROUTINES.has(s.tool))
-        error = `Step ${i + 1}: ${s.tool} cannot be used in a routine`;
-      else {
-        const r = tool.input.safeParse(s.input);
-        if (!r.success)
-          error = `Step ${i + 1} (${s.tool}): ${r.error.issues[0]?.message ?? 'invalid input'}`;
-      }
-    });
+    let error = routineStepsError(parsed.data.steps, registry);
     // routines.name is UNIQUE: a duplicate is stored under its path so one bad file can't fail the whole load.
     const duplicate = rows.some((r) => r.name.toLowerCase() === parsed.data.name.toLowerCase());
     if (duplicate) error = `Duplicate routine name "${parsed.data.name}"`;
@@ -135,6 +123,76 @@ export function createBrowserRoutineTool(vault: VaultService, trail: BrowserTrai
       await vault.write(rel, note);
       return ok(
         `Saved "${name}" with ${latest.steps.length} steps (${rel}). Run it with run_routine${triggers.length ? ` or say "${triggers[0]}"` : ''}.`,
+      );
+    },
+  });
+}
+
+/** Why these steps cannot be a routine, or null when every step names a real tool with valid input. */
+export function routineStepsError(steps: Step[], registry: ToolRegistry): string | null {
+  for (const [i, s] of steps.entries()) {
+    const tool = registry.get(s.tool);
+    if (!tool) return `Step ${i + 1}: unknown tool "${s.tool}"`;
+    if (FORBIDDEN_IN_ROUTINES.has(s.tool))
+      return `Step ${i + 1}: ${s.tool} cannot be used in a routine`;
+    const r = tool.input.safeParse(s.input);
+    if (!r.success)
+      return `Step ${i + 1} (${s.tool}): ${r.error.issues[0]?.message ?? 'invalid input'}`;
+  }
+  return null;
+}
+
+/**
+ * save_routine (2.73, teach by showing): steps Jarvis wrote himself, usually from what he saw
+ * after watch_me, become a routine note. Sir sees every step before it is saved, and each step
+ * still goes through the policy when the routine runs.
+ */
+export function createSaveRoutineTool(vault: VaultService, registry: ToolRegistry): Tool {
+  const describe = (s: Step): string => {
+    const input = JSON.stringify(s.input);
+    return `${s.tool}${input === '{}' ? '' : ` ${input.length > 140 ? `${input.slice(0, 140)}…` : input}`}`;
+  };
+  return defineTool({
+    name: 'save_routine',
+    description:
+      'Save a list of tool steps as one of sir\'s routines, so it runs again by name or trigger phrase. Use after stop_watching ("save that as my morning setup") or when sir dictates the steps. Each step is one of your tools with its input, e.g. open_app, focus_window, click_ui_element, open_url, set_volume, ask_to_continue (a pause where sir must do something himself). Not run_powershell or computer control. Sir sees every step before it is saved.',
+    input: z.object({
+      name: z
+        .string()
+        .min(2)
+        .max(60)
+        .regex(/^[\w\- ]+$/, 'letters, numbers, spaces and dashes only'),
+      triggers: z.array(z.string().min(2).max(100)).max(5).default([]),
+      steps: z
+        .array(
+          z.object({
+            tool: z.string().min(1),
+            input: z.record(z.string(), z.unknown()).default({}),
+          }),
+        )
+        .min(1)
+        .max(30),
+    }),
+    tier: 'CONFIRM',
+    summarize: ({ name, steps }) => `Save routine "${name}" (${steps.length} steps)`,
+    confirm: ({ name, steps }) => ({
+      title: `Save these steps as the routine "${name}"?`,
+      actionLabel: 'Save routine',
+      details: steps.map((s, i) => `${i + 1}. ${describe(s)}`).join('\n'),
+      detailsKind: 'text',
+    }),
+    async run({ name, triggers, steps }) {
+      const error = routineStepsError(steps, registry);
+      if (error) return fail(`${error}. Fix that step and try again.`);
+      const rel = `Routines/${name.trim()}.md`;
+      if (vault.exists(rel)) return fail(`A routine called "${name}" already exists.`);
+      const note = stringifyNote(
+        { kind: 'routine', name: name.trim(), triggers, enabled: true, steps },
+        `# ${name.trim()}\n\nSaved by Jarvis on ${new Date().toLocaleDateString('en-GB')}. Each step is checked by the safety policy when it runs.\n`,
+      );
+      await vault.write(rel, note);
+      return ok(
+        `Saved "${name}" with ${steps.length} steps (${rel}). Run it with run_routine${triggers.length ? ` or say "${triggers[0]}"` : ''}.`,
       );
     },
   });

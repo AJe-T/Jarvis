@@ -18,7 +18,12 @@ import { createRetriever } from './retriever';
 import { OBSERVATIONS_PATH, REFLECT_EVERY_MS, reflect, reflectDue } from './reflect';
 import { createReranker } from './rerank';
 import { createSemanticIndex } from './semantic';
-import { createBrowserRoutineTool, createRoutineTools, loadRoutines } from './routines';
+import {
+  createBrowserRoutineTool,
+  createRoutineTools,
+  createSaveRoutineTool,
+  loadRoutines,
+} from './routines';
 import { createVaultService } from './vault-service';
 import { createVaultWatcher } from './vault-watcher';
 import { findDuplicates, tidyReason } from './tidy';
@@ -239,6 +244,7 @@ export function createMemorySystem(s: Services) {
     }),
     ...createRoutineTools(repos, () => s.tools),
     createBrowserRoutineTool(vault, s.browserTrail),
+    createSaveRoutineTool(vault, s.registry),
   ])
     s.registry.register(t);
 
