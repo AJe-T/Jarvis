@@ -44,7 +44,11 @@ const fresh = (type: Schedule['type'], folder: string): Schedule => {
   }
 };
 
-/** When an automation runs: at a time on chosen days, every N minutes, once, monthly, or at start. */
+/** A watched folder starts as Downloads when it is allowed, else the first allowed folder. */
+export const defaultWatchFolder = (roots: string[]): string =>
+  roots.find((r) => /downloads$/i.test(r)) ?? roots[0] ?? '';
+
+/** When an automation runs: by the clock (a time, every N minutes, once, monthly, at start) or on an event. */
 export function ScheduleEditor({
   value,
   onChange,
@@ -52,9 +56,7 @@ export function ScheduleEditor({
   value: Schedule;
   onChange(s: Schedule): void;
 }): React.JSX.Element {
-  // A watched folder starts as Downloads when it is allowed, else the first allowed folder.
-  const roots = useSetting('files.allowedRoots') ?? [];
-  const firstRoot = roots.find((r) => /downloads$/i.test(r)) ?? roots[0] ?? '';
+  const firstRoot = defaultWatchFolder(useSetting('files.allowedRoots') ?? []);
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm text-ink-300">
       <select

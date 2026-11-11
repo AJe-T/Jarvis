@@ -14,6 +14,40 @@ export interface AutomationTemplate {
 
 export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
+    id: 'meeting-prep',
+    name: 'Meeting prep',
+    blurb: 'Ten minutes before each calendar event: who, what was agreed, what is open.',
+    kind: 'task',
+    schedule: { type: 'beforeEvent', minutes: 10 },
+    speak: true,
+    saveToVault: false,
+    prompt:
+      "An event on Sir's calendar starts soon (it is named in what set this off). Prepare him for it. Look up the people and the topic in memory (search_memory), what was said about them in earlier conversations (recall_earlier), and open tasks that mention them (tasks). Then give at most five short points: who it is with, what was agreed or promised last time, what is still open, and what to decide today. If memory holds nothing about it, just say in one sentence what starts when and where. Never invent a detail.",
+  },
+  {
+    id: 'overdue-nudge',
+    name: 'Overdue task nudge',
+    blurb: 'The moment a task slips past its due time, one sentence about it.',
+    kind: 'task',
+    schedule: { type: 'taskOverdue' },
+    speak: true,
+    saveToVault: false,
+    prompt:
+      "One or more of Sir's tasks just went overdue (they are named in what set this off). Tell him which in one sentence, and offer to move them to tomorrow or to mark them done. Change nothing until he answers.",
+  },
+  {
+    id: 'new-download',
+    name: 'New download',
+    blurb: 'When a file lands in Downloads: what it is and where it could go.',
+    kind: 'task',
+    // The editor swaps this for Sir's real Downloads folder (or his first allowed folder).
+    schedule: { type: 'newFile', folder: 'Downloads' },
+    speak: false,
+    saveToVault: false,
+    prompt:
+      'A new file appeared (it is named in what set this off). Say in one sentence what it probably is from its name, and suggest a folder for it. Do not open, move or delete it unless Sir asks.',
+  },
+  {
     id: 'evening',
     name: 'Evening wrap-up',
     blurb: 'Your day in review and tomorrow at a glance.',
@@ -62,7 +96,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     name: 'Goal check',
     blurb: 'Sundays at 6 pm: goals that are falling behind.',
     kind: 'checkin',
-    schedule: { type: 'daily', time: '18:00', days: [0] },
+    schedule: { type: 'daily', time: '18:00', days: [7] }, // 7 = Sunday (ISO)
     speak: true,
     saveToVault: false,
     prompt:

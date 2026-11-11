@@ -8,7 +8,7 @@ How to keep it:
 - When an item ships, delete it here (the changes log and `docs/BIBLE.md` keep the history).
 - Size: **S** < 1 h · **M** 1–3 h · **L** half a day or more (tests and BIBLE update included).
 
-Last updated: 2026-11-11 (after v2.67.0).
+Last updated: 2026-11-11 (after v2.68.0).
 
 ## 1. Core module
 
@@ -35,6 +35,7 @@ plan with sizes, Sir picks what to do now and what goes back into this file.
 
 | What | How to check |
 |---|---|
+| v2.68 meeting prep | Settings → Automations → Templates → **Meeting prep** → Use this → Save. Add a calendar event 8 minutes from now with a person Jarvis knows from memory: a spoken prep should come within a minute. Judge whether the five points are useful or too long. |
 | v2.67 event automations | Settings → Automations → new: "When a file appears" in Downloads, prompt "Tell me what this file is". Save, wait a minute, download a file: within about a minute a run starts and names it. Then one "Before a calendar event" (10 min) with an event 8 minutes from now, and one "When a task is overdue" with a task due a minute ago. Only tested with a fake model and a fake folder so far. |
 | v2.66 day timeline | Settings → Privacy → turn on "Keep a day timeline". Work for ten minutes in two apps, then Settings → Activity → My day: both apps listed with about the right minutes. Open an InPrivate window: the browser is counted, the title is not shown. Ask "where did my day go". |
 | v2.65 clipboard history | Settings → Privacy → turn on "Keep a clipboard history". Copy three things, press Ctrl+K, type "clipboard": all three listed; Enter on one, then paste. Copy a password from Jarvis's Passwords (and from your own password manager if you use one): it must NOT appear. If nothing is ever listed: `Select-String -Path "$env:APPDATA\Jarvis\logs\jarvis.1.log" -Pattern "clipboard privacy check failed"`. Claude could not reach the real clipboard from its sandbox, so the private-mark check has only been tested with fakes. |
@@ -72,5 +73,4 @@ Proposed 2026-11-10 from a survey of the modules and of other assistants. Sir ha
 | Index for search inside files | `search_in_files` (2.64) reads files one by one and stops after 15 s | L | Build an index only if Sir searches big folders often. |
 | Palette: open a calendar event on its day | Ctrl+K opens the Calendar, not the event's date | S | |
 | Screen memory | OCR text of what was on screen, searchable: "the error I saw at 3 pm" | L | Idea from Screenpipe. Needs app exclusions, pause, retention, and a Security.md section. |
-| Meeting prep | Before a calendar event, surface memory notes about the people and topic | M | Needs the event triggers above. |
 | Teach by showing | Record steps Sir does once, replay them as a skill | L | Riskiest; build last, if at all. |

@@ -8,7 +8,8 @@ import { call, cleanError } from '../../lib/api';
 import { useChatStore } from '../../stores/chat-store';
 import { useUiStore } from '../../stores/ui-store';
 import { AUTOMATION_TEMPLATES } from '@shared/automation-templates';
-import { ScheduleEditor } from './schedule-editor';
+import { useSetting } from '../../stores/settings-store';
+import { ScheduleEditor, defaultWatchFolder } from './schedule-editor';
 import { SettingTextArea } from './settings-controls';
 
 type Task = Res<'tasks:list'>[number];
@@ -116,6 +117,7 @@ export function AutomationsSection(): React.JSX.Element {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editing, setEditing] = useState<TaskInput | null>(null);
   const toast = useUiStore((s) => s.toast);
+  const roots = useSetting('files.allowedRoots') ?? [];
   const load = useCallback(() => void call('tasks:list', {}).then(setTasks), []);
   useEffect(() => {
     load();
@@ -257,7 +259,12 @@ export function AutomationsSection(): React.JSX.Element {
                   disabled={added}
                   onClick={() => {
                     const { id: _tplId, blurb: _blurb, ...input } = tpl;
-                    setEditing({ ...input, enabled: true });
+                    // A watched-folder template gets Sir's real folder, which the save then checks.
+                    const schedule =
+                      input.schedule.type === 'newFile'
+                        ? { ...input.schedule, folder: defaultWatchFolder(roots) }
+                        : input.schedule;
+                    setEditing({ ...input, schedule, enabled: true });
                     requestAnimationFrame(() =>
                       document
                         .getElementById('new-automation')
