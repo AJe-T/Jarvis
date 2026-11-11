@@ -66,7 +66,7 @@ export function createCloudClient(deps: BrainDeps, connection: () => string) {
 }
 
 export const isCliBrain = (id: BrainRef): id is CliBrainId =>
-  id === 'chatgpt' || id === 'antigravity';
+  id === 'chatgpt' || id === 'antigravity' || id === 'opencode';
 
 const isConnection = (id: BrainRef): id is `conn_${string}` => CONNECTION_ID_RE.test(id);
 const isCloud = (id: BrainRef): id is CloudProviderId => CLOUD_PROVIDERS.some((p) => p.id === id);

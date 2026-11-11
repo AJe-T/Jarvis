@@ -8,14 +8,16 @@ import { newId } from '../lib/util';
  * Sir's own AI subscriptions, used through each company's official command-line app, signed in
  * with his account (no API key): ChatGPT (Free/Go/Plus/Pro) through OpenAI's Codex CLI, Gemini
  * (Google AI Pro) through Google's Antigravity CLI. Paperclip and OpenClaw drive the same CLIs.
+ * OpenCode (2.71) answers through whatever provider Sir signed it in to (`opencode auth login`).
  *
  * Security.md §CLI brains: they answer only. Codex runs in its read-only sandbox with Sir's Codex
  * config (MCP servers, rules) ignored; Antigravity runs without auto-approval, so any tool request
- * is refused. Both start in an empty folder. Jarvis's own tools do the acting.
+ * is refused. OpenCode runs its read-only "plan" agent with no plugins and no permission flag.
+ * All start in an empty folder. Jarvis's own tools do the acting.
  * ⚠️ Flags verified on 2026-10-16 against codex-cli 0.163.0 and agy (`--help`).
  */
 
-export type CliBrainId = 'chatgpt' | 'antigravity';
+export type CliBrainId = 'chatgpt' | 'antigravity' | 'opencode';
 
 export interface CliBrain {
   id: CliBrainId;
@@ -228,5 +230,107 @@ export function createCliBrains(deps: {
     },
   };
 
-  return { chatgpt, antigravity };
+  const opencodeExe = (): string | null => {
+    const pkg = join(appData, 'npm', 'node_modules', 'opencode-ai', 'node_modules');
+    return pick([
+      join(pkg, 'opencode-windows-x64', 'bin', 'opencode.exe'),
+      join(pkg, 'opencode-windows-x64-baseline', 'bin', 'opencode.exe'),
+      join(pkg, 'opencode-windows-arm64', 'bin', 'opencode.exe'),
+    ]);
+  };
+
+  const opencode: CliBrain = {
+    id: 'opencode',
+    label: 'OpenCode (its own sign-in)',
+    loginArgs: ['auth', 'login'],
+    installHint: 'In a terminal: npm i -g opencode-ai, then "opencode auth login"',
+    find: opencodeExe,
+    async signedIn() {
+      const exe = opencodeExe();
+      if (!exe) return false;
+      const r = await run(exe, ['auth', 'list'], {
+        stdin: '',
+        cwd: cwd(),
+        signal: AbortSignal.timeout(20_000),
+        timeoutMs: 20_000,
+        env: cliEnv(env),
+      }).catch(() => null);
+      const count = /(\d+)\s+credentials?/i.exec(r?.stdout ?? '');
+      return r && r.code === 0 && count ? Number(count[1]) > 0 : null;
+    },
+    async run(prompt, signal) {
+      const exe = opencodeExe();
+      if (!exe)
+        throw new JarvisError(
+          'INVALID',
+          'opencode missing',
+          'Install OpenCode first: run "npm i -g opencode-ai", then "opencode auth login".',
+        );
+      // Its read-only "plan" agent, no plugins, in an empty folder, and no permission flag, so it
+      // can only answer. One argument, like Antigravity ("Request:" first, so it never reads as a flag).
+      const r = await run(
+        exe,
+        [
+          'run',
+          '--format',
+          'json',
+          '--agent',
+          'plan',
+          '--pure',
+          '--dir',
+          cwd(),
+          `Request:\n${prompt.slice(-MAX_ARG_PROMPT)}`,
+        ],
+        { stdin: '', cwd: cwd(), signal, env: cliEnv(env) },
+      );
+      // It exits 0 even when the provider refused the request: the JSON events say what happened.
+      const { answer, error } = openCodeAnswer(r.stdout);
+      if (r.code === 0 && answer && !error) return answer;
+      const why = error ?? (errorLine(r.stderr) || 'no answer');
+      throw new JarvisError(
+        'LLM_BAD_REQUEST',
+        `opencode exit ${r.code}: ${why}`,
+        /auth|credential|sign in|log ?in|401|api key/i.test(why)
+          ? `OpenCode is not signed in to its provider (${why}). Run "opencode auth login" once.`
+          : `OpenCode failed: ${why}`,
+      );
+    },
+  };
+
+  return { chatgpt, antigravity, opencode };
+}
+
+/**
+ * Reads OpenCode's `run --format json` output: one JSON object per line. `text` events carry a
+ * finished piece of the answer in `part.text`; an `error` event carries the provider's message.
+ * ⚠️ Event shapes checked 2026-11-11 against opencode 1.14.48 (the error event live; the text
+ * event from how the program writes it, since no provider would answer on this PC).
+ */
+export function openCodeAnswer(stdout: string): { answer: string; error: string | null } {
+  const texts: string[] = [];
+  let error: string | null = null;
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line.trim().startsWith('{')) continue;
+    let ev: unknown;
+    try {
+      ev = JSON.parse(line);
+    } catch {
+      continue; // a cut-off or non-JSON line
+    }
+    if (!ev || typeof ev !== 'object') continue;
+    const e = ev as {
+      type?: unknown;
+      part?: { text?: unknown };
+      error?: { name?: unknown; data?: { message?: unknown } };
+    };
+    if (e.type === 'text' && typeof e.part?.text === 'string') texts.push(e.part.text.trim());
+    if (e.type === 'error') {
+      const message = e.error?.data?.message;
+      const name = e.error?.name;
+      error = (typeof message === 'string' ? message : typeof name === 'string' ? name : 'error')
+        .replace(/\s+/g, ' ')
+        .slice(0, 240);
+    }
+  }
+  return { answer: texts.filter(Boolean).join('\n\n'), error };
 }

@@ -384,6 +384,7 @@ export const BRAIN_IDS = [
   ...CLOUD_PROVIDER_IDS,
   'chatgpt',
   'antigravity',
+  'opencode',
 ] as const;
 export type BrainId = (typeof BRAIN_IDS)[number];
 
@@ -398,6 +399,7 @@ export const BRAIN_LABELS: Record<BrainId, string> = {
   >),
   chatgpt: 'ChatGPT plan (Codex app)',
   antigravity: 'Gemini plan (Antigravity app)',
+  opencode: 'OpenCode (its own sign-in)',
 };
 
 /** A brain by name, or one of Sir's extra connections by id (conn_openai_2). */

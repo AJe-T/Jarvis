@@ -344,7 +344,7 @@ Found by file name only (`shared/agent-clis.ts`); `detected` ones are not used b
 | `gemini` | Gemini CLI (Google) | `gemini` | detected | 2026-10-17 |
 | `copilot` | GitHub Copilot CLI (GitHub) | `copilot` | detected | 2026-10-16 |
 | `cursor` | Cursor CLI (Cursor) | `cursor-agent` | detected | 2026-10-16 |
-| `opencode` | OpenCode (SST) | `opencode` | detected | 2026-10-17 |
+| `opencode` | OpenCode (SST) | `opencode` | answer-brain | 2026-11-11 |
 | `aider` | Aider (Aider) | `aider` | detected | 2026-10-16 |
 | `goose` | Goose (Block / AAIF) | `goose` | detected | 2026-10-16 |
 | `kimi` | Kimi Code CLI (Moonshot AI) | `kimi` | detected | 2026-10-16 |

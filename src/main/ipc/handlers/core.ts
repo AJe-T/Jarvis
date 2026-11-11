@@ -241,7 +241,7 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
   });
   handle('llm:cliStatus', async () =>
     Promise.all(
-      (['chatgpt', 'antigravity'] as const).map(async (id) => {
+      (['chatgpt', 'antigravity', 'opencode'] as const).map(async (id) => {
         const b = s.brains.cli(id);
         const installed = b?.find() != null;
         return {
@@ -260,6 +260,7 @@ export function registerCoreHandlers(s: Services, hooks: CoreHooks = {}): void {
         claude: s.claudeCode.path(),
         codex: s.brains.cli('chatgpt')?.find() ?? null,
         antigravity: s.brains.cli('antigravity')?.find() ?? null,
+        opencode: s.brains.cli('opencode')?.find() ?? null,
       },
     }),
   );

@@ -62,7 +62,7 @@ All use `main/llm/local-client.ts` (Messages API ↔ OpenAI Chat Completions tra
 | Codex CLI (ChatGPT plan) | Implemented | Answer-only brain `chatgpt`: `exec --sandbox read-only`, user config ignored. |
 | Antigravity CLI (Gemini plan) | Implemented | Answer-only brain `antigravity`: `--print`, no auto-approve. |
 | Gemini CLI | Unsupported (personal accounts) | Tested 2026-10-17: Google refuses personal sign-in in Gemini CLI; use Antigravity or the Gemini API key. |
-| OpenCode | Detected only | Headless mode tested 2026-10-17; needs its own `opencode auth login` before it can be wired. |
+| OpenCode | Answer brain (v2.71) | `run --format json --agent plan --pure --dir <empty folder>`: its read-only agent, no plugins, no permission flag, so it only answers. It exits 0 on provider errors, so the runner reads its JSON events (`text` parts are the answer, an `error` event is the failure). Re-tested 2026-11-11 (1.14.48): **no answer seen on this PC yet**: OpenRouter replied "Missing Authentication header" although a credential is stored, and the free models need OpenCode 1.18 or newer. Until Sir fixes the sign-in it reports exactly that. |
 | GitHub Copilot CLI, Cursor CLI, Aider, Goose | Detected only | Not installed on this PC, so their script mode can't be tested yet. |
 | Kimi Code CLI | Detected only | Windows support not confirmed in its docs. |
 

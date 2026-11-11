@@ -8,7 +8,7 @@ How to keep it:
 - When an item ships, delete it here (the changes log and `docs/BIBLE.md` keep the history).
 - Size: **S** < 1 h · **M** 1–3 h · **L** half a day or more (tests and BIBLE update included).
 
-Last updated: 2026-11-11 (after v2.70.0).
+Last updated: 2026-11-11 (after v2.71.0).
 
 ## 1. Core module
 
@@ -35,6 +35,7 @@ plan with sizes, Sir picks what to do now and what goes back into this file.
 
 | What | How to check |
 |---|---|
+| v2.71 OpenCode brain | It has never answered on this PC. In a terminal: `opencode run "say OK"`. If it says "Missing Authentication header", run `opencode auth login` again (the stored OpenRouter key is refused), or `npm i -g opencode-ai@latest` for the free models (they need 1.18+). Then Settings → Brain → Your AI subscriptions → OpenCode → Test, and give an NPC the OpenCode brain. |
 | v2.70 undo | Ask Jarvis to create a text file on the Desktop, then say "undo that": after the confirmation it is in the Recycle Bin. Ask him to add a task, then Ctrl+K → "Undo: Add task …". Ask him to move a file, edit nothing, undo: it is back. Only tested with a fake Recycle Bin and a fake model. |
 | v2.69 edit by voice | Settings → Dictation → Edit by voice → on. In Notepad type a rough sentence, select it, press Ctrl+Alt+E, say "make this formal", pause: the sentence is replaced. Try Word and a browser text box too, and press the hotkey with nothing selected (a notice, nothing pasted). Never run with a real mic, a real app or a real model: check that Ctrl+C reaches the app (keys released in time) and that your clipboard is as before. |
 | v2.68 meeting prep | Settings → Automations → Templates → **Meeting prep** → Use this → Save. Add a calendar event 8 minutes from now with a person Jarvis knows from memory: a spoken prep should come within a minute. Judge whether the five points are useful or too long. |
@@ -56,7 +57,6 @@ plan with sizes, Sir picks what to do now and what goes back into this file.
 
 | What | Waiting on |
 |---|---|
-| Integrations step 6: OpenCode as an answer brain | **Unblocked (2026-11-10):** `opencode auth list` shows an OpenRouter credential. Ready to build (L) when Sir says. It exits 0 on errors, so read its JSON events. |
 | Gemini CLI | Refuses personal accounts. |
 | Copilot CLI | Only the VS Code shim is installed. |
 | Bedrock, Vertex, Azure providers | No cloud accounts. Ask Sir before building them. |

@@ -722,7 +722,7 @@ export const INVOKE = {
     Empty,
     z.array(
       z.object({
-        id: z.enum(['chatgpt', 'antigravity']),
+        id: z.enum(['chatgpt', 'antigravity', 'opencode']),
         label: z.string(),
         installed: z.boolean(),
         signedIn: z.boolean().nullable(),
@@ -748,9 +748,9 @@ export const INVOKE = {
       }),
     ),
   ),
-  'llm:cliLogin': contract(z.object({ id: z.enum(['chatgpt', 'antigravity']) }), Ok),
+  'llm:cliLogin': contract(z.object({ id: z.enum(['chatgpt', 'antigravity', 'opencode']) }), Ok),
   'llm:cliTest': contract(
-    z.object({ id: z.enum(['chatgpt', 'antigravity']) }),
+    z.object({ id: z.enum(['chatgpt', 'antigravity', 'opencode']) }),
     z.object({ ok: z.boolean(), error: z.string().optional() }),
   ),
   'location:detect': contract(Empty, z.object({ town: z.string() })),

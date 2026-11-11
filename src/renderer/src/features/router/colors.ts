@@ -18,6 +18,7 @@ export const PROVIDER_COLORS: Record<string, string> = {
   local: '#22d3ee',
   chatgpt: '#10a37f',
   antigravity: '#fbbc04',
+  opencode: '#8b9cb3',
   cerebras: '#f15a29',
   cloudflare: '#f6821f',
   nvidia: '#76b900',
