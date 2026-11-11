@@ -1275,6 +1275,15 @@ export const INVOKE = {
     }),
   ),
   'timeline:clear': contract(Empty, Ok),
+  /** Undo (2.70): the last thing Jarvis changed, and taking it back (the UI confirms first). */
+  'undo:peek': contract(
+    Empty,
+    z.object({ id: z.number().int(), label: z.string(), at: z.number() }).nullable(),
+  ),
+  'undo:run': contract(
+    z.object({ id: z.number().int().min(1) }),
+    z.object({ ok: z.boolean(), message: z.string() }),
+  ),
   /** NPCs (2.21): Sir's team of single-purpose agents, Jarvis at their head. */
   'npcs:list': contract(
     Empty,

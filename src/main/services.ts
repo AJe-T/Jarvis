@@ -72,6 +72,7 @@ import {
   reportingOwnCopies,
 } from './tools/native/clipboard-history';
 import { createNativeTools } from './tools/native/index';
+import { createUndoJournal, createUndoTool, undoablePlanner } from './tools/undo-journal';
 import { createTimeline, createTimelineTool } from './tools/everyday/timeline';
 import { createAgentDesktop, findAgentDesktop } from './tools/native/agent-desktop';
 import type { OsAdapter } from './tools/native/os';
@@ -235,6 +236,8 @@ export function createServices(opts: ServiceOptions) {
     if (key === 'persona' || key === 'quiet.until' || key === 'offline.enabled')
       opts.emit('settings:changed', { key, value });
   });
+  // Undo (2.70): what Jarvis changed, newest last, each with the way to take it back.
+  const undo = createUndoJournal();
   // Clipboard history (2.65): memory only, and never the copies Jarvis makes himself.
   const clipboardHistory = createClipboardHistory({
     read: () => opts.os.clipboardRead(),
@@ -547,7 +550,8 @@ export function createServices(opts: ServiceOptions) {
     freeSearchShown: (scope) =>
       scope ? freeSearchFits(scope) : settings.get('pool.abilities.search'),
   });
-  for (const tool of createPlannerTools(planner, (view) => {
+  // Jarvis's own task and calendar changes can be undone; what Sir does in the app is not journaled.
+  for (const tool of createPlannerTools(undoablePlanner(planner, undo), (view) => {
     opts.emit('nav:open', { view });
     for (const l of navListeners) l(view);
   }))
@@ -658,7 +662,9 @@ export function createServices(opts: ServiceOptions) {
     enabled: () => settings.get('pc.agentDesktop'),
   });
   if (agentDesktopPath) logger.info({ path: agentDesktopPath }, 'agent-desktop found');
+  registry.register(createUndoTool(undo));
   for (const tool of createNativeTools({
+    undo,
     agentDesktop,
     onShellRun: (script, r, ms) => terminal.record(script, r, ms),
     os: os,
@@ -893,6 +899,7 @@ export function createServices(opts: ServiceOptions) {
     os,
     clipboardHistory,
     timeline,
+    undo,
     settings,
     secrets,
     conversations,

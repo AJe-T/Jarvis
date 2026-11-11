@@ -63,6 +63,15 @@ describe('command palette search', () => {
     expect(localItems(sources).some((i) => i.run.kind === 'clearClips')).toBe(false);
   });
 
+  it('offers to undo the last thing Jarvis changed, in the opening menu too', () => {
+    const items = localItems({ ...sources, undo: { id: 3, label: 'Move report.pdf to Archive' } });
+    const first = matchItems(items, 'undo')[0];
+    expect(first?.label).toBe('Undo: Move report.pdf to Archive');
+    expect(first?.run).toEqual({ kind: 'undo', id: 3, label: 'Move report.pdf to Archive' });
+    expect(matchItems(items, '').some((i) => i.run.kind === 'undo')).toBe(true);
+    expect(localItems({ ...sources, undo: null }).some((i) => i.run.kind === 'undo')).toBe(false);
+  });
+
   it('caps each group at six, drops repeats and puts labels that start with the query first', () => {
     const many = Array.from({ length: 9 }, (_, i) => ({
       id: `chat:${i}`,

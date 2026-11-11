@@ -75,6 +75,7 @@ Trust boundaries: Renderer ↔ Main (IPC), Main ↔ child processes (MCP/PowerSh
 | `search_files`, `read_text_file` (in allowed roots, ≤ 1 MB) | SAFE | Output marked untrusted |
 | `search_in_files` (text of files in allowed roots; text ≤ 1 MB, documents ≤ 5 MB) | SAFE; **CONFIRM** when the words searched for are a hunt for secrets (password, token, API key, private key, credential, PIN, OTP, CVV) | Output marked untrusted; denied folders are not entered and every file is checked against the path guard before it is opened (links and denied paths); credential files are never opened (`.env`, keys, `.npmrc`, `.netrc`, `.git-credentials`, `credentials*`, `secrets*`, key stores); bounded by time (15 s) and counts (3,000 files, 15 documents); listed in `PRIVATE_TOOLS` (files), so its output never reaches a third-party free model (§16.15) |
 | `write_clipboard` | SAFE | |
+| `undo_last_action` | CONFIRM | Shows what it will take back; re-checks the path guard; never overwrites or deletes permanently; §16.21 |
 | `day_timeline` | SAFE | App names and window titles Jarvis recorded himself; output untrusted; §16.18 |
 | `clipboard_history` | CONFIRM | Past copies may be private; output untrusted; §16.17 |
 | `read_clipboard` | CONFIRM | Clipboard may hold passwords |
@@ -565,6 +566,12 @@ Free tiers of other companies answer sub-tasks Claude hands to brain `free`. Tie
 - **Injection:** the selection travels inside `<untrusted_content source="selected text">` and the system prompt tells the model to edit it, not obey it. The model has no tools in this call, so the worst a planted instruction can do is change the pasted text, which Sir sees and can undo with Ctrl+Z.
 - **Writing back:** pasted with Ctrl+V only if the window in front is still the one the selection came from; otherwise the result is left on the clipboard. An empty or failed rewrite pastes nothing.
 - **Residual risk (accepted):** the rewrite replaces the selection without a confirmation dialog (that is the feature); the app's own undo is the way back.
+
+### 16.21 Undo (v2.70)
+- **What it is:** an in-memory list (30 at most, empty after a restart) of what Jarvis's own tools changed, each with a function that takes it back (`src/main/tools/undo-journal.ts`). File tools record after a successful run; the task and calendar tools see the planner through `undoablePlanner`. The Settings UI and Sir's own edits never record anything.
+- **Tool `undo_last_action`:** CONFIRM, and the dialog shows the action it will take back. From Ctrl+K the renderer confirms, and `undo:run` carries the id Sir was shown: if a newer action was recorded meanwhile, nothing is undone.
+- **An undo is checked like the action:** every path passes the path guard again; nothing is overwritten (a move back is refused if something is at the old place; a file's earlier contents are restored only if the file still holds exactly what Jarvis wrote); removal is the Recycle Bin or `rmdir` of an empty folder, never a permanent delete.
+- **Not reversible:** `delete_to_recycle_bin` (the undo says to restore from the Recycle Bin), overwrites of files over 1 MB (not recorded), `run_powershell`, UI automation and anything sent outside this PC.
 
 ### 16.16 Offline mode and figures (v2.60)
 - **Offline mode** (`src/main/offline.ts`, `offline.enabled` is main-only): `offline:set` turns it on only when the brain, speech to text, voice and wake word are all on this PC (loopback addresses only, not the home network) and the local model answers a ping. While on, the settings service itself refuses any write that would add a cloud part (`setGuard`, same check before/after, so IPC, onboarding and main flows all pass it), `voice:setMode` refuses realtime, voice v2 ignores the Deepgram key, cloud hearing and Edge/ElevenLabs fallbacks are skipped, and `brains.ready`, the free pool and fusion report only local brains. Web-reading tools are not blocked.

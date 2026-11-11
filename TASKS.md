@@ -8,7 +8,7 @@ How to keep it:
 - When an item ships, delete it here (the changes log and `docs/BIBLE.md` keep the history).
 - Size: **S** < 1 h · **M** 1–3 h · **L** half a day or more (tests and BIBLE update included).
 
-Last updated: 2026-11-11 (after v2.69.0).
+Last updated: 2026-11-11 (after v2.70.0).
 
 ## 1. Core module
 
@@ -35,6 +35,7 @@ plan with sizes, Sir picks what to do now and what goes back into this file.
 
 | What | How to check |
 |---|---|
+| v2.70 undo | Ask Jarvis to create a text file on the Desktop, then say "undo that": after the confirmation it is in the Recycle Bin. Ask him to add a task, then Ctrl+K → "Undo: Add task …". Ask him to move a file, edit nothing, undo: it is back. Only tested with a fake Recycle Bin and a fake model. |
 | v2.69 edit by voice | Settings → Dictation → Edit by voice → on. In Notepad type a rough sentence, select it, press Ctrl+Alt+E, say "make this formal", pause: the sentence is replaced. Try Word and a browser text box too, and press the hotkey with nothing selected (a notice, nothing pasted). Never run with a real mic, a real app or a real model: check that Ctrl+C reaches the app (keys released in time) and that your clipboard is as before. |
 | v2.68 meeting prep | Settings → Automations → Templates → **Meeting prep** → Use this → Save. Add a calendar event 8 minutes from now with a person Jarvis knows from memory: a spoken prep should come within a minute. Judge whether the five points are useful or too long. |
 | v2.67 event automations | Settings → Automations → new: "When a file appears" in Downloads, prompt "Tell me what this file is". Save, wait a minute, download a file: within about a minute a run starts and names it. Then one "Before a calendar event" (10 min) with an event 8 minutes from now, and one "When a task is overdue" with a task due a minute ago. Only tested with a fake model and a fake folder so far. |
@@ -67,7 +68,6 @@ Proposed 2026-11-10 from a survey of the modules and of other assistants. Sir ha
 | Idea | What it gives | Size | Notes |
 |---|---|---|---|
 | "Send to" on older replies | The 2.64 chips (Add to tasks, Add to calendar, Save to Space) sit under the latest reply only | S | Add a hover menu on every reply if Sir wants it. |
-| Action journal + "undo that" | Reverse Jarvis's file, task and calendar changes | L | Touches `tools/executor.ts`. |
 | Tests for untested modules | `copilot`, `inference`, `npcs`, `scheduler`, `settings`, `skills`, `spaces`, `ipc` | M per batch | No visible change. |
 | Split oversized files | `voice-controller.ts`, `ipc-contract.ts`, `voice-system.ts`, `services.ts` are over 800 lines | L | No visible change. |
 | Index for search inside files | `search_in_files` (2.64) reads files one by one and stops after 15 s | L | Build an index only if Sir searches big folders often. |

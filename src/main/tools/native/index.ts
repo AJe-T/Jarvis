@@ -6,6 +6,7 @@ import { createAppTools } from './apps';
 import { createDocumentTool } from './documents';
 import { createFileTools } from './files';
 import { createMiscTools } from './misc';
+import type { UndoJournal } from '../undo-journal';
 import type { OsAdapter } from './os';
 import { createShellTool } from './shell';
 import { createSystemTools } from './system';
@@ -24,6 +25,8 @@ export interface NativeToolDeps {
   onShellRun?: Parameters<typeof createShellTool>[1];
   /** vercel-labs/agent-desktop when installed: quicker UI tools, and notifications. */
   agentDesktop?: AgentDesktop;
+  /** File changes record their undo here. */
+  undo?: UndoJournal;
 }
 
 /** API-Guide.md §2.3 v1 native tool catalogue (memory/routines/delegation tools are added by their phases). */
@@ -39,6 +42,7 @@ export function createNativeTools(d: NativeToolDeps): Tool[] {
       guard: d.guard,
       roots: d.roots,
       protectedPaths: d.protectedPaths,
+      ...(d.undo ? { undo: d.undo } : {}),
     }),
     createDocumentTool(d.guard),
     ...createMiscTools(d.os, d.scheduler),

@@ -5,7 +5,7 @@ import { handle } from '../handle';
 const PREVIEW_CHARS = 300;
 
 /**
- * Clipboard history and day timeline channels (Security.md §16.17, §16.18). The renderer gets
+ * Clipboard history, day timeline and undo channels (Security.md §16.17, §16.18, §16.21). The renderer gets
  * short clipboard previews only; the full text goes straight from the history back to the
  * clipboard, never through the window.
  */
@@ -28,6 +28,20 @@ export function registerClipboardHandlers(s: Services): void {
     s.timeline.clear();
     s.audit.append('user', 'timeline.clear', {});
     return { ok: true };
+  });
+  // Undo (Security.md §16.21): the id makes sure the action taken back is the one Sir was shown.
+  handle('undo:peek', () => s.undo.last() ?? null);
+  handle('undo:run', async (req) => {
+    const done = await s.undo.undoLast(req.id);
+    if (!done)
+      return { ok: false, message: 'That is no longer the last action, so nothing was undone.' };
+    s.audit.append('user', 'undo.run', { label: done.label, ok: done.ok });
+    return {
+      ok: done.ok,
+      message: done.ok
+        ? `Undid "${done.label}". ${done.result}`
+        : `Could not undo "${done.label}": ${done.result}`,
+    };
   });
   handle('clipboard:clear', () => {
     s.clipboardHistory.clear();

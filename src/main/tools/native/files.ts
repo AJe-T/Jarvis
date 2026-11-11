@@ -1,11 +1,22 @@
 import { existsSync, statSync } from 'node:fs';
-import { cp, mkdir, open, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  rename,
+  rmdir,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type { Tier } from '@shared/types';
 import { ToolError } from '../../errors';
 import type { PathGuard } from '../../security/path-guard';
 import { defineTool, fail, ok, type Tool } from '../types';
+import type { UndoJournal } from '../undo-journal';
 import { DOCUMENT_EXT, documentText } from './documents';
 import type { OsAdapter } from './os';
 
@@ -49,6 +60,8 @@ export interface FileToolDeps {
   roots(): string[];
   /** Paths that must never be deleted/moved even inside allowed roots (the vault root). */
   protectedPaths(): string[];
+  /** Where each change records how to take it back ("undo that"). */
+  undo?: UndoJournal;
 }
 
 function list(paths: string[]): string {
@@ -184,6 +197,28 @@ async function searchContents(
 
 export function createFileTools(deps: FileToolDeps): Tool[] {
   const { guard } = deps;
+
+  /** An undo acts on the same paths again, so they must still be inside the allowed folders. */
+  const stillAllowed = (...paths: string[]): void => {
+    for (const p of paths)
+      if (!guard.check(p).ok) throw new Error(`${p} is no longer inside your allowed folders.`);
+  };
+  /** rename, or copy + Recycle Bin across drives (never a permanent delete). */
+  const moveAcross = (from: string, to: string): Promise<void> =>
+    rename(from, to).catch(async (err: NodeJS.ErrnoException) => {
+      if (err.code !== 'EXDEV') throw err;
+      await cp(from, to, { recursive: true, errorOnExist: true });
+      await deps.os.trashItem(from);
+    });
+  /** Undo of a move or rename: back to where it was, unless something took its place. */
+  const moveBack = async (now: string, original: string): Promise<string> => {
+    stillAllowed(now, original);
+    if (!existsSync(now)) throw new Error(`${now} is no longer there.`);
+    if (existsSync(original) && original.toLowerCase() !== now.toLowerCase())
+      throw new Error(`Something else is at ${original} now, so nothing was moved.`);
+    await moveAcross(now, original);
+    return `Moved it back to ${original}.`;
+  };
   return [
     defineTool({
       name: 'search_files',
@@ -317,10 +352,30 @@ export function createFileTools(deps: FileToolDeps): Tool[] {
         const file = guard.resolve(p);
         if (existsSync(file) && !overwrite)
           return fail(`${file} already exists. Set overwrite to true to replace it.`);
+        // What was there before, so the write can be undone (a bigger file is replaced for good).
+        const existed = existsSync(file);
+        const before =
+          existed && statSync(file).size <= MAX_READ ? await readFile(file, 'utf8') : null;
         await mkdir(path.dirname(file), { recursive: true });
         const tmp = `${file}.jarvis-tmp`;
         await writeFile(tmp, content, 'utf8');
         await rename(tmp, file);
+        if (!existed || before !== null)
+          deps.undo?.record(
+            `${existed ? 'Overwrite' : 'Create'} ${path.basename(file)}`,
+            async () => {
+              stillAllowed(file);
+              if (!existsSync(file)) throw new Error(`${file} is already gone.`);
+              if ((await readFile(file, 'utf8')) !== content)
+                throw new Error(`${path.basename(file)} was changed since, so it was left alone.`);
+              if (before === null) {
+                await deps.os.trashItem(file);
+                return `Moved ${path.basename(file)} to the Recycle Bin.`;
+              }
+              await writeFile(file, before, 'utf8');
+              return `Put the earlier contents of ${path.basename(file)} back.`;
+            },
+          );
         return ok(`Saved ${file}.`);
       },
     }),
@@ -342,6 +397,18 @@ export function createFileTools(deps: FileToolDeps): Tool[] {
         const dir = guard.resolve(p);
         if (existsSync(dir)) return ok(`${dir} already exists.`);
         await mkdir(dir, { recursive: true });
+        deps.undo?.record(`Create folder ${path.basename(dir)}`, async () => {
+          stillAllowed(dir);
+          // rmdir removes an empty folder only: anything put in it since keeps it.
+          await rmdir(dir).catch((err: NodeJS.ErrnoException) => {
+            throw new Error(
+              err.code === 'ENOTEMPTY'
+                ? `${path.basename(dir)} has things in it now, so it was left alone.`
+                : `${dir} could not be removed.`,
+            );
+          });
+          return `Removed the empty folder ${path.basename(dir)}.`;
+        });
         return ok(`Created ${dir}.`);
       },
     }),
@@ -369,11 +436,11 @@ export function createFileTools(deps: FileToolDeps): Tool[] {
           dest = guard.resolve(path.join(dest, path.basename(src)));
         if (existsSync(dest)) return fail(`${dest} already exists; choose another name.`);
         await mkdir(path.dirname(dest), { recursive: true });
-        await rename(src, dest).catch(async (err: NodeJS.ErrnoException) => {
-          if (err.code !== 'EXDEV') throw err;
-          await cp(src, dest, { recursive: true, errorOnExist: true });
-          await deps.os.trashItem(src); // cross-drive move: copy, then Recycle Bin (never permanent delete)
-        });
+        await moveAcross(src, dest);
+        const finalDest = dest;
+        deps.undo?.record(`Move ${path.basename(src)} to ${path.dirname(finalDest)}`, () =>
+          moveBack(finalDest, src),
+        );
         return ok(`Moved to ${dest}.`);
       },
     }),
@@ -406,6 +473,7 @@ export function createFileTools(deps: FileToolDeps): Tool[] {
         if (existsSync(dest) && dest.toLowerCase() !== src.toLowerCase())
           return fail(`${newName} already exists there.`);
         await rename(src, dest);
+        deps.undo?.record(`Rename ${path.basename(src)} to ${newName}`, () => moveBack(dest, src));
         return ok(`Renamed to ${dest}.`);
       },
     }),
@@ -432,6 +500,13 @@ export function createFileTools(deps: FileToolDeps): Tool[] {
           dest = guard.resolve(path.join(dest, path.basename(src)));
         if (existsSync(dest)) return fail(`${dest} already exists.`);
         await cp(src, dest, { recursive: true, errorOnExist: true });
+        const copy = dest;
+        deps.undo?.record(`Copy ${path.basename(src)} to ${path.dirname(copy)}`, async () => {
+          stillAllowed(copy);
+          if (!existsSync(copy)) throw new Error(`${copy} is already gone.`);
+          await deps.os.trashItem(copy);
+          return `Moved the copy ${path.basename(copy)} to the Recycle Bin.`;
+        });
         return ok(`Copied to ${dest}.`);
       },
     }),
@@ -469,6 +544,17 @@ export function createFileTools(deps: FileToolDeps): Tool[] {
           await deps.os.trashItem(p);
           done++;
         }
+        // Honest, not magic: Jarvis has no safe way to pull an item back out of the Recycle Bin.
+        if (done > 0)
+          deps.undo?.record(
+            done === 1
+              ? `Move ${path.basename(resolved[0] ?? '')} to the Recycle Bin`
+              : `Move ${done} items to the Recycle Bin`,
+            () =>
+              Promise.resolve(
+                'Jarvis cannot take things out of the Recycle Bin himself. Open the Recycle Bin, select them and choose Restore.',
+              ),
+          );
         return ok(
           `Moved ${done} item(s) to the Recycle Bin.${missing.length ? ` Not found: ${missing.join(', ')}` : ''}`,
         );

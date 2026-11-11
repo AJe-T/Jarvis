@@ -22,7 +22,8 @@ export type PaletteRun =
   | { kind: 'newChat' }
   | { kind: 'toggleSidebar' }
   | { kind: 'clip'; id: number }
-  | { kind: 'clearClips' };
+  | { kind: 'clearClips' }
+  | { kind: 'undo'; id: number; label: string };
 
 export interface PaletteItem {
   id: string;
@@ -43,6 +44,8 @@ export interface PaletteSources {
   chats: Array<{ id: string; title: string | null }>;
   /** Clipboard history previews, newest first (empty while the setting is off). */
   clips?: Array<{ id: number; preview: string }>;
+  /** The last thing Jarvis changed that can be taken back, if any. */
+  undo?: { id: number; label: string } | null;
 }
 
 const PER_GROUP = 6;
@@ -64,6 +67,17 @@ export function localItems(s: PaletteSources): PaletteItem[] {
       keywords: 'rail menu',
       run: { kind: 'toggleSidebar' },
     },
+    ...(s.undo
+      ? [
+          {
+            id: 'action:undo',
+            group: 'Actions',
+            label: `Undo: ${s.undo.label}`,
+            keywords: 'take back revert put it back',
+            run: { kind: 'undo', id: s.undo.id, label: s.undo.label },
+          } satisfies PaletteItem,
+        ]
+      : []),
     ...((s.clips?.length ?? 0) > 0
       ? [
           {

@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Search } from 'lucide-react';
 import { NAV_ITEMS } from '../../components/jarvis/rail';
 import type { Res } from '@shared/ipc-contract';
+import { confirmAction } from '../../components/ui/confirm-modal';
 import { call, cleanError } from '../../lib/api';
 import { useChatStore } from '../../stores/chat-store';
 import { usePlannerStore } from '../../stores/planner-store';
@@ -42,6 +43,20 @@ function run(r: PaletteRun): void {
         () => ui.toast({ level: 'info', message: 'Copied again. Paste it with Ctrl+V.' }),
         (err: unknown) => ui.toast({ level: 'error', message: cleanError(err) }),
       );
+    case 'undo':
+      return void confirmAction({
+        title: 'Undo this?',
+        body: r.label,
+        actionLabel: 'Undo',
+        destructive: false,
+      }).then(async (yes) => {
+        if (!yes) return;
+        const done = await call('undo:run', { id: r.id }).catch((err: unknown) => ({
+          ok: false,
+          message: cleanError(err),
+        }));
+        ui.toast({ level: done.ok ? 'info' : 'error', message: done.message });
+      });
     case 'clearClips':
       return void call('clipboard:clear', {}).then(() =>
         ui.toast({ level: 'info', message: 'Clipboard history cleared.' }),
@@ -135,6 +150,7 @@ export function Palette(): React.JSX.Element | null {
   const pages = useSpacePages(open);
   const clipsOn = useSetting('clipboard.history') === true;
   const [clips, setClips] = useState<Res<'clipboard:history'>>([]);
+  const [undo, setUndo] = useState<Res<'undo:peek'>>(null);
   const remote = useRemoteHits(open ? query : '');
 
   useEffect(() => {
@@ -155,6 +171,7 @@ export function Palette(): React.JSX.Element | null {
     if (!usePlannerStore.getState().loaded) void usePlannerStore.getState().refresh();
     if (clipsOn) void call('clipboard:history', {}).then(setClips, () => setClips([]));
     else setClips([]);
+    void call('undo:peek', {}).then(setUndo, () => setUndo(null));
   }, [open, clipsOn]);
 
   const local = useMemo(
@@ -167,8 +184,9 @@ export function Palette(): React.JSX.Element | null {
         spaces: spaces.map((s) => ({ name: s.name, pages: pages[s.name] ?? [] })),
         chats,
         clips,
+        undo,
       }),
-    [todos, events, spaces, pages, chats, clips],
+    [todos, events, spaces, pages, chats, clips, undo],
   );
   const results = useMemo(
     () => groupItems([...matchItems(local, query), ...remote], query),
