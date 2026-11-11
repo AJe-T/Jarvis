@@ -233,7 +233,8 @@ describe('fallback both ways', () => {
     await ask(t, 'Explain how rainbows form.', id);
     expect(t.calls).toHaveLength(0);
     expect(notices(t).filter((n) => n.includes('budget'))).toHaveLength(3);
-  });
+    // Four turns in a row: more than the default 5 s when the PC is busy (a build, the e2e suite).
+  }, 20_000);
 
   it('a third-party AI taking over gets only the current question, never the hand-over note', async () => {
     let groq = 0;
