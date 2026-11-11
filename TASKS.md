@@ -8,7 +8,7 @@ How to keep it:
 - When an item ships, delete it here (the changes log and `docs/BIBLE.md` keep the history).
 - Size: **S** < 1 h · **M** 1–3 h · **L** half a day or more (tests and BIBLE update included).
 
-Last updated: 2026-11-11 (after v2.66.0).
+Last updated: 2026-11-11 (after v2.67.0).
 
 ## 1. Core module
 
@@ -35,6 +35,7 @@ plan with sizes, Sir picks what to do now and what goes back into this file.
 
 | What | How to check |
 |---|---|
+| v2.67 event automations | Settings → Automations → new: "When a file appears" in Downloads, prompt "Tell me what this file is". Save, wait a minute, download a file: within about a minute a run starts and names it. Then one "Before a calendar event" (10 min) with an event 8 minutes from now, and one "When a task is overdue" with a task due a minute ago. Only tested with a fake model and a fake folder so far. |
 | v2.66 day timeline | Settings → Privacy → turn on "Keep a day timeline". Work for ten minutes in two apps, then Settings → Activity → My day: both apps listed with about the right minutes. Open an InPrivate window: the browser is counted, the title is not shown. Ask "where did my day go". |
 | v2.65 clipboard history | Settings → Privacy → turn on "Keep a clipboard history". Copy three things, press Ctrl+K, type "clipboard": all three listed; Enter on one, then paste. Copy a password from Jarvis's Passwords (and from your own password manager if you use one): it must NOT appear. If nothing is ever listed: `Select-String -Path "$env:APPDATA\Jarvis\logs\jarvis.1.log" -Pattern "clipboard privacy check failed"`. Claude could not reach the real clipboard from its sandbox, so the private-mark check has only been tested with fakes. |
 | v2.64 search, chips and file search | Press Ctrl+K and type a task, a chat word, "microphone"; open a memory note from it. Under a reply use **Add to tasks** and **Save to Space**. Ask "find the file that mentions <a word>" and check the time it takes on your real Documents folder. |
@@ -63,7 +64,6 @@ Proposed 2026-11-10 from a survey of the modules and of other assistants. Sir ha
 
 | Idea | What it gives | Size | Notes |
 |---|---|---|---|
-| Event triggers for automations | Act when something happens: meeting in 10 min, task overdue, new file in a folder | L | `src/shared/schedule.ts` has only time and startup types. Security pass needed. |
 | "Send to" on older replies | The 2.64 chips (Add to tasks, Add to calendar, Save to Space) sit under the latest reply only | S | Add a hover menu on every reply if Sir wants it. |
 | Action journal + "undo that" | Reverse Jarvis's file, task and calendar changes | L | Touches `tools/executor.ts`. |
 | Tests for untested modules | `copilot`, `inference`, `npcs`, `scheduler`, `settings`, `skills`, `spaces`, `ipc` | M per batch | No visible change. |

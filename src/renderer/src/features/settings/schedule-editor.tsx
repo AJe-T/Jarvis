@@ -1,4 +1,5 @@
 import type { ScheduleInput as Schedule } from '@shared/schedule';
+import { useSetting } from '../../stores/settings-store';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const INPUT = 'min-h-8 rounded-md border border-line bg-surface-2 px-2 text-ink-100';
@@ -9,6 +10,9 @@ const TYPES: Record<Schedule['type'], string> = {
   once: 'Once',
   monthly: 'Monthly',
   startup: 'When Jarvis starts',
+  beforeEvent: 'Before a calendar event',
+  taskOverdue: 'When a task is overdue',
+  newFile: 'When a file appears',
 };
 
 /** "YYYY-MM-DDTHH:mm" for tomorrow 09:00, local time (what datetime-local wants). */
@@ -19,7 +23,7 @@ function tomorrowNine(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T09:00`;
 }
 
-const fresh = (type: Schedule['type']): Schedule => {
+const fresh = (type: Schedule['type'], folder: string): Schedule => {
   switch (type) {
     case 'daily':
       return { type, time: '09:00', days: [] };
@@ -31,6 +35,12 @@ const fresh = (type: Schedule['type']): Schedule => {
       return { type, day: 1, time: '09:00' };
     case 'startup':
       return { type, delayMinutes: 0 };
+    case 'beforeEvent':
+      return { type, minutes: 10 };
+    case 'taskOverdue':
+      return { type };
+    case 'newFile':
+      return { type, folder };
   }
 };
 
@@ -42,12 +52,15 @@ export function ScheduleEditor({
   value: Schedule;
   onChange(s: Schedule): void;
 }): React.JSX.Element {
+  // A watched folder starts as Downloads when it is allowed, else the first allowed folder.
+  const roots = useSetting('files.allowedRoots') ?? [];
+  const firstRoot = roots.find((r) => /downloads$/i.test(r)) ?? roots[0] ?? '';
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm text-ink-300">
       <select
         aria-label="Schedule type"
         value={value.type}
-        onChange={(e) => onChange(fresh(e.target.value as Schedule['type']))}
+        onChange={(e) => onChange(fresh(e.target.value as Schedule['type'], firstRoot))}
         className={INPUT}
       >
         {Object.entries(TYPES).map(([k, label]) => (
@@ -87,6 +100,42 @@ export function ScheduleEditor({
           })}
           <span className="text-ink-500">(no days ticked = every day)</span>
         </>
+      )}
+      {value.type === 'beforeEvent' && (
+        <label className="flex items-center gap-2">
+          <input
+            type="number"
+            min={5}
+            max={120}
+            step={5}
+            aria-label="Minutes before the event"
+            value={value.minutes}
+            onChange={(e) =>
+              onChange({
+                type: 'beforeEvent',
+                minutes: Math.min(120, Math.max(5, Math.round(Number(e.target.value) || 5))),
+              })
+            }
+            className={`${INPUT} w-20`}
+          />
+          minutes before it starts (not for all-day events)
+        </label>
+      )}
+      {value.type === 'taskOverdue' && (
+        <span className="text-ink-500">runs once for each task, when its due time passes</span>
+      )}
+      {value.type === 'newFile' && (
+        <label className="flex min-w-0 flex-1 items-center gap-2">
+          in
+          <input
+            type="text"
+            aria-label="Folder to watch"
+            placeholder="A folder inside your allowed folders"
+            value={value.folder}
+            onChange={(e) => onChange({ type: 'newFile', folder: e.target.value })}
+            className={`${INPUT} min-w-0 flex-1`}
+          />
+        </label>
       )}
       {value.type === 'interval' && (
         <label className="flex items-center gap-2">

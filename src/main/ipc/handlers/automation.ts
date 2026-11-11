@@ -29,6 +29,13 @@ const view = (t: TaskRow) => {
 export function registerAutomationHandlers(s: Services, a: Automation): void {
   handle('tasks:list', () => a.repo.list().map(view));
   handle('tasks:save', (req) => {
+    // A watched folder must be one Sir allowed (the watcher re-checks it on every look).
+    if (req.schedule.type === 'newFile' && !s.pathGuard.check(req.schedule.folder).ok)
+      throw new JarvisError(
+        'INVALID',
+        'folder not allowed',
+        'That folder is not inside your allowed folders (Settings → Files).',
+      );
     const t = a.repo.upsert(req);
     s.audit.append('user', 'task.save', { id: t.id, name: t.name, enabled: req.enabled });
     emit('tasks:changed', {});

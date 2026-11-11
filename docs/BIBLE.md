@@ -379,6 +379,11 @@ Settings → **Automations**, or just say "every Friday at 5 pm summarise my wee
   - **Task:** do something and report.
   - **Check-in:** speaks up only when something is worth saying.
 - **When (2.9 adds the last three):** at a time on chosen days, every N minutes, **once** on a date and time, **monthly** on a day (29–31 run on the last day of shorter months), or **each time Jarvis starts** (after a delay you choose; 20 s grace for startup to settle). Say "on the 1st of each month check my bills", "tomorrow at 9 remind me…", "each time you start, tell me what's overdue".
+- **On an event (2.67):** an automation can also run when something happens, chosen in the same "when" list or by asking ("ten minutes before every meeting, brief me", "when a task goes overdue, tell me", "when a file lands in Downloads, tell me what it is"):
+  - **Before a calendar event:** 5–120 minutes before each event starts (repeating events too; never all-day events).
+  - **When a task is overdue:** once per task, when its due time passes (a date with no time counts as overdue the next day). Tasks that slip together are reported in one run; tasks already overdue for more than a day are not news.
+  - **When a file appears:** in a folder inside your allowed folders. The first look only notes what is there; downloads still in progress (`.crdownload`, `.part`, `.tmp`) and Office lock files are ignored. Files that arrive while Jarvis is closed are not reported.
+  - Checked every 30 seconds while Jarvis runs; one automation starts at most one run every 2 minutes, and never while its last run is still going. What happened (event title, task title, file name) is given to Jarvis as data, never as instructions.
 - **Templates (2.9):** Evening wrap-up, Weekly review, When I start Jarvis, Late-morning focus nudge, Monthly bills check, Lunchtime news, Stretch and water break, Claude Code watch. **Use this** fills the editor so you can adjust before saving.
 - **Buttons:** Run now, **Last result** (opens its latest conversation), Edit, **Duplicate** (a switched-off copy to change), Delete.
 - **When they run:**
@@ -904,6 +909,7 @@ If `laya:install` reports a mismatch, this export differs from the pinned one (f
 | 1.0 | Polish and packaging: mini orb, backups, usage dashboard, installer with fuses |
 | 1.1 | Claude subscription connection |
 | 1.2 | On-device voice (Whisper, openWakeWord); 1.2.1 fixed the wake word never hearing anything |
+| 2.67 | **Automations that run on an event.** Three new "when" choices: before a calendar event, when a task goes overdue, when a file appears in an allowed folder (migration 023 remembers what was already announced). What set a run off reaches the model wrapped as untrusted data. |
 | 2.66 | **Day timeline.** The app and window in front, once a minute while you are at the PC, kept 30 days (migration 022); Settings → Activity → My day, or ask "where did my day go". Off until turned on in Settings → Privacy. |
 | 2.65 | **Clipboard history.** The last 50 text copies, in memory only, found with Ctrl+K or by asking; off until turned on in Settings → Privacy. Private-marked copies, Jarvis's own copies and secret-looking text are never kept. |
 | 2.64 | **Search everything (Ctrl+K), search inside files, send a reply to Tasks, Calendar or Spaces.** A command palette finds screens, settings, tasks, events, Spaces pages, chats and memory notes. New tool `search_in_files` finds files by their text (plain text, PDF, Word, Excel, PowerPoint) inside the allowed folders. The latest reply has **Add to tasks**, **Save to Space** and, when it names a time, **Add to calendar** chips. Every ended listen now logs who ended it and after how long (`listening cancelled` in the log), to trace listens that close after a second. |

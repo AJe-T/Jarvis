@@ -41,7 +41,8 @@ function monthDay(year: number, month: number, day: number, h: number, m: number
 
 /**
  * Next time after `from` (local time) the schedule fires; null when it never will by the clock
- * (a one-off that has passed, or "when Jarvis starts", which automation.start() runs itself).
+ * (a one-off that has passed, "when Jarvis starts", which automation.start() runs itself, or an
+ * event trigger, which automation checks every tick).
  */
 export function nextRun(s: Schedule, from: Date): Date | null {
   switch (s.type) {
@@ -52,6 +53,9 @@ export function nextRun(s: Schedule, from: Date): Date | null {
       return at > from ? at : null;
     }
     case 'startup':
+    case 'beforeEvent':
+    case 'taskOverdue':
+    case 'newFile':
       return null;
     case 'monthly': {
       const [h, m] = hm(s.time);
@@ -83,6 +87,12 @@ export function describeSchedule(s: Schedule): string {
       return `once, ${new Date(s.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`;
     case 'monthly':
       return `monthly on the ${ordinal(s.day)} at ${s.time}`;
+    case 'beforeEvent':
+      return `${s.minutes} min before each calendar event`;
+    case 'taskOverdue':
+      return 'when a task goes overdue';
+    case 'newFile':
+      return `when a file appears in ${s.folder}`;
     case 'startup':
       return s.delayMinutes
         ? `when Jarvis starts (after ${s.delayMinutes} min)`
