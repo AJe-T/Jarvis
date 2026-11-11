@@ -144,6 +144,12 @@ export function reportingOwnCopies(os: OsAdapter, ignore: (text: string) => void
       ignore(text);
       return os.pasteText(text);
     },
+    // Voice edit copies the selection for a moment: that is not a copy Sir made.
+    copySelection: async () => {
+      const text = await os.copySelection();
+      if (text) ignore(text);
+      return text;
+    },
   };
 }
 

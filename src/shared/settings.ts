@@ -468,6 +468,7 @@ export const SETTINGS = {
   'hotkeys.kill': { schema: accelerator, default: 'Ctrl+Alt+Shift+X' },
   /** Dictation (ideas from isair/jarvis): press to start, speak, pause or press again to type it. */
   'hotkeys.dictation': { schema: accelerator, default: 'Ctrl+Alt+D' },
+  'hotkeys.edit': { schema: accelerator, default: 'Ctrl+Alt+E' },
   /** Reply copilot (idea from jev-chat-jarvis): read the chat in front and help draft a reply. */
   'hotkeys.copilot': { schema: accelerator, default: 'Ctrl+Alt+R' },
   'copilot.enabled': { schema: z.boolean(), default: true },
@@ -495,6 +496,8 @@ export const SETTINGS = {
   'dictation.keepHistory': { schema: z.boolean(), default: true },
   /** Hold to talk (idea from Hex): hold the hotkey while speaking; letting go types it. */
   'dictation.holdToTalk': { schema: z.boolean(), default: false },
+  /** Voice edit (2.69): select text in any app, press hotkeys.edit, say what to change. */
+  'dictation.editSelection': { schema: z.boolean(), default: false },
   'vault.path': { schema: z.string().max(400), default: '' },
   'files.allowedRoots': {
     schema: z.array(z.string().min(3).max(400)).max(50),

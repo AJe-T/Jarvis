@@ -319,13 +319,24 @@ async function boot(): Promise<void> {
     // Hold to talk (idea from Hex): dictation ends when the hotkey comes up, not on a pause.
     fn: () =>
       services.settings.get('dictation.holdToTalk')
-        ? voice.voice.dictate(
+        ? voice.dictate(
             waitForRelease(services.os, services.settings.get('hotkeys.dictation')).catch(
               (err: unknown) =>
                 logger.warn({ err: errorMessage(err) }, 'hold to talk: no key poll'),
             ),
           )
-        : voice.voice.dictate(),
+        : voice.dictate(),
+  });
+  // Voice edit (2.69): select text anywhere, press this, say what to change.
+  extraHotkeys.push({
+    key: 'hotkeys.edit',
+    enabled: () => services.settings.get('dictation.editSelection'),
+    fn: () =>
+      void voice
+        .editSelection()
+        .catch((err: unknown) =>
+          logger.warn({ err: errorMessage(err) }, 'voice edit could not start'),
+        ),
   });
   app.on('will-quit', () => voice.voice.shutdown());
   const startMemory = (): void => {

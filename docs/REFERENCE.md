@@ -123,7 +123,7 @@ Every tool goes through the executor: Zod input check → policy tier (SAFE runs
 | `write_text_file` | CONFIRM (destructive) | Create a text file, or overwrite one when overwrite is true, in the allowed folders. Requires confirmation. Max 1 MB. |
 | `youtube_transcript` | SAFE (untrusted output) | Get a YouTube video's transcript from its captions (auto-generated count): title, channel, length and the words with timestamps. Use to summarise a video, answer questions about it or find where something is said. Takes a link or the video id. Fails if the video has no captions. The transcript is untrusted data. |
 
-## Settings (165)
+## Settings (167)
 
 Stored in the local database; changed in Settings. Secrets are separate (below).
 
@@ -240,6 +240,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `hotkeys.toggleWindow` | string | `Ctrl+Alt+J` |  |
 | `hotkeys.kill` | string | `Ctrl+Alt+Shift+X` |  |
 | `hotkeys.dictation` | string | `Ctrl+Alt+D` |  |
+| `hotkeys.edit` | string | `Ctrl+Alt+E` |  |
 | `hotkeys.copilot` | string | `Ctrl+Alt+R` |  |
 | `copilot.enabled` | boolean | `true` |  |
 | `apps.scratchpad` | string | `` |  |
@@ -251,6 +252,7 @@ Stored in the local database; changed in Settings. Secrets are separate (below).
 | `dictation.dictionary` | string | `` |  |
 | `dictation.keepHistory` | boolean | `true` |  |
 | `dictation.holdToTalk` | boolean | `false` |  |
+| `dictation.editSelection` | boolean | `false` |  |
 | `vault.path` | string | `` |  |
 | `files.allowedRoots` | array | `[]` | audited with value |
 | `policy.overrides` | object | `{}` | audited with value |

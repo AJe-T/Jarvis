@@ -25,6 +25,11 @@ export interface OsAdapter {
   captureScreen(opts: { maxWidth: number }): Promise<Uint8Array>;
   /** Puts text into the focused app via the clipboard + Ctrl+V, then restores the clipboard. */
   pasteText(text: string): Promise<void>;
+  /**
+   * The text selected in the app in front (Ctrl+C, then the clipboard is put back). Empty when
+   * nothing is selected. The hotkey that led here must already be released.
+   */
+  copySelection(): Promise<string>;
   /** The window in front (for dictation and the reply copilot); hwnd 0 when unknown. */
   foregroundWindow(): Promise<ForegroundWindow>;
   /** Brings the window with this exact title to the front; false if it isn't open. */
@@ -63,6 +68,10 @@ const USER32 = `Add-Type -Name U -Namespace J -MemberDefinition '[DllImport("use
 /** Ctrl down, V down, V up, Ctrl up. */
 const PASTE_SCRIPT = `${USER32}
 [J.U]::keybd_event(0x11,0,0,[UIntPtr]::Zero); [J.U]::keybd_event(0x56,0,0,[UIntPtr]::Zero); [J.U]::keybd_event(0x56,0,2,[UIntPtr]::Zero); [J.U]::keybd_event(0x11,0,2,[UIntPtr]::Zero)`;
+/** Ctrl down, C down, C up, Ctrl up, then time for the app to fill the clipboard. */
+const COPY_SCRIPT = `${USER32}
+[J.U]::keybd_event(0x11,0,0,[UIntPtr]::Zero); [J.U]::keybd_event(0x43,0,0,[UIntPtr]::Zero); [J.U]::keybd_event(0x43,0,2,[UIntPtr]::Zero); [J.U]::keybd_event(0x11,0,2,[UIntPtr]::Zero)
+Start-Sleep -Milliseconds 200`;
 const FOREGROUND_SCRIPT = `${USER32}
 $h = [J.U]::GetForegroundWindow(); $sb = New-Object System.Text.StringBuilder 512; [void][J.U]::GetWindowText($h, $sb, 512)
 $procId = 0; [void][J.U]::GetWindowThreadProcessId($h, [ref]$procId); $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
@@ -107,6 +116,18 @@ export function createWindowsOs(e: ElectronBits): OsAdapter {
       // Give the target app time to read the clipboard before putting Sir's clipboard back.
       setTimeout(() => void e.clipboard.writeText(previous).catch(() => undefined), 600);
     },
+    async copySelection() {
+      const previous = await e.clipboard.readText().catch(() => '');
+      // Emptied first, so "nothing selected" (Ctrl+C changes nothing) reads as empty, not as the old text.
+      await e.clipboard.writeText('');
+      try {
+        const r = await runPowerShell(COPY_SCRIPT, { timeoutMs: 10_000 });
+        if (r.exitCode !== 0) throw new ToolError(r.stderr || 'Copy failed.');
+        return await e.clipboard.readText();
+      } finally {
+        await e.clipboard.writeText(previous).catch(() => undefined);
+      }
+    },
     async focusWindow(title) {
       const r = await runPowerShell(
         '$ok = (New-Object -ComObject WScript.Shell).AppActivate([string]$P.title); Start-Sleep -Milliseconds 300; if ($ok) { "1" } else { "0" }',
@@ -144,6 +165,8 @@ export function createFakeOs(
     psJson: (script: string, opts?: PsOptions) => unknown;
     clipboard: string;
     foreground: ForegroundWindow;
+    /** What copySelection returns (the text "selected" in the app in front). */
+    selection: string;
   }> = {},
 ) {
   const calls: Array<{ op: string; args: unknown[] }> = [];
@@ -187,6 +210,10 @@ export function createFakeOs(
     },
     async pasteText(text) {
       calls.push({ op: 'pasteText', args: [text] });
+    },
+    async copySelection() {
+      calls.push({ op: 'copySelection', args: [] });
+      return responses.selection ?? '';
     },
     async focusWindow(title) {
       calls.push({ op: 'focusWindow', args: [title] });

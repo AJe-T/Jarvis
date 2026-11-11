@@ -46,6 +46,7 @@ JARVIS is a **voice-first personal assistant for Windows**, built as an Electron
 | `Ctrl+Alt+J` | Show / hide Jarvis |
 | `Ctrl+Alt+Shift+X` | **Stop everything** (kill switch) |
 | `Ctrl+Alt+D` | Dictation: type what you say into any app (off until enabled) |
+| `Ctrl+Alt+E` | Edit by voice: rewrite the text you selected, in any app (off until enabled) |
 | `Ctrl+Alt+R` | Reply copilot for the chat on screen |
 | `Ctrl+K` | Search everything and jump (inside the Jarvis window; fixed) |
 
@@ -172,6 +173,11 @@ Models: default (Sonnet 5.5), deep ("think hard", "plan" → Opus 5.5), fast (Ha
 - **No key? One click:** Settings → Voice → **Set up free on-device speech** downloads Whisper base.en + the voice detector (about 80 MB, once) and switches speech to on-device. If Deepgram is chosen but has no key, Jarvis uses on-device Whisper automatically when it is downloaded.
 - Why not Chrome's built-in speech? Electron (unlike Google Chrome) has no Google speech key, so `webkitSpeechRecognition` fails with a `network` error. The phone remote (§3.15) *does* use it, because there it runs in your phone's real browser.
 - A faster fully-offline streaming engine (sherpa-onnx, ~60–130 MB models) is a possible next step if Whisper's lag bothers you.
+
+**Edit by voice, in any app (2.69, idea from Wispr Flow's command mode):**
+- Enable it in Settings → Dictation → **Edit by voice**. Select text in Word, a browser, your mail, anywhere; press `Ctrl+Alt+E`; say what to change: "make this formal", "shorter", "fix the grammar", "turn this into bullet points", "translate to Telugu". Pause (or press the hotkey again) and the selection is replaced by the rewrite.
+- How it works: Jarvis copies the selection (your clipboard is put back), listens exactly as for dictation, sends the selection and your words to your AI, and pastes the answer over the selection.
+- It never sends a selection that looks like it holds a password, a key or a card number, nor more than 8,000 characters. If you switch windows while it works, nothing is pasted: the result waits on the clipboard. If the AI fails, your text stays as it was. Each edit is kept in the dictation history (when that is on) as "(edit) what you said".
 
 **Dictation into other apps:**
 - Enable it in Settings → Dictation, then press `Ctrl+Alt+D` in any app.
@@ -910,6 +916,7 @@ If `laya:install` reports a mismatch, this export differs from the pinned one (f
 | 1.0 | Polish and packaging: mini orb, backups, usage dashboard, installer with fuses |
 | 1.1 | Claude subscription connection |
 | 1.2 | On-device voice (Whisper, openWakeWord); 1.2.1 fixed the wake word never hearing anything |
+| 2.69 | **Edit by voice.** Select text in any app, press Ctrl+Alt+E, say what to change; the selection is rewritten in place. Off until enabled in Settings → Dictation. Secret-looking selections are never sent; a window switch or a failed rewrite leaves the text untouched. |
 | 2.68 | **Meeting prep.** Three templates built on event automations: Meeting prep (ten minutes before each calendar event, from memory, earlier conversations and tasks), Overdue task nudge, New download. |
 | 2.67 | **Automations that run on an event.** Three new "when" choices: before a calendar event, when a task goes overdue, when a file appears in an allowed folder (migration 023 remembers what was already announced). What set a run off reaches the model wrapped as untrusted data. |
 | 2.66 | **Day timeline.** The app and window in front, once a minute while you are at the PC, kept 30 days (migration 022); Settings → Activity → My day, or ask "where did my day go". Off until turned on in Settings → Privacy. |

@@ -49,6 +49,9 @@ function onStopped(rec: Recorder, onStop: () => void): Recorder {
 import { pickModel } from '../agent/model-router';
 import { INTENT_JUDGE_PROMPT, parseIntent, type Intent, type JudgeContext } from './conversation';
 import { createDictationRepo, finishDictation, vocabularyTerms } from './dictation';
+import { waitForRelease } from './key-release';
+import { EDIT_SYSTEM, createVoiceEdit } from './voice-edit';
+import { wrapUntrusted } from '../security/untrusted';
 import { createLocalEngines, type LocalEngines } from './local/local-engines';
 import { createModelStore, type ModelStore } from './local/model-store';
 import { matchQuickCommand, type RoutineTriggers } from './quick-commands';
@@ -673,8 +676,52 @@ export function createVoiceSystem(
         .prepare('SELECT name, trigger_phrases_json FROM routines WHERE enabled = 1')
         .all() as Array<{ name: string; trigger_phrases_json: string }>
     ).map((r) => ({ name: r.name, triggers: JSON.parse(r.trigger_phrases_json) as string[] }));
+  // Voice edit (2.69): a selection waiting for its spoken instruction turns the next dictation
+  // into "rewrite the selection as I say" instead of "type what I say".
+  const edit = createVoiceEdit({
+    os: s.os,
+    notify: (level, message) => s.emit('notify', { level, message }),
+    async rewrite(selection, instruction) {
+      s.budget.assertCanSpend();
+      const msg = await s.llm.stream(
+        {
+          model: pickModel(s.settings, { purpose: 'copilot' }),
+          max_tokens: 4000,
+          system: EDIT_SYSTEM,
+          messages: [
+            {
+              role: 'user',
+              content: `Instruction: ${instruction}\n\nSelected text:\n${wrapUntrusted(selection, 'selected text')}`,
+            },
+          ],
+        },
+        { signal: AbortSignal.timeout(60_000) },
+      );
+      s.ledger.record(msg, 'copilot', null);
+      return msg.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+    },
+  });
   /** Types dictated words into the app in front (clipboard + Ctrl+V, clipboard restored). */
   async function typeDictation(raw: string): Promise<void> {
+    const selection = edit.take();
+    if (selection) {
+      const instruction = raw.trim();
+      if (!instruction) return;
+      const target = await s.os.foregroundWindow().catch(() => ({ title: '', process: '' }));
+      const edited = await edit.apply(selection, instruction).catch((err: unknown) => {
+        logger.warn({ err: String(err) }, 'voice edit failed');
+        s.emit('notify', {
+          level: 'error',
+          message: 'The edit did not work, so your text is unchanged. Try again.',
+        });
+        return null;
+      });
+      if (edited === null) return;
+      if (s.settings.get('dictation.keepHistory'))
+        dictations.add(`(edit) ${instruction}`, edited, target.process || target.title || null);
+      s.emit('dictation:done', { text: edited, app: target.process || target.title || '' });
+      return;
+    }
     const text = finishDictation(raw, {
       removeFillers: s.settings.get('dictation.removeFillers'),
       dictionary: s.settings.get('dictation.dictionary'),
@@ -886,6 +933,21 @@ export function createVoiceSystem(
   return {
     voice,
     dictations,
+    /** The dictation hotkey: a plain dictation, unless it ends the instruction of a voice edit. */
+    dictate(released?: Promise<unknown>): void {
+      if (s.state.get() !== 'LISTENING') edit.cancel();
+      voice.dictate(released);
+    },
+    /**
+     * The edit hotkey: copy what is selected in the app in front, then listen for what to do with
+     * it. Pressed again while listening, it ends the instruction like the dictation hotkey does.
+     */
+    async editSelection(): Promise<void> {
+      if (edit.isWaiting() && s.state.get() === 'LISTENING') return voice.dictate();
+      // Ctrl+C must not arrive while Sir still holds the hotkey's own keys.
+      await waitForRelease(s.os, s.settings.get('hotkeys.edit')).catch(() => undefined);
+      if (await edit.begin()) voice.dictate();
+    },
     /**
      * A recorded clip (Telegram voice note) → text. Deepgram reads OGG directly when there's a key;
      * otherwise on-device Whisper (the renderer decodes the audio first). Null if neither is set up.

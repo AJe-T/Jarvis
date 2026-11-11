@@ -9,6 +9,7 @@ import { SettingInput, SettingSwitch, SettingTextArea } from './settings-control
 /** Dictation (ideas from isair/jarvis): speak, and Jarvis types it into the app in front. */
 export function DictationSection(): React.JSX.Element {
   const hotkey = useDraftSetting('hotkeys.dictation') ?? 'Ctrl+Alt+D';
+  const editHotkey = useDraftSetting('hotkeys.edit') ?? 'Ctrl+Alt+E';
   const [history, setHistory] = useState<Res<'dictation:history'>>([]);
   const load = useCallback(() => void call('dictation:history', {}).then(setHistory), []);
   useEffect(() => {
@@ -34,6 +35,13 @@ export function DictationSection(): React.JSX.Element {
           hint='One fix per line: "heard => written", e.g. "jarvis => JARVIS" or "avan tech => AvaanTech". A line with just a name ("Priyanka") adds it to the vocabulary. With Deepgram (English), every written word is sent as a word to expect, so names are heard right the first time.'
         />
         <SettingSwitch k="dictation.keepHistory" label="Keep a history of dictations on this PC" />
+      </Section>
+      <Section
+        title="Edit by voice"
+        description={`Select text in any app, press ${editHotkey}, and say what to change: "make this formal", "shorter", "fix the grammar", "translate to Telugu". Jarvis rewrites the selection and puts it back in its place. The selected text is sent to your AI; text that looks like a password, a key or a card number is never sent.`}
+      >
+        <SettingSwitch k="dictation.editSelection" label="Turn on the edit hotkey" />
+        <SettingInput k="hotkeys.edit" label="Edit hotkey" />
       </Section>
       <Section
         title="Meetings"
