@@ -61,11 +61,44 @@ function run(r: PaletteRun): void {
       return void call('clipboard:clear', {}).then(() =>
         ui.toast({ level: 'info', message: 'Clipboard history cleared.' }),
       );
+    case 'screen':
+      return void call('screen:copy', { id: r.id }).then(
+        () =>
+          ui.toast({
+            level: 'info',
+            message: 'The text of that screen is on the clipboard. Paste it with Ctrl+V.',
+          }),
+        (err: unknown) => ui.toast({ level: 'error', message: cleanError(err) }),
+      );
+    case 'clearScreen':
+      return void confirmAction({
+        title: 'Delete the whole screen memory?',
+        body: 'Everything Jarvis kept about what was on your screen is deleted. This cannot be undone.',
+        actionLabel: 'Delete',
+        destructive: true,
+      }).then(async (yes) => {
+        if (!yes) return;
+        await call('screen:clear', {});
+        ui.toast({ level: 'info', message: 'Screen memory cleared.' });
+      });
   }
 }
 
-/** What past chats and memory notes say (searched in the main process), as Sir types. */
-function useRemoteHits(query: string): PaletteItem[] {
+/** "2026-11-11T09:32:10.000Z" → "11 Nov 15:02" in local time. */
+function when(iso: string): string {
+  return new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * What past chats, memory notes and (when it is on) the screen memory say, searched in the main
+ * process as Sir types.
+ */
+function useRemoteHits(query: string, screenOn: boolean): PaletteItem[] {
   const [hits, setHits] = useState<PaletteItem[]>([]);
   useEffect(() => {
     const q = query.trim();
@@ -75,9 +108,17 @@ function useRemoteHits(query: string): PaletteItem[] {
       void Promise.allSettled([
         call('conversations:search', { query: q }),
         call('memory:search', { query: q }),
-      ]).then(([chats, notes]) => {
+        screenOn ? call('screen:search', { query: q }) : Promise.resolve([]),
+      ]).then(([chats, notes, screens]) => {
         if (!live) return;
         setHits([
+          ...(screens.status === 'fulfilled' ? screens.value : []).map((h): PaletteItem => ({
+            id: `screen:${h.id}`,
+            group: 'Screen',
+            label: h.snippet,
+            hint: `${h.process} · ${when(h.at)}`,
+            run: { kind: 'screen', id: h.id },
+          })),
           ...(chats.status === 'fulfilled' ? chats.value : []).map((h): PaletteItem => ({
             id: `chat:${h.conversationId}`,
             group: 'Chats',
@@ -99,7 +140,7 @@ function useRemoteHits(query: string): PaletteItem[] {
       live = false;
       clearTimeout(t);
     };
-  }, [query]);
+  }, [query, screenOn]);
   return hits;
 }
 
@@ -151,7 +192,8 @@ export function Palette(): React.JSX.Element | null {
   const clipsOn = useSetting('clipboard.history') === true;
   const [clips, setClips] = useState<Res<'clipboard:history'>>([]);
   const [undo, setUndo] = useState<Res<'undo:peek'>>(null);
-  const remote = useRemoteHits(open ? query : '');
+  const screenOn = useSetting('screenMemory.enabled') === true;
+  const remote = useRemoteHits(open ? query : '', screenOn);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -185,8 +227,9 @@ export function Palette(): React.JSX.Element | null {
         chats,
         clips,
         undo,
+        screenOn,
       }),
-    [todos, events, spaces, pages, chats, clips, undo],
+    [todos, events, spaces, pages, chats, clips, undo, screenOn],
   );
   const results = useMemo(
     () => groupItems([...matchItems(local, query), ...remote], query),

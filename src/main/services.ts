@@ -74,6 +74,7 @@ import {
 import { createNativeTools } from './tools/native/index';
 import { createUndoJournal, createUndoTool, undoablePlanner } from './tools/undo-journal';
 import { createTimeline, createTimelineTool } from './tools/everyday/timeline';
+import { createScreenMemory, createScreenMemoryTool } from './tools/everyday/screen-memory';
 import { createAgentDesktop, findAgentDesktop } from './tools/native/agent-desktop';
 import type { OsAdapter } from './tools/native/os';
 import { createMealTools, createMealsRepo } from './tools/everyday/meals';
@@ -687,6 +688,20 @@ export function createServices(opts: ServiceOptions) {
   });
   if (!opts.isTest) timeline.start();
   registry.register(createTimelineTool(timeline, () => settings.get('timeline.enabled')));
+  // Screen memory (2.72): the text on the main screen, read on this PC, only while the setting is on.
+  const screenMemory = createScreenMemory({
+    db,
+    os,
+    idleSeconds: opts.idleSeconds ?? (() => 0),
+    enabled: () => settings.get('screenMemory.enabled'),
+    excluded: () => settings.get('screenMemory.excludeApps'),
+    keepDays: () => settings.get('screenMemory.keepDays'),
+    ownPid: process.pid,
+  });
+  if (!opts.isTest) screenMemory.start();
+  registry.register(
+    createScreenMemoryTool(screenMemory, () => settings.get('screenMemory.enabled')),
+  );
   for (const tool of [
     ...createWeatherTools({ settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) }),
     ...createMealTools({ repo: meals, settings }),
@@ -899,6 +914,7 @@ export function createServices(opts: ServiceOptions) {
     os,
     clipboardHistory,
     timeline,
+    screenMemory,
     undo,
     settings,
     secrets,

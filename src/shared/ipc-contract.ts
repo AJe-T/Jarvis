@@ -1275,6 +1275,21 @@ export const INVOKE = {
     }),
   ),
   'timeline:clear': contract(Empty, Ok),
+  /** Screen memory (2.72): snippets for the command palette; copy puts one capture's text on the clipboard. */
+  'screen:search': contract(
+    z.object({ query: z.string().trim().min(2).max(100) }),
+    z.array(
+      z.object({
+        id: z.number().int(),
+        at: z.string(),
+        process: z.string(),
+        title: z.string(),
+        snippet: z.string(),
+      }),
+    ),
+  ),
+  'screen:copy': contract(z.object({ id: z.number().int().min(1) }), Ok),
+  'screen:clear': contract(Empty, Ok),
   /** Undo (2.70): the last thing Jarvis changed, and taking it back (the UI confirms first). */
   'undo:peek': contract(
     Empty,

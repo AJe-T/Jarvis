@@ -510,6 +510,11 @@ export const SETTINGS = {
   'privacy.logConversationsToVault': { schema: z.boolean(), default: true },
   /** Clipboard history (2.65): the last text copies, in memory only. Off until Sir turns it on. */
   'clipboard.history': { schema: z.boolean(), default: false },
+  /** Screen memory (2.72): the text on the main screen, read on this PC, kept keepDays. */
+  'screenMemory.enabled': { schema: z.boolean(), default: false },
+  /** App names never read, separated by commas or new lines (e.g. "WhatsApp, mstsc"). */
+  'screenMemory.excludeApps': { schema: z.string().max(2000), default: '' },
+  'screenMemory.keepDays': { schema: z.number().int().min(1).max(30), default: 7 },
   /** Day timeline (2.66): app and window title in front, once a minute, kept 30 days. */
   'timeline.enabled': { schema: z.boolean(), default: false },
   'retention.messagesDays': { schema: z.number().int().min(0).max(36500), default: 0 },
@@ -676,6 +681,7 @@ export const SENSITIVE_SETTINGS: readonly SettingKey[] = [
   'files.allowedRoots',
   'clipboard.history', // whether what Sir copies is remembered
   'timeline.enabled', // whether the apps Sir uses are recorded
+  'screenMemory.enabled', // whether the text on Sir's screen is kept
   'llm.provider',
   'llm.cloud.provider', // where the whole conversation is sent
   'llm.cloud.connection', // and with whose key

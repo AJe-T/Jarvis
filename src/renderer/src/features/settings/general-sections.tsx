@@ -43,6 +43,20 @@ export function PrivacySection(): React.JSX.Element {
         k="timeline.enabled"
         label="Keep a day timeline: which app and window was in front, once a minute while you are at the PC, for 30 days (Settings → Activity → My day). Never what is on the screen; private-browsing windows and password managers are recorded without a title"
       />
+      <SettingSwitch
+        k="screenMemory.enabled"
+        label="Keep a screen memory: about once a minute, while you are at the PC, the text on your main screen is read on this PC and kept, so you can ask what you saw earlier or find it with Ctrl+K. Text only, never a picture; passwords and keys are blanked; private-browsing windows, password managers and Jarvis itself are never read"
+      />
+      <SettingInput
+        k="screenMemory.excludeApps"
+        label="Apps the screen memory never reads (names separated by commas, e.g. WhatsApp, mstsc)"
+      />
+      <SettingInput
+        k="screenMemory.keepDays"
+        label="Keep screen memory for (days, 1–30)"
+        type="number"
+        step={1}
+      />
       <SettingInput
         k="retention.messagesDays"
         label="Delete chat history older than (days, 0 = keep forever)"

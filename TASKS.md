@@ -8,7 +8,7 @@ How to keep it:
 - When an item ships, delete it here (the changes log and `docs/BIBLE.md` keep the history).
 - Size: **S** < 1 h · **M** 1–3 h · **L** half a day or more (tests and BIBLE update included).
 
-Last updated: 2026-11-11 (after v2.71.0).
+Last updated: 2026-11-11 (after v2.72.0).
 
 ## 1. Core module
 
@@ -35,6 +35,7 @@ plan with sizes, Sir picks what to do now and what goes back into this file.
 
 | What | How to check |
 |---|---|
+| v2.72 screen memory | Settings → Privacy → "Keep a screen memory" on. Read a web page for two minutes, then Ctrl+K and type a few words from it: a **Screen** result appears; Enter, paste. Open an InPrivate window and Jarvis's Passwords screen for a few minutes: neither may ever be found. Check Task Manager for the processor cost once a minute. The capture loop and Windows OCR were tested with fakes only. |
 | v2.71 OpenCode brain | It has never answered on this PC. In a terminal: `opencode run "say OK"`. If it says "Missing Authentication header", run `opencode auth login` again (the stored OpenRouter key is refused), or `npm i -g opencode-ai@latest` for the free models (they need 1.18+). Then Settings → Brain → Your AI subscriptions → OpenCode → Test, and give an NPC the OpenCode brain. |
 | v2.70 undo | Ask Jarvis to create a text file on the Desktop, then say "undo that": after the confirmation it is in the Recycle Bin. Ask him to add a task, then Ctrl+K → "Undo: Add task …". Ask him to move a file, edit nothing, undo: it is back. Only tested with a fake Recycle Bin and a fake model. |
 | v2.69 edit by voice | Settings → Dictation → Edit by voice → on. In Notepad type a rough sentence, select it, press Ctrl+Alt+E, say "make this formal", pause: the sentence is replaced. Try Word and a browser text box too, and press the hotkey with nothing selected (a notice, nothing pasted). Never run with a real mic, a real app or a real model: check that Ctrl+C reaches the app (keys released in time) and that your clipboard is as before. |
@@ -72,5 +73,4 @@ Proposed 2026-11-10 from a survey of the modules and of other assistants. Sir ha
 | Split oversized files | `voice-controller.ts`, `ipc-contract.ts`, `voice-system.ts`, `services.ts` are over 800 lines | L | No visible change. |
 | Index for search inside files | `search_in_files` (2.64) reads files one by one and stops after 15 s | L | Build an index only if Sir searches big folders often. |
 | Palette: open a calendar event on its day | Ctrl+K opens the Calendar, not the event's date | S | |
-| Screen memory | OCR text of what was on screen, searchable: "the error I saw at 3 pm" | L | Idea from Screenpipe. Needs app exclusions, pause, retention, and a Security.md section. |
 | Teach by showing | Record steps Sir does once, replay them as a skill | L | Riskiest; build last, if at all. |

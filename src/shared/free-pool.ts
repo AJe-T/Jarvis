@@ -390,6 +390,7 @@ export const PRIVATE_TOOLS: Record<string, PrivateSourceId> = {
   show_file: 'files',
   look_at_screen: 'screen',
   day_timeline: 'screen',
+  screen_memory: 'screen',
   read_screen_text: 'screen',
   read_window_text: 'screen',
   save_screenshot: 'screen',

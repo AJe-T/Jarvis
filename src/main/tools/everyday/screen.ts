@@ -28,6 +28,29 @@ $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult]
 $stream.Dispose()
 @{ lines = @($result.Lines | ForEach-Object { $_.Text }) } | ConvertTo-Json -Compress`;
 
+/**
+ * The lines of text on the main screen, read on this PC by Windows OCR. The screenshot lives in a
+ * temp file only for the read and is deleted afterwards; nothing but the text leaves this function.
+ */
+export async function screenTextLines(
+  os: Pick<OsAdapter, 'captureScreen' | 'psJson'>,
+): Promise<string[]> {
+  const file = join(tmpdir(), `jarvis-ocr-${randomUUID()}.png`);
+  try {
+    await writeFile(file, await os.captureScreen({ maxWidth: OCR_MAX_WIDTH }));
+    const r = await os
+      .psJson<{ lines?: string[] }>(OCR_SCRIPT, { params: { path: file }, timeoutMs: 25_000 })
+      .catch((err: unknown) => {
+        throw new ToolError(
+          `Windows OCR failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    return (r.lines ?? []).filter((l) => l.trim());
+  } finally {
+    await rm(file, { force: true });
+  }
+}
+
 /** Longest edge of the image sent to Claude (vision limit, API-Guide.md §7). */
 export const SCREEN_MAX_WIDTH = 1568;
 
@@ -94,25 +117,12 @@ export function createScreenTools(
         detailsKind: 'text',
       }),
       async run() {
-        const file = join(tmpdir(), `jarvis-ocr-${randomUUID()}.png`);
-        try {
-          await writeFile(file, await os.captureScreen({ maxWidth: OCR_MAX_WIDTH }));
-          const r = await os
-            .psJson<{ lines?: string[] }>(OCR_SCRIPT, { params: { path: file }, timeoutMs: 25_000 })
-            .catch((err: unknown) => {
-              throw new ToolError(
-                `Windows OCR failed: ${err instanceof Error ? err.message : String(err)}`,
-              );
-            });
-          const lines = (r.lines ?? []).filter((l) => l.trim());
-          if (!lines.length) return ok('No readable text on the screen.');
-          return {
-            content: [{ type: 'text', text: lines.join('\n') }],
-            untrustedSource: 'the screen',
-          };
-        } finally {
-          await rm(file, { force: true });
-        }
+        const lines = await screenTextLines(os);
+        if (!lines.length) return ok('No readable text on the screen.');
+        return {
+          content: [{ type: 'text', text: lines.join('\n') }],
+          untrustedSource: 'the screen',
+        };
       },
     }),
     // "Take a screenshot and save it as X" (Gladiator07/JARVIS, BolisettySujith/J.A.R.V.I.S).

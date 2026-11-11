@@ -5,6 +5,7 @@ export const PALETTE_GROUPS = [
   'Actions',
   'Go to',
   'Clipboard',
+  'Screen',
   'Settings',
   'Tasks',
   'Calendar',
@@ -23,7 +24,9 @@ export type PaletteRun =
   | { kind: 'toggleSidebar' }
   | { kind: 'clip'; id: number }
   | { kind: 'clearClips' }
-  | { kind: 'undo'; id: number; label: string };
+  | { kind: 'undo'; id: number; label: string }
+  | { kind: 'screen'; id: number }
+  | { kind: 'clearScreen' };
 
 export interface PaletteItem {
   id: string;
@@ -46,6 +49,8 @@ export interface PaletteSources {
   clips?: Array<{ id: number; preview: string }>;
   /** The last thing Jarvis changed that can be taken back, if any. */
   undo?: { id: number; label: string } | null;
+  /** Screen memory is on: offer to clear it (its matches come from the main process). */
+  screenOn?: boolean;
 }
 
 const PER_GROUP = 6;
@@ -67,6 +72,16 @@ export function localItems(s: PaletteSources): PaletteItem[] {
       keywords: 'rail menu',
       run: { kind: 'toggleSidebar' },
     },
+    ...(s.screenOn
+      ? [
+          {
+            id: 'action:clear-screen',
+            group: 'Actions',
+            label: 'Clear the screen memory',
+            run: { kind: 'clearScreen' },
+          } satisfies PaletteItem,
+        ]
+      : []),
     ...(s.undo
       ? [
           {
@@ -157,7 +172,9 @@ export function matchItems(items: PaletteItem[], query: string): PaletteItem[] {
   const q = query.trim().toLowerCase();
   if (!q)
     return items.filter(
-      (i) => (i.group === 'Actions' && i.run.kind !== 'clearClips') || i.group === 'Go to',
+      (i) =>
+        (i.group === 'Actions' && i.run.kind !== 'clearClips' && i.run.kind !== 'clearScreen') ||
+        i.group === 'Go to',
     );
   const words = q.split(/\s+/);
   const hits = items.filter((i) => {

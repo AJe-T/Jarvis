@@ -5,7 +5,8 @@ import { handle } from '../handle';
 const PREVIEW_CHARS = 300;
 
 /**
- * Clipboard history, day timeline and undo channels (Security.md §16.17, §16.18, §16.21). The renderer gets
+ * Clipboard history, day timeline, undo and screen memory channels (Security.md §16.17,
+ * §16.18, §16.21, §16.22). The renderer gets
  * short clipboard previews only; the full text goes straight from the history back to the
  * clipboard, never through the window.
  */
@@ -27,6 +28,21 @@ export function registerClipboardHandlers(s: Services): void {
   handle('timeline:clear', () => {
     s.timeline.clear();
     s.audit.append('user', 'timeline.clear', {});
+    return { ok: true };
+  });
+  // Screen memory (Security.md §16.22): the window gets snippets; a full capture goes straight
+  // to the clipboard inside the main process.
+  handle('screen:search', (req) => s.screenMemory.search(req.query, 6));
+  handle('screen:copy', async (req) => {
+    const text = s.screenMemory.text(req.id);
+    if (text === undefined)
+      throw new JarvisError('INVALID', 'capture gone', 'That capture is no longer kept.');
+    await s.os.clipboardWrite(text);
+    return { ok: true };
+  });
+  handle('screen:clear', () => {
+    s.screenMemory.clear();
+    s.audit.append('user', 'screenMemory.clear', {});
     return { ok: true };
   });
   // Undo (Security.md §16.21): the id makes sure the action taken back is the one Sir was shown.

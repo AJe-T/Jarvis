@@ -20,11 +20,11 @@ const IDLE_SECONDS = 120;
 const KEEP_DAYS = 30;
 const TITLE_CHARS = 120;
 const TOP_WINDOWS = 5;
-const PRIVATE_TITLE = /inprivate|incognito|private browsing|private window/i;
-const PRIVATE_PROCESS =
+export const PRIVATE_TITLE = /inprivate|incognito|private browsing|private window/i;
+export const PRIVATE_PROCESS =
   /keepass|1password|bitwarden|lastpass|dashlane|keeper|enpass|nordpass|protonpass|roboform/i;
 /** The lock screen and the desktop itself are not "using an app". */
-const NOT_AN_APP = /^(lockapp|logonui|idle)$/i;
+export const NOT_AN_APP = /^(lockapp|logonui|idle)$/i;
 
 export interface TimelineApp {
   process: string;
