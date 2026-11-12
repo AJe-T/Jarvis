@@ -150,14 +150,16 @@ function knownFolders(userData: string) {
 }
 
 export function showMainWindow(): void {
-  if (!mainWindow) return;
+  // A closed window can still be referenced from the tray, a notification or a second launch.
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
 }
 
 function toggleMainWindow(): void {
-  if (mainWindow?.isVisible() && mainWindow.isFocused()) mainWindow.hide();
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && mainWindow.isFocused())
+    mainWindow.hide();
   else showMainWindow();
 }
 
@@ -642,7 +644,14 @@ async function boot(): Promise<void> {
     else meter.stop();
   };
   applyMeter();
-  mainWindow.on('closed', () => meter.stop());
+  mainWindow.on('closed', () => {
+    meter.stop();
+    // The main window is gone for good: drop the reference and quit, so no headless instance
+    // (e.g. kept alive by the mini orb) holds the single-instance lock.
+    mainWindow = null;
+    quitting = true;
+    app.quit();
+  });
   services.settings.onChange((key) => {
     if (key === 'appearance.orbMusic') applyMeter();
   });
