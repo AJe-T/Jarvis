@@ -933,6 +933,7 @@ If `laya:install` reports a mismatch, this export differs from the pinned one (f
 | 1.0 | Polish and packaging: mini orb, backups, usage dashboard, installer with fuses |
 | 1.1 | Claude subscription connection |
 | 1.2 | On-device voice (Whisper, openWakeWord); 1.2.1 fixed the wake word never hearing anything |
+| 2.74 | **Under the hood.** The IPC contract (1,490 lines) is split into shared schemas and three files of channels by area, joined by `ipc-contract.ts`; the IPC handlers, at 2.5% test coverage, get integration tests (clipboard, timeline, screen memory, undo, automations, passwords, planner, safety). No visible change. |
 | 2.73 | **Teach by showing.** "Watch me" notes the windows and focused controls of a task you do once (names only, five minutes at most, after confirmation); Jarvis turns it into a routine with the new `save_routine`, showing every step first. |
 | 2.72 | **Screen memory.** The text on the main screen, read on this PC about once a minute and kept a week (migration 024), searchable by asking or with Ctrl+K. Off until turned on; never Jarvis itself, private windows or password managers; secrets blanked; text only. |
 | 2.71 | **OpenCode as an answer brain** (Integrations step 6). Used through its own sign-in, read-only, in an empty folder; provider errors it hides behind exit code 0 are read from its JSON events and shown. Not yet seen answering on this PC (its sign-in is refused by the provider). |

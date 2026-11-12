@@ -92,7 +92,7 @@ log.info({ tool: block.name, tier, decision, durationMs }, 'tool executed');
 
 ## 5. IPC Patterns
 
-- Define channel + Zod request/response in `src/shared/ipc-contract.ts` **first**, then implement the handler and preload method.
+- Define the channel name in `src/shared/ipc-channels.ts` and its Zod request/response in the fitting `src/shared/ipc-invoke-*.ts` **first**, then implement the handler and preload method.
 - One preload method per channel; no generic `invoke`.
 - Events from main use `webContents.send` via a typed `emit(event, payload)` helper; payloads validated in dev builds.
 - Large binary (TTS audio) goes as `ArrayBuffer`; high-frequency events (`voice:level`) are throttled (≤ 20 Hz).

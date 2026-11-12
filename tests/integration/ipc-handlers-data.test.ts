@@ -88,7 +88,8 @@ describe('IPC handlers: passwords', () => {
       ]),
     );
     expect(JSON.stringify(audit)).not.toMatch(/hunter2|Bank/);
-  });
+    // Three key derivations (setup, failed unlock, unlock): over 5 s when the whole suite runs.
+  }, 30_000);
 
   it('a copied password never enters the clipboard history', async () => {
     const { s } = setup();

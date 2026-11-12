@@ -71,6 +71,6 @@ Proposed 2026-11-10 from a survey of the modules and of other assistants. Sir ha
 |---|---|---|---|
 | "Send to" on older replies | The 2.64 chips (Add to tasks, Add to calendar, Save to Space) sit under the latest reply only | S | Add a hover menu on every reply if Sir wants it. |
 | Tests for the on-device model host | `src/main/inference/client.ts` talks to an Electron utility process; its remote path (31% of the module covered) has no test | M | Needs a fake utility process. The IPC handlers got tests in 2.74 (they were at 2.5%); the other "untested" modules were already 78–91% covered by the integration tests. |
-| Split oversized files | `voice-controller.ts`, `ipc-contract.ts`, `voice-system.ts`, `services.ts` are over 800 lines | L | No visible change. |
+| Split oversized files | `voice-controller.ts` (1,528 lines), `voice-system.ts` (1,104) and `services.ts` (998) are over 800 lines; `ipc-contract.ts` was split in 2.74 | L | No visible change. The voice files share closure state, so a split needs a design, not a cut. |
 | Index for search inside files | `search_in_files` (2.64) reads files one by one and stops after 15 s | L | Build an index only if Sir searches big folders often. |
 | Palette: open a calendar event on its day | Ctrl+K opens the Calendar, not the event's date | S | |

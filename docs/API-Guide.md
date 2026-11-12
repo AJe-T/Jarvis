@@ -70,7 +70,7 @@ All channels and payload schemas live in `src/shared/ipc-contract.ts` and are va
 
 Renderer → main fire-and-forget: `tts:playback` `{ utteranceId, event: 'started'\|'finished'\|'level', level? }`.
 
-> Implementation: channel names live in `src/shared/ipc-channels.ts` (dependency-free, so the sandboxed preload can import it); schemas in `src/shared/ipc-contract.ts`. The preload exposes `window.jarvis.call[channel](req)`, `window.jarvis.send[channel](payload)` and `window.jarvis.on(event, handler)`: one fixed function per channel, built from the fixed list.
+> Implementation: channel names live in `src/shared/ipc-channels.ts` (dependency-free, so the sandboxed preload can import it); schemas in `src/shared/ipc-schemas.ts` and the invoke channels in `src/shared/ipc-invoke-ai.ts`, `ipc-invoke-system.ts` and `ipc-invoke-apps.ts`, joined by `src/shared/ipc-contract.ts` (import from there; a channel missing from every part fails its type check). The preload exposes `window.jarvis.call[channel](req)`, `window.jarvis.send[channel](payload)` and `window.jarvis.on(event, handler)`: one fixed function per channel, built from the fixed list.
 
 ### 1.3 Preload (`src/preload/index.ts`)
 
@@ -675,7 +675,7 @@ All channels and payload schemas live in `src/shared/ipc-contract.ts` and are va
 
 Renderer → main fire-and-forget: `tts:playback` `{ utteranceId, event: 'started'\|'finished'\|'level', level? }`.
 
-> Implementation: channel names live in `src/shared/ipc-channels.ts` (dependency-free, so the sandboxed preload can import it); schemas in `src/shared/ipc-contract.ts`. The preload exposes `window.jarvis.call[channel](req)`, `window.jarvis.send[channel](payload)` and `window.jarvis.on(event, handler)`: one fixed function per channel, built from the fixed list.
+> Implementation: channel names live in `src/shared/ipc-channels.ts` (dependency-free, so the sandboxed preload can import it); schemas in `src/shared/ipc-schemas.ts` and the invoke channels in `src/shared/ipc-invoke-ai.ts`, `ipc-invoke-system.ts` and `ipc-invoke-apps.ts`, joined by `src/shared/ipc-contract.ts` (import from there; a channel missing from every part fails its type check). The preload exposes `window.jarvis.call[channel](req)`, `window.jarvis.send[channel](payload)` and `window.jarvis.on(event, handler)`: one fixed function per channel, built from the fixed list.
 
 ### 1.3 Preload (`src/preload/index.ts`)
 

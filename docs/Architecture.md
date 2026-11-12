@@ -276,7 +276,10 @@ jarvis/
 ├─ resources/                    # icons, sounds (chimes), fonts
 ├─ src/
 │  ├─ shared/                    # imported by main + preload + renderer
-│  │  ├─ ipc-contract.ts         # channel names + zod schemas + types
+│  │  ├─ ipc-channels.ts         # channel names (dependency-free, for the preload)
+│  │  ├─ ipc-contract.ts         # joins the parts below; import INVOKE / EVENTS / types from here
+│  │  ├─ ipc-schemas.ts          # zod schemas shared by several channels
+│  │  ├─ ipc-invoke-*.ts         # invoke channels by area: ai, system, apps
 │  │  ├─ types.ts                # AssistantState, ToolTier, etc.
 │  │  └─ constants.ts
 │  ├─ main/
