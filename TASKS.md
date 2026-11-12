@@ -8,7 +8,7 @@ How to keep it:
 - When an item ships, delete it here (the changes log and `docs/BIBLE.md` keep the history).
 - Size: **S** < 1 h · **M** 1–3 h · **L** half a day or more (tests and BIBLE update included).
 
-Last updated: 2026-11-11 (after v2.73.0).
+Last updated: 2026-11-12 (after v2.74.0).
 
 ## 1. Core module
 
