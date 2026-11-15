@@ -26,8 +26,11 @@ test('Phase 7: manual backup, usage tab, mini orb round-trip', async () => {
     'aria-checked',
     'true',
   );
+  // Scoped to the status box: the OpenCode note elsewhere on the page also says "not signed in".
   await expect(
-    page.getByText(/Signed in to Claude Code|not signed in|isn't installed/),
+    page
+      .getByRole('status')
+      .filter({ hasText: /Signed in to Claude Code|not signed in|isn't installed/ }),
   ).toBeVisible({ timeout: 20_000 });
   await page.getByRole('radio', { name: /Anthropic API key/ }).click();
   await expect(page.locator('#anthropic-label')).toBeVisible();
